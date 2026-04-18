@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Zenith</string>
+    <string name="accessibility_service_description">Zenith uses this service to monitor which apps are open and show focus shields when your time limit is reached.</string>
+</resources>

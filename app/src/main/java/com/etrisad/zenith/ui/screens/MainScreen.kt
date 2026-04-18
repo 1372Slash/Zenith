@@ -1,0 +1,153 @@
+package com.etrisad.zenith.ui.screens
+
+import androidx.compose.animation.*
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.etrisad.zenith.ui.components.PermissionBottomSheet
+import com.etrisad.zenith.ui.navigation.Screen
+import com.etrisad.zenith.ui.navigation.navItems
+import com.etrisad.zenith.ui.screens.focus.FocusScreen
+import com.etrisad.zenith.ui.screens.home.HomeScreen
+import com.etrisad.zenith.ui.screens.settings.SettingsScreen
+import com.etrisad.zenith.ui.viewmodel.FocusViewModel
+import com.etrisad.zenith.ui.viewmodel.HomeViewModel
+import com.etrisad.zenith.util.hasAllPermissions
+
+import com.etrisad.zenith.data.preferences.ThemeConfig
+import com.etrisad.zenith.data.preferences.UserPreferences
+
+@Composable
+fun MainScreen(
+    homeViewModel: HomeViewModel,
+    focusViewModel: FocusViewModel,
+    userPreferencesRepository: UserPreferencesRepository
+) {
+    val navController = rememberNavController()
+    val context = LocalContext.current
+    
+    val preferences by userPreferencesRepository.userPreferencesFlow.collectAsState(
+        initial = UserPreferences(ThemeConfig.FOLLOW_SYSTEM, true, false, 0)
+    )
+
+    var showPermissionSheet by remember { mutableStateOf(false) }
+    
+    // Check permissions and update sheet visibility
+    fun checkPermissions() {
+        val hasUsageStats = com.etrisad.zenith.util.hasUsageStatsPermission(context)
+        val hasOverlay = android.provider.Settings.canDrawOverlays(context)
+        val hasAccessibility = com.etrisad.zenith.util.isAccessibilityServiceEnabled(context)
+        
+        val allGranted = hasUsageStats && hasOverlay && (hasAccessibility || preferences.accessibilityDisabled)
+        showPermissionSheet = !allGranted
+    }
+
+    // Re-check permissions when app resumes or preferences change
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner, preferences.accessibilityDisabled) {
+        checkPermissions()
+    }
+    
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                checkPermissions()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    if (showPermissionSheet) {
+        PermissionBottomSheet(
+            preferencesRepository = userPreferencesRepository,
+            onDismissRequest = { 
+                showPermissionSheet = false
+            },
+            onAllPermissionsGranted = {
+                showPermissionSheet = false
+            }
+        )
+    }
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentDestination = navBackStackEntry?.destination
+                navItems.forEach { screen ->
+                    NavigationBarItem(
+                        icon = { Icon(screen.icon, contentDescription = null) },
+                        label = { Text(screen.title) },
+                        selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                        onClick = {
+                            navController.navigate(screen.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = Screen.Home.route,
+            modifier = Modifier.padding(innerPadding),
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f)
+                ) + fadeIn(animationSpec = spring(stiffness = 400f))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it / 3 },
+                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f)
+                ) + fadeOut(animationSpec = spring(stiffness = 400f))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it / 3 },
+                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f)
+                ) + fadeIn(animationSpec = spring(stiffness = 400f))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f)
+                ) + fadeOut(animationSpec = spring(stiffness = 400f))
+            }
+        ) {
+            composable(Screen.Home.route) {
+                HomeScreen(homeViewModel, userPreferencesRepository)
+            }
+            composable(Screen.Focus.route) {
+                FocusScreen(focusViewModel)
+            }
+            composable(Screen.Settings.route) {
+                SettingsScreen(userPreferencesRepository)
+            }
+        }
+    }
+}

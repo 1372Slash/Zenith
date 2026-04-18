@@ -1,0 +1,13 @@
+<resources>
+    <!-- Tema Utama Aplikasi (Material 3) -->
+    <style name="Theme.Zenith" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Anda bisa menambahkan kustomisasi warna M3 di sini jika diperlukan -->
+    </style>
+
+    <!-- Tema Splash Screen (Akan otomatis menggunakan warna adaptif) -->
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/white</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.Zenith</item>
+    </style>
+</resources>
