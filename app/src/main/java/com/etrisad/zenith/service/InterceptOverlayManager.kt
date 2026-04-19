@@ -34,7 +34,8 @@ class InterceptOverlayManager(private val context: Context) {
         shield: com.etrisad.zenith.data.local.entity.ShieldEntity?,
         totalUsageToday: Long,
         onAllowUse: (Int, Boolean) -> Unit,
-        onCloseApp: () -> Unit
+        onCloseApp: () -> Unit,
+        onGoalDismiss: () -> Unit
     ) {
         if (overlayView != null) return
         isShowing = true
@@ -63,6 +64,10 @@ class InterceptOverlayManager(private val context: Context) {
                             onCloseApp = {
                                 hideOverlay()
                                 onCloseApp()
+                            },
+                            onGoalDismiss = {
+                                hideOverlay()
+                                onGoalDismiss()
                             }
                         )
                     }

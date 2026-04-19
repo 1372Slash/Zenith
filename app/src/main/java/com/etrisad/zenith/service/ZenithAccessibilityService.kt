@@ -107,6 +107,9 @@ class ZenithAccessibilityService : AccessibilityService() {
                         },
                         onCloseApp = {
                             performGlobalAction(GLOBAL_ACTION_HOME)
+                        },
+                        onGoalDismiss = {
+                            allowedApps[packageName] = System.currentTimeMillis() + (60 * 60 * 1000L) // 1 hour
                         }
                     )
                 }

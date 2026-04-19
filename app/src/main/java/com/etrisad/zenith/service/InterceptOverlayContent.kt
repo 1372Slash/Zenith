@@ -12,6 +12,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,9 +31,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
+import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -41,7 +47,8 @@ fun InterceptOverlayContent(
     shield: ShieldEntity?,
     totalUsageToday: Long,
     onAllowUse: (Int, Boolean) -> Unit,
-    onCloseApp: () -> Unit
+    onCloseApp: () -> Unit,
+    onGoalDismiss: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val appIcon = remember(packageName) {
@@ -119,8 +126,8 @@ fun InterceptOverlayContent(
                 elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
             ) {
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    // Uses & Emergency Indicators (Top of Bottom Sheet)
-                    if (shield != null) {
+                    // Uses & Emergency Indicators (Top of Bottom Sheet) - Only for SHIELD
+                    if (shield != null && shield.type == FocusType.SHIELD) {
                         // Left: Uses
                         Row(
                             modifier = Modifier
@@ -199,7 +206,7 @@ fun InterceptOverlayContent(
                                 )
                             } else {
                                 Icon(
-                                    Icons.Outlined.Block,
+                                    if (shield?.type == FocusType.GOAL) Icons.Outlined.Flag else Icons.Outlined.Block,
                                     contentDescription = null,
                                     modifier = Modifier.size(48.dp),
                                     tint = MaterialTheme.colorScheme.primary
@@ -210,7 +217,7 @@ fun InterceptOverlayContent(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         Text(
-                            text = "Mindful Pause",
+                            text = if (shield?.type == FocusType.GOAL) "Goal Pursuit" else "Mindful Pause",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
@@ -226,122 +233,250 @@ fun InterceptOverlayContent(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "Zenith Shield is active for this app.",
+                            text = if (shield?.type == FocusType.GOAL) 
+                                "You're working towards your usage goal." 
+                                else "Zenith Shield is active for this app.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
-                        // Usage Progress
-                        if (shield != null) {
-                            Spacer(modifier = Modifier.height(24.dp))
-                            val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
-                            val remainingMillis = (totalLimitMillis - totalUsageToday).coerceAtLeast(0L)
-                            val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
+                        if (shield != null && shield.type == FocusType.GOAL) {
+                            // GOAL UI
+                            val targetLimitMillis = shield.timeLimitMinutes * 60 * 1000L
+                            val progress = if (targetLimitMillis > 0) totalUsageToday.toFloat() / targetLimitMillis else 0f
+                            val remainingMillis = (targetLimitMillis - totalUsageToday).coerceAtLeast(0L)
                             
+                            val estimateTime = remember(remainingMillis) {
+                                val finishTime = System.currentTimeMillis() + remainingMillis
+                                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(finishTime))
+                            }
+
+                            val motivationText = remember(progress) {
+                                when {
+                                    progress < 0.3f -> "Great start! Keep going."
+                                    progress < 0.6f -> "You're halfway there! Stay focused."
+                                    progress < 0.9f -> "Almost finished! You can do it."
+                                    else -> "Just a little more to go!"
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(24.dp))
+
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        text = formatMillis(totalUsageToday),
+                                        text = "${(progress * 100).toInt()}% Done",
                                         style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
                                     )
                                     Text(
-                                        text = "${formatMillis(remainingMillis)} left today",
+                                        text = "Target: ${shield.timeLimitMinutes}m",
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                Spacer(modifier = Modifier.height(4.dp))
+                                
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
                                 val animatedProgress by animateFloatAsState(
                                     targetValue = progress.coerceIn(0f, 1f),
                                     animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
-                                    label = "progress"
+                                    label = "goalProgress"
                                 )
                                 LinearWavyProgressIndicator(
                                     progress = { animatedProgress },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(10.dp),
-                                    color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                    color = MaterialTheme.colorScheme.primary,
                                     trackColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
-                            }
-                        }
 
-                        if ((isUsesExceeded || isTimeLimitReached) && !isEmergencyUnlocked) {
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Timer,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Estimated finish: $estimateTime",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
                             Spacer(modifier = Modifier.height(32.dp))
-                            
-                            if (isUsesExceeded && !isTimeLimitReached) {
-                                var countdownText by remember { mutableStateOf(formatCountdown(refreshTimeLeftMillis)) }
-                                LaunchedEffect(refreshTimeLeftMillis) {
-                                    var current = refreshTimeLeftMillis
-                                    while (current > 0) {
-                                        delay(1000)
-                                        current -= 1000
-                                        countdownText = formatCountdown(current)
+
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Lightbulb,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = motivationText,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(32.dp))
+
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        showContent = false
+                                        delay(400)
+                                        onGoalDismiss()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = MaterialTheme.shapes.large
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Outlined.CheckCircle, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Got it, let's continue", fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                        } else {
+                            // SHIELD UI (Original)
+                            // Usage Progress
+                            if (shield != null) {
+                                Spacer(modifier = Modifier.height(24.dp))
+                                val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
+                                val remainingMillis = (totalLimitMillis - totalUsageToday).coerceAtLeast(0L)
+                                val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
+                                
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = formatMillis(totalUsageToday),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "${formatMillis(remainingMillis)} left today",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    val animatedProgress by animateFloatAsState(
+                                        targetValue = progress.coerceIn(0f, 1f),
+                                        animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
+                                        label = "progress"
+                                    )
+                                    LinearWavyProgressIndicator(
+                                        progress = { animatedProgress },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(10.dp),
+                                        color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                }
+                            }
+
+                            if ((isUsesExceeded || isTimeLimitReached) && !isEmergencyUnlocked) {
+                                Spacer(modifier = Modifier.height(32.dp))
+                                
+                                if (isUsesExceeded && !isTimeLimitReached) {
+                                    var countdownText by remember { mutableStateOf(formatCountdown(refreshTimeLeftMillis)) }
+                                    LaunchedEffect(refreshTimeLeftMillis) {
+                                        var current = refreshTimeLeftMillis
+                                        while (current > 0) {
+                                            delay(1000)
+                                            current -= 1000
+                                            countdownText = formatCountdown(current)
+                                        }
+                                    }
+
+                                    Text(
+                                        text = "Uses limit reached. Refresh in $countdownText",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.error,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center
+                                    )
+                                } else {
+                                    Text(
+                                        text = "Daily limit reached. Come back tomorrow.",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.error,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+
+                                if (shield != null && shield.emergencyUseCount > 0) {
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                    EmergencyButton(onEmergencyUse = { isEmergencyUnlocked = true })
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.height(32.dp))
+
+                                Text(
+                                    text = if (isEmergencyUnlocked) "Emergency Use: Select Duration" else "How long do you want to use it?",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                DurationButtonsGrid { minutes -> 
+                                    scope.launch {
+                                        showContent = false
+                                        delay(400)
+                                        onAllowUse(minutes, isEmergencyUnlocked)
                                     }
                                 }
+                            }
 
-                                Text(
-                                    text = "Uses limit reached. Refresh in $countdownText",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.error,
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center
+                            Spacer(modifier = Modifier.height(24.dp))
+
+                            TextButton(
+                                onClick = {
+                                    scope.launch {
+                                        showContent = false
+                                        delay(400)
+                                        onCloseApp()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
                                 )
-                            } else {
-                                Text(
-                                    text = "Daily limit reached. Come back tomorrow.",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.error,
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center
-                                )
+                            ) {
+                                Text("Close App", fontWeight = FontWeight.Bold)
                             }
-
-                            if (shield != null && shield.emergencyUseCount > 0) {
-                                Spacer(modifier = Modifier.height(24.dp))
-                                EmergencyButton(onEmergencyUse = { isEmergencyUnlocked = true })
-                            }
-                        } else {
-                            Spacer(modifier = Modifier.height(32.dp))
-
-                            Text(
-                                text = if (isEmergencyUnlocked) "Emergency Use: Select Duration" else "How long do you want to use it?",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            DurationButtonsGrid { minutes -> 
-                                scope.launch {
-                                    showContent = false
-                                    delay(400)
-                                    onAllowUse(minutes, isEmergencyUnlocked)
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        TextButton(
-                            onClick = {
-                                scope.launch {
-                                    showContent = false
-                                    delay(400)
-                                    onCloseApp()
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error
-                            )
-                        ) {
-                            Text("Close App", fontWeight = FontWeight.Bold)
                         }
                     }
                 }

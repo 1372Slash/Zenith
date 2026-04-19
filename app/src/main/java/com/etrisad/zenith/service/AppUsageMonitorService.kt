@@ -118,6 +118,9 @@ class AppUsageMonitorService : Service() {
                     },
                     onCloseApp = {
                         goToHomeScreen()
+                    },
+                    onGoalDismiss = {
+                        allowedApps[targetPackageName] = System.currentTimeMillis() + (60 * 60 * 1000L) // 1 hour
                     }
                 )
             }
