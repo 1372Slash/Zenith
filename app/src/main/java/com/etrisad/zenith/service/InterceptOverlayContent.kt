@@ -4,7 +4,6 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -23,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -67,6 +67,24 @@ fun InterceptOverlayContent(
     val isDelayEnabled = shield?.isDelayAppEnabled == true && shield.type == FocusType.SHIELD
     var delayProgress by remember { mutableFloatStateOf(0f) }
     var isDelaying by remember { mutableStateOf(isDelayEnabled) }
+
+    val motivationalMessages = remember {
+        listOf(
+            "Time for a quick stretch! 🧘",
+            "Have you had enough water today? 💧",
+            "Take 3 deep breaths... 💨",
+            "Ready to crush your goals? 🚀",
+            "Productivity is a marathon, not a sprint. 🏃",
+            "Check your to-do list for a quick win! ✅",
+            "A small step today is a big leap tomorrow. ✨",
+            "Stay focused, stay mindful. 🧠",
+            "Remember your homework or tasks! 📚",
+            "Do one small productive thing now. ⚡"
+        )
+    }
+    val randomMessage = remember(isDelaying) {
+        if (isDelaying) motivationalMessages.random() else ""
+    }
     
     val scope = rememberCoroutineScope()
 
@@ -480,25 +498,38 @@ fun InterceptOverlayContent(
                                             horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
                                             Text(
-                                                text = "Wait for a moment...",
+                                                text = randomMessage,
                                                 style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.SemiBold
+                                                fontWeight = FontWeight.Bold,
+                                                textAlign = TextAlign.Center,
+                                                modifier = Modifier.padding(horizontal = 16.dp)
                                             )
-                                            Spacer(modifier = Modifier.height(16.dp))
-                                            LinearWavyProgressIndicator(
-                                                progress = { delayProgress },
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(8.dp),
-                                                color = MaterialTheme.colorScheme.primary,
-                                                trackColor = MaterialTheme.colorScheme.surfaceVariant
-                                            )
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                            val secondsLeft = kotlin.math.ceil((1f - delayProgress) * delayDurationSeconds).toInt()
+                                            Spacer(modifier = Modifier.height(32.dp))
+                                            
+                                            Box(contentAlignment = Alignment.Center) {
+                                                val density = androidx.compose.ui.platform.LocalDensity.current
+                                                CircularWavyProgressIndicator(
+                                                    progress = { delayProgress },
+                                                    modifier = Modifier.size(120.dp),
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    amplitude = { 1f }, // Menggunakan nilai konstan atau lambda yang benar
+                                                    wavelength = 40.dp, // Menambah wavelength agar gelombang lebih jarang
+                                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                                )
+                                                val secondsLeft = kotlin.math.ceil((1f - delayProgress) * delayDurationSeconds).toInt()
+                                                Text(
+                                                    text = "${secondsLeft}s",
+                                                    style = MaterialTheme.typography.headlineMedium,
+                                                    fontWeight = FontWeight.Black,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                            
+                                            Spacer(modifier = Modifier.height(24.dp))
                                             Text(
-                                                text = "$secondsLeft seconds remaining",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                text = "Mindfulness in progress...",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                             )
                                         }
                                     } else {
@@ -637,6 +668,7 @@ fun EmergencyButton(onEmergencyUse: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DurationButtonsGrid(onAllowUse: (Int) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -651,6 +683,7 @@ fun DurationButtonsGrid(onAllowUse: (Int) -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DurationButton(
     minutes: Int,
@@ -714,12 +747,13 @@ fun DurationButton(
         ) { enabled ->
             if (!enabled) {
                 Box(contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(
+                    CircularWavyProgressIndicator(
                         progress = { progress },
-                        modifier = Modifier.size(32.dp),
+                        modifier = Modifier.size(36.dp),
                         color = MaterialTheme.colorScheme.primary,
-                        strokeWidth = 3.dp,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        stroke = Stroke(width = 6.dp.value),
+                        trackStroke = Stroke(width = 6.dp.value)
                     )
                     // Calculate countdown from progress for smooth transition
                     val secondsLeft = if (delaySeconds > 0) {
