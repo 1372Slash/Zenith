@@ -167,7 +167,7 @@ fun SettingsScreenContent(
         com.etrisad.zenith.ui.screens.home.ScreenTimeTargetBottomSheet(
             initialMinutes = preferences.screenTimeTargetMinutes,
             onDismiss = { showTargetSheet = false },
-            onSave = { 
+            onSave = {
                 onSetTarget(it)
                 showTargetSheet = false
             }

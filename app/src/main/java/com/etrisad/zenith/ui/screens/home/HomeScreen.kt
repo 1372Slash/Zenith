@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
+import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.ui.components.ShieldSortHeader
 import com.etrisad.zenith.ui.theme.ZenithTheme
@@ -221,7 +222,7 @@ fun UsageDashboard(
                     )
                 }
             }
-            
+
             Text(
                 text = formatDuration(uiState.totalScreenTime),
                 style = MaterialTheme.typography.displayMedium,
@@ -235,9 +236,9 @@ fun UsageDashboard(
 
             if (isTargetSet) {
                 Text(
-                    text = if (isExceeded) 
+                    text = if (isExceeded)
                         "Limit exceeded! Time to rest and reset for tomorrow."
-                    else 
+                    else
                         "Target: ${formatDuration(targetMillis)} (${formatDuration(targetMillis - uiState.totalScreenTime)} left)",
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (isExceeded) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -245,11 +246,11 @@ fun UsageDashboard(
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             val progress = if (isTargetSet) {
-                if (isExceeded) 0f 
+                if (isExceeded) 0f
                 else ((targetMillis - uiState.totalScreenTime).toFloat() / targetMillis).coerceIn(0f, 1f)
             } else {
                 0.7f // Default placeholder progress
@@ -260,7 +261,7 @@ fun UsageDashboard(
                 animationSpec = spring(dampingRatio = 0.4f, stiffness = 50f),
                 label = "DashboardProgress"
             )
-            
+
             LinearWavyProgressIndicator(
                 progress = { dashboardProgress },
                 modifier = Modifier
@@ -276,7 +277,7 @@ fun UsageDashboard(
         ScreenTimeTargetBottomSheet(
             initialMinutes = preferences.screenTimeTargetMinutes,
             onDismiss = { showTargetSheet = false },
-            onSave = { 
+            onSave = {
                 onSetTarget(it)
                 showTargetSheet = false
             }
@@ -352,7 +353,7 @@ fun ScreenTimeTargetBottomSheet(
             ) {
                 Text("Save Target")
             }
-            
+
             if (initialMinutes > 0) {
                 TextButton(
                     onClick = { onSave(0) },
@@ -362,29 +363,6 @@ fun ScreenTimeTargetBottomSheet(
                 }
             }
         }
-    }
-}
-
-@Composable
-fun NumberPicker(
-    value: Int,
-    onValueChange: (Int) -> Unit,
-    range: IntRange,
-    label: String
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        IconButton(onClick = { if (value < range.last) onValueChange(value + 1) }) {
-            Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Increase")
-        }
-        Text(
-            text = value.toString().padStart(2, '0'),
-            style = MaterialTheme.typography.displayMedium,
-            fontWeight = FontWeight.Bold
-        )
-        IconButton(onClick = { if (value > range.first) onValueChange(value - 1) }) {
-            Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = "Decrease")
-        }
-        Text(text = label, style = MaterialTheme.typography.labelMedium)
     }
 }
 
@@ -406,19 +384,19 @@ fun UsageTrendsRow(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    "Yesterday", 
+                    "Yesterday",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    formatDuration(uiState.yesterdayScreenTime), 
+                    formatDuration(uiState.yesterdayScreenTime),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
             }
         }
-        
+
         Card(
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(8.dp),
@@ -428,7 +406,7 @@ fun UsageTrendsRow(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    "Trend", 
+                    "Trend",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -504,7 +482,7 @@ fun UsageHistoryCard(
                     }
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
             UsageGraph(
                 history = history,
@@ -522,15 +500,15 @@ fun UsageGraph(
     val pages = remember(history) { history.chunked(7) }
     val pageCount = pages.size.coerceAtLeast(1)
     val pagerState = rememberPagerState(pageCount = { pageCount }, initialPage = (pageCount - 1).coerceAtLeast(0))
-    
+
     // Determine max usage for the current visible page (Adaptive Scale)
     val currentPageData = if (pagerState.currentPage < pages.size) pages[pagerState.currentPage] else emptyList()
     val maxUsageRaw = currentPageData.maxOfOrNull { it.totalTime }?.coerceAtLeast(1L) ?: 1L
-    
+
     // Scale to nearest hour for cleaner indicators
     val maxUsageHours = (maxUsageRaw / (1000 * 60 * 60)).coerceAtLeast(1) + 1
     val maxUsage = maxUsageHours * 1000 * 60 * 60L
-    
+
     val dateFormat = remember { SimpleDateFormat("dd", Locale.getDefault()) }
     val dayFormat = remember { SimpleDateFormat("EEE", Locale.getDefault()) }
     val todayDate = remember { dateFormat.format(System.currentTimeMillis()) }
@@ -611,7 +589,7 @@ fun UsageGraph(
                             ),
                             label = "BarHeight"
                         )
-                        
+
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
@@ -641,7 +619,7 @@ fun UsageGraph(
                     }
                 }
             }
-            
+
             // Fixed Labels (Days) at the bottom, matching the pager
             HorizontalPager(
                 state = pagerState,
@@ -668,7 +646,7 @@ fun UsageGraph(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
-        
+
         // Pager Indicators (Dots)
         Row(
             Modifier
@@ -851,12 +829,12 @@ fun ShieldItem(
     val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
     val remainingMillis = shield.remainingTimeMillis.coerceIn(0L, totalLimitMillis)
     val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
-    
+
     val context = LocalContext.current
     val appIcon = remember(shield.packageName) {
         try {
             context.packageManager.getApplicationIcon(shield.packageName)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }
@@ -878,10 +856,15 @@ fun ShieldItem(
                     )
                 },
                 supportingContent = {
+                    val timeLabel = if (shield.type == FocusType.GOAL) "To Go" else "Left"
                     Text(
-                        text = "${formatDuration(remainingMillis)} left",
+                        text = "${formatDuration(remainingMillis)} $timeLabel",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                        color = if (shield.type == FocusType.GOAL) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                        }
                     )
                 },
                 leadingContent = {
@@ -907,8 +890,13 @@ fun ShieldItem(
                     }
                 },
                 trailingContent = {
+                    val percentage = if (shield.type == FocusType.GOAL) {
+                        ((1f - progress) * 100).toInt()
+                    } else {
+                        (progress * 100).toInt()
+                    }
                     Text(
-                        text = "${(progress * 100).toInt()}%",
+                        text = "$percentage%",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -917,21 +905,27 @@ fun ShieldItem(
                     containerColor = Color.Transparent
                 )
             )
-            
+
             val animatedProgress by animateFloatAsState(
                 targetValue = progress,
                 animationSpec = spring(dampingRatio = 0.5f, stiffness = 100f),
                 label = "Progress"
             )
 
+            val indicatorColor = if (shield.type == FocusType.GOAL) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
+            }
+
             LinearWavyProgressIndicator(
-                progress = { animatedProgress },
+                progress = { if (shield.type == FocusType.GOAL) 1f - animatedProgress else animatedProgress },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
                     .height(8.dp)
                     .clip(CircleShape),
-                color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
+                color = indicatorColor,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         }
@@ -961,6 +955,44 @@ fun EmptyShieldsMessage() {
     }
 }
 
+@Composable
+fun NumberPicker(
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    range: IntRange,
+    label: String
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        IconButton(
+            onClick = { if (value < range.last) onValueChange(value + 1) },
+            enabled = value < range.last
+        ) {
+            Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Increase $label")
+        }
+        Text(
+            text = value.toString().padStart(2, '0'),
+            style = MaterialTheme.typography.displayMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        IconButton(
+            onClick = { if (value > range.first) onValueChange(value - 1) },
+            enabled = value > range.first
+        ) {
+            Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = "Decrease $label")
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 fun HomeScreenPreview() {
@@ -974,8 +1006,8 @@ fun HomeScreenPreview() {
                     AppUsageInfo("com.youtube", "YouTube", 900000)
                 ),
                 shieldedApps = listOf(
-                    ShieldEntity("com.instagram", "Instagram", 60, remainingTimeMillis = 30 * 60 * 1000L),
-                    ShieldEntity("com.twitter", "X", 30, remainingTimeMillis = 5 * 60 * 1000L)
+                    ShieldEntity("com.instagram", "Instagram", FocusType.SHIELD, 60, remainingTimeMillis = 30 * 60 * 1000L),
+                    ShieldEntity("com.twitter", "X", FocusType.SHIELD, 30, remainingTimeMillis = 5 * 60 * 1000L)
                 )
             ),
             preferences = com.etrisad.zenith.data.preferences.UserPreferences(

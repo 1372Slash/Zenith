@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.repository.ShieldRepository
 import kotlinx.coroutines.Dispatchers
@@ -27,7 +28,8 @@ data class FocusUiState(
     val installedApps: List<AppInfo> = emptyList(),
     val searchQuery: String = "",
     val isLoadingApps: Boolean = false,
-    val selectedAppForShield: AppInfo? = null,
+    val selectedAppForFocus: AppInfo? = null,
+    val selectedFocusType: FocusType = FocusType.SHIELD,
     val isSettingsSheetOpen: Boolean = false,
     val sortType: ShieldSortType = ShieldSortType.ALPHABETICAL
 )
@@ -108,46 +110,51 @@ class FocusViewModel(
         _uiState.value = _uiState.value.copy(installedApps = filtered)
     }
 
-    fun selectAppForShield(app: AppInfo) {
+    fun selectAppForFocus(app: AppInfo?, type: FocusType) {
         _uiState.value = _uiState.value.copy(
-            selectedAppForShield = app,
-            isSettingsSheetOpen = true
+            selectedAppForFocus = app,
+            selectedFocusType = type,
+            isSettingsSheetOpen = app != null // Only open settings if app is selected
         )
     }
 
     fun closeSettingsSheet() {
         _uiState.value = _uiState.value.copy(
             isSettingsSheetOpen = false,
-            selectedAppForShield = null
+            selectedAppForFocus = null
         )
     }
 
-    fun saveShield(
+    fun saveFocus(
         timeLimitMinutes: Int,
-        emergencyUseCount: Int,
-        isRemindersEnabled: Boolean,
-        isStrictModeEnabled: Boolean,
-        isAutoQuitEnabled: Boolean,
+        emergencyUseCount: Int = 0,
+        isRemindersEnabled: Boolean = true,
+        isStrictModeEnabled: Boolean = false,
+        isAutoQuitEnabled: Boolean = false,
         maxUsesPerPeriod: Int = 5,
-        refreshPeriodMinutes: Int = 60
+        refreshPeriodMinutes: Int = 60,
+        goalReminderPeriodMinutes: Int = 0
     ) {
-        val selectedApp = _uiState.value.selectedAppForShield ?: return
+        val selectedApp = _uiState.value.selectedAppForFocus ?: return
+        val type = _uiState.value.selectedFocusType
         viewModelScope.launch {
             val existing = _uiState.value.shieldedApps.find { it.packageName == selectedApp.packageName }
             val shield = ShieldEntity(
                 packageName = selectedApp.packageName,
                 appName = selectedApp.appName,
+                type = type,
                 timeLimitMinutes = timeLimitMinutes,
-                emergencyUseCount = emergencyUseCount,
+                emergencyUseCount = if (type == FocusType.SHIELD) emergencyUseCount else 0,
                 isRemindersEnabled = isRemindersEnabled,
-                isStrictModeEnabled = isStrictModeEnabled,
-                isAutoQuitEnabled = isAutoQuitEnabled,
+                isStrictModeEnabled = if (type == FocusType.SHIELD) isStrictModeEnabled else false,
+                isAutoQuitEnabled = if (type == FocusType.SHIELD) isAutoQuitEnabled else false,
                 remainingTimeMillis = existing?.remainingTimeMillis ?: (timeLimitMinutes * 60 * 1000L),
                 lastUsedTimestamp = System.currentTimeMillis(),
-                maxUsesPerPeriod = maxUsesPerPeriod,
-                refreshPeriodMinutes = refreshPeriodMinutes,
+                maxUsesPerPeriod = if (type == FocusType.SHIELD) maxUsesPerPeriod else 0,
+                refreshPeriodMinutes = if (type == FocusType.SHIELD) refreshPeriodMinutes else 0,
                 currentPeriodUses = existing?.currentPeriodUses ?: 0,
-                lastPeriodResetTimestamp = existing?.lastPeriodResetTimestamp ?: System.currentTimeMillis()
+                lastPeriodResetTimestamp = existing?.lastPeriodResetTimestamp ?: System.currentTimeMillis(),
+                goalReminderPeriodMinutes = goalReminderPeriodMinutes
             )
             shieldRepository.insertShield(shield)
             closeSettingsSheet()
@@ -170,7 +177,8 @@ class FocusViewModel(
                 AppInfo(shield.packageName, shield.appName, null)
             }
             _uiState.value = _uiState.value.copy(
-                selectedAppForShield = appInfo,
+                selectedAppForFocus = appInfo,
+                selectedFocusType = shield.type,
                 isSettingsSheetOpen = true
             )
         }
