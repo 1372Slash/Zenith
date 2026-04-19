@@ -148,7 +148,8 @@ class FocusViewModel(
         isAutoQuitEnabled: Boolean = false,
         maxUsesPerPeriod: Int = 5,
         refreshPeriodMinutes: Int = 60,
-        goalReminderPeriodMinutes: Int = 0
+        goalReminderPeriodMinutes: Int = 0,
+        isDelayAppEnabled: Boolean = false
     ) {
         val selectedApp = _uiState.value.selectedAppForFocus ?: return
         val type = _uiState.value.selectedFocusType
@@ -171,7 +172,8 @@ class FocusViewModel(
                 currentPeriodUses = existing?.currentPeriodUses ?: 0,
                 lastPeriodResetTimestamp = existing?.lastPeriodResetTimestamp ?: System.currentTimeMillis(),
                 lastEmergencyRechargeTimestamp = existing?.lastEmergencyRechargeTimestamp ?: System.currentTimeMillis(),
-                goalReminderPeriodMinutes = goalReminderPeriodMinutes
+                goalReminderPeriodMinutes = goalReminderPeriodMinutes,
+                isDelayAppEnabled = if (type == FocusType.SHIELD) isDelayAppEnabled else false
             )
             shieldRepository.insertShield(shield)
             closeSettingsSheet()

@@ -46,6 +46,7 @@ fun InterceptOverlayContent(
     appName: String,
     shield: ShieldEntity?,
     totalUsageToday: Long,
+    delayDurationSeconds: Int = 0,
     onAllowUse: (Int, Boolean) -> Unit,
     onCloseApp: () -> Unit,
     onGoalDismiss: () -> Unit = {}
@@ -61,6 +62,12 @@ fun InterceptOverlayContent(
 
     var showContent by remember { mutableStateOf(false) }
     var isEmergencyUnlocked by remember { mutableStateOf(false) }
+    
+    // Delay App State
+    val isDelayEnabled = shield?.isDelayAppEnabled == true && shield.type == FocusType.SHIELD
+    var delayProgress by remember { mutableFloatStateOf(0f) }
+    var isDelaying by remember { mutableStateOf(isDelayEnabled) }
+    
     val scope = rememberCoroutineScope()
 
     val backgroundAlpha by animateFloatAsState(
@@ -71,6 +78,22 @@ fun InterceptOverlayContent(
 
     LaunchedEffect(Unit) {
         showContent = true
+    }
+
+    // Delay Timer Effect
+    LaunchedEffect(isDelaying) {
+        if (isDelaying && delayDurationSeconds > 0) {
+            val startTime = System.currentTimeMillis()
+            val endTime = startTime + (delayDurationSeconds * 1000)
+            while (System.currentTimeMillis() < endTime) {
+                delay(16) // ~60fps
+                delayProgress = ((System.currentTimeMillis() - startTime).toFloat() / (delayDurationSeconds * 1000)).coerceIn(0f, 1f)
+            }
+            delayProgress = 1f
+            isDelaying = false
+        } else {
+            isDelaying = false
+        }
     }
 
     val isPeriodExpired = shield != null && 
@@ -443,19 +466,62 @@ fun InterceptOverlayContent(
                             } else {
                                 Spacer(modifier = Modifier.height(32.dp))
 
-                                Text(
-                                    text = if (isEmergencyUnlocked) "Emergency Use: Select Duration" else "How long do you want to use it?",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
+                                AnimatedContent(
+                                    targetState = isDelaying,
+                                    transitionSpec = {
+                                        fadeIn(animationSpec = tween(500)) togetherWith
+                                                fadeOut(animationSpec = tween(500))
+                                    },
+                                    label = "delayContent"
+                                ) { delaying ->
+                                    if (delaying) {
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Text(
+                                                text = "Wait for a moment...",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            LinearWavyProgressIndicator(
+                                                progress = { delayProgress },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(8.dp),
+                                                color = MaterialTheme.colorScheme.primary,
+                                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                            )
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            val secondsLeft = kotlin.math.ceil((1f - delayProgress) * delayDurationSeconds).toInt()
+                                            Text(
+                                                text = "$secondsLeft seconds remaining",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    } else {
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Text(
+                                                text = if (isEmergencyUnlocked) "Emergency Use: Select Duration" else "How long do you want to use it?",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
 
-                                Spacer(modifier = Modifier.height(16.dp))
+                                            Spacer(modifier = Modifier.height(16.dp))
 
-                                DurationButtonsGrid { minutes -> 
-                                    scope.launch {
-                                        showContent = false
-                                        delay(400)
-                                        onAllowUse(minutes, isEmergencyUnlocked)
+                                            DurationButtonsGrid { minutes ->
+                                                scope.launch {
+                                                    showContent = false
+                                                    delay(400)
+                                                    onAllowUse(minutes, isEmergencyUnlocked)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }

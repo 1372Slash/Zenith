@@ -8,12 +8,14 @@ import android.view.accessibility.AccessibilityEvent
 import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.repository.ShieldRepository
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
 
 class ZenithAccessibilityService : AccessibilityService() {
 
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
     private lateinit var shieldRepository: ShieldRepository
+    private lateinit var preferencesRepository: com.etrisad.zenith.data.preferences.UserPreferencesRepository
     private lateinit var overlayManager: InterceptOverlayManager
     private val allowedApps = mutableMapOf<String, Long>()
     private var currentPackage: String? = null
@@ -28,6 +30,7 @@ class ZenithAccessibilityService : AccessibilityService() {
         isServiceRunning = true
         val database = ZenithDatabase.getDatabase(this)
         shieldRepository = ShieldRepository(database.shieldDao())
+        preferencesRepository = com.etrisad.zenith.data.preferences.UserPreferencesRepository(this)
         overlayManager = InterceptOverlayManager(this)
         startMonitoring()
     }
@@ -81,12 +84,15 @@ class ZenithAccessibilityService : AccessibilityService() {
             val shield = shieldRepository.getShieldByPackageName(packageName)
             if (shield != null && !InterceptOverlayManager.isShowing) {
                 val totalUsageToday = getTotalUsageToday(packageName)
+                val delayDurationSeconds = preferencesRepository.userPreferencesFlow.first().delayAppDurationSeconds
+                
                 serviceScope.launch(Dispatchers.Main) {
                     overlayManager.showOverlay(
                         packageName = packageName,
                         appName = shield.appName,
                         shield = shield,
                         totalUsageToday = totalUsageToday,
+                        delayDurationSeconds = delayDurationSeconds,
                         onAllowUse = { minutes, isEmergency ->
                             serviceScope.launch {
                                 val currentShield = shieldRepository.getShieldByPackageName(packageName) ?: return@launch

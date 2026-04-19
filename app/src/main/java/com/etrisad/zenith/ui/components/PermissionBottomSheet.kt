@@ -41,7 +41,7 @@ fun PermissionBottomSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     
     val preferences by preferencesRepository.userPreferencesFlow.collectAsState(
-        initial = UserPreferences(ThemeConfig.FOLLOW_SYSTEM, true, false, 0, 60)
+        initial = UserPreferences(ThemeConfig.FOLLOW_SYSTEM, true, false, 0, 60, 30)
     )
     
     var hasUsageStats by remember { mutableStateOf(hasUsageStatsPermission(context)) }

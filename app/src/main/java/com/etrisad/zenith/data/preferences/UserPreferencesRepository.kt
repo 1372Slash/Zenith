@@ -28,6 +28,7 @@ class UserPreferencesRepository(private val context: Context) {
         val ACCESSIBILITY_DISABLED = booleanPreferencesKey("accessibility_disabled")
         val SCREEN_TIME_TARGET = intPreferencesKey("screen_time_target")
         val EMERGENCY_RECHARGE_DURATION_MINUTES = intPreferencesKey("emergency_recharge_duration_minutes")
+        val DELAY_APP_DURATION_SECONDS = intPreferencesKey("delay_app_duration_seconds")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -46,7 +47,15 @@ class UserPreferencesRepository(private val context: Context) {
             val accessibilityDisabled = preferences[PreferencesKeys.ACCESSIBILITY_DISABLED] ?: false
             val screenTimeTarget = preferences[PreferencesKeys.SCREEN_TIME_TARGET] ?: 0
             val emergencyRechargeDuration = preferences[PreferencesKeys.EMERGENCY_RECHARGE_DURATION_MINUTES] ?: 60
-            UserPreferences(themeConfig, dynamicColor, accessibilityDisabled, screenTimeTarget, emergencyRechargeDuration)
+            val delayAppDuration = preferences[PreferencesKeys.DELAY_APP_DURATION_SECONDS] ?: 30
+            UserPreferences(
+                themeConfig = themeConfig,
+                dynamicColor = dynamicColor,
+                accessibilityDisabled = accessibilityDisabled,
+                screenTimeTargetMinutes = screenTimeTarget,
+                emergencyRechargeDurationMinutes = emergencyRechargeDuration,
+                delayAppDurationSeconds = delayAppDuration
+            )
         }
 
     suspend fun setThemeConfig(themeConfig: ThemeConfig) {
@@ -78,6 +87,12 @@ class UserPreferencesRepository(private val context: Context) {
             preferences[PreferencesKeys.EMERGENCY_RECHARGE_DURATION_MINUTES] = minutes
         }
     }
+
+    suspend fun setDelayAppDuration(seconds: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.DELAY_APP_DURATION_SECONDS] = seconds
+        }
+    }
 }
 
 data class UserPreferences(
@@ -85,5 +100,6 @@ data class UserPreferences(
     val dynamicColor: Boolean,
     val accessibilityDisabled: Boolean,
     val screenTimeTargetMinutes: Int,
-    val emergencyRechargeDurationMinutes: Int
+    val emergencyRechargeDurationMinutes: Int,
+    val delayAppDurationSeconds: Int
 )

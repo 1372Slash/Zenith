@@ -69,7 +69,8 @@ fun HomeScreen(
             true,
             false,
             0,
-            60
+            60,
+            30
         )
     )
 
@@ -1177,7 +1178,8 @@ fun HomeScreenPreview() {
                 true,
                 false,
                 180, // 3h target
-                60
+                60,
+                30
             ),
             onSetTarget = {},
             formatDuration = { "3h 30m" },

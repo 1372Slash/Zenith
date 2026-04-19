@@ -114,12 +114,15 @@ class AppUsageMonitorService : Service() {
         val shield = shieldRepository.getShieldByPackageName(targetPackageName)
         if (shield != null && !InterceptOverlayManager.isShowing) {
             val totalUsageToday = getTotalUsageToday(targetPackageName)
+            val delayDurationSeconds = preferencesRepository.userPreferencesFlow.first().delayAppDurationSeconds
+            
             serviceScope.launch(Dispatchers.Main) {
                 overlayManager.showOverlay(
                     packageName = targetPackageName,
                     appName = shield.appName,
                     shield = shield,
                     totalUsageToday = totalUsageToday,
+                    delayDurationSeconds = delayDurationSeconds,
                     onAllowUse = { minutes, isEmergency ->
                         serviceScope.launch {
                             val currentShield = shieldRepository.getShieldByPackageName(targetPackageName) ?: return@launch

@@ -15,13 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.AccessibilityNew
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.DarkMode
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Palette
-import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -44,7 +38,8 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
             dynamicColor = true,
             accessibilityDisabled = false,
             screenTimeTargetMinutes = 0,
-            emergencyRechargeDurationMinutes = 60
+            emergencyRechargeDurationMinutes = 60,
+            delayAppDurationSeconds = 30
         )
     )
     val coroutineScope = rememberCoroutineScope()
@@ -75,6 +70,11 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
             coroutineScope.launch {
                 preferencesRepository.setEmergencyRechargeDuration(minutes)
             }
+        },
+        onSetDelayAppDuration = { seconds ->
+            coroutineScope.launch {
+                preferencesRepository.setDelayAppDuration(seconds)
+            }
         }
     )
 }
@@ -86,10 +86,12 @@ fun SettingsScreenContent(
     onDynamicColorChange: (Boolean) -> Unit,
     onAccessibilityDisabledChange: (Boolean) -> Unit,
     onSetTarget: (Int) -> Unit,
-    onSetEmergencyRecharge: (Int) -> Unit
+    onSetEmergencyRecharge: (Int) -> Unit,
+    onSetDelayAppDuration: (Int) -> Unit
 ) {
     var showTargetSheet by remember { mutableStateOf(false) }
     var showEmergencyRechargeSheet by remember { mutableStateOf(false) }
+    var showDelayAppSheet by remember { mutableStateOf(false) }
 
     Scaffold { innerPadding ->
         LazyColumn(
@@ -142,6 +144,17 @@ fun SettingsScreenContent(
                     } else "No target set",
                     onClick = { showTargetSheet = true },
                     icon = Icons.Outlined.Edit,
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                SettingsActionItem(
+                    title = "App Opening Delay",
+                    summary = "Wait ${preferences.delayAppDurationSeconds}s before reopening",
+                    onClick = { showDelayAppSheet = true },
+                    icon = Icons.Outlined.History,
                     shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                 )
             }
@@ -205,6 +218,86 @@ fun SettingsScreenContent(
                 showEmergencyRechargeSheet = false
             }
         )
+    }
+
+    if (showDelayAppSheet) {
+        DelayAppBottomSheet(
+            initialSeconds = preferences.delayAppDurationSeconds,
+            onDismiss = { showDelayAppSheet = false },
+            onSave = { seconds ->
+                onSetDelayAppDuration(seconds)
+                showDelayAppSheet = false
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DelayAppBottomSheet(
+    initialSeconds: Int,
+    onDismiss: () -> Unit,
+    onSave: (Int) -> Unit
+) {
+    var seconds by remember { mutableIntStateOf(initialSeconds) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp)
+                .navigationBarsPadding()
+        ) {
+            Text(
+                text = "App Opening Delay",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Set how many seconds to wait before a user can reopen an app after being kicked out.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                IconButton(
+                    onClick = { if (seconds >= 10) seconds -= 5 },
+                    modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                ) {
+                    Text("-", style = MaterialTheme.typography.headlineMedium)
+                }
+
+                Text(
+                    text = "${seconds}s",
+                    style = MaterialTheme.typography.displayMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 32.dp)
+                )
+
+                IconButton(
+                    onClick = { if (seconds < 300) seconds += 5 },
+                    modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                ) {
+                    Text("+", style = MaterialTheme.typography.headlineMedium)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Button(
+                onClick = { onSave(seconds) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text("Save Delay", modifier = Modifier.padding(8.dp))
+            }
+        }
     }
 }
 

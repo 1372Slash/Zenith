@@ -52,7 +52,8 @@ class MainActivity : ComponentActivity() {
                     true,
                     false,
                     0,
-                    60
+                    60,
+                    30
                 )
             )
 

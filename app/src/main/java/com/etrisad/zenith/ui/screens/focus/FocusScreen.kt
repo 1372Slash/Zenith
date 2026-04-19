@@ -152,8 +152,8 @@ fun FocusScreen(viewModel: FocusViewModel) {
                 focusType = uiState.selectedFocusType,
                 existingShield = (uiState.activeShields + uiState.activeGoals).find { it.packageName == uiState.selectedAppForFocus!!.packageName },
                 onDismiss = { viewModel.closeSettingsSheet() },
-                onSave = { limit, emergency, reminders, strict, autoQuit, maxUses, refresh, goalReminder ->
-                    viewModel.saveFocus(limit, emergency, reminders, strict, autoQuit, maxUses, refresh, goalReminder)
+                onSave = { limit, emergency, reminders, strict, autoQuit, maxUses, refresh, goalReminder, delayApp ->
+                    viewModel.saveFocus(limit, emergency, reminders, strict, autoQuit, maxUses, refresh, goalReminder, delayApp)
                 }
             )
         }
@@ -615,7 +615,7 @@ fun FocusSettingsBottomSheet(
     focusType: FocusType,
     existingShield: ShieldEntity?,
     onDismiss: () -> Unit,
-    onSave: (Int, Int, Boolean, Boolean, Boolean, Int, Int, Int) -> Unit
+    onSave: (Int, Int, Boolean, Boolean, Boolean, Int, Int, Int, Boolean) -> Unit
 ) {
     val timePickerState = rememberTimePickerState(
         initialHour = (existingShield?.timeLimitMinutes ?: (if (focusType == FocusType.GOAL) 60 else 30)) / 60,
@@ -626,6 +626,7 @@ fun FocusSettingsBottomSheet(
     var remindersEnabled by remember { mutableStateOf(existingShield?.isRemindersEnabled ?: true) }
     var strictModeEnabled by remember { mutableStateOf(existingShield?.isStrictModeEnabled ?: false) }
     var autoQuitEnabled by remember { mutableStateOf(existingShield?.isAutoQuitEnabled ?: false) }
+    var isDelayAppEnabled by remember { mutableStateOf(existingShield?.isDelayAppEnabled ?: false) }
     var maxUses by remember { mutableStateOf(existingShield?.maxUsesPerPeriod?.toString() ?: "5") }
     var refreshPeriodMinutes by remember { mutableIntStateOf(existingShield?.refreshPeriodMinutes ?: 60) }
     var goalReminderPeriodMinutes by remember { mutableIntStateOf(existingShield?.goalReminderPeriodMinutes ?: 120) }
@@ -788,6 +789,16 @@ fun FocusSettingsBottomSheet(
                     onCheckedChange = { autoQuitEnabled = it },
                     icon = Icons.AutoMirrored.Outlined.ExitToApp
                 )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                SettingsToggle(
+                    title = "Delay App",
+                    description = "Wait before reopening after being kicked out",
+                    checked = isDelayAppEnabled,
+                    onCheckedChange = { isDelayAppEnabled = it },
+                    icon = Icons.Outlined.History
+                )
             } else {
                 // GOAL specific settings
                 ExposedDropdownMenuBox(
@@ -846,7 +857,8 @@ fun FocusSettingsBottomSheet(
                         autoQuitEnabled,
                         maxUses.toIntOrNull() ?: 5,
                         refreshPeriodMinutes,
-                        goalReminderPeriodMinutes
+                        goalReminderPeriodMinutes,
+                        isDelayAppEnabled
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
