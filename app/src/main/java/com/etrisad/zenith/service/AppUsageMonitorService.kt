@@ -41,11 +41,21 @@ class AppUsageMonitorService : Service() {
         startMonitoring()
     }
 
+    private var lastCheckedDay = -1
+
     private fun startMonitoring() {
         serviceScope.launch {
             while (true) {
                 val currentApp = getForegroundApp()
                 val currentTime = System.currentTimeMillis()
+
+                // Check for day change to update streaks
+                val calendar = java.util.Calendar.getInstance()
+                val currentDay = calendar.get(java.util.Calendar.DAY_OF_YEAR)
+                if (lastCheckedDay != -1 && currentDay != lastCheckedDay) {
+                    updateStreaks()
+                }
+                lastCheckedDay = currentDay
 
                 if (currentApp != null && currentApp != packageName) {
                     val allowedUntil = allowedApps[currentApp] ?: 0L
@@ -169,6 +179,43 @@ class AppUsageMonitorService : Service() {
                         allowedApps[targetPackageName] = System.currentTimeMillis() + (60 * 60 * 1000L) // 1 hour
                     }
                 )
+            }
+        }
+    }
+
+    private suspend fun updateStreaks() {
+        val shields = shieldRepository.allShields.first()
+        val currentTime = System.currentTimeMillis()
+        
+        shields.forEach { shield ->
+            val totalUsageToday = getTotalUsageToday(shield.packageName)
+            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+            
+            var shouldIncrement = false
+            if (shield.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL) {
+                // Goal: Streak if reached 100% (usage >= target)
+                if (totalUsageToday >= limitMillis && limitMillis > 0) {
+                    shouldIncrement = true
+                }
+            } else {
+                // Shield: Streak if within limit (usage <= limit)
+                if (totalUsageToday <= limitMillis) {
+                    shouldIncrement = true
+                }
+            }
+
+            if (shouldIncrement) {
+                val newStreak = shield.currentStreak + 1
+                shieldRepository.updateShield(shield.copy(
+                    currentStreak = newStreak,
+                    lastStreakUpdateTimestamp = currentTime
+                ))
+            } else {
+                // Reset streak if not met
+                shieldRepository.updateShield(shield.copy(
+                    currentStreak = 0,
+                    lastStreakUpdateTimestamp = currentTime
+                ))
             }
         }
     }

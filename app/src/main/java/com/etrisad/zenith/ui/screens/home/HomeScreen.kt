@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -1074,11 +1075,28 @@ fun ShieldItem(
                     } else {
                         (progress * 100).toInt()
                     }
-                    Text(
-                        text = "$percentage%",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (shield.currentStreak > 0) {
+                            Icon(
+                                imageVector = Icons.Default.Whatshot,
+                                contentDescription = "Streak",
+                                modifier = Modifier.size(16.dp),
+                                tint = Color(0xFFFF9800)
+                            )
+                            Text(
+                                text = "${shield.currentStreak}",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFF9800),
+                                modifier = Modifier.padding(start = 2.dp, end = 8.dp)
+                            )
+                        }
+                        Text(
+                            text = "$percentage%",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 },
                 colors = ListItemDefaults.colors(
                     containerColor = Color.Transparent

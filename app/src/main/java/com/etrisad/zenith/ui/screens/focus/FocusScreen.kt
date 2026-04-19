@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
+import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -421,12 +422,29 @@ fun ShieldConfigItem(
                     (progress * 100).toInt() // Show remaining limit
                 }
                 
-                Text(
-                    text = "$percentage%",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (shield.currentStreak > 0) {
+                        Icon(
+                            imageVector = Icons.Default.Whatshot,
+                            contentDescription = "Streak",
+                            modifier = Modifier.size(18.dp),
+                            tint = Color(0xFFFF9800)
+                        )
+                        Text(
+                            text = "${shield.currentStreak}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFF9800),
+                            modifier = Modifier.padding(start = 2.dp, end = 12.dp)
+                        )
+                    }
+                    Text(
+                        text = "$percentage%",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
                 Spacer(modifier = Modifier.width(8.dp))
 
