@@ -126,7 +126,14 @@ fun SettingsScreenContent(
                 Spacer(modifier = Modifier.height(4.dp))
                 SettingsActionItem(
                     title = "Emergency Recharge Time",
-                    summary = "1 charge every ${preferences.emergencyRechargeDurationMinutes} minutes",
+                    summary = preferences.emergencyRechargeDurationMinutes.let { mins ->
+                        val label = when {
+                            mins >= 1440 -> "${mins / 1440} day${if (mins / 1440 > 1) "s" else ""}"
+                            mins >= 60 -> "${mins / 60} hour${if (mins / 60 > 1) "s" else ""}"
+                            else -> "$mins minutes"
+                        }
+                        "1 charge every $label"
+                    },
                     onClick = { showEmergencyRechargeSheet = true },
                     icon = Icons.Outlined.Shield,
                     shape = RoundedCornerShape(8.dp)
@@ -152,7 +159,14 @@ fun SettingsScreenContent(
                 Spacer(modifier = Modifier.height(4.dp))
                 SettingsActionItem(
                     title = "App Opening Delay",
-                    summary = "Wait ${preferences.delayAppDurationSeconds}s before reopening",
+                    summary = preferences.delayAppDurationSeconds.let { secs ->
+                        val label = when {
+                            secs >= 3600 -> "${secs / 3600}h"
+                            secs >= 60 -> "${secs / 60}m"
+                            else -> "${secs}s"
+                        }
+                        "Wait $label before reopening"
+                    },
                     onClick = { showDelayAppSheet = true },
                     icon = Icons.Outlined.History,
                     shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
@@ -267,28 +281,44 @@ fun DelayAppBottomSheet(
                 horizontalArrangement = Arrangement.Center
             ) {
                 IconButton(
-                    onClick = { if (seconds >= 10) seconds -= 5 },
+                    onClick = { if (seconds >= 5) seconds -= 5 },
                     modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
                 ) {
                     Text("-", style = MaterialTheme.typography.headlineMedium)
                 }
 
                 Text(
-                    text = "${seconds}s",
+                    text = if (seconds >= 60) "${seconds / 60}m ${seconds % 60}s" else "${seconds}s",
                     style = MaterialTheme.typography.displayMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 32.dp)
                 )
 
                 IconButton(
-                    onClick = { if (seconds < 300) seconds += 5 },
+                    onClick = { if (seconds < 3600) seconds += 5 },
                     modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
                 ) {
                     Text("+", style = MaterialTheme.typography.headlineMedium)
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+            ) {
+                listOf(15, 30, 60).forEach { preset ->
+                    FilterChip(
+                        selected = seconds == preset,
+                        onClick = { seconds = preset },
+                        label = { Text("${preset}s") },
+                        shape = CircleShape
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = { onSave(seconds) },
@@ -336,14 +366,18 @@ fun EmergencyRechargeBottomSheet(
                 horizontalArrangement = Arrangement.Center
             ) {
                 IconButton(
-                    onClick = { if (minutes >= 10) minutes -= 5 },
+                    onClick = { if (minutes >= 5) minutes -= 5 },
                     modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
                 ) {
                     Text("-", style = MaterialTheme.typography.headlineMedium)
                 }
 
                 Text(
-                    text = "${minutes}m",
+                    text = when {
+                        minutes >= 1440 -> "${minutes / 1440}d" + if (minutes % 1440 > 0) " ${ (minutes % 1440) / 60 }h" else ""
+                        minutes >= 60 -> "${minutes / 60}h" + if (minutes % 60 > 0) " ${minutes % 60}m" else ""
+                        else -> "${minutes}m"
+                    },
                     style = MaterialTheme.typography.displayMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 32.dp)
@@ -357,7 +391,29 @@ fun EmergencyRechargeBottomSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+            ) {
+                val presets = listOf(60, 180, 1440)
+                presets.forEach { preset ->
+                    val label = when {
+                        preset >= 1440 -> "${preset / 1440}d"
+                        preset >= 60 -> "${preset / 60}h"
+                        else -> "${preset}m"
+                    }
+                    FilterChip(
+                        selected = minutes == preset,
+                        onClick = { minutes = preset },
+                        label = { Text(label) },
+                        shape = CircleShape
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = { onSave(minutes) },

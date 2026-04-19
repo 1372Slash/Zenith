@@ -632,6 +632,7 @@ fun FocusSettingsBottomSheet(
     var goalReminderPeriodMinutes by remember { mutableIntStateOf(existingShield?.goalReminderPeriodMinutes ?: 120) }
     var isDropdownExpanded by remember { mutableStateOf(false) }
     var isGoalDropdownExpanded by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val refreshOptions = listOf(
         "Per 30 Menit" to 30,
@@ -700,6 +701,24 @@ fun FocusSettingsBottomSheet(
                     state = timePickerState,
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+            ) {
+                val presets = if (focusType == FocusType.GOAL) listOf(30, 60, 120, 240) else listOf(15, 30, 60, 120)
+                presets.forEach { preset ->
+                    FilterChip(
+                        selected = (timePickerState.hour * 60 + timePickerState.minute) == preset,
+                        onClick = {
+                            timePickerState.hour = preset / 60
+                            timePickerState.minute = preset % 60
+                        },
+                        label = { Text(if (preset >= 60) "${preset / 60}h" else "${preset}m") },
+                        shape = CircleShape
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))

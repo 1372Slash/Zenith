@@ -382,6 +382,26 @@ fun ScreenTimeTargetBottomSheet(
 
             Spacer(modifier = Modifier.height(32.dp))
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+            ) {
+                val presets = listOf(120, 240, 360, 480) // 2h, 4h, 6h, 8h
+                presets.forEach { preset ->
+                    FilterChip(
+                        selected = (hours * 60 + minutes) == preset,
+                        onClick = {
+                            hours = preset / 60
+                            minutes = preset % 60
+                        },
+                        label = { Text("${preset / 60}h") },
+                        shape = CircleShape
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             Button(
                 onClick = { onSave(hours * 60 + minutes) },
                 modifier = Modifier.fillMaxWidth(),
