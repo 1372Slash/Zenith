@@ -130,7 +130,8 @@ fun FocusScreen(viewModel: FocusViewModel) {
             innerPadding = innerPadding,
             onEditShield = { viewModel.editShield(it) },
             onDeleteShield = { viewModel.deleteShield(it) },
-            onSortTypeChange = { viewModel.onSortTypeChange(it) }
+            onShieldSortTypeChange = { viewModel.onShieldSortTypeChange(it) },
+            onGoalSortTypeChange = { viewModel.onGoalSortTypeChange(it) }
         )
 
         if (isAppPickerOpen) {
@@ -149,7 +150,7 @@ fun FocusScreen(viewModel: FocusViewModel) {
             FocusSettingsBottomSheet(
                 appInfo = uiState.selectedAppForFocus!!,
                 focusType = uiState.selectedFocusType,
-                existingShield = uiState.shieldedApps.find { it.packageName == uiState.selectedAppForFocus!!.packageName },
+                existingShield = (uiState.activeShields + uiState.activeGoals).find { it.packageName == uiState.selectedAppForFocus!!.packageName },
                 onDismiss = { viewModel.closeSettingsSheet() },
                 onSave = { limit, emergency, reminders, strict, autoQuit, maxUses, refresh, goalReminder ->
                     viewModel.saveFocus(limit, emergency, reminders, strict, autoQuit, maxUses, refresh, goalReminder)
@@ -165,7 +166,8 @@ fun FocusScreenContent(
     innerPadding: PaddingValues,
     onEditShield: (ShieldEntity) -> Unit,
     onDeleteShield: (ShieldEntity) -> Unit,
-    onSortTypeChange: (ShieldSortType) -> Unit
+    onShieldSortTypeChange: (ShieldSortType) -> Unit,
+    onGoalSortTypeChange: (ShieldSortType) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
@@ -179,56 +181,33 @@ fun FocusScreenContent(
         item {
             FocusHeader()
         }
+
+        // Active Goals Section
         item {
             ShieldSortHeader(
-                title = "Focus Plan",
-                currentSortType = uiState.sortType,
-                onSortTypeChange = onSortTypeChange
+                title = "Active Goals",
+                currentSortType = uiState.goalSortType,
+                onSortTypeChange = onGoalSortTypeChange
             )
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        if (uiState.shieldedApps.isEmpty()) {
+        if (uiState.activeGoals.isEmpty()) {
             item {
-                AnimatedVisibility(
-                    visible = true,
-                    enter = scaleIn(animationSpec = spring(dampingRatio = 0.5f, stiffness = 200f)) + fadeIn()
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 100.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Outlined.Security,
-                                contentDescription = null,
-                                modifier = Modifier.size(80.dp),
-                                tint = MaterialTheme.colorScheme.outlineVariant
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "Add a Zenith Shield to stay focused",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.outline
-                            )
-                        }
-                    }
-                }
+                EmptyFocusMessage(message = "No active goals yet")
             }
         } else {
             itemsIndexed(
-                items = uiState.shieldedApps,
+                items = uiState.activeGoals,
                 key = { _, shield -> shield.packageName }
             ) { index, shield ->
                 val shape = when {
-                    uiState.shieldedApps.size == 1 -> RoundedCornerShape(24.dp)
+                    uiState.activeGoals.size == 1 -> RoundedCornerShape(24.dp)
                     index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-                    index == uiState.shieldedApps.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                    index == uiState.activeGoals.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                     else -> RoundedCornerShape(8.dp)
                 }
-                
+
                 Column(modifier = Modifier.animateItem()) {
                     ShieldConfigItem(
                         shield = shield,
@@ -236,10 +215,82 @@ fun FocusScreenContent(
                         onEdit = { onEditShield(shield) },
                         onDelete = { onDeleteShield(shield) }
                     )
-                    if (index < uiState.shieldedApps.size - 1) {
+                    if (index < uiState.activeGoals.size - 1) {
                         Spacer(modifier = Modifier.height(4.dp))
                     }
                 }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(24.dp)) }
+
+        // Active Shields Section
+        item {
+            ShieldSortHeader(
+                title = "Active Shields",
+                currentSortType = uiState.shieldSortType,
+                onSortTypeChange = onShieldSortTypeChange
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        if (uiState.activeShields.isEmpty()) {
+            item {
+                EmptyFocusMessage(message = "No active shields yet")
+            }
+        } else {
+            itemsIndexed(
+                items = uiState.activeShields,
+                key = { _, shield -> shield.packageName }
+            ) { index, shield ->
+                val shape = when {
+                    uiState.activeShields.size == 1 -> RoundedCornerShape(24.dp)
+                    index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                    index == uiState.activeShields.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                    else -> RoundedCornerShape(8.dp)
+                }
+
+                Column(modifier = Modifier.animateItem()) {
+                    ShieldConfigItem(
+                        shield = shield,
+                        shape = shape,
+                        onEdit = { onEditShield(shield) },
+                        onDelete = { onDeleteShield(shield) }
+                    )
+                    if (index < uiState.activeShields.size - 1) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EmptyFocusMessage(message: String) {
+    AnimatedVisibility(
+        visible = true,
+        enter = scaleIn(animationSpec = spring(dampingRatio = 0.5f, stiffness = 200f)) + fadeIn()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.Outlined.Security,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.outlineVariant
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.outline
+                )
             }
         }
     }
@@ -858,7 +909,7 @@ fun FocusScreenPreview() {
     ZenithTheme {
         FocusScreenContent(
             uiState = FocusUiState(
-                shieldedApps = listOf(
+                activeShields = listOf(
                     ShieldEntity("com.instagram", "Instagram", FocusType.SHIELD, 60),
                     ShieldEntity("com.twitter", "X", FocusType.SHIELD, 30, isStrictModeEnabled = true)
                 )
@@ -866,7 +917,8 @@ fun FocusScreenPreview() {
             innerPadding = PaddingValues(0.dp),
             onEditShield = {},
             onDeleteShield = {},
-            onSortTypeChange = {}
+            onShieldSortTypeChange = {},
+            onGoalSortTypeChange = {}
         )
     }
 }

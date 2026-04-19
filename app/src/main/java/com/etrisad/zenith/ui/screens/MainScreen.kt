@@ -25,6 +25,7 @@ import com.etrisad.zenith.ui.navigation.Screen
 import com.etrisad.zenith.ui.navigation.navItems
 import com.etrisad.zenith.ui.screens.focus.FocusScreen
 import com.etrisad.zenith.ui.screens.home.HomeScreen
+import com.etrisad.zenith.ui.screens.home.UsageStatsScreen
 import com.etrisad.zenith.ui.screens.settings.SettingsScreen
 import com.etrisad.zenith.ui.viewmodel.FocusViewModel
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
@@ -90,26 +91,35 @@ fun MainScreen(
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentDestination = navBackStackEntry?.destination
-                navItems.forEach { screen ->
-                    NavigationBarItem(
-                        icon = { Icon(screen.icon, contentDescription = null) },
-                        label = { Text(screen.title) },
-                        selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
-                        onClick = {
-                            if (currentDestination?.route != screen.route) {
-                                navController.navigate(screen.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
+            val navBackStackEntry by navController.currentBackStackEntryAsState()
+            val currentRoute = navBackStackEntry?.destination?.route
+            val showBottomBar = currentRoute != Screen.UsageStats.route
+
+            AnimatedVisibility(
+                visible = showBottomBar,
+                enter = slideInVertically(initialOffsetY = { it }),
+                exit = slideOutVertically(targetOffsetY = { it })
+            ) {
+                NavigationBar {
+                    val currentDestination = navBackStackEntry?.destination
+                    navItems.forEach { screen ->
+                        NavigationBarItem(
+                            icon = { Icon(screen.icon, contentDescription = null) },
+                            label = { Text(screen.title) },
+                            selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                            onClick = {
+                                if (currentDestination?.route != screen.route) {
+                                    navController.navigate(screen.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
-                                    launchSingleTop = true
-                                    restoreState = true
                                 }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -117,7 +127,10 @@ fun MainScreen(
         NavHost(
             navController = navController,
             startDestination = Screen.Home.route,
-            modifier = Modifier.padding(innerPadding),
+            modifier = Modifier.padding(
+                bottom = if (navController.currentBackStackEntryAsState().value?.destination?.route == Screen.UsageStats.route) 0.dp else innerPadding.calculateBottomPadding(),
+                top = innerPadding.calculateTopPadding()
+            ),
             enterTransition = {
                 val initialRoute = initialState.destination.route
                 val targetRoute = targetState.destination.route
@@ -184,13 +197,23 @@ fun MainScreen(
             }
         ) {
             composable(Screen.Home.route) {
-                HomeScreen(homeViewModel, userPreferencesRepository)
+                HomeScreen(
+                    homeViewModel,
+                    userPreferencesRepository,
+                    onSeeFullList = { navController.navigate(Screen.UsageStats.route) }
+                )
             }
             composable(Screen.Focus.route) {
                 FocusScreen(focusViewModel)
             }
             composable(Screen.Settings.route) {
                 SettingsScreen(userPreferencesRepository)
+            }
+            composable(Screen.UsageStats.route) {
+                UsageStatsScreen(
+                    viewModel = homeViewModel,
+                    onBack = { navController.popBackStack() }
+                )
             }
         }
     }

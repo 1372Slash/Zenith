@@ -38,6 +38,7 @@ import com.etrisad.zenith.ui.viewmodel.HomeUiState
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
 import com.etrisad.zenith.ui.viewmodel.ShieldSortType
 
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.TrendingDown
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.foundation.pager.HorizontalPager
@@ -52,7 +53,11 @@ import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import kotlinx.coroutines.launch
 
 @Composable
-fun HomeScreen(viewModel: HomeViewModel, userPreferencesRepository: UserPreferencesRepository) {
+fun HomeScreen(
+    viewModel: HomeViewModel,
+    userPreferencesRepository: UserPreferencesRepository,
+    onSeeFullList: () -> Unit
+) {
     val uiState by viewModel.uiState.collectAsState()
     val preferences by userPreferencesRepository.userPreferencesFlow.collectAsState(
         initial = com.etrisad.zenith.data.preferences.UserPreferences(
@@ -74,7 +79,9 @@ fun HomeScreen(viewModel: HomeViewModel, userPreferencesRepository: UserPreferen
             }
         },
         formatDuration = viewModel::formatDuration,
-        onSortTypeChange = viewModel::onSortTypeChange
+        onShieldSortTypeChange = viewModel::onShieldSortTypeChange,
+        onGoalSortTypeChange = viewModel::onGoalSortTypeChange,
+        onSeeFullList = onSeeFullList
     )
 }
 
@@ -84,7 +91,9 @@ fun HomeScreenContent(
     preferences: com.etrisad.zenith.data.preferences.UserPreferences,
     onSetTarget: (Int) -> Unit,
     formatDuration: (Long) -> String,
-    onSortTypeChange: (ShieldSortType) -> Unit
+    onShieldSortTypeChange: (ShieldSortType) -> Unit,
+    onGoalSortTypeChange: (ShieldSortType) -> Unit,
+    onSeeFullList: () -> Unit
 ) {
     Scaffold { innerPadding ->
         LazyColumn(
@@ -131,26 +140,45 @@ fun HomeScreenContent(
                 TopAppsSection(
                     topApps = uiState.topApps,
                     formatDuration = formatDuration,
-                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
+                    onSeeFullList = onSeeFullList
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
             item {
                 ShieldSortHeader(
-                    title = "Active Shields",
-                    currentSortType = uiState.sortType,
-                    onSortTypeChange = onSortTypeChange
+                    title = "Active Goals",
+                    currentSortType = uiState.goalSortType,
+                    onSortTypeChange = onGoalSortTypeChange
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            if (uiState.shieldedApps.isEmpty()) {
+            if (uiState.activeGoals.isEmpty()) {
                 item {
-                    EmptyShieldsMessage()
+                    EmptyShieldsMessage(message = "No active goals. Go to Focus to add one!")
                 }
             } else {
-                shieldList(shields = uiState.shieldedApps, formatDuration = formatDuration)
+                shieldList(shields = uiState.activeGoals, formatDuration = formatDuration)
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+                ShieldSortHeader(
+                    title = "Active Shields",
+                    currentSortType = uiState.shieldSortType,
+                    onSortTypeChange = onShieldSortTypeChange
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            if (uiState.activeShields.isEmpty()) {
+                item {
+                    EmptyShieldsMessage(message = "No active shields. Go to Focus to add one!")
+                }
+            } else {
+                shieldList(shields = uiState.activeShields, formatDuration = formatDuration)
             }
         }
     }
@@ -672,7 +700,8 @@ fun UsageGraph(
 fun TopAppsSection(
     topApps: List<AppUsageInfo>,
     formatDuration: (Long) -> String,
-    shape: Shape = RoundedCornerShape(32.dp)
+    shape: Shape = RoundedCornerShape(32.dp),
+    onSeeFullList: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -694,8 +723,41 @@ fun TopAppsSection(
                 Text(
                     text = "Top Used Apps",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
                 )
+
+                // Stacked app icons
+                AnimatedVisibility(
+                    visible = !expanded,
+                    enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) + 
+                            scaleIn(initialScale = 0.8f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)),
+                    exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) + 
+                           scaleOut(targetScale = 0.8f, animationSpec = spring(stiffness = Spring.StiffnessLow))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy((-12).dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        topApps.take(3).reversed().forEach { app ->
+                            if (app.icon != null) {
+                                Image(
+                                    painter = BitmapPainter(app.icon.toBitmap().asImageBitmap()),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.surface)
+                                        .padding(1.5.dp)
+                                        .clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Icon(
                     imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
                     contentDescription = if (expanded) "Collapse" else "Expand"
@@ -715,10 +777,9 @@ fun TopAppsSection(
                     modifier = Modifier.padding(top = 16.dp)
                 ) {
                     topApps.forEachIndexed { index, app ->
-                        val shape = when {
+                        val itemShape = when {
                             topApps.size == 1 -> RoundedCornerShape(24.dp)
                             index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-                            index == topApps.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                             else -> RoundedCornerShape(8.dp)
                         }
 
@@ -733,7 +794,7 @@ fun TopAppsSection(
 
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = shape,
+                            shape = itemShape,
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                             )
@@ -785,8 +846,39 @@ fun TopAppsSection(
                                 )
                             )
                         }
-                        if (index < topApps.size - 1) {
-                            Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+
+                    // See Full List Card at the bottom of the group
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSeeFullList() },
+                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "See Full List",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
                         }
                     }
                 }
@@ -933,7 +1025,7 @@ fun ShieldItem(
 }
 
 @Composable
-fun EmptyShieldsMessage() {
+fun EmptyShieldsMessage(message: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -948,9 +1040,10 @@ fun EmptyShieldsMessage() {
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "No active shields. Go to Focus to add one!",
+            text = message,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.outline
+            color = MaterialTheme.colorScheme.outline,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
     }
 }
@@ -1005,9 +1098,12 @@ fun HomeScreenPreview() {
                     AppUsageInfo("com.twitter", "X", 1800000),
                     AppUsageInfo("com.youtube", "YouTube", 900000)
                 ),
-                shieldedApps = listOf(
+                activeShields = listOf(
                     ShieldEntity("com.instagram", "Instagram", FocusType.SHIELD, 60, remainingTimeMillis = 30 * 60 * 1000L),
                     ShieldEntity("com.twitter", "X", FocusType.SHIELD, 30, remainingTimeMillis = 5 * 60 * 1000L)
+                ),
+                activeGoals = listOf(
+                    ShieldEntity("com.duolingo", "Duolingo", FocusType.GOAL, 30, remainingTimeMillis = 10 * 60 * 1000L)
                 )
             ),
             preferences = com.etrisad.zenith.data.preferences.UserPreferences(
@@ -1018,7 +1114,9 @@ fun HomeScreenPreview() {
             ),
             onSetTarget = {},
             formatDuration = { "3h 30m" },
-            onSortTypeChange = {}
+            onShieldSortTypeChange = {},
+            onGoalSortTypeChange = {},
+            onSeeFullList = {}
         )
     }
 }

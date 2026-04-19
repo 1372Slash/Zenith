@@ -32,8 +32,11 @@ data class HomeUiState(
     val percentageChange: Float = 0f,
     val dailyUsageHistory: List<DailyUsage> = emptyList(),
     val topApps: List<AppUsageInfo> = emptyList(),
-    val shieldedApps: List<ShieldEntity> = emptyList(),
-    val sortType: ShieldSortType = ShieldSortType.ALPHABETICAL
+    val allAppsUsage: List<AppUsageInfo> = emptyList(),
+    val activeShields: List<ShieldEntity> = emptyList(),
+    val activeGoals: List<ShieldEntity> = emptyList(),
+    val shieldSortType: ShieldSortType = ShieldSortType.ALPHABETICAL,
+    val goalSortType: ShieldSortType = ShieldSortType.ALPHABETICAL
 )
 
 class HomeViewModel(
@@ -44,22 +47,36 @@ class HomeViewModel(
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
+    private var allShields: List<ShieldEntity> = emptyList()
+
     init {
         viewModelScope.launch {
             shieldRepository.allShields.collect { shields ->
-                _uiState.value = _uiState.value.copy(
-                    shieldedApps = sortShields(shields, _uiState.value.sortType)
-                )
+                allShields = shields
+                updateShieldedLists()
             }
         }
         refreshUsageStats()
         startRealTimeUpdates()
     }
 
-    fun onSortTypeChange(sortType: ShieldSortType) {
+    fun onShieldSortTypeChange(sortType: ShieldSortType) {
+        _uiState.value = _uiState.value.copy(shieldSortType = sortType)
+        updateShieldedLists()
+    }
+
+    fun onGoalSortTypeChange(sortType: ShieldSortType) {
+        _uiState.value = _uiState.value.copy(goalSortType = sortType)
+        updateShieldedLists()
+    }
+
+    private fun updateShieldedLists() {
+        val shields = allShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.SHIELD }
+        val goals = allShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL }
+
         _uiState.value = _uiState.value.copy(
-            sortType = sortType,
-            shieldedApps = sortShields(_uiState.value.shieldedApps, sortType)
+            activeShields = sortShields(shields, _uiState.value.shieldSortType),
+            activeGoals = sortShields(goals, _uiState.value.goalSortType)
         )
     }
 
@@ -167,12 +184,21 @@ class HomeViewModel(
             }
         }
 
+        val allAppsUsage = appList.sortedByDescending { it.totalTimeVisible }.map { app ->
+            try {
+                app.copy(icon = pm.getApplicationIcon(app.packageName))
+            } catch (e: PackageManager.NameNotFoundException) {
+                app
+            }
+        }
+
         _uiState.value = _uiState.value.copy(
             totalScreenTime = totalToday,
             yesterdayScreenTime = totalYesterday,
             percentageChange = percentageChange,
             dailyUsageHistory = history.reversed(),
-            topApps = topApps
+            topApps = topApps,
+            allAppsUsage = allAppsUsage
         )
     }
 

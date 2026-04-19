@@ -24,14 +24,16 @@ data class AppInfo(
 )
 
 data class FocusUiState(
-    val shieldedApps: List<ShieldEntity> = emptyList(),
+    val activeShields: List<ShieldEntity> = emptyList(),
+    val activeGoals: List<ShieldEntity> = emptyList(),
     val installedApps: List<AppInfo> = emptyList(),
     val searchQuery: String = "",
     val isLoadingApps: Boolean = false,
     val selectedAppForFocus: AppInfo? = null,
     val selectedFocusType: FocusType = FocusType.SHIELD,
     val isSettingsSheetOpen: Boolean = false,
-    val sortType: ShieldSortType = ShieldSortType.ALPHABETICAL
+    val shieldSortType: ShieldSortType = ShieldSortType.ALPHABETICAL,
+    val goalSortType: ShieldSortType = ShieldSortType.ALPHABETICAL
 )
 
 class FocusViewModel(
@@ -43,22 +45,35 @@ class FocusViewModel(
     val uiState: StateFlow<FocusUiState> = _uiState.asStateFlow()
 
     private val _allInstalledApps = MutableStateFlow<List<AppInfo>>(emptyList())
+    private var allShields: List<ShieldEntity> = emptyList()
 
     init {
         viewModelScope.launch {
             shieldRepository.allShields.collect { shields ->
-                _uiState.value = _uiState.value.copy(
-                    shieldedApps = sortShields(shields, _uiState.value.sortType)
-                )
+                allShields = shields
+                updateShieldedLists()
             }
         }
         loadInstalledApps()
     }
 
-    fun onSortTypeChange(sortType: ShieldSortType) {
+    fun onShieldSortTypeChange(sortType: ShieldSortType) {
+        _uiState.value = _uiState.value.copy(shieldSortType = sortType)
+        updateShieldedLists()
+    }
+
+    fun onGoalSortTypeChange(sortType: ShieldSortType) {
+        _uiState.value = _uiState.value.copy(goalSortType = sortType)
+        updateShieldedLists()
+    }
+
+    private fun updateShieldedLists() {
+        val shields = allShields.filter { it.type == FocusType.SHIELD }
+        val goals = allShields.filter { it.type == FocusType.GOAL }
+
         _uiState.value = _uiState.value.copy(
-            sortType = sortType,
-            shieldedApps = sortShields(_uiState.value.shieldedApps, sortType)
+            activeShields = sortShields(shields, _uiState.value.shieldSortType),
+            activeGoals = sortShields(goals, _uiState.value.goalSortType)
         )
     }
 
@@ -138,7 +153,7 @@ class FocusViewModel(
         val selectedApp = _uiState.value.selectedAppForFocus ?: return
         val type = _uiState.value.selectedFocusType
         viewModelScope.launch {
-            val existing = _uiState.value.shieldedApps.find { it.packageName == selectedApp.packageName }
+            val existing = allShields.find { it.packageName == selectedApp.packageName }
             val shield = ShieldEntity(
                 packageName = selectedApp.packageName,
                 appName = selectedApp.appName,
