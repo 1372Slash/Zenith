@@ -142,7 +142,7 @@ class FocusViewModel(
 
     fun saveFocus(
         timeLimitMinutes: Int,
-        emergencyUseCount: Int = 0,
+        maxEmergencyUses: Int = 3,
         isRemindersEnabled: Boolean = true,
         isStrictModeEnabled: Boolean = false,
         isAutoQuitEnabled: Boolean = false,
@@ -159,7 +159,8 @@ class FocusViewModel(
                 appName = selectedApp.appName,
                 type = type,
                 timeLimitMinutes = timeLimitMinutes,
-                emergencyUseCount = if (type == FocusType.SHIELD) emergencyUseCount else 0,
+                emergencyUseCount = existing?.emergencyUseCount ?: (if (type == FocusType.SHIELD) maxEmergencyUses else 0),
+                maxEmergencyUses = if (type == FocusType.SHIELD) maxEmergencyUses else 0,
                 isRemindersEnabled = isRemindersEnabled,
                 isStrictModeEnabled = if (type == FocusType.SHIELD) isStrictModeEnabled else false,
                 isAutoQuitEnabled = if (type == FocusType.SHIELD) isAutoQuitEnabled else false,
@@ -169,6 +170,7 @@ class FocusViewModel(
                 refreshPeriodMinutes = if (type == FocusType.SHIELD) refreshPeriodMinutes else 0,
                 currentPeriodUses = existing?.currentPeriodUses ?: 0,
                 lastPeriodResetTimestamp = existing?.lastPeriodResetTimestamp ?: System.currentTimeMillis(),
+                lastEmergencyRechargeTimestamp = existing?.lastEmergencyRechargeTimestamp ?: System.currentTimeMillis(),
                 goalReminderPeriodMinutes = goalReminderPeriodMinutes
             )
             shieldRepository.insertShield(shield)

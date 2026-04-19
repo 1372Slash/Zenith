@@ -64,7 +64,8 @@ fun HomeScreen(
             com.etrisad.zenith.data.preferences.ThemeConfig.FOLLOW_SYSTEM,
             true,
             false,
-            0
+            0,
+            60
         )
     )
 
@@ -1110,7 +1111,8 @@ fun HomeScreenPreview() {
                 com.etrisad.zenith.data.preferences.ThemeConfig.FOLLOW_SYSTEM,
                 true,
                 false,
-                180 // 3h target
+                180, // 3h target
+                60
             ),
             onSetTarget = {},
             formatDuration = { "3h 30m" },

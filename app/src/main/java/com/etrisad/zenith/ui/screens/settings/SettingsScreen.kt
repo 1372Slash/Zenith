@@ -28,9 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.data.preferences.ThemeConfig
@@ -41,7 +39,13 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
     val preferences by preferencesRepository.userPreferencesFlow.collectAsState(
-        initial = UserPreferences(ThemeConfig.FOLLOW_SYSTEM, true, false, 0)
+        initial = UserPreferences(
+            themeConfig = ThemeConfig.FOLLOW_SYSTEM,
+            dynamicColor = true,
+            accessibilityDisabled = false,
+            screenTimeTargetMinutes = 0,
+            emergencyRechargeDurationMinutes = 60
+        )
     )
     val coroutineScope = rememberCoroutineScope()
 
@@ -66,6 +70,11 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
             coroutineScope.launch {
                 preferencesRepository.setScreenTimeTarget(minutes)
             }
+        },
+        onSetEmergencyRecharge = { minutes ->
+            coroutineScope.launch {
+                preferencesRepository.setEmergencyRechargeDuration(minutes)
+            }
         }
     )
 }
@@ -76,9 +85,11 @@ fun SettingsScreenContent(
     onThemeChange: (ThemeConfig) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onAccessibilityDisabledChange: (Boolean) -> Unit,
-    onSetTarget: (Int) -> Unit
+    onSetTarget: (Int) -> Unit,
+    onSetEmergencyRecharge: (Int) -> Unit
 ) {
     var showTargetSheet by remember { mutableStateOf(false) }
+    var showEmergencyRechargeSheet by remember { mutableStateOf(false) }
 
     Scaffold { innerPadding ->
         LazyColumn(
@@ -106,6 +117,17 @@ fun SettingsScreenContent(
                     onCheckedChange = onAccessibilityDisabledChange,
                     icon = Icons.Outlined.AccessibilityNew,
                     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                SettingsActionItem(
+                    title = "Emergency Recharge Time",
+                    summary = "1 charge every ${preferences.emergencyRechargeDurationMinutes} minutes",
+                    onClick = { showEmergencyRechargeSheet = true },
+                    icon = Icons.Outlined.Shield,
+                    shape = RoundedCornerShape(8.dp)
                 )
             }
 
@@ -167,11 +189,91 @@ fun SettingsScreenContent(
         com.etrisad.zenith.ui.screens.home.ScreenTimeTargetBottomSheet(
             initialMinutes = preferences.screenTimeTargetMinutes,
             onDismiss = { showTargetSheet = false },
-            onSave = {
-                onSetTarget(it)
+            onSave = { minutes ->
+                onSetTarget(minutes)
                 showTargetSheet = false
             }
         )
+    }
+
+    if (showEmergencyRechargeSheet) {
+        EmergencyRechargeBottomSheet(
+            initialMinutes = preferences.emergencyRechargeDurationMinutes,
+            onDismiss = { showEmergencyRechargeSheet = false },
+            onSave = { minutes ->
+                onSetEmergencyRecharge(minutes)
+                showEmergencyRechargeSheet = false
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EmergencyRechargeBottomSheet(
+    initialMinutes: Int,
+    onDismiss: () -> Unit,
+    onSave: (Int) -> Unit
+) {
+    var minutes by remember { mutableIntStateOf(initialMinutes) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp)
+                .navigationBarsPadding()
+        ) {
+            Text(
+                text = "Emergency Recharge",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Set how long it takes to recover one emergency use count.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                IconButton(
+                    onClick = { if (minutes >= 10) minutes -= 5 },
+                    modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                ) {
+                    Text("-", style = MaterialTheme.typography.headlineMedium)
+                }
+
+                Text(
+                    text = "${minutes}m",
+                    style = MaterialTheme.typography.displayMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 32.dp)
+                )
+
+                IconButton(
+                    onClick = { if (minutes < 1440) minutes += 5 },
+                    modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                ) {
+                    Text("+", style = MaterialTheme.typography.headlineMedium)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Button(
+                onClick = { onSave(minutes) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text("Save Duration", modifier = Modifier.padding(8.dp))
+            }
+        }
     }
 }
 
@@ -386,7 +488,7 @@ fun SettingsToggle(
     description: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     shape: Shape = RoundedCornerShape(24.dp)
 ) {
     Card(

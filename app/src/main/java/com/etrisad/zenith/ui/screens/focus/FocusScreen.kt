@@ -622,7 +622,7 @@ fun FocusSettingsBottomSheet(
         initialMinute = (existingShield?.timeLimitMinutes ?: (if (focusType == FocusType.GOAL) 60 else 30)) % 60,
         is24Hour = true
     )
-    var emergencyUses by remember { mutableStateOf(existingShield?.emergencyUseCount?.toString() ?: "3") }
+    var maxEmergencyUses by remember { mutableStateOf(existingShield?.maxEmergencyUses?.toString() ?: "3") }
     var remindersEnabled by remember { mutableStateOf(existingShield?.isRemindersEnabled ?: true) }
     var strictModeEnabled by remember { mutableStateOf(existingShield?.isStrictModeEnabled ?: false) }
     var autoQuitEnabled by remember { mutableStateOf(existingShield?.isAutoQuitEnabled ?: false) }
@@ -749,9 +749,9 @@ fun FocusSettingsBottomSheet(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 OutlinedTextField(
-                    value = emergencyUses,
-                    onValueChange = { if (it.all { char -> char.isDigit() }) emergencyUses = it },
-                    label = { Text("Emergency Use Count") },
+                    value = maxEmergencyUses,
+                    onValueChange = { if (it.all { char -> char.isDigit() }) maxEmergencyUses = it },
+                    label = { Text("Max Emergency Uses") },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                         keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
@@ -840,7 +840,7 @@ fun FocusSettingsBottomSheet(
                 onClick = {
                     onSave(
                         timePickerState.hour * 60 + timePickerState.minute,
-                        emergencyUses.toIntOrNull() ?: 3,
+                        maxEmergencyUses.toIntOrNull() ?: 3,
                         remindersEnabled,
                         strictModeEnabled,
                         autoQuitEnabled,

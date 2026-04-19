@@ -15,6 +15,7 @@ data class ShieldEntity(
     val type: FocusType = FocusType.SHIELD,
     val timeLimitMinutes: Int,
     val emergencyUseCount: Int = 0,
+    val maxEmergencyUses: Int = 3,
     val isRemindersEnabled: Boolean = true,
     val isStrictModeEnabled: Boolean = false,
     val isAutoQuitEnabled: Boolean = false,
@@ -24,5 +25,6 @@ data class ShieldEntity(
     val refreshPeriodMinutes: Int = 60,
     val currentPeriodUses: Int = 0,
     val lastPeriodResetTimestamp: Long = 0L,
+    val lastEmergencyRechargeTimestamp: Long = 0L,
     val goalReminderPeriodMinutes: Int = 0 // New field for Goal
 )

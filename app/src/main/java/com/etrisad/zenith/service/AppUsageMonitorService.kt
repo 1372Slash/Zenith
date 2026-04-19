@@ -12,11 +12,13 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.etrisad.zenith.data.local.database.ZenithDatabase
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class AppUsageMonitorService : Service() {
@@ -24,6 +26,7 @@ class AppUsageMonitorService : Service() {
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
     private lateinit var shieldRepository: ShieldRepository
+    private lateinit var preferencesRepository: UserPreferencesRepository
     private lateinit var overlayManager: InterceptOverlayManager
     private var lastForegroundApp: String? = null
     private val allowedApps = mutableMapOf<String, Long>()
@@ -32,6 +35,7 @@ class AppUsageMonitorService : Service() {
         super.onCreate()
         val database = ZenithDatabase.getDatabase(this)
         shieldRepository = ShieldRepository(database.shieldDao())
+        preferencesRepository = UserPreferencesRepository(this)
         overlayManager = InterceptOverlayManager(this)
         startForeground(NOTIFICATION_ID, createNotification())
         startMonitoring()
@@ -73,15 +77,33 @@ class AppUsageMonitorService : Service() {
     private suspend fun updateUsageTime(packageName: String) {
         val shield = shieldRepository.getShieldByPackageName(packageName) ?: return
         val currentTime = System.currentTimeMillis()
+        
+        // Recharge Emergency Uses logic
+        val prefs = preferencesRepository.userPreferencesFlow.first()
+        val rechargeDurationMillis = prefs.emergencyRechargeDurationMinutes * 60 * 1000L
+        
+        var updatedShield = shield
+        if (shield.emergencyUseCount < shield.maxEmergencyUses && rechargeDurationMillis > 0) {
+            val timeSinceLastRecharge = currentTime - shield.lastEmergencyRechargeTimestamp
+            if (timeSinceLastRecharge >= rechargeDurationMillis) {
+                val chargesToAdd = (timeSinceLastRecharge / rechargeDurationMillis).toInt()
+                val newCount = (shield.emergencyUseCount + chargesToAdd).coerceAtMost(shield.maxEmergencyUses)
+                updatedShield = updatedShield.copy(
+                    emergencyUseCount = newCount,
+                    lastEmergencyRechargeTimestamp = shield.lastEmergencyRechargeTimestamp + (chargesToAdd * rechargeDurationMillis)
+                )
+            }
+        }
+
         val totalUsageToday = getTotalUsageToday(packageName)
         val limitMillis = shield.timeLimitMinutes * 60 * 1000L
         
         // Calculate real remaining time based on system usage stats
         val remainingMillis = (limitMillis - totalUsageToday).coerceAtLeast(0L)
         
-        // Only update if there's a significant change to avoid excessive DB writes
-        if (kotlin.math.abs(shield.remainingTimeMillis - remainingMillis) > 500) {
-            shieldRepository.updateShield(shield.copy(
+        // Only update if there's a significant change or recharge happened
+        if (kotlin.math.abs(shield.remainingTimeMillis - remainingMillis) > 500 || updatedShield != shield) {
+            shieldRepository.updateShield(updatedShield.copy(
                 remainingTimeMillis = remainingMillis,
                 lastUsedTimestamp = currentTime
             ))
@@ -102,8 +124,10 @@ class AppUsageMonitorService : Service() {
                         serviceScope.launch {
                             val currentShield = shieldRepository.getShieldByPackageName(targetPackageName) ?: return@launch
                             val updatedShield = if (isEmergency) {
+                                val isFirstChargeUsed = currentShield.emergencyUseCount == currentShield.maxEmergencyUses
                                 currentShield.copy(
-                                    emergencyUseCount = (currentShield.emergencyUseCount - 1).coerceAtLeast(0)
+                                    emergencyUseCount = (currentShield.emergencyUseCount - 1).coerceAtLeast(0),
+                                    lastEmergencyRechargeTimestamp = if (isFirstChargeUsed) System.currentTimeMillis() else currentShield.lastEmergencyRechargeTimestamp
                                 )
                             } else {
                                 val periodExpired = System.currentTimeMillis() - currentShield.lastPeriodResetTimestamp > currentShield.refreshPeriodMinutes * 60 * 1000L

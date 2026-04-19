@@ -51,7 +51,8 @@ class MainActivity : ComponentActivity() {
                     com.etrisad.zenith.data.preferences.ThemeConfig.FOLLOW_SYSTEM,
                     true,
                     false,
-                    0
+                    0,
+                    60
                 )
             )
 

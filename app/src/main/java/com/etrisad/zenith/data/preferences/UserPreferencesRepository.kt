@@ -27,6 +27,7 @@ class UserPreferencesRepository(private val context: Context) {
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val ACCESSIBILITY_DISABLED = booleanPreferencesKey("accessibility_disabled")
         val SCREEN_TIME_TARGET = intPreferencesKey("screen_time_target")
+        val EMERGENCY_RECHARGE_DURATION_MINUTES = intPreferencesKey("emergency_recharge_duration_minutes")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -44,7 +45,8 @@ class UserPreferencesRepository(private val context: Context) {
             val dynamicColor = preferences[PreferencesKeys.DYNAMIC_COLOR] ?: true
             val accessibilityDisabled = preferences[PreferencesKeys.ACCESSIBILITY_DISABLED] ?: false
             val screenTimeTarget = preferences[PreferencesKeys.SCREEN_TIME_TARGET] ?: 0
-            UserPreferences(themeConfig, dynamicColor, accessibilityDisabled, screenTimeTarget)
+            val emergencyRechargeDuration = preferences[PreferencesKeys.EMERGENCY_RECHARGE_DURATION_MINUTES] ?: 60
+            UserPreferences(themeConfig, dynamicColor, accessibilityDisabled, screenTimeTarget, emergencyRechargeDuration)
         }
 
     suspend fun setThemeConfig(themeConfig: ThemeConfig) {
@@ -70,11 +72,18 @@ class UserPreferencesRepository(private val context: Context) {
             preferences[PreferencesKeys.SCREEN_TIME_TARGET] = minutes
         }
     }
+
+    suspend fun setEmergencyRechargeDuration(minutes: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.EMERGENCY_RECHARGE_DURATION_MINUTES] = minutes
+        }
+    }
 }
 
 data class UserPreferences(
     val themeConfig: ThemeConfig,
     val dynamicColor: Boolean,
     val accessibilityDisabled: Boolean,
-    val screenTimeTargetMinutes: Int
+    val screenTimeTargetMinutes: Int,
+    val emergencyRechargeDurationMinutes: Int
 )
