@@ -10,8 +10,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,16 +21,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
+import androidx.graphics.shapes.toPath
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.ui.components.ShieldSortHeader
@@ -97,6 +101,7 @@ fun HomeScreenContent(
     onSeeFullList: () -> Unit
 ) {
     Scaffold { innerPadding ->
+        val targetMillis = preferences.screenTimeTargetMinutes * 60 * 1000L
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -131,6 +136,7 @@ fun HomeScreenContent(
             item {
                 UsageHistoryCard(
                     history = uiState.dailyUsageHistory,
+                    targetMillis = targetMillis,
                     formatDuration = formatDuration,
                     shape = RoundedCornerShape(8.dp)
                 )
@@ -463,6 +469,7 @@ fun UsageTrendsRow(
 @Composable
 fun UsageHistoryCard(
     history: List<com.etrisad.zenith.ui.viewmodel.DailyUsage>,
+    targetMillis: Long,
     formatDuration: (Long) -> String,
     shape: Shape
 ) {
@@ -515,24 +522,38 @@ fun UsageHistoryCard(
             Spacer(modifier = Modifier.height(16.dp))
             UsageGraph(
                 history = history,
+                targetMillis = targetMillis,
                 onDaySelected = { selectedUsage = it }
             )
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun UsageGraph(
     history: List<com.etrisad.zenith.ui.viewmodel.DailyUsage>,
+    targetMillis: Long,
     onDaySelected: (com.etrisad.zenith.ui.viewmodel.DailyUsage?) -> Unit
 ) {
+    val sunnyShape = remember {
+        GenericShape { size, _ ->
+            val path = MaterialShapes.Sunny.toPath().asComposePath()
+            val matrix = Matrix()
+            matrix.scale(size.width, size.height)
+            path.transform(matrix)
+            addPath(path)
+        }
+    }
     val pages = remember(history) { history.chunked(7) }
     val pageCount = pages.size.coerceAtLeast(1)
     val pagerState = rememberPagerState(pageCount = { pageCount }, initialPage = (pageCount - 1).coerceAtLeast(0))
 
     // Determine max usage for the current visible page (Adaptive Scale)
     val currentPageData = if (pagerState.currentPage < pages.size) pages[pagerState.currentPage] else emptyList()
-    val maxUsageRaw = currentPageData.maxOfOrNull { it.totalTime }?.coerceAtLeast(1L) ?: 1L
+    val maxUsageRaw = (currentPageData.maxOfOrNull { it.totalTime } ?: 0L)
+        .coerceAtLeast(targetMillis)
+        .coerceAtLeast(1L)
 
     // Scale to nearest hour for cleaner indicators
     val maxUsageHours = (maxUsageRaw / (1000 * 60 * 60)).coerceAtLeast(1) + 1
@@ -562,7 +583,7 @@ fun UsageGraph(
                 .fillMaxWidth()
                 .height(180.dp)
         ) {
-            // Background grid lines (Indicators) - Animating the scale labels
+            // Background grid lines (Indicators)
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -586,6 +607,27 @@ fun UsageGraph(
                             modifier = Modifier.weight(1f),
                             thickness = 0.5.dp,
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                        )
+                    }
+                }
+            }
+
+            // Goal line
+            if (targetMillis > 0) {
+                val goalRatio = (targetMillis.toFloat() / maxUsage).coerceIn(0f, 1f)
+                val goalLineColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.6f)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = 24.dp, start = 32.dp)
+                ) {
+                    androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                        val y = size.height * (1f - goalRatio)
+                        drawLine(
+                            color = goalLineColor,
+                            start = androidx.compose.ui.geometry.Offset(0f, y),
+                            end = androidx.compose.ui.geometry.Offset(size.width, y),
+                            strokeWidth = 2.dp.toPx()
                         )
                     }
                 }
@@ -619,6 +661,16 @@ fun UsageGraph(
                             label = "BarHeight"
                         )
 
+                        val isGoalAchieved = targetMillis > 0 && usage.totalTime <= targetMillis
+                        val isToday = dateFormat.format(usage.date) == todayDate
+                        
+                        val baseColor = if (isGoalAchieved) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
+                        val barColor = when {
+                            isSelected -> baseColor
+                            isToday -> baseColor.copy(alpha = 0.8f)
+                            else -> baseColor.copy(alpha = 0.4f)
+                        }
+
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
@@ -633,17 +685,30 @@ fun UsageGraph(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .width(14.dp)
+                                    .width(40.dp)
                                     .fillMaxHeight(animatedHeight)
-                                    .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
-                                    .background(
-                                        when {
-                                            isSelected -> MaterialTheme.colorScheme.secondary
-                                            dateFormat.format(usage.date) == todayDate -> MaterialTheme.colorScheme.primary
-                                            else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                                        }
-                                    )
-                            )
+                                    .clip(CircleShape)
+                                    .background(barColor),
+                                contentAlignment = Alignment.TopCenter
+                            ) {
+                                if (isGoalAchieved && animatedHeight > 0.15f) {
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(top = 8.dp)
+                                            .size(28.dp)
+                                            .clip(sunnyShape)
+                                            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.tertiary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -662,13 +727,13 @@ fun UsageGraph(
                 val pageData = if (pageIndex < pages.size) pages[pageIndex] else emptyList()
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     pageData.forEach { usage ->
-                        Text(
-                            text = dayFormat.format(usage.date).first().toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
+                                Text(
+                                text = dayFormat.format(usage.date).first().toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                                textAlign = TextAlign.Center
+                            )
                     }
                 }
             }
@@ -1044,7 +1109,7 @@ fun EmptyShieldsMessage(message: String) {
             text = message,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.outline,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            textAlign = TextAlign.Center
         )
     }
 }

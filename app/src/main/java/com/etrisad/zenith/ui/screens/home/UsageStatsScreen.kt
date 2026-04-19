@@ -32,7 +32,7 @@ fun UsageStatsScreen(
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    
+
     // Grouping logic: apps with < 1 minute (60,000 ms) of usage
     val (regularApps, lowUsageApps) = remember(uiState.allAppsUsage) {
         uiState.allAppsUsage.partition { it.totalTimeVisible >= 60000L }

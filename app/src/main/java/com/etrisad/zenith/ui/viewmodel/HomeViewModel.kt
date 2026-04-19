@@ -2,6 +2,7 @@ package com.etrisad.zenith.ui.viewmodel
 
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -102,70 +103,87 @@ class HomeViewModel(
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val pm = context.packageManager
         
-        // Today's stats
-        val todayCalendar = Calendar.getInstance()
-        todayCalendar.set(Calendar.HOUR_OF_DAY, 0)
-        todayCalendar.set(Calendar.MINUTE, 0)
-        todayCalendar.set(Calendar.SECOND, 0)
-        todayCalendar.set(Calendar.MILLISECOND, 0)
-        val todayStart = todayCalendar.timeInMillis
-        val now = System.currentTimeMillis()
+        val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val launcherPackage = pm.resolveActivity(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
+        
+        val launcherApps = pm.queryIntentActivities(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),
+            0
+        ).map { it.activityInfo.packageName }.toSet()
 
-        val todayStats = usageStatsManager.queryAndAggregateUsageStats(todayStart, now)
+        val now = System.currentTimeMillis()
+        val cal = Calendar.getInstance()
+        
+        // Today midnight
+        cal.timeInMillis = now
+        cal.set(Calendar.HOUR_OF_DAY, 0)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        val todayStart = cal.timeInMillis
+
+        // 1. GET TODAY'S STATS (Real-time aggregation)
+        val todayStatsMap = usageStatsManager.queryAndAggregateUsageStats(todayStart, now)
         var totalToday = 0L
         val appList = mutableListOf<AppUsageInfo>()
 
-        todayStats.forEach { (packageName, usageStat) ->
-            val time = usageStat.totalTimeInForeground // totalTimeVisible might be more accurate but let's stick to foreground for consistency with standard usage apps
+        todayStatsMap.forEach { (packageName, usageStat) ->
+            if (packageName == context.packageName || packageName == launcherPackage) return@forEach
+            if (!launcherApps.contains(packageName)) return@forEach
+
+            // Use the maximum of totalTimeVisible and totalTimeInForeground for accuracy across Android versions
+            val time = usageStat.totalTimeVisible.coerceAtLeast(usageStat.totalTimeInForeground)
             if (time > 0) {
                 totalToday += time
                 try {
                     val appInfo = pm.getApplicationInfo(packageName, 0)
                     val appName = pm.getApplicationLabel(appInfo).toString()
                     appList.add(AppUsageInfo(packageName, appName, time))
-                } catch (e: PackageManager.NameNotFoundException) {}
+                } catch (e: Exception) {}
             }
         }
 
-        // Yesterday's stats
-        val yesterdayStart = todayStart - (24 * 60 * 60 * 1000L)
-        val yesterdayEnd = todayStart - 1
-        val yesterdayStats = usageStatsManager.queryAndAggregateUsageStats(yesterdayStart, yesterdayEnd)
-        var totalYesterday = 0L
-        yesterdayStats.forEach { (_, usageStat) ->
-            totalYesterday += usageStat.totalTimeInForeground
-        }
+        // 2. GET HISTORICAL STATS (Last 21 days)
+        // We query strictly before todayStart to avoid overlapping with our Today's aggregation
+        val historyRangeStart = todayStart - (21 * 24 * 60 * 60 * 1000L)
+        val allDailyStats = usageStatsManager.queryUsageStats(
+            UsageStatsManager.INTERVAL_DAILY,
+            historyRangeStart,
+            todayStart
+        )
 
-        // 21 days history
-        val history = mutableListOf<DailyUsage>()
-        val queryCalendar = Calendar.getInstance()
-        for (i in 0 until 21) {
-            queryCalendar.timeInMillis = todayStart
-            queryCalendar.add(Calendar.DAY_OF_YEAR, -i)
-            val start = queryCalendar.timeInMillis
+        val dailyTotals = mutableMapOf<Long, Long>()
+        allDailyStats.forEach { stat ->
+            if (stat.packageName == context.packageName || stat.packageName == launcherPackage) return@forEach
+            if (!launcherApps.contains(stat.packageName)) return@forEach
             
-            val queryEndCalendar = Calendar.getInstance()
-            queryEndCalendar.timeInMillis = start
-            queryEndCalendar.set(Calendar.HOUR_OF_DAY, 23)
-            queryEndCalendar.set(Calendar.MINUTE, 59)
-            queryEndCalendar.set(Calendar.SECOND, 59)
-            val end = queryEndCalendar.timeInMillis
-            
-            val dailyStats = usageStatsManager.queryUsageStats(
-                UsageStatsManager.INTERVAL_DAILY,
-                start,
-                if (i == 0) now else end
-            )
-            
-            var dayTotal = 0L
-            dailyStats.forEach { stat ->
-                // Check if the stat's last time used is within the day we're querying
-                // and use totalTimeInForeground for more reliable daily breakdown
-                if (stat.lastTimeUsed >= start) {
-                    dayTotal += stat.totalTimeInForeground
+            val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+            if (time > 0) {
+                // Normalize the bucket's timestamp to find its day start
+                cal.timeInMillis = stat.firstTimeStamp
+                cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                val dayKey = cal.timeInMillis
+                
+                // Safety: only buckets before today
+                if (dayKey < todayStart) {
+                    dailyTotals[dayKey] = (dailyTotals[dayKey] ?: 0L) + time
                 }
             }
-            history.add(DailyUsage(start, dayTotal))
+        }
+
+        // 3. ASSEMBLE RESULTS
+        val history = mutableListOf<DailyUsage>()
+        val yesterdayStart = todayStart - (24 * 60 * 60 * 1000L)
+        val totalYesterday = dailyTotals[yesterdayStart] ?: 0L
+
+        // Reconstruct the 21-day timeline
+        for (i in 0 until 21) {
+            val dStart = todayStart - (i * 24 * 60 * 60 * 1000L)
+            val dayTotal = if (i == 0) totalToday else (dailyTotals[dStart] ?: 0L)
+            history.add(DailyUsage(dStart, dayTotal))
         }
 
         val percentageChange = if (totalYesterday > 0) {
