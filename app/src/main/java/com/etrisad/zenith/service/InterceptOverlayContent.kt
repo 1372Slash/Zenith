@@ -20,6 +20,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -65,7 +67,7 @@ fun InterceptOverlayContent(
     
     // Delay App State
     val isDelayEnabled = shield?.isDelayAppEnabled == true && shield.type == FocusType.SHIELD
-    var delayProgress by remember { mutableFloatStateOf(0f) }
+    val delayProgressAnimatable = remember { Animatable(0f) }
     var isDelaying by remember { mutableStateOf(isDelayEnabled) }
 
     val motivationalMessages = remember {
@@ -88,7 +90,7 @@ fun InterceptOverlayContent(
     
     val scope = rememberCoroutineScope()
 
-    val backgroundAlpha by animateFloatAsState(
+    val backgroundAlphaState = animateFloatAsState(
         targetValue = if (showContent) 0.6f else 0f,
         animationSpec = tween(durationMillis = 400),
         label = "backgroundAlpha"
@@ -101,15 +103,17 @@ fun InterceptOverlayContent(
     // Delay Timer Effect
     LaunchedEffect(isDelaying) {
         if (isDelaying && delayDurationSeconds > 0) {
-            val startTime = System.currentTimeMillis()
-            val endTime = startTime + (delayDurationSeconds * 1000)
-            while (System.currentTimeMillis() < endTime) {
-                delay(16) // ~60fps
-                delayProgress = ((System.currentTimeMillis() - startTime).toFloat() / (delayDurationSeconds * 1000)).coerceIn(0f, 1f)
-            }
-            delayProgress = 1f
+            delayProgressAnimatable.snapTo(0f)
+            delayProgressAnimatable.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = delayDurationSeconds * 1000,
+                    easing = LinearEasing
+                )
+            )
             isDelaying = false
         } else {
+            delayProgressAnimatable.snapTo(0f)
             isDelaying = false
         }
     }
@@ -137,7 +141,8 @@ fun InterceptOverlayContent(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = backgroundAlpha))
+                .graphicsLayer { alpha = backgroundAlphaState.value }
+                .background(Color.Black)
                 .pointerInput(Unit) {
                     detectTapGestures { }
                 }
@@ -323,18 +328,19 @@ fun InterceptOverlayContent(
                                 
                                 Spacer(modifier = Modifier.height(8.dp))
                                 
-                                val animatedProgress by animateFloatAsState(
+                                val animatedProgressState = animateFloatAsState(
                                     targetValue = progress.coerceIn(0f, 1f),
                                     animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
                                     label = "goalProgress"
                                 )
                                 LinearWavyProgressIndicator(
-                                    progress = { animatedProgress },
+                                    progress = { animatedProgressState.value },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(10.dp),
                                     color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    wavelength = 40.dp
                                 )
 
                                 Spacer(modifier = Modifier.height(12.dp))
@@ -430,18 +436,19 @@ fun InterceptOverlayContent(
                                         )
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    val animatedProgress by animateFloatAsState(
+                                    val animatedProgressState = animateFloatAsState(
                                         targetValue = progress.coerceIn(0f, 1f),
                                         animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
                                         label = "progress"
                                     )
                                     LinearWavyProgressIndicator(
-                                        progress = { animatedProgress },
+                                        progress = { animatedProgressState.value },
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(10.dp),
                                         color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        wavelength = 40.dp
                                     )
                                 }
                             }
@@ -507,16 +514,15 @@ fun InterceptOverlayContent(
                                             Spacer(modifier = Modifier.height(32.dp))
                                             
                                             Box(contentAlignment = Alignment.Center) {
-                                                val density = androidx.compose.ui.platform.LocalDensity.current
                                                 CircularWavyProgressIndicator(
-                                                    progress = { delayProgress },
+                                                    progress = { delayProgressAnimatable.value },
                                                     modifier = Modifier.size(120.dp),
                                                     color = MaterialTheme.colorScheme.primary,
                                                     amplitude = { 1f }, // Menggunakan nilai konstan atau lambda yang benar
-                                                    wavelength = 40.dp, // Menambah wavelength agar gelombang lebih jarang
+                                                    wavelength = 36.dp, // Menambah wavelength agar gelombang lebih jarang
                                                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
                                                 )
-                                                val secondsLeft = kotlin.math.ceil((1f - delayProgress) * delayDurationSeconds).toInt()
+                                                val secondsLeft = kotlin.math.ceil((1f - delayProgressAnimatable.value) * delayDurationSeconds).toInt()
                                                 Text(
                                                     text = "${secondsLeft}s",
                                                     style = MaterialTheme.typography.headlineMedium,
@@ -605,25 +611,25 @@ private fun formatMillis(millis: Long): String {
 @Composable
 fun EmergencyButton(onEmergencyUse: () -> Unit) {
     var isHolding by remember { mutableStateOf(false) }
-    var holdProgress by remember { mutableFloatStateOf(0f) }
+    var holdProgressTarget by remember { mutableFloatStateOf(0f) }
 
-    val animatedProgress by animateFloatAsState(
-        targetValue = holdProgress,
+    val animatedProgressState = animateFloatAsState(
+        targetValue = holdProgressTarget,
         animationSpec = if (isHolding) tween(5000, easing = LinearEasing) else tween(300),
         label = "holdProgress"
     )
 
     LaunchedEffect(isHolding) {
         if (isHolding) {
-            holdProgress = 1f
+            holdProgressTarget = 1f
             delay(5000)
             if (isHolding) {
                 onEmergencyUse()
                 isHolding = false
-                holdProgress = 0f
+                holdProgressTarget = 0f
             }
         } else {
-            holdProgress = 0f
+            holdProgressTarget = 0f
         }
     }
 
@@ -647,20 +653,24 @@ fun EmergencyButton(onEmergencyUse: () -> Unit) {
             },
         contentAlignment = Alignment.Center
     ) {
-        // Simple progress background fill
+        // Optimized progress background fill
+        val progressColor = MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
         Box(
             modifier = Modifier
-                .fillMaxWidth(animatedProgress)
-                .fillMaxHeight()
-                .align(Alignment.CenterStart)
-                .background(MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+                .fillMaxSize()
+                .drawBehind {
+                    drawRect(
+                        color = progressColor,
+                        size = size.copy(width = size.width * animatedProgressState.value)
+                    )
+                }
         )
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Bolt, contentDescription = null, tint = MaterialTheme.colorScheme.error)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = if (isHolding) "Hold for ${5 - (animatedProgress * 5).toInt()}s..." else "Hold for 5s to use Emergency",
+                text = if (isHolding) "Hold for ${5 - (animatedProgressState.value * 5).toInt()}s..." else "Hold for 5s to use Emergency",
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 fontWeight = FontWeight.Bold
             )
@@ -695,7 +705,7 @@ fun DurationButton(
     LaunchedEffect(Unit) { startAnimation = true }
 
     // Smooth progress animation
-    val progress by animateFloatAsState(
+    val progressState = animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0f,
         animationSpec = if (delaySeconds > 0) {
             tween(durationMillis = delaySeconds * 1000, easing = LinearEasing)
@@ -705,10 +715,10 @@ fun DurationButton(
         label = "buttonProgress"
     )
 
-    val isEnabled = progress >= 1f
+    val isEnabled = progressState.value >= 1f
 
     // Spring bounce scale animation when becoming enabled
-    val scale by animateFloatAsState(
+    val scaleState = animateFloatAsState(
         targetValue = if (isEnabled) 1f else 0.95f,
         animationSpec = if (isEnabled) {
             spring(
@@ -727,8 +737,8 @@ fun DurationButton(
         modifier = modifier
             .height(64.dp)
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                scaleX = scaleState.value
+                scaleY = scaleState.value
                 alpha = if (isEnabled) 1f else 0.8f
             },
         shape = MaterialTheme.shapes.large,
@@ -747,17 +757,19 @@ fun DurationButton(
         ) { enabled ->
             if (!enabled) {
                 Box(contentAlignment = Alignment.Center) {
+                    val density = androidx.compose.ui.platform.LocalDensity.current
                     CircularWavyProgressIndicator(
-                        progress = { progress },
+                        progress = { progressState.value },
                         modifier = Modifier.size(36.dp),
                         color = MaterialTheme.colorScheme.primary,
                         trackColor = MaterialTheme.colorScheme.surfaceVariant,
                         stroke = Stroke(width = 6.dp.value),
-                        trackStroke = Stroke(width = 6.dp.value)
+                        trackStroke = Stroke(width = 6.dp.value),
+                        wavelength = 12.dp
                     )
                     // Calculate countdown from progress for smooth transition
                     val secondsLeft = if (delaySeconds > 0) {
-                        kotlin.math.ceil(delaySeconds * (1f - progress)).toInt().coerceAtLeast(1)
+                        kotlin.math.ceil(delaySeconds * (1f - progressState.value)).toInt().coerceAtLeast(1)
                     } else 0
                     
                     if (secondsLeft > 0) {
