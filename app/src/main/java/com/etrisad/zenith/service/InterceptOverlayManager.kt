@@ -6,6 +6,9 @@ import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.view.WindowManager
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.*
 import androidx.savedstate.SavedStateRegistry
@@ -47,23 +50,31 @@ class InterceptOverlayManager(private val context: Context) {
         val composeView = ComposeView(context).apply {
             setContent {
                 ZenithTheme {
-                    InterceptOverlayContent(
-                        packageName = packageName,
-                        appName = appName,
-                        shield = shield,
-                        totalUsageToday = totalUsageToday,
-                        onAllowUse = { minutes, isEmergency ->
-                            hideOverlay()
-                            onAllowUse(minutes, isEmergency)
-                        },
-                        onCloseApp = {
-                            hideOverlay()
-                            onCloseApp()
-                        }
-                    )
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        InterceptOverlayContent(
+                            packageName = packageName,
+                            appName = appName,
+                            shield = shield,
+                            totalUsageToday = totalUsageToday,
+                            onAllowUse = { minutes, isEmergency ->
+                                hideOverlay()
+                                onAllowUse(minutes, isEmergency)
+                            },
+                            onCloseApp = {
+                                hideOverlay()
+                                onCloseApp()
+                            }
+                        )
+                    }
                 }
             }
         }
+
+        // Force layout to go behind system bars so we can color them ourselves
+        @Suppress("DEPRECATION")
+        composeView.systemUiVisibility = (android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
 
         composeView.setViewTreeLifecycleOwner(lOwner)
         composeView.setViewTreeViewModelStoreOwner(object : ViewModelStoreOwner {
@@ -74,18 +85,19 @@ class InterceptOverlayManager(private val context: Context) {
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE
-            },
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or 
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-            WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+            WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+            WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.CENTER
+            gravity = Gravity.FILL
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                setFitInsetsTypes(0)
+            }
         }
 
         try {

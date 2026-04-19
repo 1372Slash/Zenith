@@ -1,6 +1,8 @@
 package com.etrisad.zenith.ui.screens
 
 import androidx.compose.animation.*
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
@@ -97,12 +99,14 @@ fun MainScreen(
                         label = { Text(screen.title) },
                         selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
                         onClick = {
-                            navController.navigate(screen.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+                            if (currentDestination?.route != screen.route) {
+                                navController.navigate(screen.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
                             }
                         }
                     )
@@ -115,28 +119,68 @@ fun MainScreen(
             startDestination = Screen.Home.route,
             modifier = Modifier.padding(innerPadding),
             enterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { it },
-                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f)
-                ) + fadeIn(animationSpec = spring(stiffness = 400f))
+                val initialRoute = initialState.destination.route
+                val targetRoute = targetState.destination.route
+                val initialIndex = navItems.indexOfFirst { it.route == initialRoute }
+                val targetIndex = navItems.indexOfFirst { it.route == targetRoute }
+
+                val animationSpec = spring<IntOffset>(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessLow
+                )
+
+                if (targetIndex > initialIndex) {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = animationSpec
+                    ) + fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow))
+                } else {
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = animationSpec
+                    ) + fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow))
+                }
             },
             exitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { -it / 3 },
-                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f)
-                ) + fadeOut(animationSpec = spring(stiffness = 400f))
+                val initialRoute = initialState.destination.route
+                val targetRoute = targetState.destination.route
+                val initialIndex = navItems.indexOfFirst { it.route == initialRoute }
+                val targetIndex = navItems.indexOfFirst { it.route == targetRoute }
+
+                val animationSpec = spring<IntOffset>(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessLow
+                )
+
+                if (targetIndex > initialIndex) {
+                    slideOutHorizontally(
+                        targetOffsetX = { -it / 3 },
+                        animationSpec = animationSpec
+                    ) + fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow))
+                } else {
+                    slideOutHorizontally(
+                        targetOffsetX = { it / 3 },
+                        animationSpec = animationSpec
+                    ) + fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow))
+                }
             },
             popEnterTransition = {
                 slideInHorizontally(
                     initialOffsetX = { -it / 3 },
-                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f)
-                ) + fadeIn(animationSpec = spring(stiffness = 400f))
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                ) + fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow))
             },
             popExitTransition = {
                 slideOutHorizontally(
                     targetOffsetX = { it },
-                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f)
-                ) + fadeOut(animationSpec = spring(stiffness = 400f))
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                ) + fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow))
             }
         ) {
             composable(Screen.Home.route) {

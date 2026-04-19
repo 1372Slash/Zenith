@@ -80,15 +80,19 @@ fun InterceptOverlayContent(
     } else 0L
 
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Transparent),
         contentAlignment = Alignment.BottomCenter
     ) {
-        // Scrim background
+        // 1. Scrim background (Semi-transparan agar aplikasi di bawah terlihat)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = backgroundAlpha))
-                .clickable(enabled = false) { }
+                .pointerInput(Unit) {
+                    detectTapGestures { }
+                }
         )
 
         AnimatedVisibility(
@@ -107,7 +111,7 @@ fun InterceptOverlayContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .wrapContentHeight()
-                    .imePadding(),
+                    .imePadding(), // Navigation bar padding dipindah ke dalam agar background kartu meluas ke bawah
                 shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -163,7 +167,8 @@ fun InterceptOverlayContent(
                     Column(
                         modifier = Modifier
                             .padding(24.dp)
-                            .fillMaxWidth(),
+                            .fillMaxWidth()
+                            .navigationBarsPadding(), // Memastikan konten tetap aman di atas navigation bar
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         // Drag handle simulation
