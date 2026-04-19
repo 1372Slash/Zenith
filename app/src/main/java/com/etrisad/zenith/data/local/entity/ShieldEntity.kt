@@ -27,5 +27,6 @@ data class ShieldEntity(
     val lastPeriodResetTimestamp: Long = 0L,
     val lastEmergencyRechargeTimestamp: Long = 0L,
     val goalReminderPeriodMinutes: Int = 0, // New field for Goal
-    val isDelayAppEnabled: Boolean = false
+    val isDelayAppEnabled: Boolean = false,
+    val lastDelayStartTimestamp: Long = 0L
 )

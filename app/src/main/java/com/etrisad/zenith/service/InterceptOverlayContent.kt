@@ -67,8 +67,18 @@ fun InterceptOverlayContent(
     
     // Delay App State
     val isDelayEnabled = shield?.isDelayAppEnabled == true && shield.type == FocusType.SHIELD
-    val delayProgressAnimatable = remember { Animatable(0f) }
-    var isDelaying by remember { mutableStateOf(isDelayEnabled) }
+    
+    val initialProgress = remember(shield, delayDurationSeconds) {
+        if (isDelayEnabled && shield != null && shield.lastDelayStartTimestamp > 0 && delayDurationSeconds > 0) {
+            val elapsed = System.currentTimeMillis() - shield.lastDelayStartTimestamp
+            (elapsed.toFloat() / (delayDurationSeconds * 1000f)).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
+    }
+
+    val delayProgressAnimatable = remember { Animatable(initialProgress) }
+    var isDelaying by remember { mutableStateOf(isDelayEnabled && initialProgress < 1f) }
 
     val motivationalMessages = remember {
         listOf(
@@ -103,17 +113,20 @@ fun InterceptOverlayContent(
     // Delay Timer Effect
     LaunchedEffect(isDelaying) {
         if (isDelaying && delayDurationSeconds > 0) {
-            delayProgressAnimatable.snapTo(0f)
-            delayProgressAnimatable.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(
-                    durationMillis = delayDurationSeconds * 1000,
-                    easing = LinearEasing
+            val remainingProgress = 1f - delayProgressAnimatable.value
+            val remainingDuration = (remainingProgress * delayDurationSeconds * 1000).toInt()
+            
+            if (remainingDuration > 0) {
+                delayProgressAnimatable.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(
+                        durationMillis = remainingDuration,
+                        easing = LinearEasing
+                    )
                 )
-            )
+            }
             isDelaying = false
         } else {
-            delayProgressAnimatable.snapTo(0f)
             isDelaying = false
         }
     }

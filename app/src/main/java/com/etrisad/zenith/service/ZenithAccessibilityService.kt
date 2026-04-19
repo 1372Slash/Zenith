@@ -50,6 +50,12 @@ class ZenithAccessibilityService : AccessibilityService() {
                             withContext(Dispatchers.Main) {
                                 performGlobalAction(GLOBAL_ACTION_HOME)
                                 allowedApps.remove(pkg)
+                                // Start delay immediately after auto-quit if enabled
+                                if (shield.isDelayAppEnabled) {
+                                    serviceScope.launch {
+                                        shieldRepository.updateShield(shield.copy(lastDelayStartTimestamp = System.currentTimeMillis()))
+                                    }
+                                }
                             }
                         } else {
                             // Trigger overlay if not showing and auto-quit is off
@@ -86,11 +92,22 @@ class ZenithAccessibilityService : AccessibilityService() {
                 val totalUsageToday = getTotalUsageToday(packageName)
                 val delayDurationSeconds = preferencesRepository.userPreferencesFlow.first().delayAppDurationSeconds
                 
+                // Update lastDelayStartTimestamp if it's not set and delay is enabled
+                val shieldWithTimestamp = if (shield.isDelayAppEnabled && shield.lastDelayStartTimestamp == 0L) {
+                    val updated = shield.copy(lastDelayStartTimestamp = System.currentTimeMillis())
+                    serviceScope.launch {
+                        shieldRepository.updateShield(updated)
+                    }
+                    updated
+                } else {
+                    shield
+                }
+
                 serviceScope.launch(Dispatchers.Main) {
                     overlayManager.showOverlay(
                         packageName = packageName,
                         appName = shield.appName,
-                        shield = shield,
+                        shield = shieldWithTimestamp,
                         totalUsageToday = totalUsageToday,
                         delayDurationSeconds = delayDurationSeconds,
                         onAllowUse = { minutes, isEmergency ->
@@ -98,13 +115,15 @@ class ZenithAccessibilityService : AccessibilityService() {
                                 val currentShield = shieldRepository.getShieldByPackageName(packageName) ?: return@launch
                                 val updatedShield = if (isEmergency) {
                                     currentShield.copy(
-                                        emergencyUseCount = (currentShield.emergencyUseCount - 1).coerceAtLeast(0)
+                                        emergencyUseCount = (currentShield.emergencyUseCount - 1).coerceAtLeast(0),
+                                        lastDelayStartTimestamp = 0L // Reset delay
                                     )
                                 } else {
                                     val periodExpired = System.currentTimeMillis() - currentShield.lastPeriodResetTimestamp > currentShield.refreshPeriodMinutes * 60 * 1000L
                                     currentShield.copy(
                                         currentPeriodUses = if (periodExpired) 1 else currentShield.currentPeriodUses + 1,
-                                        lastPeriodResetTimestamp = if (periodExpired) System.currentTimeMillis() else currentShield.lastPeriodResetTimestamp
+                                        lastPeriodResetTimestamp = if (periodExpired) System.currentTimeMillis() else currentShield.lastPeriodResetTimestamp,
+                                        lastDelayStartTimestamp = 0L // Reset delay
                                     )
                                 }
                                 shieldRepository.updateShield(updatedShield)

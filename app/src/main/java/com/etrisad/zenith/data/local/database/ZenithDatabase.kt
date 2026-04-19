@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.etrisad.zenith.data.local.dao.ShieldDao
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 
-@Database(entities = [ShieldEntity::class], version = 6, exportSchema = false)
+@Database(entities = [ShieldEntity::class], version = 7, exportSchema = false)
 abstract class ZenithDatabase : RoomDatabase() {
     abstract fun shieldDao(): ShieldDao
 
@@ -38,6 +38,12 @@ abstract class ZenithDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE shields ADD COLUMN lastDelayStartTimestamp INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getDatabase(context: Context): ZenithDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -45,7 +51,7 @@ abstract class ZenithDatabase : RoomDatabase() {
                     ZenithDatabase::class.java,
                     "zenith_database"
                 )
-                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     .build()
                 INSTANCE = instance
                 instance
