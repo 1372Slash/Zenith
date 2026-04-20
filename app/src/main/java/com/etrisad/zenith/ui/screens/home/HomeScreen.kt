@@ -72,7 +72,8 @@ fun HomeScreen(
             accessibilityDisabled = false,
             screenTimeTargetMinutes = 0,
             emergencyRechargeDurationMinutes = 60,
-            delayAppDurationSeconds = 30
+            delayAppDurationSeconds = 30,
+            whitelistedPackages = emptySet()
         )
     )
 
@@ -1290,7 +1291,8 @@ fun HomeScreenPreview() {
                 accessibilityDisabled = false,
                 screenTimeTargetMinutes = 180, // 3h target
                 emergencyRechargeDurationMinutes = 60,
-                delayAppDurationSeconds = 30
+                delayAppDurationSeconds = 30,
+                whitelistedPackages = emptySet()
             ),
             onSetTarget = {},
             formatDuration = { "3h 30m" },

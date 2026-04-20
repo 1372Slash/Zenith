@@ -4,6 +4,8 @@ import android.accessibilityservice.AccessibilityService
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.view.accessibility.AccessibilityEvent
 import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.repository.ShieldRepository
@@ -29,6 +31,7 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private var activeSchedules = listOf<com.etrisad.zenith.data.local.entity.ScheduleEntity>()
+    private var whitelistedPackages = setOf<String>()
 
     override fun onCreate() {
         super.onCreate()
@@ -43,6 +46,12 @@ class ZenithAccessibilityService : AccessibilityService() {
                 activeSchedules = schedules.filter { it.isActive }
             }
         }
+
+        serviceScope.launch {
+            preferencesRepository.userPreferencesFlow.collect { preferences ->
+                whitelistedPackages = preferences.whitelistedPackages
+            }
+        }
         
         startMonitoring()
     }
@@ -52,31 +61,28 @@ class ZenithAccessibilityService : AccessibilityService() {
             while (isActive) {
                 delay(1000)
                 val pkg = currentPackage ?: continue
-                if (pkg == packageName) continue
+                if (shouldBypassBlocking(pkg)) continue
 
+                // 1. Check schedules first (Always check regardless of allowedApps)
+                if (checkSchedules(pkg)) continue
+
+                // 2. Then check Shield/Shield Delay
                 val allowedUntil = allowedApps[pkg] ?: 0L
-                if (allowedUntil > 0 && System.currentTimeMillis() > allowedUntil) {
-                    // Check schedules first
-                    if (checkSchedules(pkg)) continue
-
+                if (System.currentTimeMillis() > allowedUntil) {
                     val shield = shieldRepository.getShieldByPackageName(pkg)
                     if (shield != null) {
                         if (shield.isAutoQuitEnabled) {
                             withContext(Dispatchers.Main) {
                                 performGlobalAction(GLOBAL_ACTION_HOME)
                                 allowedApps.remove(pkg)
-                                // Start delay immediately after auto-quit if enabled
                                 if (shield.isDelayAppEnabled) {
                                     serviceScope.launch {
                                         shieldRepository.updateShield(shield.copy(lastDelayStartTimestamp = System.currentTimeMillis()))
                                     }
                                 }
                             }
-                        } else {
-                            // Trigger overlay if not showing and auto-quit is off
-                            if (!InterceptOverlayManager.isShowing) {
-                                checkIfAppIsShielded(pkg)
-                            }
+                        } else if (!InterceptOverlayManager.isShowing) {
+                            checkIfAppIsShielded(pkg)
                         }
                     }
                 }
@@ -84,23 +90,112 @@ class ZenithAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun isLauncherOrSystemHome(packageName: String): Boolean {
+        // Cek via PackageManager — semua launcher yang terdaftar sebagai HOME
+        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val launchers = packageManager.queryIntentActivities(homeIntent, PackageManager.MATCH_ALL)
+        if (launchers.any { it.activityInfo.packageName == packageName }) return true
+
+        // Cek via CATEGORY_LAUNCHER — app yang punya launcher icon tapi bukan user app
+        // (beberapa custom ROM launcher tidak register ke CATEGORY_HOME dengan benar)
+        try {
+            val appInfo = packageManager.getApplicationInfo(packageName, 0)
+            val isSystem = (appInfo.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
+            if (isSystem) {
+                val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                launcherIntent.setPackage(packageName)
+                val activities = packageManager.queryIntentActivities(launcherIntent, 0)
+                // System app yang punya launcher activity tapi nama package mengandung "launcher"/"home"
+                if (activities.isNotEmpty() && (packageName.contains("launcher", ignoreCase = true)
+                            || packageName.contains("home", ignoreCase = true))) {
+                    return true
+                }
+            }
+        } catch (_: PackageManager.NameNotFoundException) {}
+
+        return false
+    }
+
+    private fun shouldBypassBlocking(packageName: String): Boolean {
+        // 1. App kita sendiri
+        if (packageName == this.packageName) return true
+
+        // 2. Paket system kritis (Android Framework, System UI, dll)
+        val criticalSystemPackages = setOf(
+            "android",
+            "com.android.systemui",
+            "com.android.settings",
+            "com.android.phone",
+            "com.android.server.telecom",
+            "com.google.android.packageinstaller",
+            "com.android.packageinstaller",
+            "com.google.android.permissioncontroller"
+        )
+        if (packageName in criticalSystemPackages) return true
+
+        // 3. Whitelist dari User Preferences (cached)
+        if (whitelistedPackages.contains(packageName)) {
+            android.util.Log.d("ZenithService", "Bypass: $packageName is in Whitelist")
+            return true
+        }
+
+        // 4. Launcher / home screen (Sangat penting untuk Ortus Launcher)
+        if (isLauncherOrSystemHome(packageName) || 
+            packageName.contains("launcher", ignoreCase = true) || 
+            packageName.contains("home", ignoreCase = true)) {
+            android.util.Log.d("ZenithService", "Bypass: $packageName identified as Launcher")
+            return true
+        }
+
+        // 5. System app lainnya (kecuali yang memang sering membuat kecanduan)
+        try {
+            val appInfo = packageManager.getApplicationInfo(packageName, 0)
+            val isSystem = (appInfo.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
+            if (isSystem) {
+                val blockableSystemApps = setOf(
+                    "com.google.android.youtube",
+                    "com.android.chrome",
+                    "com.google.android.apps.youtube.music",
+                    "com.android.vending" // Play Store
+                )
+                if (packageName !in blockableSystemApps) return true
+            }
+        } catch (_: PackageManager.NameNotFoundException) {
+            return true
+        }
+
+        return false
+    }
+
     private fun checkSchedules(packageName: String): Boolean {
+        // FAST-PASS: Jika whitelist, JANGAN LANJUTKAN LOGIKA SCHEDULE
+        if (shouldBypassBlocking(packageName)) {
+            android.util.Log.d("ZenithService", "Fast-Pass Schedule: $packageName is Whitelisted")
+            return false
+        }
+
         val currentTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
-        
-        for (schedule in activeSchedules) {
-            if (isTimeInInterval(currentTime, schedule.startTime, schedule.endTime)) {
-                when (schedule.mode) {
-                    com.etrisad.zenith.data.local.entity.ScheduleMode.BLOCK -> {
-                        if (packageName in schedule.packageNames) {
-                            showScheduleOverlay(packageName, schedule)
-                            return true
-                        }
+        val activeSchedulesSnapshot = activeSchedules // Use snapshot to avoid concurrent modification issues
+
+        for (schedule in activeSchedulesSnapshot) {
+            if (!isTimeInInterval(currentTime, schedule.startTime, schedule.endTime)) continue
+
+            when (schedule.mode) {
+                com.etrisad.zenith.data.local.entity.ScheduleMode.BLOCK -> {
+                    if (packageName in schedule.packageNames) {
+                        android.util.Log.d("ZenithService", "Blocking $packageName (BLOCK mode active)")
+                        showScheduleOverlay(packageName, schedule)
+                        return true
                     }
-                    com.etrisad.zenith.data.local.entity.ScheduleMode.ALLOW -> {
-                        if (packageName !in schedule.packageNames && packageName != this.packageName) {
-                            showScheduleOverlay(packageName, schedule)
-                            return true
-                        }
+                }
+                com.etrisad.zenith.data.local.entity.ScheduleMode.ALLOW -> {
+                    // Dalam mode ALLOW, aplikasi yang TIDAK ada di daftar schedule akan diblokir.
+                    // TAPI karena kita sudah melakukan FAST-PASS di atas, 
+                    // Ortus Launcher (yang di-whitelist) tidak akan pernah sampai ke baris ini.
+                    if (packageName !in schedule.packageNames) {
+                        android.util.Log.d("ZenithService", "Blocking $packageName (Not in ALLOW list of ${schedule.name})")
+                        showScheduleOverlay(packageName, schedule)
+                        return true
                     }
                 }
             }
@@ -139,13 +234,19 @@ class ZenithAccessibilityService : AccessibilityService() {
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val packageName = event.packageName?.toString() ?: return
             currentPackage = packageName
-            
-            // Don't intercept our own app
-            if (packageName == this.packageName) return
 
-            // Check schedules first
+            android.util.Log.d("ZenithService", "Detected window change: $packageName")
+
+            // 1. CEK WHITELIST/BYPASS SECARA ABSOLUT
+            if (shouldBypassBlocking(packageName)) {
+                android.util.Log.d("ZenithService", "Bypassing $packageName")
+                return
+            }
+
+            // 2. CEK JADWAL
             if (checkSchedules(packageName)) return
 
+            // 3. CEK SHIELD
             val currentTime = System.currentTimeMillis()
             val allowedUntil = allowedApps[packageName] ?: 0L
             if (currentTime > allowedUntil) {
@@ -155,6 +256,8 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private fun checkIfAppIsShielded(packageName: String) {
+        if (shouldBypassBlocking(packageName)) return // Gunakan bypass yang lebih komprehensif
+
         serviceScope.launch {
             val shield = shieldRepository.getShieldByPackageName(packageName)
             if (shield != null && !InterceptOverlayManager.isShowing) {

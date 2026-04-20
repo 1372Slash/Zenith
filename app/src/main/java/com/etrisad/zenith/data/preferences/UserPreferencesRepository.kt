@@ -29,6 +29,7 @@ class UserPreferencesRepository(private val context: Context) {
         val SCREEN_TIME_TARGET = intPreferencesKey("screen_time_target")
         val EMERGENCY_RECHARGE_DURATION_MINUTES = intPreferencesKey("emergency_recharge_duration_minutes")
         val DELAY_APP_DURATION_SECONDS = intPreferencesKey("delay_app_duration_seconds")
+        val WHITELISTED_PACKAGES = stringPreferencesKey("whitelisted_packages")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -48,13 +49,15 @@ class UserPreferencesRepository(private val context: Context) {
             val screenTimeTarget = preferences[PreferencesKeys.SCREEN_TIME_TARGET] ?: 0
             val emergencyRechargeDuration = preferences[PreferencesKeys.EMERGENCY_RECHARGE_DURATION_MINUTES] ?: 60
             val delayAppDuration = preferences[PreferencesKeys.DELAY_APP_DURATION_SECONDS] ?: 30
+            val whitelistedPackages = preferences[PreferencesKeys.WHITELISTED_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
             UserPreferences(
                 themeConfig = themeConfig,
                 dynamicColor = dynamicColor,
                 accessibilityDisabled = accessibilityDisabled,
                 screenTimeTargetMinutes = screenTimeTarget,
                 emergencyRechargeDurationMinutes = emergencyRechargeDuration,
-                delayAppDurationSeconds = delayAppDuration
+                delayAppDurationSeconds = delayAppDuration,
+                whitelistedPackages = whitelistedPackages
             )
         }
 
@@ -93,6 +96,12 @@ class UserPreferencesRepository(private val context: Context) {
             preferences[PreferencesKeys.DELAY_APP_DURATION_SECONDS] = seconds
         }
     }
+
+    suspend fun setWhitelistedPackages(packages: Set<String>) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.WHITELISTED_PACKAGES] = packages.joinToString(",")
+        }
+    }
 }
 
 data class UserPreferences(
@@ -101,5 +110,6 @@ data class UserPreferences(
     val accessibilityDisabled: Boolean,
     val screenTimeTargetMinutes: Int,
     val emergencyRechargeDurationMinutes: Int,
-    val delayAppDurationSeconds: Int
+    val delayAppDurationSeconds: Int,
+    val whitelistedPackages: Set<String>
 )

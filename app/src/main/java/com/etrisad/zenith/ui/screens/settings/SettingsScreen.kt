@@ -39,10 +39,12 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
             accessibilityDisabled = false,
             screenTimeTargetMinutes = 0,
             emergencyRechargeDurationMinutes = 60,
-            delayAppDurationSeconds = 30
+            delayAppDurationSeconds = 30,
+            whitelistedPackages = emptySet()
         )
     )
     val coroutineScope = rememberCoroutineScope()
+    var showWhitelistSheet by remember { mutableStateOf(false) }
 
     SettingsScreenContent(
         preferences = preferences,
@@ -75,6 +77,13 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
             coroutineScope.launch {
                 preferencesRepository.setDelayAppDuration(seconds)
             }
+        },
+        showWhitelistSheet = showWhitelistSheet,
+        onShowWhitelistSheetChange = { showWhitelistSheet = it },
+        onSetWhitelistedPackages = { packages ->
+            coroutineScope.launch {
+                preferencesRepository.setWhitelistedPackages(packages)
+            }
         }
     )
 }
@@ -87,7 +96,10 @@ fun SettingsScreenContent(
     onAccessibilityDisabledChange: (Boolean) -> Unit,
     onSetTarget: (Int) -> Unit,
     onSetEmergencyRecharge: (Int) -> Unit,
-    onSetDelayAppDuration: (Int) -> Unit
+    onSetDelayAppDuration: (Int) -> Unit,
+    showWhitelistSheet: Boolean,
+    onShowWhitelistSheetChange: (Boolean) -> Unit,
+    onSetWhitelistedPackages: (Set<String>) -> Unit
 ) {
     var showTargetSheet by remember { mutableStateOf(false) }
     var showEmergencyRechargeSheet by remember { mutableStateOf(false) }
@@ -169,6 +181,17 @@ fun SettingsScreenContent(
                     },
                     onClick = { showDelayAppSheet = true },
                     icon = Icons.Outlined.History,
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                SettingsActionItem(
+                    title = "Whitelist Apps",
+                    summary = "${preferences.whitelistedPackages.size} apps bypassed",
+                    onClick = { onShowWhitelistSheetChange(true) },
+                    icon = Icons.Outlined.VerifiedUser,
                     shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                 )
             }
@@ -241,6 +264,17 @@ fun SettingsScreenContent(
             onSave = { seconds ->
                 onSetDelayAppDuration(seconds)
                 showDelayAppSheet = false
+            }
+        )
+    }
+
+    if (showWhitelistSheet) {
+        WhitelistBottomSheet(
+            initialWhitelisted = preferences.whitelistedPackages,
+            onDismiss = { onShowWhitelistSheetChange(false) },
+            onSave = { packages ->
+                onSetWhitelistedPackages(packages)
+                onShowWhitelistSheetChange(false)
             }
         )
     }

@@ -219,6 +219,16 @@ class FocusViewModel(
         _uiState.value = _uiState.value.copy(isScheduleSettingsOpen = false, editingSchedule = null)
     }
 
+    fun editSchedule(schedule: ScheduleEntity) {
+        _uiState.value = _uiState.value.copy(
+            isScheduleSettingsOpen = true,
+            editingSchedule = schedule,
+            selectedAppsForSchedule = schedule.packageNames.toSet(),
+            isSchedulePickerOpen = false,
+            isSettingsSheetOpen = false
+        )
+    }
+
     fun saveSchedule(
         name: String,
         startTime: String,
@@ -229,14 +239,30 @@ class FocusViewModel(
         if (packageNames.isEmpty()) return
 
         viewModelScope.launch {
-            val schedule = ScheduleEntity(
-                name = name,
-                packageNames = packageNames,
-                startTime = startTime,
-                endTime = endTime,
-                mode = mode
-            )
-            shieldRepository.insertSchedule(schedule)
+            val editing = _uiState.value.editingSchedule
+            val schedule = if (editing != null) {
+                editing.copy(
+                    name = name,
+                    packageNames = packageNames,
+                    startTime = startTime,
+                    endTime = endTime,
+                    mode = mode
+                )
+            } else {
+                ScheduleEntity(
+                    name = name,
+                    packageNames = packageNames,
+                    startTime = startTime,
+                    endTime = endTime,
+                    mode = mode
+                )
+            }
+            
+            if (editing != null) {
+                shieldRepository.updateSchedule(schedule)
+            } else {
+                shieldRepository.insertSchedule(schedule)
+            }
             closeScheduleSettings()
         }
     }

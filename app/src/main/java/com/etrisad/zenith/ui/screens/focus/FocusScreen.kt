@@ -146,6 +146,7 @@ fun FocusScreen(
             innerPadding = innerPadding,
             onEditShield = { viewModel.editShield(it) },
             onDeleteShield = { viewModel.deleteShield(it) },
+            onEditSchedule = { viewModel.editSchedule(it) },
             onDeleteSchedule = { viewModel.deleteSchedule(it) },
             onShieldSortTypeChange = { viewModel.onShieldSortTypeChange(it) },
             onGoalSortTypeChange = { viewModel.onGoalSortTypeChange(it) },
@@ -176,6 +177,7 @@ fun FocusScreen(
 
         if (uiState.isScheduleSettingsOpen) {
             ScheduleSettingsBottomSheet(
+                editingSchedule = uiState.editingSchedule,
                 onDismiss = { viewModel.closeScheduleSettings() },
                 onSave = { name, start, end, mode ->
                     viewModel.saveSchedule(name, start, end, mode)
@@ -204,6 +206,7 @@ fun FocusScreenContent(
     innerPadding: PaddingValues,
     onEditShield: (ShieldEntity) -> Unit,
     onDeleteShield: (ShieldEntity) -> Unit,
+    onEditSchedule: (ScheduleEntity) -> Unit,
     onDeleteSchedule: (ScheduleEntity) -> Unit,
     onShieldSortTypeChange: (ShieldSortType) -> Unit,
     onGoalSortTypeChange: (ShieldSortType) -> Unit,
@@ -221,56 +224,6 @@ fun FocusScreenContent(
         item {
             FocusHeader()
         }
-
-        // Active Schedules Section
-        item {
-            Text(
-                text = "Active Schedules",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(vertical = 16.dp)
-            )
-        }
-
-        if (uiState.activeSchedules.isEmpty()) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    )
-                ) {
-                    EmptyFocusMessage(message = "No active schedules yet")
-                }
-            }
-        } else {
-            itemsIndexed(
-                items = uiState.activeSchedules,
-                key = { _, schedule -> schedule.id }
-            ) { index, schedule ->
-                val shape = when {
-                    uiState.activeSchedules.size == 1 -> RoundedCornerShape(24.dp)
-                    index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-                    index == uiState.activeSchedules.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                    else -> RoundedCornerShape(8.dp)
-                }
-
-                Column(modifier = Modifier.animateItem()) {
-                    ScheduleItem(
-                        schedule = schedule,
-                        shape = shape,
-                        onDelete = { onDeleteSchedule(schedule) }
-                    )
-                    if (index < uiState.activeSchedules.size - 1) {
-                        Spacer(modifier = Modifier.height(2.dp))
-                    }
-                }
-            }
-        }
-
-        item { Spacer(modifier = Modifier.height(24.dp)) }
 
         // Active Goals Section
         item {
@@ -369,6 +322,57 @@ fun FocusScreenContent(
                 }
             }
         }
+
+        item { Spacer(modifier = Modifier.height(24.dp)) }
+
+        // Active Schedules Section
+        item {
+            Text(
+                text = "Active Schedules",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 16.dp)
+            )
+        }
+
+        if (uiState.activeSchedules.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                ) {
+                    EmptyFocusMessage(message = "No active schedules yet")
+                }
+            }
+        } else {
+            itemsIndexed(
+                items = uiState.activeSchedules,
+                key = { _, schedule -> schedule.id }
+            ) { index, schedule ->
+                val shape = when {
+                    uiState.activeSchedules.size == 1 -> RoundedCornerShape(24.dp)
+                    index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                    index == uiState.activeSchedules.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                    else -> RoundedCornerShape(8.dp)
+                }
+
+                Column(modifier = Modifier.animateItem()) {
+                    ScheduleItem(
+                        schedule = schedule,
+                        shape = shape,
+                        onEdit = { onEditSchedule(schedule) },
+                        onDelete = { onDeleteSchedule(schedule) }
+                    )
+                    if (index < uiState.activeSchedules.size - 1) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -376,10 +380,13 @@ fun FocusScreenContent(
 fun ScheduleItem(
     schedule: ScheduleEntity,
     shape: RoundedCornerShape,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onEdit() },
         shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -401,12 +408,21 @@ fun ScheduleItem(
                 )
             },
             trailingContent = {
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        imageVector = Icons.Outlined.Delete,
-                        contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.error
-                    )
+                Row {
+                    IconButton(onClick = onEdit) {
+                        Icon(
+                            imageVector = Icons.Outlined.Edit,
+                            contentDescription = "Edit",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            imageVector = Icons.Outlined.Delete,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             },
             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
@@ -757,14 +773,18 @@ fun MultiAppPickerBottomSheet(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduleSettingsBottomSheet(
+    editingSchedule: ScheduleEntity? = null,
     onDismiss: () -> Unit,
     onSave: (String, String, String, ScheduleMode) -> Unit
 ) {
-    var name by remember { mutableStateOf("My Schedule") }
-    var mode by remember { mutableStateOf(ScheduleMode.BLOCK) }
+    var name by remember { mutableStateOf(editingSchedule?.name ?: "My Schedule") }
+    var mode by remember { mutableStateOf(editingSchedule?.mode ?: ScheduleMode.BLOCK) }
     
-    val startTimeState = rememberTimePickerState(initialHour = 9, initialMinute = 0, is24Hour = true)
-    val endTimeState = rememberTimePickerState(initialHour = 17, initialMinute = 0, is24Hour = true)
+    val initialStart = editingSchedule?.startTime?.split(":")?.map { it.toInt() } ?: listOf(9, 0)
+    val initialEnd = editingSchedule?.endTime?.split(":")?.map { it.toInt() } ?: listOf(17, 0)
+
+    val startTimeState = rememberTimePickerState(initialHour = initialStart[0], initialMinute = initialStart[1], is24Hour = true)
+    val endTimeState = rememberTimePickerState(initialHour = initialEnd[0], initialMinute = initialEnd[1], is24Hour = true)
     
     var showStartTimePicker by remember { mutableStateOf(false) }
     var showEndTimePicker by remember { mutableStateOf(false) }
@@ -777,7 +797,11 @@ fun ScheduleSettingsBottomSheet(
                 .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
         ) {
-            Text("Schedule Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(
+                text = if (editingSchedule != null) "Edit Schedule" else "Schedule Settings",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
             Spacer(modifier = Modifier.height(24.dp))
             
             OutlinedTextField(
@@ -847,7 +871,10 @@ fun ScheduleSettingsBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.large
             ) {
-                Text("Save Schedule", modifier = Modifier.padding(8.dp))
+                Text(
+                    text = if (editingSchedule != null) "Update Schedule" else "Save Schedule",
+                    modifier = Modifier.padding(8.dp)
+                )
             }
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -1466,6 +1493,7 @@ fun FocusScreenPreview() {
             innerPadding = PaddingValues(0.dp),
             onEditShield = {},
             onDeleteShield = {},
+            onEditSchedule = {},
             onDeleteSchedule = {},
             onShieldSortTypeChange = {},
             onGoalSortTypeChange = {},

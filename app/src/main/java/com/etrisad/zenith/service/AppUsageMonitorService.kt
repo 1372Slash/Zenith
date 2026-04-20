@@ -31,6 +31,7 @@ class AppUsageMonitorService : Service() {
     private var lastForegroundApp: String? = null
     private val allowedApps = mutableMapOf<String, Long>()
     private var activeSchedules = listOf<com.etrisad.zenith.data.local.entity.ScheduleEntity>()
+    private var whitelistedPackages = setOf<String>()
 
     override fun onCreate() {
         super.onCreate()
@@ -42,6 +43,12 @@ class AppUsageMonitorService : Service() {
         serviceScope.launch {
             shieldRepository.allSchedules.collect { schedules ->
                 activeSchedules = schedules.filter { it.isActive }
+            }
+        }
+
+        serviceScope.launch {
+            preferencesRepository.userPreferencesFlow.collect { preferences ->
+                whitelistedPackages = preferences.whitelistedPackages
             }
         }
 
@@ -66,12 +73,19 @@ class AppUsageMonitorService : Service() {
                 lastCheckedDay = currentDay
 
                 if (currentApp != null && currentApp != packageName) {
+                    // BYPASS CHECK: Whitelist, Launcher, System UI, dll.
+                    if (shouldBypassBlocking(currentApp)) {
+                        lastForegroundApp = currentApp
+                        delay(1000)
+                        continue
+                    }
+
                     val allowedUntil = allowedApps[currentApp] ?: 0L
                     
                     // Update usage time in database if app is shielded
                     updateUsageTime(currentApp)
 
-            if (currentTime > allowedUntil && !InterceptOverlayManager.isShowing && !ZenithAccessibilityService.isServiceRunning) {
+                    if (currentTime > allowedUntil && !InterceptOverlayManager.isShowing && !ZenithAccessibilityService.isServiceRunning) {
                         // Check schedules first
                         if (checkSchedules(currentApp)) {
                             lastForegroundApp = currentApp
@@ -265,6 +279,9 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun checkSchedules(packageName: String): Boolean {
+        // Redundant bypass check for safety
+        if (shouldBypassBlocking(packageName)) return false
+
         val currentTime = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
         
         for (schedule in activeSchedules) {
@@ -277,13 +294,72 @@ class AppUsageMonitorService : Service() {
                         }
                     }
                     com.etrisad.zenith.data.local.entity.ScheduleMode.ALLOW -> {
-                        if (packageName !in schedule.packageNames && packageName != this.packageName) {
+                        // Whitelist sudah ditangani oleh shouldBypassBlocking di awal
+                        if (packageName !in schedule.packageNames) {
                             showScheduleOverlay(packageName, schedule)
                             return true
                         }
                     }
                 }
             }
+        }
+        return false
+    }
+
+    private fun isLauncherOrSystemHome(packageName: String): Boolean {
+        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val launchers = packageManager.queryIntentActivities(homeIntent, android.content.pm.PackageManager.MATCH_ALL)
+        if (launchers.any { it.activityInfo.packageName == packageName }) return true
+
+        try {
+            val appInfo = packageManager.getApplicationInfo(packageName, 0)
+            val isSystem = (appInfo.flags and (android.content.pm.ApplicationInfo.FLAG_SYSTEM or android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
+            if (isSystem) {
+                val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                launcherIntent.setPackage(packageName)
+                val activities = packageManager.queryIntentActivities(launcherIntent, 0)
+                if (activities.isNotEmpty() && (packageName.contains("launcher", ignoreCase = true)
+                            || packageName.contains("home", ignoreCase = true))) {
+                    return true
+                }
+            }
+        } catch (_: Exception) {}
+        return false
+    }
+
+    private fun shouldBypassBlocking(packageName: String): Boolean {
+        if (packageName == this.packageName) return true
+        if (packageName in whitelistedPackages) return true
+        if (isLauncherOrSystemHome(packageName) || 
+            packageName.contains("launcher", ignoreCase = true) || 
+            packageName.contains("home", ignoreCase = true)) return true
+
+        val criticalSystemPackages = setOf(
+            "android",
+            "com.android.systemui",
+            "com.android.settings",
+            "com.android.phone",
+            "com.android.server.telecom",
+            "com.google.android.packageinstaller",
+            "com.android.packageinstaller",
+            "com.google.android.permissioncontroller"
+        )
+        if (packageName in criticalSystemPackages) return true
+
+        try {
+            val appInfo = packageManager.getApplicationInfo(packageName, 0)
+            val isSystem = (appInfo.flags and (android.content.pm.ApplicationInfo.FLAG_SYSTEM or android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
+            if (isSystem) {
+                val blockableSystemApps = setOf(
+                    "com.google.android.youtube",
+                    "com.android.chrome",
+                    "com.google.android.apps.youtube.music",
+                    "com.android.vending"
+                )
+                return packageName !in blockableSystemApps
+            }
+        } catch (_: Exception) {
+            return true
         }
         return false
     }

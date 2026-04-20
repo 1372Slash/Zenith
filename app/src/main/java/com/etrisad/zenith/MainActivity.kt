@@ -53,7 +53,8 @@ class MainActivity : ComponentActivity() {
                     false,
                     0,
                     60,
-                    30
+                    30,
+                    emptySet()
                 )
             )
 
