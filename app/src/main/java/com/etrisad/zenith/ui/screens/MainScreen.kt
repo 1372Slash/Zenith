@@ -133,7 +133,7 @@ fun MainScreen(
             startDestination = Screen.Home.route,
             modifier = Modifier.padding(
                 bottom = if (isDeepScreen) 0.dp else innerPadding.calculateBottomPadding(),
-                top = innerPadding.calculateTopPadding()
+                top = if (isDeepScreen) 0.dp else innerPadding.calculateTopPadding()
             ),
             enterTransition = {
                 val initialRoute = initialState.destination.route
