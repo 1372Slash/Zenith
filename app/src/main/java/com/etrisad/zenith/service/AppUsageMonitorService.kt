@@ -12,7 +12,6 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.etrisad.zenith.data.local.database.ZenithDatabase
-import com.etrisad.zenith.data.local.entity.TodoEntity
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
 import kotlinx.coroutines.CoroutineScope
@@ -190,11 +189,6 @@ class AppUsageMonitorService : Service() {
                     },
                     onGoalDismiss = {
                         allowedApps[targetPackageName] = System.currentTimeMillis() + (60 * 60 * 1000L) // 1 hour
-                    },
-                    onToggleTodo = { todo ->
-                        serviceScope.launch {
-                            shieldRepository.updateTodo(todo.copy(isDone = !todo.isDone))
-                        }
                     }
                 )
             }

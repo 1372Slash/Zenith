@@ -6,7 +6,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -27,28 +26,21 @@ import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import com.etrisad.zenith.data.local.entity.FocusType
-import com.etrisad.zenith.data.local.entity.TodoEntity
-import com.etrisad.zenith.ui.screens.focus.FocusSettingsBottomSheet
-import com.etrisad.zenith.ui.viewmodel.FocusViewModel
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
-import com.etrisad.zenith.ui.viewmodel.DailyUsage
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AppDetailScreen(
-    packageName: String,
+    @Suppress("UNUSED_PARAMETER") packageName: String,
     viewModel: HomeViewModel,
-    focusViewModel: FocusViewModel,
     onBack: () -> Unit
 ) {
     val uiState by viewModel.appDetailUiState.collectAsState()
-    val focusUiState by focusViewModel.uiState.collectAsState()
 
     LaunchedEffect(packageName) {
         viewModel.loadAppDetail(packageName)
@@ -57,17 +49,10 @@ fun AppDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Text("App Details", fontWeight = FontWeight.Bold)
-                },
+                title = { Text("App Details", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { focusViewModel.openSettingsForPackage(uiState.packageName) }) {
-                        Icon(Icons.Outlined.Settings, contentDescription = "Settings")
                     }
                 }
             )
@@ -76,110 +61,84 @@ fun AppDetailScreen(
         val targetMillis = uiState.shieldEntity?.timeLimitMinutes?.let { it * 60 * 1000L } ?: 0L
         val isFocusActive = uiState.shieldEntity != null
 
-        Box(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(
-                    top = innerPadding.calculateTopPadding(),
-                    bottom = 32.dp
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(
+                top = innerPadding.calculateTopPadding(),
+                bottom = 32.dp
+            )
+        ) {
+            item {
+                AppHeader(
+                    appName = uiState.appName,
+                    packageName = uiState.packageName,
+                    icon = uiState.icon,
+                    focusType = uiState.type,
+                    isActive = isFocusActive
                 )
-            ) {
-                item {
-                    AppHeader(
-                        appName = uiState.appName,
-                        icon = uiState.icon,
-                        focusType = uiState.type,
-                        isActive = isFocusActive
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
-
-                if (uiState.type == FocusType.GOAL) {
-                    item {
-                        TodoGroupCard(
-                            todos = uiState.todos,
-                            onAddTodo = { content -> viewModel.addTodo(uiState.packageName, content) },
-                            onToggleTodo = { viewModel.toggleTodo(it) },
-                            onDeleteTodo = { viewModel.deleteTodo(it) },
-                            onReorder = { viewModel.reorderTodos(uiState.packageName, it) }
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
-                }
-
-                item {
-                    UsageCard(
-                        title = "Today's Usage",
-                        time = viewModel.formatDuration(uiState.todayUsage),
-                        targetMillis = targetMillis,
-                        currentUsage = uiState.todayUsage,
-                        focusType = uiState.type,
-                        formatDuration = { viewModel.formatDuration(it) },
-                        isActive = isFocusActive,
-                        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-
-                item {
-                    UsageTrendsRow(
-                        yesterdayTime = viewModel.formatDuration(uiState.yesterdayUsage),
-                        percentageChange = uiState.percentageChange,
-                        focusType = uiState.type
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-
-                item {
-                    if (uiState.usageHistory.isNotEmpty()) {
-                        UsageHistoryCard(
-                            history = uiState.usageHistory,
-                            targetMillis = targetMillis,
-                            focusType = uiState.type,
-                            formatDuration = { viewModel.formatDuration(it) },
-                            onDaySelected = { /* No-op */ },
-                            shape = RoundedCornerShape(
-                                topStart = 8.dp,
-                                topEnd = 8.dp,
-                                bottomStart = if (uiState.shieldEntity == null) 24.dp else 8.dp,
-                                bottomEnd = if (uiState.shieldEntity == null) 24.dp else 8.dp
-                            )
-                        )
-                    } else {
-                        Box(modifier = Modifier.fillMaxWidth().height(250.dp))
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-
-                item {
-                    AnimatedVisibility(
-                        visible = uiState.shieldEntity != null,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically()
-                    ) {
-                        DeleteShieldCard(
-                            onDelete = {
-                                viewModel.deleteShieldFromDetail()
-                            },
-                            shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                        )
-                    }
-                }
+                Spacer(modifier = Modifier.height(24.dp))
             }
 
-            if (focusUiState.isSettingsSheetOpen && focusUiState.selectedAppForFocus != null) {
-                FocusSettingsBottomSheet(
-                    appInfo = focusUiState.selectedAppForFocus!!,
-                    focusType = focusUiState.selectedFocusType,
-                    existingShield = (focusUiState.activeShields + focusUiState.activeGoals).find { it.packageName == focusUiState.selectedAppForFocus!!.packageName },
-                    onDismiss = { focusViewModel.closeSettingsSheet() },
-                    onSave = { limit, emergency, reminders, strict, autoQuit, maxUses, refresh, goalReminder, delayApp ->
-                        focusViewModel.saveFocus(limit, emergency, reminders, strict, autoQuit, maxUses, refresh, goalReminder, delayApp)
-                        viewModel.loadAppDetail(packageName) // Refresh UI after save
-                    }
+            item {
+                UsageCard(
+                    title = "Today's Usage",
+                    time = viewModel.formatDuration(uiState.todayUsage),
+                    targetMillis = targetMillis,
+                    currentUsage = uiState.todayUsage,
+                    focusType = uiState.type,
+                    formatDuration = { viewModel.formatDuration(it) },
+                    isActive = isFocusActive,
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
                 )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            item {
+                UsageTrendsRow(
+                    yesterdayTime = viewModel.formatDuration(uiState.yesterdayUsage),
+                    percentageChange = uiState.percentageChange,
+                    focusType = uiState.type
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            item {
+                if (uiState.usageHistory.isNotEmpty()) {
+                    UsageHistoryCard(
+                        history = uiState.usageHistory,
+                        targetMillis = targetMillis,
+                        focusType = uiState.type,
+                        formatDuration = { viewModel.formatDuration(it) },
+                        onDaySelected = { /* No-op, we stay on Today's Usage in the header */ },
+                        shape = RoundedCornerShape(
+                            topStart = 8.dp,
+                            topEnd = 8.dp,
+                            bottomStart = if (uiState.shieldEntity == null) 24.dp else 8.dp,
+                            bottomEnd = if (uiState.shieldEntity == null) 24.dp else 8.dp
+                        )
+                    )
+                } else {
+                    // Placeholder during loading to prevent layout jump and ensure animation triggers correctly later
+                    Box(modifier = Modifier.fillMaxWidth().height(250.dp))
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            item {
+                AnimatedVisibility(
+                    visible = uiState.shieldEntity != null,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    DeleteShieldCard(
+                        onDelete = {
+                            viewModel.deleteShieldFromDetail()
+                        },
+                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                    )
+                }
             }
         }
     }
@@ -188,6 +147,7 @@ fun AppDetailScreen(
 @Composable
 fun AppHeader(
     appName: String,
+    @Suppress("UNUSED_PARAMETER") packageName: String,
     icon: android.graphics.drawable.Drawable?,
     focusType: FocusType?,
     isActive: Boolean
@@ -223,8 +183,7 @@ fun AppHeader(
             text = appName,
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
+            textAlign = TextAlign.Center
         )
 
         AnimatedVisibility(
@@ -237,7 +196,7 @@ fun AppHeader(
                 Surface(
                     color = typeColor.copy(alpha = 0.1f),
                     shape = CircleShape,
-                    modifier = Modifier.padding(top = 16.dp)
+                    modifier = Modifier.padding(top = 8.dp)
                 ) {
                     Text(
                         text = focusType.name,
@@ -427,14 +386,14 @@ fun UsageTrendsRow(
 
 @Composable
 fun UsageHistoryCard(
-    history: List<DailyUsage>,
+    history: List<com.etrisad.zenith.ui.viewmodel.DailyUsage>,
     targetMillis: Long,
     focusType: FocusType?,
     formatDuration: (Long) -> String,
-    onDaySelected: (DailyUsage?) -> Unit,
+    onDaySelected: (com.etrisad.zenith.ui.viewmodel.DailyUsage?) -> Unit,
     shape: androidx.compose.ui.graphics.Shape
 ) {
-    var selectedUsage by remember { mutableStateOf<DailyUsage?>(null) }
+    var selectedUsage by remember { mutableStateOf<com.etrisad.zenith.ui.viewmodel.DailyUsage?>(null) }
     val dateFormat = remember { SimpleDateFormat("dd", Locale.getDefault()) }
     val todayDate = remember { dateFormat.format(System.currentTimeMillis()) }
 
@@ -486,9 +445,9 @@ fun UsageHistoryCard(
                 history = history,
                 targetMillis = targetMillis,
                 focusType = focusType,
-                onDaySelected = { usage ->
-                    selectedUsage = usage
-                    onDaySelected(usage)
+                onDaySelected = { 
+                    selectedUsage = it
+                    onDaySelected(it)
                 }
             )
         }
@@ -545,239 +504,3 @@ fun DeleteShieldCard(
         }
     }
 }
-
-@Composable
-fun TodoGroupCard(
-    todos: List<TodoEntity>,
-    onAddTodo: (String) -> Unit,
-    onToggleTodo: (TodoEntity) -> Unit,
-    onDeleteTodo: (TodoEntity) -> Unit,
-    @Suppress("UNUSED_PARAMETER") onReorder: (List<TodoEntity>) -> Unit
-) {
-    var showAddDialog by remember { mutableStateOf(false) }
-    var todoText by remember { mutableStateOf("") }
-    var isDoneExpanded by remember { mutableStateOf(false) }
-
-    val activeTodos = todos.filter { !it.isDone }
-    val doneTodos = todos.filter { it.isDone }
-    
-    val totalVisibleItems = activeTodos.size + (if (doneTodos.isNotEmpty()) 1 else 0)
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "To-do List",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            IconButton(
-                onClick = { showAddDialog = true },
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                ),
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(Icons.Outlined.Add, contentDescription = "Add Todo", modifier = Modifier.size(20.dp))
-            }
-        }
-
-        if (activeTodos.isEmpty() && doneTodos.isEmpty()) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                )
-            ) {
-                Text(
-                    text = "No tasks yet. Add some to stay productive!",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    textAlign = TextAlign.Center
-                )
-            }
-        } else {
-            // Individual cards for active tasks with grouped shapes
-            activeTodos.forEachIndexed { index, todo ->
-                val shape = getGroupedShape(index, totalVisibleItems)
-                TodoCard(
-                    todo = todo,
-                    onToggle = { onToggleTodo(todo) },
-                    onDelete = { onDeleteTodo(todo) },
-                    shape = shape
-                )
-            }
-
-            // Group card for done tasks
-            if (doneTodos.isNotEmpty()) {
-                val shape = getGroupedShape(totalVisibleItems - 1, totalVisibleItems)
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = shape,
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { isDoneExpanded = !isDoneExpanded }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = if (isDoneExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "Done (${doneTodos.size})",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        AnimatedVisibility(visible = isDoneExpanded) {
-                            Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                                doneTodos.forEach { todo ->
-                                    TodoItem(
-                                        todo = todo,
-                                        onToggle = { onToggleTodo(todo) },
-                                        onDelete = { onDeleteTodo(todo) },
-                                        modifier = Modifier.padding(horizontal = 4.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if (showAddDialog) {
-        AlertDialog(
-            onDismissRequest = { 
-                showAddDialog = false
-                todoText = ""
-            },
-            title = { Text("Add Task") },
-            text = {
-                OutlinedTextField(
-                    value = todoText,
-                    onValueChange = { todoText = it },
-                    placeholder = { Text("Enter task...") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (todoText.isNotBlank()) {
-                            onAddTodo(todoText)
-                            todoText = ""
-                            showAddDialog = false
-                        }
-                    },
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Add Task")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { 
-                    showAddDialog = false 
-                    todoText = ""
-                }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-}
-
-@Composable
-private fun getGroupedShape(index: Int, total: Int): RoundedCornerShape {
-    return when {
-        total <= 1 -> RoundedCornerShape(24.dp)
-        index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-        index == total - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-        else -> RoundedCornerShape(8.dp)
-    }
-}
-
-@Composable
-fun TodoCard(
-    todo: TodoEntity,
-    onToggle: () -> Unit,
-    onDelete: () -> Unit,
-    shape: RoundedCornerShape
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = shape,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
-    ) {
-        TodoItem(
-            todo = todo,
-            onToggle = onToggle,
-            onDelete = onDelete,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-    }
-}
-
-@Composable
-fun TodoItem(
-    todo: TodoEntity,
-    onToggle: () -> Unit,
-    onDelete: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Checkbox(
-            checked = todo.isDone,
-            onCheckedChange = { onToggle() }
-        )
-        Text(
-            text = todo.content,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f),
-            textDecoration = if (todo.isDone) TextDecoration.LineThrough else null,
-            color = if (todo.isDone) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-        )
-        IconButton(onClick = onDelete) {
-            Icon(
-                Icons.Outlined.Close,
-                contentDescription = "Delete",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp)
-            )
-        }
-    }
-}
-
-

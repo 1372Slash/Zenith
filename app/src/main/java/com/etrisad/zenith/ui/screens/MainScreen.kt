@@ -235,7 +235,6 @@ fun MainScreen(
                 com.etrisad.zenith.ui.screens.home.AppDetailScreen(
                     packageName = packageName,
                     viewModel = homeViewModel,
-                    focusViewModel = focusViewModel,
                     onBack = { navController.popBackStack() }
                 )
             }

@@ -4,7 +4,6 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -13,8 +12,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Timer
@@ -36,11 +33,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
-import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
-import com.etrisad.zenith.data.local.entity.TodoEntity
-import com.etrisad.zenith.data.repository.ShieldRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -57,15 +51,9 @@ fun InterceptOverlayContent(
     delayDurationSeconds: Int = 0,
     onAllowUse: (Int, Boolean) -> Unit,
     onCloseApp: () -> Unit,
-    onGoalDismiss: () -> Unit = {},
-    onToggleTodo: (TodoEntity) -> Unit = {}
+    onGoalDismiss: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val shieldRepository = remember { 
-        ShieldRepository(ZenithDatabase.getDatabase(context).shieldDao()) 
-    }
-    val todos by shieldRepository.getTodosForApp(packageName).collectAsState(initial = emptyList())
-
     val appIcon = remember(packageName) {
         try {
             context.packageManager.getApplicationIcon(packageName)
@@ -417,14 +405,6 @@ fun InterceptOverlayContent(
 
                             Spacer(modifier = Modifier.height(32.dp))
 
-                            if (todos.isNotEmpty()) {
-                                OverlayTodoSection(
-                                    todos = todos,
-                                    onToggleTodo = onToggleTodo
-                                )
-                                Spacer(modifier = Modifier.height(24.dp))
-                            }
-
                             Button(
                                 onClick = {
                                     scope.launch {
@@ -618,151 +598,6 @@ fun InterceptOverlayContent(
                 }
             }
         }
-    }
-}
-
-@Composable
-fun OverlayTodoSection(
-    todos: List<TodoEntity>,
-    onToggleTodo: (TodoEntity) -> Unit
-) {
-    val activeTodos = todos.filter { !it.isDone }
-    val doneTodos = todos.filter { it.isDone }
-    var isDoneExpanded by remember { mutableStateOf(false) }
-
-    // Menghitung total blok kartu: jumlah tugas aktif + 1 (untuk grup 'Done' jika ada)
-    val totalVisibleItems = activeTodos.size + (if (doneTodos.isNotEmpty()) 1 else 0)
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp) // Jarak rapat agar terlihat satu grup
-    ) {
-        Text(
-            text = "To-do List",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-
-        if (activeTodos.isEmpty() && doneTodos.isEmpty()) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-            ) {
-                Text(
-                    text = "No tasks for this app.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-        } else {
-            // Render Tugas Aktif dengan shape dinamis
-            activeTodos.forEachIndexed { index, todo ->
-                val shape = getGroupedShape(index, totalVisibleItems)
-                OverlayTodoCard(todo, onToggleTodo, shape)
-            }
-
-            // Render Grup Selesai sebagai item terakhir jika ada
-            if (doneTodos.isNotEmpty()) {
-                val shape = getGroupedShape(totalVisibleItems - 1, totalVisibleItems)
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = shape,
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { isDoneExpanded = !isDoneExpanded },
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = if (isDoneExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "Done (${doneTodos.size})",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        AnimatedVisibility(visible = isDoneExpanded) {
-                            Column(modifier = Modifier.padding(top = 8.dp)) {
-                                doneTodos.forEach { todo ->
-                                    OverlayTodoItem(todo, onToggleTodo)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun getGroupedShape(index: Int, total: Int): RoundedCornerShape {
-    return when {
-        total <= 1 -> RoundedCornerShape(24.dp)
-        index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-        index == total - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-        else -> RoundedCornerShape(8.dp)
-    }
-}
-
-@Composable
-fun OverlayTodoCard(
-    todo: TodoEntity,
-    onToggleTodo: (TodoEntity) -> Unit,
-    shape: RoundedCornerShape
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = shape,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
-    ) {
-        OverlayTodoItem(
-            todo = todo,
-            onToggleTodo = onToggleTodo,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-        )
-    }
-}
-
-@Composable
-fun OverlayTodoItem(
-    todo: TodoEntity,
-    onToggleTodo: (TodoEntity) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Checkbox(
-            checked = todo.isDone,
-            onCheckedChange = { onToggleTodo(todo) },
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Text(
-            text = todo.content,
-            style = MaterialTheme.typography.bodyLarge,
-            textDecoration = if (todo.isDone) androidx.compose.ui.text.style.TextDecoration.LineThrough else null,
-            color = if (todo.isDone) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-        )
     }
 }
 

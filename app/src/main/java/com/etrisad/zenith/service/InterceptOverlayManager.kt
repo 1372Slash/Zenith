@@ -15,8 +15,6 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.etrisad.zenith.data.local.entity.ShieldEntity
-import com.etrisad.zenith.data.local.entity.TodoEntity
 import com.etrisad.zenith.ui.theme.ZenithTheme
 
 class InterceptOverlayManager(private val context: Context) {
@@ -33,13 +31,12 @@ class InterceptOverlayManager(private val context: Context) {
     fun showOverlay(
         packageName: String,
         appName: String,
-        shield: ShieldEntity?,
+        shield: com.etrisad.zenith.data.local.entity.ShieldEntity?,
         totalUsageToday: Long,
         delayDurationSeconds: Int = 0,
         onAllowUse: (Int, Boolean) -> Unit,
         onCloseApp: () -> Unit,
-        onGoalDismiss: () -> Unit,
-        onToggleTodo: (TodoEntity) -> Unit = {}
+        onGoalDismiss: () -> Unit
     ) {
         if (overlayView != null) return
         isShowing = true
@@ -73,8 +70,7 @@ class InterceptOverlayManager(private val context: Context) {
                             onGoalDismiss = {
                                 hideOverlay()
                                 onGoalDismiss()
-                            },
-                            onToggleTodo = onToggleTodo
+                            }
                         )
                     }
                 }
