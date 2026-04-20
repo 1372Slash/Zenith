@@ -11,10 +11,12 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
+import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material.icons.outlined.*
@@ -547,24 +549,24 @@ fun ShieldConfigItem(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    
+
                     val hours = shield.timeLimitMinutes / 60
                     val mins = shield.timeLimitMinutes % 60
                     val typeText = if (shield.type == FocusType.GOAL) "target" else "limit"
                     val limitText = if (hours > 0) "${hours}h ${mins}m $typeText" else "${mins}m $typeText"
-                    
+
                     val statusText = if (shield.type == FocusType.GOAL) {
                         "Productive"
                     } else {
                         if (shield.isStrictModeEnabled) "Strict" else "Normal"
                     }
-                    
+
                     Text(
                         text = "$limitText • $statusText",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    
+
                     val timeLabel = if (shield.type == FocusType.GOAL) "To Go" else "Left"
                     Text(
                         text = "${formatRemainingTime(remainingMillis)} $timeLabel",
@@ -586,7 +588,7 @@ fun ShieldConfigItem(
                 } else {
                     (progress * 100).toInt() // Show remaining limit
                 }
-                
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (shield.currentStreak > 0) {
                         Icon(
@@ -722,14 +724,14 @@ fun MultiAppPickerBottomSheet(
                             index == allApps.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                             else -> RoundedCornerShape(8.dp)
                         }
-                        
+
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { onAppToggled(app.packageName) },
                             shape = shape,
                             colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer 
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
                                                else MaterialTheme.colorScheme.surfaceContainerHigh
                             )
                         ) {
@@ -755,7 +757,7 @@ fun MultiAppPickerBottomSheet(
                     item { Spacer(modifier = Modifier.height(80.dp)) }
                 }
             }
-            
+
             // FAB in bottom sheet
             FloatingActionButton(
                 onClick = onConfirm,
@@ -779,89 +781,181 @@ fun ScheduleSettingsBottomSheet(
 ) {
     var name by remember { mutableStateOf(editingSchedule?.name ?: "My Schedule") }
     var mode by remember { mutableStateOf(editingSchedule?.mode ?: ScheduleMode.BLOCK) }
-    
+    var isEditingName by remember { mutableStateOf(false) }
+
     val initialStart = editingSchedule?.startTime?.split(":")?.map { it.toInt() } ?: listOf(9, 0)
     val initialEnd = editingSchedule?.endTime?.split(":")?.map { it.toInt() } ?: listOf(17, 0)
 
     val startTimeState = rememberTimePickerState(initialHour = initialStart[0], initialMinute = initialStart[1], is24Hour = true)
     val endTimeState = rememberTimePickerState(initialHour = initialEnd[0], initialMinute = initialEnd[1], is24Hour = true)
-    
+
     var showStartTimePicker by remember { mutableStateOf(false) }
     var showEndTimePicker by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    if (showStartTimePicker) {
+        TimePickerDialog(
+            onDismiss = { showStartTimePicker = false },
+            onConfirm = { showStartTimePicker = false }
+        ) {
+            TimePicker(state = startTimeState)
+        }
+    }
+
+    if (showEndTimePicker) {
+        TimePickerDialog(
+            onDismiss = { showEndTimePicker = false },
+            onConfirm = { showEndTimePicker = false }
+        ) {
+            TimePicker(state = endTimeState)
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
-                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
         ) {
-            Text(
-                text = if (editingSchedule != null) "Edit Schedule" else "Schedule Settings",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Schedule Name") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            Text("Time Period", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Button(
-                    onClick = { showStartTimePicker = true },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+            // Header similar to Shield Settings
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(MaterialTheme.shapes.medium)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text("Start: ${String.format("%02d:%02d", startTimeState.hour, startTimeState.minute)}")
+                    Icon(
+                        imageVector = Icons.Outlined.Schedule,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
                 }
-                Button(
-                    onClick = { showEndTimePicker = true },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { isEditingName = !isEditingName }
                 ) {
-                    Text("End: ${String.format("%02d:%02d", endTimeState.hour, endTimeState.minute)}")
+                    if (isEditingName) {
+                        BasicTextField(
+                            value = name,
+                            onValueChange = { name = it },
+                            textStyle = MaterialTheme.typography.headlineSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        text = "Schedule Settings • Tap to Edit Name",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
-            }
-            
-            if (showStartTimePicker) {
-                TimePickerDialog(
-                    onDismiss = { showStartTimePicker = false },
-                    onConfirm = { showStartTimePicker = false }
-                ) { TimePicker(state = startTimeState) }
-            }
-            if (showEndTimePicker) {
-                TimePickerDialog(
-                    onDismiss = { showEndTimePicker = false },
-                    onConfirm = { showEndTimePicker = false }
-                ) { TimePicker(state = endTimeState) }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-            
-            Text("Schedule Mode", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+            // Time Selection Row (Start & End)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Start Time Card
+                Surface(
+                    onClick = { showStartTimePicker = true },
+                    modifier = Modifier.weight(1f),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Start Time",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = String.format("%02d:%02d", startTimeState.hour, startTimeState.minute),
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // End Time Card
+                Surface(
+                    onClick = { showEndTimePicker = true },
+                    modifier = Modifier.weight(1f),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "End Time",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = String.format("%02d:%02d", endTimeState.hour, endTimeState.minute),
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "Schedule Mode",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 SegmentedButton(
                     selected = mode == ScheduleMode.BLOCK,
                     onClick = { mode = ScheduleMode.BLOCK },
-                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                    icon = { Icon(Icons.Outlined.Block, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 ) { Text("Block") }
                 SegmentedButton(
                     selected = mode == ScheduleMode.ALLOW,
                     onClick = { mode = ScheduleMode.ALLOW },
-                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                    icon = { Icon(Icons.Outlined.CheckCircleOutline, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 ) { Text("Allow") }
             }
-            
+
             Spacer(modifier = Modifier.height(32.dp))
-            
+
             Button(
                 onClick = {
                     val startStr = String.format("%02d:%02d", startTimeState.hour, startTimeState.minute)
@@ -1049,7 +1143,7 @@ fun AppPickerBottomSheet(
                             }
                         }
                     }
-                    
+
                     item {
                         Spacer(modifier = Modifier.height(32.dp))
                     }

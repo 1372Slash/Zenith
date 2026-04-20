@@ -624,16 +624,64 @@ fun ScheduleOverlayContent(
         }
     }
 
+    val backgroundAlphaState = animateFloatAsState(
+        targetValue = if (showContent) 0.6f else 0f,
+        animationSpec = tween(durationMillis = 400),
+        label = "backgroundAlpha"
+    )
+
     LaunchedEffect(Unit) {
         showContent = true
+    }
+
+    val progress by produceState(initialValue = 0f) {
+        while (true) {
+            val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+            val calendar = java.util.Calendar.getInstance()
+            val currentStr = sdf.format(calendar.time)
+
+            fun toMinutes(timeStr: String): Int {
+                return try {
+                    val parts = timeStr.split(":")
+                    parts[0].toInt() * 60 + parts[1].toInt()
+                } catch (_: Exception) { 0 }
+            }
+
+            val startMin = toMinutes(schedule.startTime)
+            var endMin = toMinutes(schedule.endTime)
+            var nowMin = toMinutes(currentStr)
+
+            // Handle schedule spanning across midnight
+            if (endMin <= startMin) {
+                endMin += 24 * 60
+                if (nowMin < startMin) nowMin += 24 * 60
+            }
+
+            val total = (endMin - startMin).coerceAtLeast(1)
+            val elapsed = (nowMin - startMin).coerceIn(0, total)
+
+            value = elapsed.toFloat() / total.toFloat()
+            kotlinx.coroutines.delay(10000) // Update every 10 seconds
+        }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.6f)),
+            .background(Color.Transparent),
         contentAlignment = Alignment.BottomCenter
     ) {
+        // Scrim background with fade animation
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = backgroundAlphaState.value }
+                .background(Color.Black)
+                .pointerInput(Unit) {
+                    detectTapGestures { }
+                }
+        )
+
         AnimatedVisibility(
             visible = showContent,
             enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
@@ -644,12 +692,15 @@ fun ScheduleOverlayContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .wrapContentHeight()
-                    .navigationBarsPadding(),
+                    .imePadding(),
                 shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
-                    modifier = Modifier.padding(24.dp).fillMaxWidth(),
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .fillMaxWidth()
+                        .navigationBarsPadding(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(
@@ -730,7 +781,7 @@ fun ScheduleOverlayContent(
                     if (schedule.mode == ScheduleMode.ALLOW) {
                         // Progress indicator for Allow mode
                         CircularWavyProgressIndicator(
-                            progress = { 1f },
+                            progress = { progress },
                             modifier = Modifier.size(120.dp),
                             color = MaterialTheme.colorScheme.primary,
                             amplitude = { 1f },

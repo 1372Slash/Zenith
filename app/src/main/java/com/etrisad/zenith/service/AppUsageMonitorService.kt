@@ -122,11 +122,11 @@ class AppUsageMonitorService : Service() {
     private suspend fun updateUsageTime(packageName: String) {
         val shield = shieldRepository.getShieldByPackageName(packageName) ?: return
         val currentTime = System.currentTimeMillis()
-        
+
         // Recharge Emergency Uses logic
         val prefs = preferencesRepository.userPreferencesFlow.first()
         val rechargeDurationMillis = prefs.emergencyRechargeDurationMinutes * 60 * 1000L
-        
+
         var updatedShield = shield
         if (shield.emergencyUseCount < shield.maxEmergencyUses && rechargeDurationMillis > 0) {
             val timeSinceLastRecharge = currentTime - shield.lastEmergencyRechargeTimestamp
