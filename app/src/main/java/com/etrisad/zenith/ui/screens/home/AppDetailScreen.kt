@@ -604,7 +604,9 @@ fun TodoGroupCard(
                     text = "No tasks yet. Add some to stay productive!",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(24.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
                     textAlign = TextAlign.Center
                 )
             }
@@ -630,11 +632,12 @@ fun TodoGroupCard(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                     )
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { isDoneExpanded = !isDoneExpanded },
+                                .clickable { isDoneExpanded = !isDoneExpanded }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
@@ -652,12 +655,13 @@ fun TodoGroupCard(
                         }
 
                         AnimatedVisibility(visible = isDoneExpanded) {
-                            Column(modifier = Modifier.padding(top = 8.dp)) {
+                            Column(modifier = Modifier.padding(bottom = 8.dp)) {
                                 doneTodos.forEach { todo ->
                                     TodoItem(
                                         todo = todo,
                                         onToggle = { onToggleTodo(todo) },
-                                        onDelete = { onDeleteTodo(todo) }
+                                        onDelete = { onDeleteTodo(todo) },
+                                        modifier = Modifier.padding(horizontal = 4.dp)
                                     )
                                 }
                             }

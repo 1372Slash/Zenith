@@ -577,13 +577,13 @@ fun UsageGraph(
     val initialPage = remember(history) { (pageCount - 1).coerceAtLeast(0) }
     val pagerState = rememberPagerState(pageCount = { pageCount }, initialPage = initialPage)
 
-    // Sync pagerState when history changes and it's currently at 0 or invalid
+    // Sync pagerState when history first loads to ensure we start at the latest week
+    var hasInitializedPager by remember { mutableStateOf(false) }
     LaunchedEffect(history) {
-        if (history.isNotEmpty()) {
+        if (history.isNotEmpty() && !hasInitializedPager) {
             val targetPage = (history.chunked(7).size - 1).coerceAtLeast(0)
-            if (pagerState.currentPage != targetPage) {
-                pagerState.scrollToPage(targetPage)
-            }
+            pagerState.scrollToPage(targetPage)
+            hasInitializedPager = true
         }
     }
 
@@ -604,13 +604,15 @@ fun UsageGraph(
     var selectedDate by remember { mutableStateOf<Long?>(null) }
 
     // Trigger for opening animation - Reset every time history changes
-    var animateTrigger by remember(history) { mutableStateOf(false) }
+    var animateTrigger by remember { mutableStateOf(false) }
     
     LaunchedEffect(history) {
         if (history.isNotEmpty()) {
-            // Small delay to ensure layout and maxUsage are stable
-            kotlinx.coroutines.delay(200)
-            animateTrigger = true
+            if (!animateTrigger) {
+                // Small delay to ensure layout and maxUsage are stable
+                kotlinx.coroutines.delay(200)
+                animateTrigger = true
+            }
         }
     }
 
