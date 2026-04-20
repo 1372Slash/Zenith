@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -27,14 +28,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Matrix
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import androidx.graphics.shapes.toPath
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
@@ -179,10 +186,17 @@ fun FocusScreen(
 
         if (uiState.isScheduleSettingsOpen) {
             ScheduleSettingsBottomSheet(
+                uiState = uiState,
                 editingSchedule = uiState.editingSchedule,
                 onDismiss = { viewModel.closeScheduleSettings() },
                 onSave = { name, start, end, mode ->
                     viewModel.saveSchedule(name, start, end, mode)
+                },
+                onEditApps = {
+                    // Jangan reset selectedAppsForSchedule
+                    viewModel.closeScheduleSettings()
+                    // Buka picker tanpa reset state selectedAppsForSchedule
+                    viewModel.openSchedulePicker(resetSelection = false)
                 }
             )
         }
@@ -385,6 +399,17 @@ fun ScheduleItem(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val context = LocalContext.current
+    val appIcons = remember(schedule.packageNames) {
+        schedule.packageNames.take(4).mapNotNull { pkg ->
+            try {
+                context.packageManager.getApplicationIcon(pkg)
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -403,10 +428,10 @@ fun ScheduleItem(
                 )
             },
             leadingContent = {
-                Icon(
-                    imageVector = Icons.Outlined.Schedule,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
+                MultiAppIconGroup(
+                    appIcons = appIcons,
+                    totalCount = schedule.packageNames.size,
+                    size = 40.dp
                 )
             },
             trailingContent = {
@@ -429,6 +454,109 @@ fun ScheduleItem(
             },
             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun MultiAppIconGroup(
+    appIcons: List<android.graphics.drawable.Drawable>,
+    totalCount: Int,
+    size: Dp,
+    modifier: Modifier = Modifier
+) {
+    val sunnyShape = remember {
+        GenericShape { shapeSize, _ ->
+            val path = MaterialShapes.Sunny.toPath().asComposePath()
+            val matrix = Matrix()
+            matrix.scale(shapeSize.width, shapeSize.height)
+            path.transform(matrix)
+            addPath(path)
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(if (appIcons.size <= 1) Color.Transparent else MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center
+    ) {
+        when {
+            appIcons.isEmpty() -> {
+                Icon(
+                    imageVector = Icons.Outlined.Schedule,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(size * 0.6f)
+                )
+            }
+            appIcons.size == 1 -> {
+                Image(
+                    painter = BitmapPainter(appIcons[0].toBitmap().asImageBitmap()),
+                    contentDescription = null,
+                    modifier = Modifier.size(size).clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            else -> {
+                val iconSize = (size / 2) - 2.dp
+                val spacing = 1.dp
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(2.dp),
+                    verticalArrangement = Arrangement.spacedBy(spacing, Alignment.CenterVertically),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
+                        appIcons.take(2).forEach { icon ->
+                            Image(
+                                painter = BitmapPainter(icon.toBitmap().asImageBitmap()),
+                                contentDescription = null,
+                                modifier = Modifier.size(iconSize).clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                    if (appIcons.size > 2) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
+                            appIcons.drop(2).take(1).forEach { icon ->
+                                Image(
+                                    painter = BitmapPainter(icon.toBitmap().asImageBitmap()),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(iconSize).clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                            if (appIcons.size == 4 && totalCount <= 4) {
+                                appIcons.drop(3).forEach { icon ->
+                                    Image(
+                                        painter = BitmapPainter(icon.toBitmap().asImageBitmap()),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(iconSize).clip(CircleShape),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                            } else if (totalCount > 3) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(iconSize)
+                                        .clip(sunnyShape)
+                                        .background(MaterialTheme.colorScheme.primary),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "+${totalCount - 3}",
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        style = androidx.compose.ui.text.TextStyle(fontSize = (size.value * 0.2f).sp),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -668,14 +796,15 @@ fun MultiAppPickerBottomSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        dragHandle = null
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.85f)) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(0.9f)
                     .padding(horizontal = 16.dp)
+                    .padding(top = 24.dp)
             ) {
                 Text(
                     text = "Select Apps for Schedule",
@@ -713,6 +842,7 @@ fun MultiAppPickerBottomSheet(
 
                 LazyColumn(
                     modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(bottom = 80.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     val allApps = (uiState.topApps + uiState.installedApps).distinctBy { it.packageName }
@@ -754,16 +884,16 @@ fun MultiAppPickerBottomSheet(
                             )
                         }
                     }
-                    item { Spacer(modifier = Modifier.height(80.dp)) }
                 }
             }
 
-            // FAB in bottom sheet
+            // FAB
             FloatingActionButton(
                 onClick = onConfirm,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(32.dp),
+                    .padding(32.dp)
+                    .navigationBarsPadding(),
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = "Next")
@@ -775,10 +905,24 @@ fun MultiAppPickerBottomSheet(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduleSettingsBottomSheet(
+    uiState: FocusUiState,
     editingSchedule: ScheduleEntity? = null,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, ScheduleMode) -> Unit
+    onSave: (String, String, String, ScheduleMode) -> Unit,
+    onEditApps: () -> Unit
 ) {
+    val context = LocalContext.current
+    val appIcons = remember(editingSchedule, uiState.selectedAppsForSchedule) {
+        val packages = editingSchedule?.packageNames ?: uiState.selectedAppsForSchedule.toList()
+        packages.take(4).mapNotNull { pkg ->
+            try {
+                context.packageManager.getApplicationIcon(pkg)
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
     var name by remember { mutableStateOf(editingSchedule?.name ?: "My Schedule") }
     var mode by remember { mutableStateOf(editingSchedule?.mode ?: ScheduleMode.BLOCK) }
     var isEditingName by remember { mutableStateOf(false) }
@@ -823,20 +967,14 @@ fun ScheduleSettingsBottomSheet(
         ) {
             // Header similar to Shield Settings
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(MaterialTheme.shapes.medium)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Schedule,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
+                // Multi-App Icon Group
+                val packageNames = editingSchedule?.packageNames ?: uiState.selectedAppsForSchedule.toList()
+                MultiAppIconGroup(
+                    appIcons = appIcons,
+                    totalCount = packageNames.size,
+                    size = 56.dp,
+                    modifier = Modifier.clickable { onEditApps() }
+                )
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(
                     modifier = Modifier
@@ -861,7 +999,7 @@ fun ScheduleSettingsBottomSheet(
                         )
                     }
                     Text(
-                        text = "Schedule Settings • Tap to Edit Name",
+                        text = "Schedule Settings",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -873,15 +1011,14 @@ fun ScheduleSettingsBottomSheet(
             // Time Selection Row (Start & End)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 // Start Time Card
                 Surface(
                     onClick = { showStartTimePicker = true },
                     modifier = Modifier.weight(1f),
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp, topEnd = 8.dp, bottomEnd = 8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -895,20 +1032,21 @@ fun ScheduleSettingsBottomSheet(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = String.format("%02d:%02d", startTimeState.hour, startTimeState.minute),
+                            text = "${"%02d".format(startTimeState.hour)}:${"%02d".format(startTimeState.minute)}",
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
 
+                Spacer(modifier = Modifier.width(4.dp))
+
                 // End Time Card
                 Surface(
                     onClick = { showEndTimePicker = true },
                     modifier = Modifier.weight(1f),
-                    shape = MaterialTheme.shapes.medium,
+                    shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp, topStart = 8.dp, bottomStart = 8.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -922,7 +1060,7 @@ fun ScheduleSettingsBottomSheet(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = String.format("%02d:%02d", endTimeState.hour, endTimeState.minute),
+                            text = "${"%02d".format(endTimeState.hour)}:${"%02d".format(endTimeState.minute)}",
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -958,8 +1096,8 @@ fun ScheduleSettingsBottomSheet(
 
             Button(
                 onClick = {
-                    val startStr = String.format("%02d:%02d", startTimeState.hour, startTimeState.minute)
-                    val endStr = String.format("%02d:%02d", endTimeState.hour, endTimeState.minute)
+                    val startStr = String.format(java.util.Locale.getDefault(), "%02d:%02d", startTimeState.hour, startTimeState.minute)
+                    val endStr = String.format(java.util.Locale.getDefault(), "%02d:%02d", endTimeState.hour, endTimeState.minute)
                     onSave(name, startStr, endStr, mode)
                 },
                 modifier = Modifier.fillMaxWidth(),

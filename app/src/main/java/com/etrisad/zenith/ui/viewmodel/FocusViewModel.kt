@@ -183,12 +183,13 @@ class FocusViewModel(
         )
     }
 
-    fun openSchedulePicker() {
+    fun openSchedulePicker(resetSelection: Boolean = true) {
         _uiState.value = _uiState.value.copy(
             isSchedulePickerOpen = true,
-            selectedAppsForSchedule = emptySet(),
+            selectedAppsForSchedule = if (resetSelection) emptySet() else _uiState.value.selectedAppsForSchedule,
             isSettingsSheetOpen = false,
-            isScheduleSettingsOpen = false
+            isScheduleSettingsOpen = false,
+            editingSchedule = if (resetSelection) null else _uiState.value.editingSchedule
         )
     }
 
