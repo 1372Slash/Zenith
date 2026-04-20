@@ -32,6 +32,7 @@ data class FocusUiState(
     val selectedAppForFocus: AppInfo? = null,
     val selectedFocusType: FocusType = FocusType.SHIELD,
     val isSettingsSheetOpen: Boolean = false,
+    val topApps: List<AppInfo> = emptyList(),
     val shieldSortType: ShieldSortType = ShieldSortType.ALPHABETICAL,
     val goalSortType: ShieldSortType = ShieldSortType.ALPHABETICAL
 )
@@ -52,6 +53,7 @@ class FocusViewModel(
             shieldRepository.allShields.collect { shields ->
                 allShields = shields
                 updateShieldedLists()
+                updateInstalledAppsFilter()
             }
         }
         loadInstalledApps()
@@ -105,24 +107,52 @@ class FocusViewModel(
                     .sortedBy { it.appName.lowercase() }
             }
             _allInstalledApps.value = apps
-            _uiState.value = _uiState.value.copy(
-                installedApps = apps,
-                isLoadingApps = false
-            )
+            updateInstalledAppsFilter()
         }
+    }
+
+    private fun updateInstalledAppsFilter() {
+        val query = _uiState.value.searchQuery
+        val shieldedPackages = allShields.map { it.packageName }.toSet()
+
+        val filtered = if (query.isBlank()) {
+            _allInstalledApps.value.filter { it.packageName !in shieldedPackages }
+        } else {
+            _allInstalledApps.value.filter {
+                (it.appName.contains(query, ignoreCase = true) ||
+                        it.packageName.contains(query, ignoreCase = true)) &&
+                        it.packageName !in shieldedPackages
+            }
+        }
+
+        // Get top used apps from system usage stats
+        val topApps = getTopUsedApps(limit = 6).filter { it.packageName !in shieldedPackages }
+
+        _uiState.value = _uiState.value.copy(
+            installedApps = filtered,
+            topApps = topApps,
+            isLoadingApps = false
+        )
+    }
+
+    private fun getTopUsedApps(limit: Int): List<AppInfo> {
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
+        val pm = context.packageManager
+        val now = System.currentTimeMillis()
+        val start = now - 24 * 60 * 60 * 1000L // Last 24 hours
+
+        val stats = usm.queryAndAggregateUsageStats(start, now)
+        return stats.values
+            .sortedByDescending { it.totalTimeVisible.coerceAtLeast(it.totalTimeInForeground) }
+            .mapNotNull { stat ->
+                _allInstalledApps.value.find { it.packageName == stat.packageName }
+            }
+            .take(limit)
     }
 
     fun onSearchQueryChange(query: String) {
         _uiState.value = _uiState.value.copy(searchQuery = query)
-        val filtered = if (query.isBlank()) {
-            _allInstalledApps.value
-        } else {
-            _allInstalledApps.value.filter {
-                it.appName.contains(query, ignoreCase = true) ||
-                        it.packageName.contains(query, ignoreCase = true)
-            }
-        }
-        _uiState.value = _uiState.value.copy(installedApps = filtered)
+        updateInstalledAppsFilter()
     }
 
     fun selectAppForFocus(app: AppInfo?, type: FocusType) {

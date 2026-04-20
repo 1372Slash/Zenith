@@ -5,6 +5,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -14,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -28,6 +30,7 @@ import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
@@ -200,7 +203,15 @@ fun FocusScreenContent(
 
         if (uiState.activeGoals.isEmpty()) {
             item {
-                EmptyFocusMessage(message = "No active goals yet")
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                ) {
+                    EmptyFocusMessage(message = "No active goals yet")
+                }
             }
         } else {
             itemsIndexed(
@@ -222,7 +233,7 @@ fun FocusScreenContent(
                         onClick = { onAppClick(shield.packageName) }
                     )
                     if (index < uiState.activeGoals.size - 1) {
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
                     }
                 }
             }
@@ -242,7 +253,15 @@ fun FocusScreenContent(
 
         if (uiState.activeShields.isEmpty()) {
             item {
-                EmptyFocusMessage(message = "No active shields yet")
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                ) {
+                    EmptyFocusMessage(message = "No active shields yet")
+                }
             }
         } else {
             itemsIndexed(
@@ -264,7 +283,7 @@ fun FocusScreenContent(
                         onClick = { onAppClick(shield.packageName) }
                     )
                     if (index < uiState.activeShields.size - 1) {
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
                     }
                 }
             }
@@ -559,19 +578,168 @@ fun AppPickerBottomSheet(
                     CircularProgressIndicator()
                 }
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    itemsIndexed(uiState.installedApps) { index, app ->
-                        val shape = when {
-                            uiState.installedApps.size == 1 -> RoundedCornerShape(24.dp)
-                            index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-                            index == uiState.installedApps.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                            else -> RoundedCornerShape(8.dp)
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(0.dp) // Spacing handled by individual items
+                ) {
+                    // Top Used Apps Section
+                    if (uiState.topApps.isNotEmpty() && uiState.searchQuery.isEmpty()) {
+                        item {
+                            PickerSectionHeader(title = "Top Used Apps")
+                            Spacer(modifier = Modifier.height(16.dp))
                         }
-                        AppListItem(app = app, shape = shape, onClick = { onAppSelected(app) })
+
+                        itemsIndexed(
+                            items = uiState.topApps,
+                            key = { _, app -> "top_${app.packageName}" }
+                        ) { index, app ->
+                            val shape = when {
+                                uiState.topApps.size == 1 -> RoundedCornerShape(24.dp)
+                                index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                                index == uiState.topApps.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                                else -> RoundedCornerShape(8.dp)
+                            }
+                            Column(modifier = Modifier.animateItem()) {
+                                TopAppCard(app = app, shape = shape, onClick = { onAppSelected(app) })
+                                if (index < uiState.topApps.size - 1) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                }
+                            }
+                        }
+
+                        item {
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
+                    }
+
+                    // All Apps Section
+                    item {
+                        PickerSectionHeader(
+                            title = if (uiState.searchQuery.isEmpty()) "All Apps" else "Search Results"
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    if (uiState.installedApps.isEmpty()) {
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth().animateItem(),
+                                shape = RoundedCornerShape(24.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                                )
+                            ) {
+                                Box(
+                                    modifier = Modifier.padding(32.dp).fillMaxWidth(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "No apps found",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        itemsIndexed(
+                            items = uiState.installedApps,
+                            key = { _, app -> "all_${app.packageName}" }
+                        ) { index, app ->
+                            val shape = when {
+                                uiState.installedApps.size == 1 -> RoundedCornerShape(24.dp)
+                                index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                                index == uiState.installedApps.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                                else -> RoundedCornerShape(8.dp)
+                            }
+                            Column(modifier = Modifier.animateItem()) {
+                                AppListItem(app = app, shape = shape, onClick = { onAppSelected(app) })
+                                if (index < uiState.installedApps.size - 1) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                }
+                            }
+                        }
+                    }
+                    
+                    item {
+                        Spacer(modifier = Modifier.height(32.dp))
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+fun PickerSectionHeader(title: String, modifier: Modifier = Modifier) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = modifier.fillMaxWidth()
+    )
+}
+
+@Composable
+fun TopAppCard(app: AppInfo, shape: RoundedCornerShape, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = shape,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
+    ) {
+        ListItem(
+            headlineContent = {
+                Text(
+                    text = app.appName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            supportingContent = {
+                Text(
+                    text = app.packageName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            leadingContent = {
+                if (app.icon != null) {
+                    Image(
+                        painter = BitmapPainter(app.icon.toBitmap().asImageBitmap()),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Outlined.Android, contentDescription = null)
+                    }
+                }
+            },
+            trailingContent = {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.TrendingUp,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            },
+            colors = ListItemDefaults.colors(
+                containerColor = Color.Transparent
+            )
+        )
     }
 }
 
@@ -591,7 +759,7 @@ fun AppListItem(app: AppInfo, shape: RoundedCornerShape, onClick: () -> Unit) {
                 Text(
                     text = app.appName,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.Bold
                 )
             },
             supportingContent = {
@@ -608,14 +776,14 @@ fun AppListItem(app: AppInfo, shape: RoundedCornerShape, onClick: () -> Unit) {
                         contentDescription = null,
                         modifier = Modifier
                             .size(40.dp)
-                            .clip(CircleShape),
+                            .clip(RoundedCornerShape(12.dp)),
                         contentScale = ContentScale.Crop
                     )
                 } else {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(12.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant),
                         contentAlignment = Alignment.Center
                     ) {

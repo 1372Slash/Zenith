@@ -170,7 +170,15 @@ fun HomeScreenContent(
 
             if (uiState.activeGoals.isEmpty()) {
                 item {
-                    EmptyShieldsMessage(message = "No active goals. Go to Focus to add one!")
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        )
+                    ) {
+                        EmptyShieldsMessage(message = "No active goals. Go to Focus to add one!")
+                    }
                 }
             } else {
                 shieldList(shields = uiState.activeGoals, formatDuration = formatDuration, onAppClick = onAppClick)
@@ -188,7 +196,15 @@ fun HomeScreenContent(
 
             if (uiState.activeShields.isEmpty()) {
                 item {
-                    EmptyShieldsMessage(message = "No active shields. Go to Focus to add one!")
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        )
+                    ) {
+                        EmptyShieldsMessage(message = "No active shields. Go to Focus to add one!")
+                    }
                 }
             } else {
                 shieldList(shields = uiState.activeShields, formatDuration = formatDuration, onAppClick = onAppClick)
@@ -980,7 +996,7 @@ fun TopAppsSection(
                                 )
                             )
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
                     }
 
                     // See Full List Card at the bottom of the group
@@ -1039,7 +1055,7 @@ fun LazyListScope.shieldList(
         Column(modifier = Modifier.animateItem()) {
             ShieldItem(shield = shield, shape = shape, formatDuration = formatDuration, onAppClick = onAppClick)
             if (index < shields.size - 1) {
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
             }
         }
     }
@@ -1181,25 +1197,32 @@ fun ShieldItem(
 
 @Composable
 fun EmptyShieldsMessage(message: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+    AnimatedVisibility(
+        visible = true,
+        enter = scaleIn(animationSpec = spring(dampingRatio = 0.5f, stiffness = 200f)) + fadeIn()
     ) {
-        Icon(
-            imageVector = Icons.Outlined.HourglassEmpty,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.outline
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.outline,
-            textAlign = TextAlign.Center
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.Outlined.Security,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.outlineVariant
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.outline,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
     }
 }
 
