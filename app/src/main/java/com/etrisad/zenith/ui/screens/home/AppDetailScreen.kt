@@ -105,19 +105,24 @@ fun AppDetailScreen(
             }
 
             item {
-                UsageHistoryCard(
-                    history = uiState.usageHistory,
-                    targetMillis = targetMillis,
-                    focusType = uiState.type,
-                    formatDuration = { viewModel.formatDuration(it) },
-                    onDaySelected = { /* No-op, we stay on Today's Usage in the header */ },
-                    shape = RoundedCornerShape(
-                        topStart = 8.dp,
-                        topEnd = 8.dp,
-                        bottomStart = if (uiState.shieldEntity == null) 24.dp else 8.dp,
-                        bottomEnd = if (uiState.shieldEntity == null) 24.dp else 8.dp
+                if (uiState.usageHistory.isNotEmpty()) {
+                    UsageHistoryCard(
+                        history = uiState.usageHistory,
+                        targetMillis = targetMillis,
+                        focusType = uiState.type,
+                        formatDuration = { viewModel.formatDuration(it) },
+                        onDaySelected = { /* No-op, we stay on Today's Usage in the header */ },
+                        shape = RoundedCornerShape(
+                            topStart = 8.dp,
+                            topEnd = 8.dp,
+                            bottomStart = if (uiState.shieldEntity == null) 24.dp else 8.dp,
+                            bottomEnd = if (uiState.shieldEntity == null) 24.dp else 8.dp
+                        )
                     )
-                )
+                } else {
+                    // Placeholder during loading to prevent layout jump and ensure animation triggers correctly later
+                    Box(modifier = Modifier.fillMaxWidth().height(250.dp))
+                }
                 Spacer(modifier = Modifier.height(4.dp))
             }
 

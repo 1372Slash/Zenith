@@ -574,7 +574,18 @@ fun UsageGraph(
     }
     val pages = remember(history) { history.chunked(7) }
     val pageCount = pages.size.coerceAtLeast(1)
-    val pagerState = rememberPagerState(pageCount = { pageCount }, initialPage = (pageCount - 1).coerceAtLeast(0))
+    val initialPage = remember(history) { (pageCount - 1).coerceAtLeast(0) }
+    val pagerState = rememberPagerState(pageCount = { pageCount }, initialPage = initialPage)
+
+    // Sync pagerState when history changes and it's currently at 0 or invalid
+    LaunchedEffect(history) {
+        if (history.isNotEmpty()) {
+            val targetPage = (history.chunked(7).size - 1).coerceAtLeast(0)
+            if (pagerState.currentPage != targetPage) {
+                pagerState.scrollToPage(targetPage)
+            }
+        }
+    }
 
     // Determine max usage for the current visible page (Adaptive Scale)
     val currentPageData = if (pagerState.currentPage < pages.size) pages[pagerState.currentPage] else emptyList()
@@ -592,10 +603,15 @@ fun UsageGraph(
 
     var selectedDate by remember { mutableStateOf<Long?>(null) }
 
-    // Trigger for opening animation
-    var animateTrigger by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        animateTrigger = true
+    // Trigger for opening animation - Reset every time history changes
+    var animateTrigger by remember(history) { mutableStateOf(false) }
+    
+    LaunchedEffect(history) {
+        if (history.isNotEmpty()) {
+            // Small delay to ensure layout and maxUsage are stable
+            kotlinx.coroutines.delay(200)
+            animateTrigger = true
+        }
     }
 
     // Reset selection when paging
