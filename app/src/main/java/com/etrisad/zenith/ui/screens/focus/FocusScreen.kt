@@ -158,6 +158,7 @@ fun FocusScreen(
             FocusSettingsBottomSheet(
                 appInfo = uiState.selectedAppForFocus!!,
                 focusType = uiState.selectedFocusType,
+                usageToday = uiState.selectedAppUsageToday,
                 existingShield = (uiState.activeShields + uiState.activeGoals).find { it.packageName == uiState.selectedAppForFocus!!.packageName },
                 onDismiss = { viewModel.closeSettingsSheet() },
                 onSave = { limit, emergency, reminders, strict, autoQuit, maxUses, refresh, goalReminder, delayApp ->
@@ -766,6 +767,7 @@ fun AppPickerItem(
 fun FocusSettingsBottomSheet(
     appInfo: AppInfo,
     focusType: FocusType,
+    usageToday: Long,
     existingShield: ShieldEntity?,
     onDismiss: () -> Unit,
     onSave: (Int, Int, Boolean, Boolean, Boolean, Int, Int, Int, Boolean) -> Unit
@@ -828,11 +830,24 @@ fun FocusSettingsBottomSheet(
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
                     Text(text = appInfo.appName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    Text(
-                        text = if (focusType == FocusType.GOAL) "Goal Settings" else "Shield Settings",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (focusType == FocusType.GOAL) "Goal Settings" else "Shield Settings",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = " • ",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "Today: ${formatRemainingTime(usageToday)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
 

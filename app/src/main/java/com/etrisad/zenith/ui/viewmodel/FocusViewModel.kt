@@ -34,7 +34,8 @@ data class FocusUiState(
     val isSettingsSheetOpen: Boolean = false,
     val topApps: List<AppInfo> = emptyList(),
     val shieldSortType: ShieldSortType = ShieldSortType.ALPHABETICAL,
-    val goalSortType: ShieldSortType = ShieldSortType.ALPHABETICAL
+    val goalSortType: ShieldSortType = ShieldSortType.ALPHABETICAL,
+    val selectedAppUsageToday: Long = 0L
 )
 
 class FocusViewModel(
@@ -156,11 +157,32 @@ class FocusViewModel(
     }
 
     fun selectAppForFocus(app: AppInfo?, type: FocusType) {
+        val usage = if (app != null) {
+            getUsageTodayForPackage(app.packageName)
+        } else 0L
+
         _uiState.value = _uiState.value.copy(
             selectedAppForFocus = app,
             selectedFocusType = type,
-            isSettingsSheetOpen = app != null // Only open settings if app is selected
+            isSettingsSheetOpen = app != null,
+            selectedAppUsageToday = usage
         )
+    }
+
+    private fun getUsageTodayForPackage(packageName: String): Long {
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
+        val now = System.currentTimeMillis()
+        val calendar = java.util.Calendar.getInstance()
+        calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        calendar.set(java.util.Calendar.MINUTE, 0)
+        calendar.set(java.util.Calendar.SECOND, 0)
+        calendar.set(java.util.Calendar.MILLISECOND, 0)
+        val start = calendar.timeInMillis
+
+        val stats = usm.queryAndAggregateUsageStats(start, now)
+        return stats[packageName]?.let {
+            it.totalTimeVisible.coerceAtLeast(it.totalTimeInForeground)
+        } ?: 0L
     }
 
     fun closeSettingsSheet() {
@@ -225,10 +247,12 @@ class FocusViewModel(
             } catch (e: Exception) {
                 AppInfo(shield.packageName, shield.appName, null)
             }
+            val usage = getUsageTodayForPackage(shield.packageName)
             _uiState.value = _uiState.value.copy(
                 selectedAppForFocus = appInfo,
                 selectedFocusType = shield.type,
-                isSettingsSheetOpen = true
+                isSettingsSheetOpen = true,
+                selectedAppUsageToday = usage
             )
         }
     }
