@@ -200,7 +200,10 @@ fun MainScreen(
                 HomeScreen(
                     homeViewModel,
                     userPreferencesRepository,
-                    onSeeFullList = { navController.navigate(Screen.UsageStats.route) }
+                    onSeeFullList = { navController.navigate(Screen.UsageStats.route) },
+                    onAppClick = { packageName ->
+                        navController.navigate(Screen.AppDetail.createRoute(packageName))
+                    }
                 )
             }
             composable(Screen.Focus.route) {
@@ -211,6 +214,20 @@ fun MainScreen(
             }
             composable(Screen.UsageStats.route) {
                 UsageStatsScreen(
+                    viewModel = homeViewModel,
+                    onBack = { navController.popBackStack() },
+                    onAppClick = { packageName ->
+                        navController.navigate(Screen.AppDetail.createRoute(packageName))
+                    }
+                )
+            }
+            composable(
+                route = Screen.AppDetail.route,
+                arguments = listOf(androidx.navigation.navArgument("packageName") { type = androidx.navigation.NavType.StringType })
+            ) { backStackEntry ->
+                val packageName = backStackEntry.arguments?.getString("packageName") ?: ""
+                com.etrisad.zenith.ui.screens.home.AppDetailScreen(
+                    packageName = packageName,
                     viewModel = homeViewModel,
                     onBack = { navController.popBackStack() }
                 )

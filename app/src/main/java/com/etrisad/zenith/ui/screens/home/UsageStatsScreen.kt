@@ -2,6 +2,7 @@ package com.etrisad.zenith.ui.screens.home
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -29,7 +30,8 @@ import com.etrisad.zenith.ui.viewmodel.HomeViewModel
 @Composable
 fun UsageStatsScreen(
     viewModel: HomeViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onAppClick: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -72,7 +74,8 @@ fun UsageStatsScreen(
                 UsageItem(
                     app = app,
                     formatDuration = viewModel::formatDuration,
-                    shape = shape
+                    shape = shape,
+                    onClick = { onAppClick(app.packageName) }
                 )
                 Spacer(modifier = Modifier.height(4.dp))
             }
@@ -146,10 +149,13 @@ fun UsageStatsScreen(
 fun UsageItem(
     app: AppUsageInfo,
     formatDuration: (Long) -> String,
-    shape: androidx.compose.ui.graphics.Shape
+    shape: androidx.compose.ui.graphics.Shape,
+    onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
         shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow

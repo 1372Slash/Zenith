@@ -27,6 +27,18 @@ data class DailyUsage(
     val totalTime: Long
 )
 
+data class AppDetailUiState(
+    val packageName: String = "",
+    val appName: String = "",
+    val icon: android.graphics.drawable.Drawable? = null,
+    val type: com.etrisad.zenith.data.local.entity.FocusType? = null,
+    val todayUsage: Long = 0L,
+    val yesterdayUsage: Long = 0L,
+    val percentageChange: Float = 0f,
+    val usageHistory: List<DailyUsage> = emptyList(),
+    val shieldEntity: ShieldEntity? = null
+)
+
 data class HomeUiState(
     val totalScreenTime: Long = 0L,
     val yesterdayScreenTime: Long = 0L,
@@ -49,6 +61,9 @@ class HomeViewModel(
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     private var allShields: List<ShieldEntity> = emptyList()
+
+    private val _appDetailUiState = MutableStateFlow(AppDetailUiState())
+    val appDetailUiState: StateFlow<AppDetailUiState> = _appDetailUiState.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -94,7 +109,7 @@ class HomeViewModel(
         viewModelScope.launch {
             while (true) {
                 refreshUsageStats()
-                delay(10000) // Refresh every 10 seconds
+                delay(15000) // Refresh every 15 seconds
             }
         }
     }
@@ -122,16 +137,17 @@ class HomeViewModel(
         cal.set(Calendar.MILLISECOND, 0)
         val todayStart = cal.timeInMillis
 
-        // 1. GET TODAY'S STATS (Real-time aggregation)
-        val todayStatsMap = usageStatsManager.queryAndAggregateUsageStats(todayStart, now)
-        var totalToday = 0L
+        // Store daily totals by day-start timestamp
+        val dailyTotals = mutableMapOf<Long, Long>()
         val appList = mutableListOf<AppUsageInfo>()
 
+        // 1. Get TODAY'S stats (Real-time aggregation)
+        val todayStatsMap = usageStatsManager.queryAndAggregateUsageStats(todayStart, now)
+        var totalToday = 0L
         todayStatsMap.forEach { (packageName, usageStat) ->
             if (packageName == context.packageName || packageName == launcherPackage) return@forEach
             if (!launcherApps.contains(packageName)) return@forEach
 
-            // Use the maximum of totalTimeVisible and totalTimeInForeground for accuracy across Android versions
             val time = usageStat.totalTimeVisible.coerceAtLeast(usageStat.totalTimeInForeground)
             if (time > 0) {
                 totalToday += time
@@ -142,33 +158,23 @@ class HomeViewModel(
                 } catch (e: Exception) {}
             }
         }
+        dailyTotals[todayStart] = totalToday
 
-        // 2. GET YESTERDAY'S STATS (Separately for accuracy)
-        val yesterdayStart = todayStart - (24 * 60 * 60 * 1000L)
-        val yesterdayStatsMap = usageStatsManager.queryAndAggregateUsageStats(yesterdayStart, todayStart)
-        var totalYesterday = 0L
-        yesterdayStatsMap.forEach { (packageName, usageStat) ->
-            if (packageName == context.packageName || packageName == launcherPackage) return@forEach
-            if (!launcherApps.contains(packageName)) return@forEach
-            totalYesterday += usageStat.totalTimeVisible.coerceAtLeast(usageStat.totalTimeInForeground)
-        }
-
-        // 3. GET HISTORICAL STATS (Days before yesterday)
+        // 2. Get HISTORICAL stats (Days before today)
+        // Use queryUsageStats with INTERVAL_DAILY for cleaner bucket separation
         val historyRangeStart = todayStart - (21 * 24 * 60 * 60 * 1000L)
-        val allDailyStats = usageStatsManager.queryUsageStats(
+        val historicalStats = usageStatsManager.queryUsageStats(
             UsageStatsManager.INTERVAL_DAILY,
             historyRangeStart,
-            yesterdayStart
+            todayStart // Query up to today's start to avoid mixing with today's real-time data
         )
 
-        val dailyTotals = mutableMapOf<Long, Long>()
-        allDailyStats.forEach { stat ->
+        historicalStats?.forEach { stat ->
             if (stat.packageName == context.packageName || stat.packageName == launcherPackage) return@forEach
             if (!launcherApps.contains(stat.packageName)) return@forEach
             
             val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
             if (time > 0) {
-                // Normalize the bucket's timestamp to find its day start
                 cal.timeInMillis = stat.firstTimeStamp
                 cal.set(Calendar.HOUR_OF_DAY, 0)
                 cal.set(Calendar.MINUTE, 0)
@@ -176,27 +182,21 @@ class HomeViewModel(
                 cal.set(Calendar.MILLISECOND, 0)
                 val dayKey = cal.timeInMillis
 
-                // Safety: only buckets before yesterday
-                if (dayKey < yesterdayStart) {
+                // Only accumulate if it belongs to a day BEFORE today
+                if (dayKey < todayStart) {
                     dailyTotals[dayKey] = (dailyTotals[dayKey] ?: 0L) + time
                 }
             }
         }
 
-        // 4. ASSEMBLE RESULTS
+        // 3. Assemble the 21-day history
         val history = mutableListOf<DailyUsage>()
-
-        // Reconstruct the 21-day timeline
         for (i in 0 until 21) {
             val dStart = todayStart - (i * 24 * 60 * 60 * 1000L)
-            val dayTotal = when (i) {
-                0 -> totalToday
-                1 -> totalYesterday
-                else -> dailyTotals[dStart] ?: 0L
-            }
-            history.add(DailyUsage(dStart, dayTotal))
+            history.add(DailyUsage(dStart, dailyTotals[dStart] ?: 0L))
         }
 
+        val totalYesterday = dailyTotals[todayStart - 24 * 60 * 60 * 1000L] ?: 0L
         val percentageChange = if (totalYesterday > 0) {
             ((totalToday - totalYesterday).toFloat() / totalYesterday) * 100
         } else if (totalToday > 0) {
@@ -205,7 +205,9 @@ class HomeViewModel(
             0f
         }
 
-        val topApps = appList.sortedByDescending { it.totalTimeVisible }.take(5).map { app ->
+        val sortedApps = appList.sortedByDescending { it.totalTimeVisible }
+        
+        val topApps = sortedApps.take(5).map { app ->
             try {
                 app.copy(icon = pm.getApplicationIcon(app.packageName))
             } catch (e: PackageManager.NameNotFoundException) {
@@ -213,7 +215,7 @@ class HomeViewModel(
             }
         }
 
-        val allAppsUsage = appList.sortedByDescending { it.totalTimeVisible }.map { app ->
+        val allAppsUsage = sortedApps.map { app ->
             try {
                 app.copy(icon = pm.getApplicationIcon(app.packageName))
             } catch (e: PackageManager.NameNotFoundException) {
@@ -229,6 +231,104 @@ class HomeViewModel(
             topApps = topApps,
             allAppsUsage = allAppsUsage
         )
+    }
+
+    fun loadAppDetail(packageName: String) {
+        viewModelScope.launch {
+            val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+            val pm = context.packageManager
+            val now = System.currentTimeMillis()
+            val cal = Calendar.getInstance()
+
+            cal.timeInMillis = now
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            val todayStart = cal.timeInMillis
+
+            val dailyTotals = mutableMapOf<Long, Long>()
+
+            // 1. Today's usage for this app
+            val todayStats = usageStatsManager.queryAndAggregateUsageStats(todayStart, now)
+            val todayUsage = todayStats[packageName]?.let { 
+                it.totalTimeVisible.coerceAtLeast(it.totalTimeInForeground) 
+            } ?: 0L
+            dailyTotals[todayStart] = todayUsage
+
+            // 2. Historical usage for this app
+            val historyRangeStart = todayStart - (21 * 24 * 60 * 60 * 1000L)
+            val historicalStats = usageStatsManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY,
+                historyRangeStart,
+                todayStart
+            )
+
+            historicalStats?.forEach { stat ->
+                if (stat.packageName == packageName) {
+                    val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+                    if (time > 0) {
+                        cal.timeInMillis = stat.firstTimeStamp
+                        cal.set(Calendar.HOUR_OF_DAY, 0)
+                        cal.set(Calendar.MINUTE, 0)
+                        cal.set(Calendar.SECOND, 0)
+                        cal.set(Calendar.MILLISECOND, 0)
+                        val dayKey = cal.timeInMillis
+                        if (dayKey < todayStart) {
+                            dailyTotals[dayKey] = (dailyTotals[dayKey] ?: 0L) + time
+                        }
+                    }
+                }
+            }
+
+            val history = mutableListOf<DailyUsage>()
+            for (i in 0 until 21) {
+                val dStart = todayStart - (i * 24 * 60 * 60 * 1000L)
+                history.add(DailyUsage(dStart, dailyTotals[dStart] ?: 0L))
+            }
+
+            val yesterdayUsage = dailyTotals[todayStart - 24 * 60 * 60 * 1000L] ?: 0L
+            val percentageChange = if (yesterdayUsage > 0) {
+                ((todayUsage - yesterdayUsage).toFloat() / yesterdayUsage) * 100
+            } else if (todayUsage > 0) {
+                100f
+            } else {
+                0f
+            }
+
+            val shield = allShields.find { it.packageName == packageName }
+            
+            var appName = packageName
+            var icon: android.graphics.drawable.Drawable? = null
+            try {
+                val appInfo = pm.getApplicationInfo(packageName, 0)
+                appName = pm.getApplicationLabel(appInfo).toString()
+                icon = pm.getApplicationIcon(appInfo)
+            } catch (e: Exception) {}
+
+            _appDetailUiState.value = AppDetailUiState(
+                packageName = packageName,
+                appName = appName,
+                icon = icon,
+                type = shield?.type,
+                todayUsage = todayUsage,
+                yesterdayUsage = yesterdayUsage,
+                percentageChange = percentageChange,
+                usageHistory = history.reversed(),
+                shieldEntity = shield
+            )
+        }
+    }
+
+    fun deleteShieldFromDetail() {
+        val shield = _appDetailUiState.value.shieldEntity ?: return
+        viewModelScope.launch {
+            shieldRepository.deleteShield(shield)
+            _appDetailUiState.value = _appDetailUiState.value.copy(
+                type = null,
+                shieldEntity = null
+            )
+        }
     }
 
     fun formatDuration(millis: Long): String {

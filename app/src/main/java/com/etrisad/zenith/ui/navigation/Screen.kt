@@ -12,6 +12,9 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object Focus : Screen("focus", "Focus", Icons.Outlined.Security)
     object Settings : Screen("settings", "Settings", Icons.Outlined.Settings)
     object UsageStats : Screen("usage_stats", "Usage Stats", Icons.AutoMirrored.Outlined.List)
+    object AppDetail : Screen("app_detail/{packageName}", "App Detail", Icons.Outlined.Home) {
+        fun createRoute(packageName: String) = "app_detail/$packageName"
+    }
 }
 
 val navItems = listOf(

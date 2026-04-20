@@ -61,7 +61,8 @@ import kotlinx.coroutines.launch
 fun HomeScreen(
     viewModel: HomeViewModel,
     userPreferencesRepository: UserPreferencesRepository,
-    onSeeFullList: () -> Unit
+    onSeeFullList: () -> Unit,
+    onAppClick: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val preferences by userPreferencesRepository.userPreferencesFlow.collectAsState(
@@ -88,7 +89,8 @@ fun HomeScreen(
         formatDuration = viewModel::formatDuration,
         onShieldSortTypeChange = viewModel::onShieldSortTypeChange,
         onGoalSortTypeChange = viewModel::onGoalSortTypeChange,
-        onSeeFullList = onSeeFullList
+        onSeeFullList = onSeeFullList,
+        onAppClick = onAppClick
     )
 }
 
@@ -100,7 +102,8 @@ fun HomeScreenContent(
     formatDuration: (Long) -> String,
     onShieldSortTypeChange: (ShieldSortType) -> Unit,
     onGoalSortTypeChange: (ShieldSortType) -> Unit,
-    onSeeFullList: () -> Unit
+    onSeeFullList: () -> Unit,
+    onAppClick: (String) -> Unit
 ) {
     Scaffold { innerPadding ->
         val targetMillis = preferences.screenTimeTargetMinutes * 60 * 1000L
@@ -150,7 +153,8 @@ fun HomeScreenContent(
                     topApps = uiState.topApps,
                     formatDuration = formatDuration,
                     shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
-                    onSeeFullList = onSeeFullList
+                    onSeeFullList = onSeeFullList,
+                    onAppClick = { packageName -> onAppClick(packageName) }
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -169,7 +173,7 @@ fun HomeScreenContent(
                     EmptyShieldsMessage(message = "No active goals. Go to Focus to add one!")
                 }
             } else {
-                shieldList(shields = uiState.activeGoals, formatDuration = formatDuration)
+                shieldList(shields = uiState.activeGoals, formatDuration = formatDuration, onAppClick = onAppClick)
             }
 
             item {
@@ -187,7 +191,7 @@ fun HomeScreenContent(
                     EmptyShieldsMessage(message = "No active shields. Go to Focus to add one!")
                 }
             } else {
-                shieldList(shields = uiState.activeShields, formatDuration = formatDuration)
+                shieldList(shields = uiState.activeShields, formatDuration = formatDuration, onAppClick = onAppClick)
             }
         }
     }
@@ -789,7 +793,8 @@ fun TopAppsSection(
     topApps: List<AppUsageInfo>,
     formatDuration: (Long) -> String,
     shape: Shape = RoundedCornerShape(32.dp),
-    onSeeFullList: () -> Unit
+    onSeeFullList: () -> Unit,
+    onAppClick: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -881,7 +886,9 @@ fun TopAppsSection(
                         }
 
                         Card(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onAppClick(app.packageName) },
                             shape = itemShape,
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -977,7 +984,8 @@ fun TopAppsSection(
 
 fun LazyListScope.shieldList(
     shields: List<ShieldEntity>,
-    formatDuration: (Long) -> String
+    formatDuration: (Long) -> String,
+    onAppClick: (String) -> Unit
 ) {
     itemsIndexed(
         items = shields,
@@ -990,7 +998,7 @@ fun LazyListScope.shieldList(
             else -> RoundedCornerShape(8.dp)
         }
         Column(modifier = Modifier.animateItem()) {
-            ShieldItem(shield = shield, shape = shape, formatDuration = formatDuration)
+            ShieldItem(shield = shield, shape = shape, formatDuration = formatDuration, onAppClick = onAppClick)
             if (index < shields.size - 1) {
                 Spacer(modifier = Modifier.height(4.dp))
             }
@@ -1003,7 +1011,8 @@ fun LazyListScope.shieldList(
 fun ShieldItem(
     shield: ShieldEntity,
     shape: RoundedCornerShape,
-    formatDuration: (Long) -> String
+    formatDuration: (Long) -> String,
+    onAppClick: (String) -> Unit
 ) {
     // Simulated remaining time for UI
     val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
@@ -1020,7 +1029,9 @@ fun ShieldItem(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onAppClick(shield.packageName) },
         shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -1223,7 +1234,8 @@ fun HomeScreenPreview() {
             formatDuration = { "3h 30m" },
             onShieldSortTypeChange = {},
             onGoalSortTypeChange = {},
-            onSeeFullList = {}
+            onSeeFullList = {},
+            onAppClick = {}
         )
     }
 }
