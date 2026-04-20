@@ -67,12 +67,12 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val preferences by userPreferencesRepository.userPreferencesFlow.collectAsState(
         initial = com.etrisad.zenith.data.preferences.UserPreferences(
-            com.etrisad.zenith.data.preferences.ThemeConfig.FOLLOW_SYSTEM,
-            true,
-            false,
-            0,
-            60,
-            30
+            themeConfig = com.etrisad.zenith.data.preferences.ThemeConfig.FOLLOW_SYSTEM,
+            dynamicColor = true,
+            accessibilityDisabled = false,
+            screenTimeTargetMinutes = 0,
+            emergencyRechargeDurationMinutes = 60,
+            delayAppDurationSeconds = 30
         )
     )
 
@@ -560,6 +560,7 @@ fun UsageHistoryCard(
 fun UsageGraph(
     history: List<com.etrisad.zenith.ui.viewmodel.DailyUsage>,
     targetMillis: Long,
+    focusType: FocusType? = null,
     onDaySelected: (com.etrisad.zenith.ui.viewmodel.DailyUsage?) -> Unit
 ) {
     val sunnyShape = remember {
@@ -639,22 +640,37 @@ fun UsageGraph(
             }
 
             // Goal line
-            if (targetMillis > 0) {
+            Column(modifier = Modifier.fillMaxSize()) {
                 val goalRatio = (targetMillis.toFloat() / maxUsage).coerceIn(0f, 1f)
-                val goalLineColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.6f)
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(bottom = 24.dp, start = 32.dp)
+                val animatedGoalRatio by animateFloatAsState(
+                    targetValue = goalRatio,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessLow
+                    ),
+                    label = "GoalLineAnimation"
+                )
+
+                AnimatedVisibility(
+                    visible = targetMillis > 0,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
                 ) {
-                    androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
-                        val y = size.height * (1f - goalRatio)
-                        drawLine(
-                            color = goalLineColor,
-                            start = androidx.compose.ui.geometry.Offset(0f, y),
-                            end = androidx.compose.ui.geometry.Offset(size.width, y),
-                            strokeWidth = 2.dp.toPx()
-                        )
+                    val goalLineColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.6f)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(bottom = 24.dp, start = 32.dp)
+                    ) {
+                        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                            val y = size.height * (1f - animatedGoalRatio)
+                            drawLine(
+                                color = goalLineColor,
+                                start = androidx.compose.ui.geometry.Offset(0f, y),
+                                end = androidx.compose.ui.geometry.Offset(size.width, y),
+                                strokeWidth = 2.dp.toPx()
+                            )
+                        }
                     }
                 }
             }
@@ -687,7 +703,12 @@ fun UsageGraph(
                             label = "BarHeight"
                         )
 
-                        val isGoalAchieved = targetMillis > 0 && usage.totalTime <= targetMillis
+                        val isGoalAchieved = if (focusType == FocusType.GOAL) {
+                            targetMillis > 0 && usage.totalTime >= targetMillis
+                        } else {
+                            targetMillis > 0 && usage.totalTime <= targetMillis
+                        }
+
                         val isToday = dateFormat.format(usage.date) == todayDate
                         
                         val baseColor = if (isGoalAchieved) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
@@ -880,7 +901,7 @@ fun TopAppsSection(
                         val appIcon = remember(app.packageName) {
                             try {
                                 context.packageManager.getApplicationIcon(app.packageName)
-                            } catch (e: Exception) {
+                            } catch (_: Exception) {
                                 null
                             }
                         }
@@ -1223,12 +1244,12 @@ fun HomeScreenPreview() {
                 )
             ),
             preferences = com.etrisad.zenith.data.preferences.UserPreferences(
-                com.etrisad.zenith.data.preferences.ThemeConfig.FOLLOW_SYSTEM,
-                true,
-                false,
-                180, // 3h target
-                60,
-                30
+                themeConfig = com.etrisad.zenith.data.preferences.ThemeConfig.FOLLOW_SYSTEM,
+                dynamicColor = true,
+                accessibilityDisabled = false,
+                screenTimeTargetMinutes = 180, // 3h target
+                emergencyRechargeDurationMinutes = 60,
+                delayAppDurationSeconds = 30
             ),
             onSetTarget = {},
             formatDuration = { "3h 30m" },

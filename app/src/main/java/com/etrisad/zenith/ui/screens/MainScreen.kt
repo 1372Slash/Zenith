@@ -93,7 +93,7 @@ fun MainScreen(
         bottomBar = {
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = navBackStackEntry?.destination?.route
-            val showBottomBar = currentRoute != Screen.UsageStats.route
+            val showBottomBar = currentRoute != Screen.UsageStats.route && currentRoute?.startsWith("app_detail") == false
 
             AnimatedVisibility(
                 visible = showBottomBar,
@@ -124,76 +124,77 @@ fun MainScreen(
             }
         }
     ) { innerPadding ->
+        val navBackStackEntry by navController.currentBackStackEntryAsState()
+        val currentRoute = navBackStackEntry?.destination?.route
+        val isDeepScreen = currentRoute == Screen.UsageStats.route || currentRoute?.startsWith("app_detail") == true
+
         NavHost(
             navController = navController,
             startDestination = Screen.Home.route,
             modifier = Modifier.padding(
-                bottom = if (navController.currentBackStackEntryAsState().value?.destination?.route == Screen.UsageStats.route) 0.dp else innerPadding.calculateBottomPadding(),
+                bottom = if (isDeepScreen) 0.dp else innerPadding.calculateBottomPadding(),
                 top = innerPadding.calculateTopPadding()
             ),
             enterTransition = {
                 val initialRoute = initialState.destination.route
                 val targetRoute = targetState.destination.route
-                val initialIndex = navItems.indexOfFirst { it.route == initialRoute }
-                val targetIndex = navItems.indexOfFirst { it.route == targetRoute }
+                
+                val isTargetDeep = targetRoute == Screen.UsageStats.route || targetRoute?.startsWith("app_detail") == true
+                val isInitialDeep = initialRoute == Screen.UsageStats.route || initialRoute?.startsWith("app_detail") == true
 
                 val animationSpec = spring<IntOffset>(
                     dampingRatio = Spring.DampingRatioLowBouncy,
                     stiffness = Spring.StiffnessLow
                 )
 
-                if (targetIndex > initialIndex) {
-                    slideInHorizontally(
-                        initialOffsetX = { it },
-                        animationSpec = animationSpec
-                    ) + fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow))
+                if (isTargetDeep && !isInitialDeep) {
+                    slideInHorizontally(initialOffsetX = { it }, animationSpec = animationSpec) + fadeIn()
                 } else {
-                    slideInHorizontally(
-                        initialOffsetX = { -it },
-                        animationSpec = animationSpec
-                    ) + fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow))
+                    val initialIndex = navItems.indexOfFirst { it.route == initialRoute }
+                    val targetIndex = navItems.indexOfFirst { it.route == targetRoute }
+                    
+                    if (targetIndex > initialIndex) {
+                        slideInHorizontally(initialOffsetX = { it }, animationSpec = animationSpec) + fadeIn()
+                    } else {
+                        slideInHorizontally(initialOffsetX = { -it }, animationSpec = animationSpec) + fadeIn()
+                    }
                 }
             },
             exitTransition = {
                 val initialRoute = initialState.destination.route
                 val targetRoute = targetState.destination.route
-                val initialIndex = navItems.indexOfFirst { it.route == initialRoute }
-                val targetIndex = navItems.indexOfFirst { it.route == targetRoute }
 
+                val isTargetDeep = targetRoute == Screen.UsageStats.route || targetRoute?.startsWith("app_detail") == true
+                
                 val animationSpec = spring<IntOffset>(
                     dampingRatio = Spring.DampingRatioNoBouncy,
                     stiffness = Spring.StiffnessLow
                 )
 
-                if (targetIndex > initialIndex) {
-                    slideOutHorizontally(
-                        targetOffsetX = { -it / 3 },
-                        animationSpec = animationSpec
-                    ) + fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow))
+                if (isTargetDeep) {
+                    slideOutHorizontally(targetOffsetX = { -it / 3 }, animationSpec = animationSpec) + fadeOut()
                 } else {
-                    slideOutHorizontally(
-                        targetOffsetX = { it / 3 },
-                        animationSpec = animationSpec
-                    ) + fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow))
+                    val initialIndex = navItems.indexOfFirst { it.route == initialRoute }
+                    val targetIndex = navItems.indexOfFirst { it.route == targetRoute }
+
+                    if (targetIndex > initialIndex) {
+                        slideOutHorizontally(targetOffsetX = { -it / 3 }, animationSpec = animationSpec) + fadeOut()
+                    } else {
+                        slideOutHorizontally(targetOffsetX = { it / 3 }, animationSpec = animationSpec) + fadeOut()
+                    }
                 }
             },
             popEnterTransition = {
                 slideInHorizontally(
                     initialOffsetX = { -it / 3 },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )
-                ) + fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow))
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
+                ) + fadeIn()
             },
             popExitTransition = {
                 slideOutHorizontally(
                     targetOffsetX = { it },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )
-                ) + fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow))
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
+                ) + fadeOut()
             }
         ) {
             composable(Screen.Home.route) {
@@ -207,7 +208,12 @@ fun MainScreen(
                 )
             }
             composable(Screen.Focus.route) {
-                FocusScreen(focusViewModel)
+                FocusScreen(
+                    focusViewModel,
+                    onAppClick = { packageName ->
+                        navController.navigate(Screen.AppDetail.createRoute(packageName))
+                    }
+                )
             }
             composable(Screen.Settings.route) {
                 SettingsScreen(userPreferencesRepository)

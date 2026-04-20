@@ -42,7 +42,10 @@ import com.etrisad.zenith.ui.viewmodel.ShieldSortType
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun FocusScreen(viewModel: FocusViewModel) {
+fun FocusScreen(
+    viewModel: FocusViewModel,
+    onAppClick: (String) -> Unit
+) {
     val uiState by viewModel.uiState.collectAsState()
     var isAppPickerOpen by remember { mutableStateOf(false) }
     var isFabMenuExpanded by remember { mutableStateOf(false) }
@@ -132,7 +135,8 @@ fun FocusScreen(viewModel: FocusViewModel) {
             onEditShield = { viewModel.editShield(it) },
             onDeleteShield = { viewModel.deleteShield(it) },
             onShieldSortTypeChange = { viewModel.onShieldSortTypeChange(it) },
-            onGoalSortTypeChange = { viewModel.onGoalSortTypeChange(it) }
+            onGoalSortTypeChange = { viewModel.onGoalSortTypeChange(it) },
+            onAppClick = onAppClick
         )
 
         if (isAppPickerOpen) {
@@ -168,7 +172,8 @@ fun FocusScreenContent(
     onEditShield: (ShieldEntity) -> Unit,
     onDeleteShield: (ShieldEntity) -> Unit,
     onShieldSortTypeChange: (ShieldSortType) -> Unit,
-    onGoalSortTypeChange: (ShieldSortType) -> Unit
+    onGoalSortTypeChange: (ShieldSortType) -> Unit,
+    onAppClick: (String) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
@@ -214,7 +219,7 @@ fun FocusScreenContent(
                         shield = shield,
                         shape = shape,
                         onEdit = { onEditShield(shield) },
-                        onDelete = { onDeleteShield(shield) }
+                        onClick = { onAppClick(shield.packageName) }
                     )
                     if (index < uiState.activeGoals.size - 1) {
                         Spacer(modifier = Modifier.height(4.dp))
@@ -256,7 +261,7 @@ fun FocusScreenContent(
                         shield = shield,
                         shape = shape,
                         onEdit = { onEditShield(shield) },
-                        onDelete = { onDeleteShield(shield) }
+                        onClick = { onAppClick(shield.packageName) }
                     )
                     if (index < uiState.activeShields.size - 1) {
                         Spacer(modifier = Modifier.height(4.dp))
@@ -324,7 +329,7 @@ fun ShieldConfigItem(
     shield: ShieldEntity,
     shape: RoundedCornerShape,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onClick: () -> Unit
 ) {
     val context = LocalContext.current
     val appIcon = remember(shield.packageName) {
@@ -340,7 +345,9 @@ fun ShieldConfigItem(
     val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
         shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -452,9 +459,6 @@ fun ShieldConfigItem(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onEdit) {
                         Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.primary)
-                    }
-                    IconButton(onClick = onDelete) {
-                        Icon(Icons.Outlined.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
                     }
                 }
             }
@@ -967,7 +971,8 @@ fun FocusScreenPreview() {
             onEditShield = {},
             onDeleteShield = {},
             onShieldSortTypeChange = {},
-            onGoalSortTypeChange = {}
+            onGoalSortTypeChange = {},
+            onAppClick = {}
         )
     }
 }
