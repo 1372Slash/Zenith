@@ -37,6 +37,8 @@ data class AppDetailUiState(
     val yesterdayUsage: Long = 0L,
     val percentageChange: Float = 0f,
     val usageHistory: List<DailyUsage> = emptyList(),
+    val currentStreak: Int = 0,
+    val bestStreak: Int = 0,
     val shieldEntity: ShieldEntity? = null
 )
 
@@ -340,6 +342,8 @@ class HomeViewModel(
                 yesterdayUsage   = yesterdayUsage,
                 percentageChange = percentageChange,
                 usageHistory     = history.reversed(),
+                currentStreak    = shield?.currentStreak ?: 0,
+                bestStreak       = shield?.currentStreak ?: 0, // In future, maybe fetch from DB
                 shieldEntity     = shield
             )
         }

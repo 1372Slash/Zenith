@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -16,11 +17,14 @@ import androidx.compose.material.icons.automirrored.outlined.TrendingDown
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.Shapes
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Matrix
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
@@ -28,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
+import androidx.graphics.shapes.toPath
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
 import java.text.SimpleDateFormat
@@ -102,6 +107,23 @@ fun AppDetailScreen(
                     focusType = uiState.type
                 )
                 Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            item {
+                AnimatedVisibility(
+                    visible = uiState.shieldEntity != null,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Column {
+                        StreakCard(
+                            currentStreak = uiState.currentStreak,
+                            bestStreak = uiState.bestStreak,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                }
             }
 
             item {
@@ -450,6 +472,85 @@ fun UsageHistoryCard(
                     onDaySelected(it)
                 }
             )
+        }
+    }
+}
+
+@Composable
+fun StreakCard(
+    currentStreak: Int,
+    bestStreak: Int,
+    shape: androidx.compose.ui.graphics.Shape
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = shape,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Left Side: Title and Best Streak
+            Column {
+                Text(
+                    text = "Streak",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "$bestStreak",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Best Streak",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+
+            // Right Side: Today's Streak - Sunny shape for the number, text below
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                val sunnyShape = remember {
+                    GenericShape { size, _ ->
+                        val path = MaterialShapes.Sunny.toPath().asComposePath()
+                        val matrix = Matrix()
+                        matrix.scale(size.width, size.height)
+                        path.transform(matrix)
+                        addPath(path)
+                    }
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.tertiary, // Using tertiary color
+                    shape = sunnyShape,
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "$currentStreak",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onTertiary
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "days today",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
