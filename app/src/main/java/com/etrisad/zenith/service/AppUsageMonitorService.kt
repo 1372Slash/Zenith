@@ -133,25 +133,21 @@ class AppUsageMonitorService : Service() {
             val delayDurationSeconds = preferencesRepository.userPreferencesFlow.first().delayAppDurationSeconds
             
             val currentTime = System.currentTimeMillis()
-            val isRecentlyUsed = (currentTime - shield.lastUsedTimestamp) < 30 * 60 * 1000L
+            val lastAction = shield.lastDelayStartTimestamp
+            val isRecentlyUsed = lastAction != 0L && (currentTime - lastAction) < 30 * 60 * 1000L
 
             // Logic: No delay on first opening. Delay active after pressing time button.
             // Reset to no delay behavior after 30 minutes of inactivity.
-            val shieldWithTimestamp = if (shield.isDelayAppEnabled) {
-                when {
-                    !isRecentlyUsed && shield.lastDelayStartTimestamp != 0L -> {
-                        val updated = shield.copy(lastDelayStartTimestamp = 0L)
-                        serviceScope.launch { shieldRepository.updateShield(updated) }
-                        updated
-                    }
-                    isRecentlyUsed && shield.lastDelayStartTimestamp == 1L -> {
-                        val updated = shield.copy(lastDelayStartTimestamp = currentTime)
-                        serviceScope.launch { shieldRepository.updateShield(updated) }
-                        updated
-                    }
-                    else -> shield
-                }
+            val shieldWithTimestamp = if (shield.isDelayAppEnabled && isRecentlyUsed) {
+                // Trigger delay for recently used app
+                val updated = shield.copy(lastDelayStartTimestamp = currentTime)
+                serviceScope.launch { shieldRepository.updateShield(updated) }
+                updated
             } else {
+                // No delay for first use or after 30m inactivity
+                if (shield.isDelayAppEnabled && lastAction != 0L && !isRecentlyUsed) {
+                    serviceScope.launch { shieldRepository.updateShield(shield.copy(lastDelayStartTimestamp = 0L)) }
+                }
                 shield
             }
 
@@ -170,14 +166,14 @@ class AppUsageMonitorService : Service() {
                                 currentShield.copy(
                                     emergencyUseCount = (currentShield.emergencyUseCount - 1).coerceAtLeast(0),
                                     lastEmergencyRechargeTimestamp = if (isFirstChargeUsed) System.currentTimeMillis() else currentShield.lastEmergencyRechargeTimestamp,
-                                    lastDelayStartTimestamp = 1L // Mark as recently used for next delay
+                                    lastDelayStartTimestamp = System.currentTimeMillis() // Save session start time
                                 )
                             } else {
                                 val periodExpired = System.currentTimeMillis() - currentShield.lastPeriodResetTimestamp > currentShield.refreshPeriodMinutes * 60 * 1000L
                                 currentShield.copy(
                                     currentPeriodUses = if (periodExpired) 1 else currentShield.currentPeriodUses + 1,
                                     lastPeriodResetTimestamp = if (periodExpired) System.currentTimeMillis() else currentShield.lastPeriodResetTimestamp,
-                                    lastDelayStartTimestamp = 1L // Mark as recently used for next delay
+                                    lastDelayStartTimestamp = System.currentTimeMillis() // Save session start time
                                 )
                             }
                             shieldRepository.updateShield(updatedShield)

@@ -78,7 +78,7 @@ fun InterceptOverlayContent(
     }
 
     val delayProgressAnimatable = remember { Animatable(initialProgress) }
-    var isDelaying by remember { mutableStateOf(isDelayEnabled && initialProgress < 1f) }
+    var isDelaying by remember { mutableStateOf(isDelayEnabled && shield?.lastDelayStartTimestamp != 0L && initialProgress < 1f) }
 
     val motivationalMessages = remember {
         listOf(
