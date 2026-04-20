@@ -202,4 +202,24 @@ class FocusViewModel(
             )
         }
     }
+
+    fun openSettingsForPackage(packageName: String) {
+        viewModelScope.launch {
+            val shield = allShields.find { it.packageName == packageName }
+            if (shield != null) {
+                editShield(shield)
+            } else {
+                // If not shielded, we could open picker or default to SHIELD
+                // For now, let's try to find the app info and open settings
+                try {
+                    val pm = context.packageManager
+                    val app = pm.getApplicationInfo(packageName, 0)
+                    val appInfo = AppInfo(packageName, pm.getApplicationLabel(app).toString(), pm.getApplicationIcon(app))
+                    selectAppForFocus(appInfo, FocusType.SHIELD)
+                } catch (e: Exception) {
+                    // App not found or other error
+                }
+            }
+        }
+    }
 }

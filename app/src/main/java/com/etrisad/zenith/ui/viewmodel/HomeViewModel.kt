@@ -36,7 +36,8 @@ data class AppDetailUiState(
     val yesterdayUsage: Long = 0L,
     val percentageChange: Float = 0f,
     val usageHistory: List<DailyUsage> = emptyList(),
-    val shieldEntity: ShieldEntity? = null
+    val shieldEntity: ShieldEntity? = null,
+    val todos: List<com.etrisad.zenith.data.local.entity.TodoEntity> = emptyList()
 )
 
 data class HomeUiState(
@@ -151,6 +152,7 @@ class HomeViewModel(
             if (packageName == context.packageName || packageName == launcherPackage) return@forEach
             if (!launcherApps.contains(packageName)) return@forEach
 
+            // Use the maximum of totalTimeVisible and totalTimeInForeground for accuracy across Android versions
             val time = usageStat.totalTimeVisible.coerceAtLeast(usageStat.totalTimeInForeground)
             if (time > 0) {
                 totalToday += time
@@ -273,7 +275,7 @@ class HomeViewModel(
             val yesterdayStats = usageStatsManager.queryAndAggregateUsageStats(yesterdayStart, todayStart)
             val yesterdayUsage = yesterdayStats[packageName]?.let { it.totalTimeVisible.coerceAtLeast(it.totalTimeInForeground) } ?: 0L
 
-            // 21 day history
+            // 21 day history (Days before yesterday)
             val historyRangeStart = todayStart - (21 * 24 * 60 * 60 * 1000L)
             val allDailyStats = usageStatsManager.queryUsageStats(
                 UsageStatsManager.INTERVAL_DAILY,
@@ -320,6 +322,13 @@ class HomeViewModel(
 
             val shield = allShields.find { it.packageName == packageName }
             
+            // Collect todos
+            launch {
+                shieldRepository.getTodosForApp(packageName).collect { todos ->
+                    _appDetailUiState.value = _appDetailUiState.value.copy(todos = todos)
+                }
+            }
+
             var appName = packageName
             var icon: android.graphics.drawable.Drawable? = null
             try {
@@ -357,5 +366,40 @@ class HomeViewModel(
         val hours = millis / (1000 * 60 * 60)
         val minutes = (millis / (1000 * 60)) % 60
         return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+    }
+
+    // Todo actions
+    fun addTodo(packageName: String, content: String) {
+        viewModelScope.launch {
+            val currentTodos = _appDetailUiState.value.todos
+            val nextOrder = (currentTodos.maxOfOrNull { it.order } ?: -1) + 1
+            shieldRepository.insertTodo(
+                com.etrisad.zenith.data.local.entity.TodoEntity(
+                    packageName = packageName,
+                    content = content,
+                    order = nextOrder
+                )
+            )
+        }
+    }
+
+    fun toggleTodo(todo: com.etrisad.zenith.data.local.entity.TodoEntity) {
+        viewModelScope.launch {
+            shieldRepository.updateTodo(todo.copy(isDone = !todo.isDone))
+        }
+    }
+
+    fun deleteTodo(todo: com.etrisad.zenith.data.local.entity.TodoEntity) {
+        viewModelScope.launch {
+            shieldRepository.deleteTodo(todo)
+        }
+    }
+
+    fun reorderTodos(packageName: String, todos: List<com.etrisad.zenith.data.local.entity.TodoEntity>) {
+        viewModelScope.launch {
+            todos.forEachIndexed { index, todo ->
+                shieldRepository.updateTodo(todo.copy(order = index))
+            }
+        }
     }
 }

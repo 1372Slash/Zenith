@@ -26,4 +26,11 @@ class ShieldRepository(private val shieldDao: ShieldDao) {
     fun isAppShielded(packageName: String): Flow<Boolean> {
         return shieldDao.isAppShielded(packageName)
     }
+
+    // Todo related methods
+    fun getTodosForApp(packageName: String) = shieldDao.getTodosForApp(packageName)
+    suspend fun insertTodo(todo: com.etrisad.zenith.data.local.entity.TodoEntity) = shieldDao.insertTodo(todo)
+    suspend fun updateTodo(todo: com.etrisad.zenith.data.local.entity.TodoEntity) = shieldDao.updateTodo(todo)
+    suspend fun deleteTodo(todo: com.etrisad.zenith.data.local.entity.TodoEntity) = shieldDao.deleteTodo(todo)
+    suspend fun deleteTodosForApp(packageName: String) = shieldDao.deleteTodosForApp(packageName)
 }
