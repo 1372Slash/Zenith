@@ -599,7 +599,12 @@ fun AppPickerBottomSheet(
                                 else -> RoundedCornerShape(8.dp)
                             }
                             Column(modifier = Modifier.animateItem()) {
-                                TopAppCard(app = app, shape = shape, onClick = { onAppSelected(app) })
+                                AppPickerItem(
+                                    app = app,
+                                    shape = shape,
+                                    onClick = { onAppSelected(app) },
+                                    isTopApp = true
+                                )
                                 if (index < uiState.topApps.size - 1) {
                                     Spacer(modifier = Modifier.height(2.dp))
                                 }
@@ -652,7 +657,12 @@ fun AppPickerBottomSheet(
                                 else -> RoundedCornerShape(8.dp)
                             }
                             Column(modifier = Modifier.animateItem()) {
-                                AppListItem(app = app, shape = shape, onClick = { onAppSelected(app) })
+                                AppPickerItem(
+                                    app = app,
+                                    shape = shape,
+                                    onClick = { onAppSelected(app) },
+                                    isTopApp = false
+                                )
                                 if (index < uiState.installedApps.size - 1) {
                                     Spacer(modifier = Modifier.height(2.dp))
                                 }
@@ -681,7 +691,12 @@ fun PickerSectionHeader(title: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun TopAppCard(app: AppInfo, shape: RoundedCornerShape, onClick: () -> Unit) {
+fun AppPickerItem(
+    app: AppInfo,
+    shape: RoundedCornerShape,
+    onClick: () -> Unit,
+    isTopApp: Boolean = false
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -707,19 +722,20 @@ fun TopAppCard(app: AppInfo, shape: RoundedCornerShape, onClick: () -> Unit) {
                 )
             },
             leadingContent = {
+                val iconSize = 44.dp
                 if (app.icon != null) {
                     Image(
                         painter = BitmapPainter(app.icon.toBitmap().asImageBitmap()),
                         contentDescription = null,
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(iconSize)
                             .clip(RoundedCornerShape(12.dp)),
                         contentScale = ContentScale.Crop
                     )
                 } else {
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(iconSize)
                             .clip(RoundedCornerShape(12.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant),
                         contentAlignment = Alignment.Center
@@ -728,69 +744,16 @@ fun TopAppCard(app: AppInfo, shape: RoundedCornerShape, onClick: () -> Unit) {
                     }
                 }
             },
-            trailingContent = {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.TrendingUp,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-            },
-            colors = ListItemDefaults.colors(
-                containerColor = Color.Transparent
-            )
-        )
-    }
-}
-
-@Composable
-fun AppListItem(app: AppInfo, shape: RoundedCornerShape, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        shape = shape,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
-    ) {
-        ListItem(
-            headlineContent = {
-                Text(
-                    text = app.appName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            supportingContent = {
-                Text(
-                    text = app.packageName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            leadingContent = {
-                if (app.icon != null) {
-                    Image(
-                        painter = BitmapPainter(app.icon.toBitmap().asImageBitmap()),
+            trailingContent = if (isTopApp) {
+                {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.TrendingUp,
                         contentDescription = null,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(RoundedCornerShape(12.dp)),
-                        contentScale = ContentScale.Crop
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
                     )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Outlined.Android, contentDescription = null)
-                    }
                 }
-            },
+            } else null,
             colors = ListItemDefaults.colors(
                 containerColor = Color.Transparent
             )
