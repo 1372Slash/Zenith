@@ -4,14 +4,20 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.etrisad.zenith.data.local.dao.ScheduleDao
 import com.etrisad.zenith.data.local.dao.ShieldDao
 import com.etrisad.zenith.data.local.entity.ShieldEntity
+import com.etrisad.zenith.data.local.entity.ScheduleEntity
+import com.etrisad.zenith.data.local.Converters
 
-@Database(entities = [ShieldEntity::class], version = 8, exportSchema = false)
+@Database(entities = [ShieldEntity::class, ScheduleEntity::class], version = 9, exportSchema = false)
+@TypeConverters(Converters::class)
 abstract class ZenithDatabase : RoomDatabase() {
     abstract fun shieldDao(): ShieldDao
+    abstract fun scheduleDao(): ScheduleDao
 
     companion object {
         @Volatile

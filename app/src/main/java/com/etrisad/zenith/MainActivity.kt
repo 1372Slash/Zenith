@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val database = ZenithDatabase.getDatabase(this)
-        val shieldRepository = ShieldRepository(database.shieldDao())
+        val shieldRepository = ShieldRepository(database.shieldDao(), database.scheduleDao())
         val userPreferencesRepository = UserPreferencesRepository(this)
         
         val homeViewModelFactory = HomeViewModelFactory(applicationContext, shieldRepository)

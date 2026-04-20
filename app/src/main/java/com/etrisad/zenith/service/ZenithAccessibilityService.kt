@@ -9,6 +9,9 @@ import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.repository.ShieldRepository
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class ZenithAccessibilityService : AccessibilityService() {
 
@@ -25,13 +28,22 @@ class ZenithAccessibilityService : AccessibilityService() {
         var isServiceRunning = false
     }
 
+    private var activeSchedules = listOf<com.etrisad.zenith.data.local.entity.ScheduleEntity>()
+
     override fun onCreate() {
         super.onCreate()
         isServiceRunning = true
         val database = ZenithDatabase.getDatabase(this)
-        shieldRepository = ShieldRepository(database.shieldDao())
+        shieldRepository = ShieldRepository(database.shieldDao(), database.scheduleDao())
         preferencesRepository = com.etrisad.zenith.data.preferences.UserPreferencesRepository(this)
         overlayManager = InterceptOverlayManager(this)
+        
+        serviceScope.launch {
+            shieldRepository.allSchedules.collect { schedules ->
+                activeSchedules = schedules.filter { it.isActive }
+            }
+        }
+        
         startMonitoring()
     }
 
@@ -44,6 +56,9 @@ class ZenithAccessibilityService : AccessibilityService() {
 
                 val allowedUntil = allowedApps[pkg] ?: 0L
                 if (allowedUntil > 0 && System.currentTimeMillis() > allowedUntil) {
+                    // Check schedules first
+                    if (checkSchedules(pkg)) continue
+
                     val shield = shieldRepository.getShieldByPackageName(pkg)
                     if (shield != null) {
                         if (shield.isAutoQuitEnabled) {
@@ -69,6 +84,57 @@ class ZenithAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun checkSchedules(packageName: String): Boolean {
+        val currentTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+        
+        for (schedule in activeSchedules) {
+            if (isTimeInInterval(currentTime, schedule.startTime, schedule.endTime)) {
+                when (schedule.mode) {
+                    com.etrisad.zenith.data.local.entity.ScheduleMode.BLOCK -> {
+                        if (packageName in schedule.packageNames) {
+                            showScheduleOverlay(packageName, schedule)
+                            return true
+                        }
+                    }
+                    com.etrisad.zenith.data.local.entity.ScheduleMode.ALLOW -> {
+                        if (packageName !in schedule.packageNames && packageName != this.packageName) {
+                            showScheduleOverlay(packageName, schedule)
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    private fun isTimeInInterval(current: String, start: String, end: String): Boolean {
+        return if (start <= end) {
+            current in start..end
+        } else {
+            current >= start || current <= end
+        }
+    }
+
+    private fun showScheduleOverlay(packageName: String, schedule: com.etrisad.zenith.data.local.entity.ScheduleEntity) {
+        serviceScope.launch(Dispatchers.Main) {
+            val appName = try {
+                packageManager.getApplicationLabel(packageManager.getApplicationInfo(packageName, 0)).toString()
+            } catch (e: Exception) {
+                packageName
+            }
+            
+            overlayManager.showScheduleOverlay(
+                packageName = packageName,
+                appName = appName,
+                schedule = schedule,
+                onCloseApp = {
+                    performGlobalAction(GLOBAL_ACTION_HOME)
+                }
+            )
+        }
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val packageName = event.packageName?.toString() ?: return
@@ -76,6 +142,9 @@ class ZenithAccessibilityService : AccessibilityService() {
             
             // Don't intercept our own app
             if (packageName == this.packageName) return
+
+            // Check schedules first
+            if (checkSchedules(packageName)) return
 
             val currentTime = System.currentTimeMillis()
             val allowedUntil = allowedApps[packageName] ?: 0L

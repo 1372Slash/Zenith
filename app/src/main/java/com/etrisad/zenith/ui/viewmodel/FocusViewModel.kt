@@ -7,6 +7,8 @@ import android.graphics.drawable.Drawable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.etrisad.zenith.data.local.entity.FocusType
+import com.etrisad.zenith.data.local.entity.ScheduleEntity
+import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.repository.ShieldRepository
 import kotlinx.coroutines.Dispatchers
@@ -35,7 +37,12 @@ data class FocusUiState(
     val topApps: List<AppInfo> = emptyList(),
     val shieldSortType: ShieldSortType = ShieldSortType.ALPHABETICAL,
     val goalSortType: ShieldSortType = ShieldSortType.ALPHABETICAL,
-    val selectedAppUsageToday: Long = 0L
+    val selectedAppUsageToday: Long = 0L,
+    val activeSchedules: List<ScheduleEntity> = emptyList(),
+    val isSchedulePickerOpen: Boolean = false,
+    val selectedAppsForSchedule: Set<String> = emptySet(),
+    val isScheduleSettingsOpen: Boolean = false,
+    val editingSchedule: ScheduleEntity? = null
 )
 
 class FocusViewModel(
@@ -55,6 +62,11 @@ class FocusViewModel(
                 allShields = shields
                 updateShieldedLists()
                 updateInstalledAppsFilter()
+            }
+        }
+        viewModelScope.launch {
+            shieldRepository.allSchedules.collect { schedules ->
+                _uiState.value = _uiState.value.copy(activeSchedules = schedules)
             }
         }
         loadInstalledApps()
@@ -165,8 +177,74 @@ class FocusViewModel(
             selectedAppForFocus = app,
             selectedFocusType = type,
             isSettingsSheetOpen = app != null,
-            selectedAppUsageToday = usage
+            selectedAppUsageToday = usage,
+            isSchedulePickerOpen = false,
+            isScheduleSettingsOpen = false
         )
+    }
+
+    fun openSchedulePicker() {
+        _uiState.value = _uiState.value.copy(
+            isSchedulePickerOpen = true,
+            selectedAppsForSchedule = emptySet(),
+            isSettingsSheetOpen = false,
+            isScheduleSettingsOpen = false
+        )
+    }
+
+    fun toggleAppSelectionForSchedule(packageName: String) {
+        val current = _uiState.value.selectedAppsForSchedule
+        val newSelection = if (packageName in current) {
+            current - packageName
+        } else {
+            current + packageName
+        }
+        _uiState.value = _uiState.value.copy(selectedAppsForSchedule = newSelection)
+    }
+
+    fun proceedToScheduleSettings() {
+        if (_uiState.value.selectedAppsForSchedule.isEmpty()) return
+        _uiState.value = _uiState.value.copy(
+            isSchedulePickerOpen = false,
+            isScheduleSettingsOpen = true,
+            editingSchedule = null
+        )
+    }
+
+    fun closeSchedulePicker() {
+        _uiState.value = _uiState.value.copy(isSchedulePickerOpen = false)
+    }
+
+    fun closeScheduleSettings() {
+        _uiState.value = _uiState.value.copy(isScheduleSettingsOpen = false, editingSchedule = null)
+    }
+
+    fun saveSchedule(
+        name: String,
+        startTime: String,
+        endTime: String,
+        mode: ScheduleMode
+    ) {
+        val packageNames = _uiState.value.selectedAppsForSchedule.toList()
+        if (packageNames.isEmpty()) return
+
+        viewModelScope.launch {
+            val schedule = ScheduleEntity(
+                name = name,
+                packageNames = packageNames,
+                startTime = startTime,
+                endTime = endTime,
+                mode = mode
+            )
+            shieldRepository.insertSchedule(schedule)
+            closeScheduleSettings()
+        }
+    }
+
+    fun deleteSchedule(schedule: ScheduleEntity) {
+        viewModelScope.launch {
+            shieldRepository.deleteSchedule(schedule)
+        }
     }
 
     private fun getUsageTodayForPackage(packageName: String): Long {

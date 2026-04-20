@@ -30,13 +30,21 @@ class AppUsageMonitorService : Service() {
     private lateinit var overlayManager: InterceptOverlayManager
     private var lastForegroundApp: String? = null
     private val allowedApps = mutableMapOf<String, Long>()
+    private var activeSchedules = listOf<com.etrisad.zenith.data.local.entity.ScheduleEntity>()
 
     override fun onCreate() {
         super.onCreate()
         val database = ZenithDatabase.getDatabase(this)
-        shieldRepository = ShieldRepository(database.shieldDao())
+        shieldRepository = ShieldRepository(database.shieldDao(), database.scheduleDao())
         preferencesRepository = UserPreferencesRepository(this)
         overlayManager = InterceptOverlayManager(this)
+
+        serviceScope.launch {
+            shieldRepository.allSchedules.collect { schedules ->
+                activeSchedules = schedules.filter { it.isActive }
+            }
+        }
+
         startForeground(NOTIFICATION_ID, createNotification())
         startMonitoring()
     }
@@ -63,7 +71,14 @@ class AppUsageMonitorService : Service() {
                     // Update usage time in database if app is shielded
                     updateUsageTime(currentApp)
 
-                    if (currentTime > allowedUntil && !InterceptOverlayManager.isShowing && !ZenithAccessibilityService.isServiceRunning) {
+            if (currentTime > allowedUntil && !InterceptOverlayManager.isShowing && !ZenithAccessibilityService.isServiceRunning) {
+                        // Check schedules first
+                        if (checkSchedules(currentApp)) {
+                            lastForegroundApp = currentApp
+                            delay(1000)
+                            continue
+                        }
+
                         val shield = shieldRepository.getShieldByPackageName(currentApp)
                         if (shield != null) {
                             if (shield.isAutoQuitEnabled && allowedUntil > 0) {
@@ -247,6 +262,57 @@ class AppUsageMonitorService : Service() {
         intent.addCategory(Intent.CATEGORY_HOME)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
         startActivity(intent)
+    }
+
+    private fun checkSchedules(packageName: String): Boolean {
+        val currentTime = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
+        
+        for (schedule in activeSchedules) {
+            if (isTimeInInterval(currentTime, schedule.startTime, schedule.endTime)) {
+                when (schedule.mode) {
+                    com.etrisad.zenith.data.local.entity.ScheduleMode.BLOCK -> {
+                        if (packageName in schedule.packageNames) {
+                            showScheduleOverlay(packageName, schedule)
+                            return true
+                        }
+                    }
+                    com.etrisad.zenith.data.local.entity.ScheduleMode.ALLOW -> {
+                        if (packageName !in schedule.packageNames && packageName != this.packageName) {
+                            showScheduleOverlay(packageName, schedule)
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    private fun isTimeInInterval(current: String, start: String, end: String): Boolean {
+        return if (start <= end) {
+            current in start..end
+        } else {
+            current >= start || current <= end
+        }
+    }
+
+    private fun showScheduleOverlay(packageName: String, schedule: com.etrisad.zenith.data.local.entity.ScheduleEntity) {
+        serviceScope.launch(Dispatchers.Main) {
+            val appName = try {
+                packageManager.getApplicationLabel(packageManager.getApplicationInfo(packageName, 0)).toString()
+            } catch (e: Exception) {
+                packageName
+            }
+            
+            overlayManager.showScheduleOverlay(
+                packageName = packageName,
+                appName = appName,
+                schedule = schedule,
+                onCloseApp = {
+                    goToHomeScreen()
+                }
+            )
+        }
     }
 
     private fun getForegroundApp(): String? {

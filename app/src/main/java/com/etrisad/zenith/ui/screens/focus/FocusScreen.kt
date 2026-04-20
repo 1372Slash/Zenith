@@ -5,7 +5,6 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -14,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.filled.Whatshot
@@ -30,11 +30,12 @@ import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import com.etrisad.zenith.data.local.entity.FocusType
+import com.etrisad.zenith.data.local.entity.ScheduleEntity
+import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.ui.components.ShieldSortHeader
 import com.etrisad.zenith.ui.theme.ZenithTheme
@@ -108,7 +109,6 @@ fun FocusScreen(
             ) {
                 // Item 1: Add Shield
                 ExpressiveFabMenuItem(
-                    index = 0,
                     onClick = {
                         isFabMenuExpanded = false
                         viewModel.selectAppForFocus(null, FocusType.SHIELD)
@@ -120,7 +120,6 @@ fun FocusScreen(
 
                 // Item 2: Add Goal
                 ExpressiveFabMenuItem(
-                    index = 1,
                     onClick = {
                         isFabMenuExpanded = false
                         viewModel.selectAppForFocus(null, FocusType.GOAL)
@@ -128,6 +127,16 @@ fun FocusScreen(
                     },
                     icon = { Icon(Icons.Outlined.Flag, contentDescription = null) },
                     text = { Text("Add Goal") }
+                )
+
+                // Item 3: Add Schedule
+                ExpressiveFabMenuItem(
+                    onClick = {
+                        isFabMenuExpanded = false
+                        viewModel.openSchedulePicker()
+                    },
+                    icon = { Icon(Icons.Outlined.Schedule, contentDescription = null) },
+                    text = { Text("Add Schedule") }
                 )
             }
         }
@@ -137,6 +146,7 @@ fun FocusScreen(
             innerPadding = innerPadding,
             onEditShield = { viewModel.editShield(it) },
             onDeleteShield = { viewModel.deleteShield(it) },
+            onDeleteSchedule = { viewModel.deleteSchedule(it) },
             onShieldSortTypeChange = { viewModel.onShieldSortTypeChange(it) },
             onGoalSortTypeChange = { viewModel.onGoalSortTypeChange(it) },
             onAppClick = onAppClick
@@ -151,6 +161,25 @@ fun FocusScreen(
                     isAppPickerOpen = false
                 },
                 onSearchQueryChange = { viewModel.onSearchQueryChange(it) }
+            )
+        }
+
+        if (uiState.isSchedulePickerOpen) {
+            MultiAppPickerBottomSheet(
+                uiState = uiState,
+                onDismiss = { viewModel.closeSchedulePicker() },
+                onAppToggled = { viewModel.toggleAppSelectionForSchedule(it) },
+                onConfirm = { viewModel.proceedToScheduleSettings() },
+                onSearchQueryChange = { viewModel.onSearchQueryChange(it) }
+            )
+        }
+
+        if (uiState.isScheduleSettingsOpen) {
+            ScheduleSettingsBottomSheet(
+                onDismiss = { viewModel.closeScheduleSettings() },
+                onSave = { name, start, end, mode ->
+                    viewModel.saveSchedule(name, start, end, mode)
+                }
             )
         }
 
@@ -175,6 +204,7 @@ fun FocusScreenContent(
     innerPadding: PaddingValues,
     onEditShield: (ShieldEntity) -> Unit,
     onDeleteShield: (ShieldEntity) -> Unit,
+    onDeleteSchedule: (ScheduleEntity) -> Unit,
     onShieldSortTypeChange: (ShieldSortType) -> Unit,
     onGoalSortTypeChange: (ShieldSortType) -> Unit,
     onAppClick: (String) -> Unit
@@ -191,6 +221,56 @@ fun FocusScreenContent(
         item {
             FocusHeader()
         }
+
+        // Active Schedules Section
+        item {
+            Text(
+                text = "Active Schedules",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 16.dp)
+            )
+        }
+
+        if (uiState.activeSchedules.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                ) {
+                    EmptyFocusMessage(message = "No active schedules yet")
+                }
+            }
+        } else {
+            itemsIndexed(
+                items = uiState.activeSchedules,
+                key = { _, schedule -> schedule.id }
+            ) { index, schedule ->
+                val shape = when {
+                    uiState.activeSchedules.size == 1 -> RoundedCornerShape(24.dp)
+                    index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                    index == uiState.activeSchedules.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                    else -> RoundedCornerShape(8.dp)
+                }
+
+                Column(modifier = Modifier.animateItem()) {
+                    ScheduleItem(
+                        schedule = schedule,
+                        shape = shape,
+                        onDelete = { onDeleteSchedule(schedule) }
+                    )
+                    if (index < uiState.activeSchedules.size - 1) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                    }
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(24.dp)) }
 
         // Active Goals Section
         item {
@@ -289,6 +369,48 @@ fun FocusScreenContent(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun ScheduleItem(
+    schedule: ScheduleEntity,
+    shape: RoundedCornerShape,
+    onDelete: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = shape,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        ListItem(
+            headlineContent = { Text(schedule.name, fontWeight = FontWeight.Bold) },
+            supportingContent = {
+                Text(
+                    text = "${schedule.startTime} - ${schedule.endTime} • ${schedule.mode.name} • ${schedule.packageNames.size} apps",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            },
+            leadingContent = {
+                Icon(
+                    imageVector = Icons.Outlined.Schedule,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            },
+            trailingContent = {
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Outlined.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+        )
     }
 }
 
@@ -515,6 +637,236 @@ fun formatRemainingTime(millis: Long): String {
     val hours = totalSeconds / 3600
     val minutes = (totalSeconds % 3600) / 60
     return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MultiAppPickerBottomSheet(
+    uiState: FocusUiState,
+    onDismiss: () -> Unit,
+    onAppToggled: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onSearchQueryChange: (String) -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.9f)
+                    .padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    text = "Select Apps for Schedule",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                SearchBar(
+                    inputField = {
+                        SearchBarDefaults.InputField(
+                            query = uiState.searchQuery,
+                            onQueryChange = onSearchQueryChange,
+                            onSearch = { },
+                            expanded = false,
+                            onExpandedChange = {},
+                            placeholder = { Text("Search apps...") },
+                            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                            trailingIcon = {
+                                if (uiState.searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { onSearchQueryChange("") }) {
+                                        Icon(Icons.Outlined.Close, contentDescription = "Clear")
+                                    }
+                                }
+                            }
+                        )
+                    },
+                    expanded = false,
+                    onExpandedChange = {},
+                    modifier = Modifier.fillMaxWidth(),
+                    content = {}
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    val allApps = (uiState.topApps + uiState.installedApps).distinctBy { it.packageName }
+                    itemsIndexed(allApps) { index, app ->
+                        val isSelected = app.packageName in uiState.selectedAppsForSchedule
+                        val shape = when {
+                            allApps.size == 1 -> RoundedCornerShape(24.dp)
+                            index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                            index == allApps.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                            else -> RoundedCornerShape(8.dp)
+                        }
+                        
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onAppToggled(app.packageName) },
+                            shape = shape,
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer 
+                                               else MaterialTheme.colorScheme.surfaceContainerHigh
+                            )
+                        ) {
+                            ListItem(
+                                headlineContent = { Text(app.appName, fontWeight = FontWeight.Bold) },
+                                supportingContent = { Text(app.packageName, style = MaterialTheme.typography.bodySmall) },
+                                leadingContent = {
+                                    if (app.icon != null) {
+                                        Image(
+                                            painter = BitmapPainter(app.icon.toBitmap().asImageBitmap()),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp))
+                                        )
+                                    }
+                                },
+                                trailingContent = {
+                                    Checkbox(checked = isSelected, onCheckedChange = { onAppToggled(app.packageName) })
+                                },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                            )
+                        }
+                    }
+                    item { Spacer(modifier = Modifier.height(80.dp)) }
+                }
+            }
+            
+            // FAB in bottom sheet
+            FloatingActionButton(
+                onClick = onConfirm,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(32.dp),
+                containerColor = MaterialTheme.colorScheme.primary
+            ) {
+                Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = "Next")
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ScheduleSettingsBottomSheet(
+    onDismiss: () -> Unit,
+    onSave: (String, String, String, ScheduleMode) -> Unit
+) {
+    var name by remember { mutableStateOf("My Schedule") }
+    var mode by remember { mutableStateOf(ScheduleMode.BLOCK) }
+    
+    val startTimeState = rememberTimePickerState(initialHour = 9, initialMinute = 0, is24Hour = true)
+    val endTimeState = rememberTimePickerState(initialHour = 17, initialMinute = 0, is24Hour = true)
+    
+    var showStartTimePicker by remember { mutableStateOf(false) }
+    var showEndTimePicker by remember { mutableStateOf(false) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+        ) {
+            Text("Schedule Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Schedule Name") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            Text("Time Period", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Button(
+                    onClick = { showStartTimePicker = true },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                ) {
+                    Text("Start: ${String.format("%02d:%02d", startTimeState.hour, startTimeState.minute)}")
+                }
+                Button(
+                    onClick = { showEndTimePicker = true },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                ) {
+                    Text("End: ${String.format("%02d:%02d", endTimeState.hour, endTimeState.minute)}")
+                }
+            }
+            
+            if (showStartTimePicker) {
+                TimePickerDialog(
+                    onDismiss = { showStartTimePicker = false },
+                    onConfirm = { showStartTimePicker = false }
+                ) { TimePicker(state = startTimeState) }
+            }
+            if (showEndTimePicker) {
+                TimePickerDialog(
+                    onDismiss = { showEndTimePicker = false },
+                    onConfirm = { showEndTimePicker = false }
+                ) { TimePicker(state = endTimeState) }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            Text("Schedule Mode", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                SegmentedButton(
+                    selected = mode == ScheduleMode.BLOCK,
+                    onClick = { mode = ScheduleMode.BLOCK },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                ) { Text("Block") }
+                SegmentedButton(
+                    selected = mode == ScheduleMode.ALLOW,
+                    onClick = { mode = ScheduleMode.ALLOW },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                ) { Text("Allow") }
+            }
+            
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            Button(
+                onClick = {
+                    val startStr = String.format("%02d:%02d", startTimeState.hour, startTimeState.minute)
+                    val endStr = String.format("%02d:%02d", endTimeState.hour, endTimeState.minute)
+                    onSave(name, startStr, endStr, mode)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large
+            ) {
+                Text("Save Schedule", modifier = Modifier.padding(8.dp))
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TimePickerDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onConfirm) { Text("OK") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        text = { content() }
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -787,7 +1139,6 @@ fun FocusSettingsBottomSheet(
     var goalReminderPeriodMinutes by remember { mutableIntStateOf(existingShield?.goalReminderPeriodMinutes ?: 120) }
     var isDropdownExpanded by remember { mutableStateOf(false) }
     var isGoalDropdownExpanded by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
     val refreshOptions = listOf(
         "Per 30 Menit" to 30,
@@ -1090,7 +1441,6 @@ fun SettingsToggle(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun FloatingActionButtonMenuScope.ExpressiveFabMenuItem(
-    index: Int,
     onClick: () -> Unit,
     icon: @Composable () -> Unit,
     text: @Composable () -> Unit
@@ -1116,6 +1466,7 @@ fun FocusScreenPreview() {
             innerPadding = PaddingValues(0.dp),
             onEditShield = {},
             onDeleteShield = {},
+            onDeleteSchedule = {},
             onShieldSortTypeChange = {},
             onGoalSortTypeChange = {},
             onAppClick = {}

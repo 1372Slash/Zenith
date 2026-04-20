@@ -14,6 +14,7 @@ import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -35,6 +36,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
+import com.etrisad.zenith.data.local.entity.ScheduleEntity
+import com.etrisad.zenith.data.local.entity.ScheduleMode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -594,6 +597,161 @@ fun InterceptOverlayContent(
                                 Text("Close App", fontWeight = FontWeight.Bold)
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun ScheduleOverlayContent(
+    packageName: String,
+    appName: String,
+    schedule: ScheduleEntity,
+    onCloseApp: () -> Unit
+) {
+    var showContent by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    
+    val appIcon = remember(packageName) {
+        try {
+            context.packageManager.getApplicationIcon(packageName)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        showContent = true
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.6f)),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        AnimatedVisibility(
+            visible = showContent,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight()
+                    .navigationBarsPadding(),
+                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp).fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(40.dp)
+                            .height(4.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.outlineVariant)
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (appIcon != null) {
+                            Image(
+                                bitmap = appIcon.toBitmap().asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier.size(60.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        } else {
+                            Icon(Icons.Outlined.Schedule, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Schedule Active: ${schedule.name}",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = appName,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val modeText = if (schedule.mode == ScheduleMode.BLOCK) 
+                        "This app is blocked by your schedule." 
+                        else "Only selected apps are allowed during this schedule."
+
+                    Text(
+                        text = modeText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Outlined.Timer, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "${schedule.startTime} - ${schedule.endTime}",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    if (schedule.mode == ScheduleMode.ALLOW) {
+                        // Progress indicator for Allow mode
+                        CircularWavyProgressIndicator(
+                            progress = { 1f },
+                            modifier = Modifier.size(120.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            amplitude = { 1f },
+                            wavelength = 36.dp,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
+
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                showContent = false
+                                delay(400)
+                                onCloseApp()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large
+                    ) {
+                        Text("Close App", fontWeight = FontWeight.Bold)
                     }
                 }
             }
