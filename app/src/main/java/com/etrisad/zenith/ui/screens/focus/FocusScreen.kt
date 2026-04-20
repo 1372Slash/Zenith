@@ -17,7 +17,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
-import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material.icons.outlined.*
@@ -29,12 +28,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Matrix
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -42,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.graphics.shapes.toPath
+import kotlinx.coroutines.delay
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
@@ -60,7 +60,7 @@ fun FocusScreen(
     onAppClick: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var isAppPickerOpen by remember { mutableStateOf(false) }
+    val isAppPickerOpen = remember { mutableStateOf(false) }
     var isFabMenuExpanded by remember { mutableStateOf(false) }
 
     // Enhanced Spring Motion animations
@@ -121,7 +121,7 @@ fun FocusScreen(
                     onClick = {
                         isFabMenuExpanded = false
                         viewModel.selectAppForFocus(null, FocusType.SHIELD)
-                        isAppPickerOpen = true
+                        isAppPickerOpen.value = true
                     },
                     icon = { Icon(Icons.Outlined.Shield, contentDescription = null) },
                     text = { Text("Add Shield") }
@@ -132,7 +132,7 @@ fun FocusScreen(
                     onClick = {
                         isFabMenuExpanded = false
                         viewModel.selectAppForFocus(null, FocusType.GOAL)
-                        isAppPickerOpen = true
+                        isAppPickerOpen.value = true
                     },
                     icon = { Icon(Icons.Outlined.Flag, contentDescription = null) },
                     text = { Text("Add Goal") }
@@ -154,7 +154,6 @@ fun FocusScreen(
             uiState = uiState,
             innerPadding = innerPadding,
             onEditShield = { viewModel.editShield(it) },
-            onDeleteShield = { viewModel.deleteShield(it) },
             onEditSchedule = { viewModel.editSchedule(it) },
             onDeleteSchedule = { viewModel.deleteSchedule(it) },
             onShieldSortTypeChange = { viewModel.onShieldSortTypeChange(it) },
@@ -162,13 +161,13 @@ fun FocusScreen(
             onAppClick = onAppClick
         )
 
-        if (isAppPickerOpen) {
+        if (isAppPickerOpen.value) {
             AppPickerBottomSheet(
                 uiState = uiState,
-                onDismiss = { isAppPickerOpen = false },
+                onDismiss = { isAppPickerOpen.value = false },
                 onAppSelected = {
                     viewModel.selectAppForFocus(it, uiState.selectedFocusType)
-                    isAppPickerOpen = false
+                    isAppPickerOpen.value = false
                 },
                 onSearchQueryChange = { viewModel.onSearchQueryChange(it) }
             )
@@ -216,12 +215,12 @@ fun FocusScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun FocusScreenContent(
     uiState: FocusUiState,
     innerPadding: PaddingValues,
     onEditShield: (ShieldEntity) -> Unit,
-    onDeleteShield: (ShieldEntity) -> Unit,
     onEditSchedule: (ScheduleEntity) -> Unit,
     onDeleteSchedule: (ScheduleEntity) -> Unit,
     onShieldSortTypeChange: (ShieldSortType) -> Unit,
@@ -392,6 +391,7 @@ fun FocusScreenContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ScheduleItem(
     schedule: ScheduleEntity,
@@ -404,8 +404,55 @@ fun ScheduleItem(
         schedule.packageNames.take(4).mapNotNull { pkg ->
             try {
                 context.packageManager.getApplicationIcon(pkg)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 null
+            }
+        }
+    }
+
+    val nowMillis by produceState(initialValue = System.currentTimeMillis()) {
+        while (true) {
+            delay(60000) // Update every minute
+            value = System.currentTimeMillis()
+        }
+    }
+
+    val (isActiveNow, progress) = remember(schedule.startTime, schedule.endTime, schedule.isActive, nowMillis) {
+        if (!schedule.isActive) {
+            false to 0f
+        } else {
+            val calendar = java.util.Calendar.getInstance().apply { timeInMillis = nowMillis }
+            val currentMinutes = calendar.get(java.util.Calendar.HOUR_OF_DAY) * 60 + calendar.get(java.util.Calendar.MINUTE)
+            val currentSeconds = currentMinutes * 60 + calendar.get(java.util.Calendar.SECOND)
+
+            val startMinutes = try {
+                val parts = schedule.startTime.split(":")
+                parts[0].toInt() * 60 + parts[1].toInt()
+            } catch (_: Exception) { 0 }
+
+            val endMinutes = try {
+                val parts = schedule.endTime.split(":")
+                parts[0].toInt() * 60 + parts[1].toInt()
+            } catch (_: Exception) { 0 }
+
+            val startSeconds = startMinutes * 60
+            val endSeconds = endMinutes * 60
+
+            if (startMinutes <= endMinutes) {
+                val isActive = currentMinutes in startMinutes until endMinutes
+                val total = (endSeconds - startSeconds).coerceAtLeast(1)
+                val elapsed = (currentSeconds - startSeconds).coerceIn(0, total)
+                isActive to (elapsed.toFloat() / total)
+            } else {
+                val isActive = currentMinutes >= startMinutes || currentMinutes < endMinutes
+                val total = (24 * 3600 - startSeconds + endSeconds).coerceAtLeast(1)
+                val elapsed = if (currentSeconds >= startSeconds) {
+                    currentSeconds - startSeconds
+                } else {
+                    (24 * 3600 - startSeconds) + currentSeconds
+                }
+                val clampedElapsed = elapsed.coerceIn(0, total)
+                isActive to (clampedElapsed.toFloat() / total)
             }
         }
     }
@@ -419,41 +466,59 @@ fun ScheduleItem(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
-        ListItem(
-            headlineContent = { Text(schedule.name, fontWeight = FontWeight.Bold) },
-            supportingContent = {
-                Text(
-                    text = "${schedule.startTime} - ${schedule.endTime} • ${schedule.mode.name} • ${schedule.packageNames.size} apps",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            },
-            leadingContent = {
-                MultiAppIconGroup(
-                    appIcons = appIcons,
-                    totalCount = schedule.packageNames.size,
-                    size = 40.dp
-                )
-            },
-            trailingContent = {
-                Row {
-                    IconButton(onClick = onEdit) {
-                        Icon(
-                            imageVector = Icons.Outlined.Edit,
-                            contentDescription = "Edit",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+        Column {
+            ListItem(
+                headlineContent = { Text(schedule.name, fontWeight = FontWeight.Bold) },
+                supportingContent = {
+                    val modeText = schedule.mode.name.lowercase().replaceFirstChar { it.uppercase() }
+                    val statusText = if (isActiveNow) "Active" else "Inactive"
+                    Text(
+                        text = "${schedule.startTime} - ${schedule.endTime} • $modeText • $statusText • ${schedule.packageNames.size} apps",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isActiveNow) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                leadingContent = {
+                    MultiAppIconGroup(
+                        appIcons = appIcons,
+                        totalCount = schedule.packageNames.size,
+                        size = 40.dp
+                    )
+                },
+                trailingContent = {
+                    Row {
+                        IconButton(onClick = onEdit) {
+                            Icon(
+                                imageVector = Icons.Outlined.Edit,
+                                contentDescription = "Edit",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        IconButton(onClick = onDelete) {
+                            Icon(
+                                imageVector = Icons.Outlined.Delete,
+                                contentDescription = "Delete",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
-                    IconButton(onClick = onDelete) {
-                        Icon(
-                            imageVector = Icons.Outlined.Delete,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-            },
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-        )
+                },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+            )
+
+            if (isActiveNow) {
+                LinearWavyProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 12.dp)
+                        .height(8.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                )
+            }
+        }
     }
 }
 
@@ -917,7 +982,7 @@ fun ScheduleSettingsBottomSheet(
         packages.take(4).mapNotNull { pkg ->
             try {
                 context.packageManager.getApplicationIcon(pkg)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 null
             }
         }
@@ -933,22 +998,23 @@ fun ScheduleSettingsBottomSheet(
     val startTimeState = rememberTimePickerState(initialHour = initialStart[0], initialMinute = initialStart[1], is24Hour = true)
     val endTimeState = rememberTimePickerState(initialHour = initialEnd[0], initialMinute = initialEnd[1], is24Hour = true)
 
-    var showStartTimePicker by remember { mutableStateOf(false) }
-    var showEndTimePicker by remember { mutableStateOf(false) }
+    val currentLocale = Locale.current.platformLocale
+    val showStartTimePicker = remember { mutableStateOf(false) }
+    val showEndTimePicker = remember { mutableStateOf(false) }
 
-    if (showStartTimePicker) {
+    if (showStartTimePicker.value) {
         TimePickerDialog(
-            onDismiss = { showStartTimePicker = false },
-            onConfirm = { showStartTimePicker = false }
+            onDismiss = { showStartTimePicker.value = false },
+            onConfirm = { showStartTimePicker.value = false }
         ) {
             TimePicker(state = startTimeState)
         }
     }
 
-    if (showEndTimePicker) {
+    if (showEndTimePicker.value) {
         TimePickerDialog(
-            onDismiss = { showEndTimePicker = false },
-            onConfirm = { showEndTimePicker = false }
+            onDismiss = { showEndTimePicker.value = false },
+            onConfirm = { showEndTimePicker.value = false }
         ) {
             TimePicker(state = endTimeState)
         }
@@ -1015,7 +1081,7 @@ fun ScheduleSettingsBottomSheet(
             ) {
                 // Start Time Card
                 Surface(
-                    onClick = { showStartTimePicker = true },
+                    onClick = { showStartTimePicker.value = true },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp, topEnd = 8.dp, bottomEnd = 8.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -1032,7 +1098,7 @@ fun ScheduleSettingsBottomSheet(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "${"%02d".format(startTimeState.hour)}:${"%02d".format(startTimeState.minute)}",
+                            text = String.format(currentLocale, "%02d:%02d", startTimeState.hour, startTimeState.minute),
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -1043,7 +1109,7 @@ fun ScheduleSettingsBottomSheet(
 
                 // End Time Card
                 Surface(
-                    onClick = { showEndTimePicker = true },
+                    onClick = { showEndTimePicker.value = true },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp, topStart = 8.dp, bottomStart = 8.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -1060,7 +1126,7 @@ fun ScheduleSettingsBottomSheet(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "${"%02d".format(endTimeState.hour)}:${"%02d".format(endTimeState.minute)}",
+                            text = String.format(currentLocale, "%02d:%02d", endTimeState.hour, endTimeState.minute),
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -1089,15 +1155,15 @@ fun ScheduleSettingsBottomSheet(
                     onClick = { mode = ScheduleMode.ALLOW },
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                     icon = { Icon(Icons.Outlined.CheckCircleOutline, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                ) { Text("Allow") }
+                ) { Text("Active") }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
 
             Button(
                 onClick = {
-                    val startStr = String.format(java.util.Locale.getDefault(), "%02d:%02d", startTimeState.hour, startTimeState.minute)
-                    val endStr = String.format(java.util.Locale.getDefault(), "%02d:%02d", endTimeState.hour, endTimeState.minute)
+                    val startStr = String.format(currentLocale, "%02d:%02d", startTimeState.hour, startTimeState.minute)
+                    val endStr = String.format(currentLocale, "%02d:%02d", endTimeState.hour, endTimeState.minute)
                     onSave(name, startStr, endStr, mode)
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -1724,7 +1790,6 @@ fun FocusScreenPreview() {
             ),
             innerPadding = PaddingValues(0.dp),
             onEditShield = {},
-            onDeleteShield = {},
             onEditSchedule = {},
             onDeleteSchedule = {},
             onShieldSortTypeChange = {},
