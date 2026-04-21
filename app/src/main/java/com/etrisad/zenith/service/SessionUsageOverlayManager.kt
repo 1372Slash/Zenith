@@ -44,7 +44,7 @@ class SessionUsageOverlayManager(private val context: Context) {
     )
 
     private val activeHUDs = mutableListOf<HUDInstance>()
-    private val MAX_HUDS = 4
+    private val MAX_HUDS = 1 // Cukup 1 HUD saja agar hemat RAM (~40-60MB penghematan)
 
     fun showHUD(
         packageName: String,
@@ -231,13 +231,12 @@ fun SessionUsageHUD(
             shadowElevation = 4.dp
         ) {
             Box(contentAlignment = Alignment.Center) {
-                CircularWavyProgressIndicator(
+                CircularProgressIndicator(
                     progress = { progress },
                     modifier = Modifier.fillMaxSize().padding(4.dp),
                     color = MaterialTheme.colorScheme.primary,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    amplitude = { 1.5f },
-                    wavelength = 20.dp
+                    strokeWidth = 4.dp
                 )
                 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {

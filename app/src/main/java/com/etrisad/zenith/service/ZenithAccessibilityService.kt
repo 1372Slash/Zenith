@@ -10,12 +10,15 @@ import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.local.entity.ShieldEntity
+import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -23,19 +26,23 @@ class ZenithAccessibilityService : AccessibilityService() {
 
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
+    private val packageChangeFlow = MutableSharedFlow<String>(extraBufferCapacity = 1)
     private lateinit var shieldRepository: ShieldRepository
     private lateinit var preferencesRepository: UserPreferencesRepository
     private lateinit var overlayManager: InterceptOverlayManager
     private lateinit var sessionUsageOverlayManager: SessionUsageOverlayManager
     private val usageStatsManager by lazy { getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager }
+    private val reusableCalendar = java.util.Calendar.getInstance()
 
     private var lastForegroundApp: String? = null
+    private var lastEvaluationTime = 0L
     private var currentShieldCache: ShieldEntity? = null
     private var lastUsageFetchTime = 0L
     private var cachedTotalUsage = 0L
     private val allowedApps = mutableMapOf<String, Long>()
     private var activeSchedules = listOf<ScheduleEntity>()
     private var whitelistedPackages = setOf<String>()
+    private var currentPreferences: UserPreferences? = null
 
     private class ParsedSchedule(
         val id: Long,
@@ -54,8 +61,8 @@ class ZenithAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         isServiceRunning = true
-        val database = ZenithDatabase.getDatabase(this)
-        shieldRepository = ShieldRepository(database.shieldDao(), database.scheduleDao())
+        val app = application as com.etrisad.zenith.ZenithApplication
+        shieldRepository = app.shieldRepository
         preferencesRepository = UserPreferencesRepository(this)
         overlayManager = InterceptOverlayManager(this)
         sessionUsageOverlayManager = SessionUsageOverlayManager(this)
@@ -79,7 +86,15 @@ class ZenithAccessibilityService : AccessibilityService() {
 
         serviceScope.launch {
             preferencesRepository.userPreferencesFlow.collect { preferences ->
+                currentPreferences = preferences
                 whitelistedPackages = preferences.whitelistedPackages
+            }
+        }
+
+        // Debounce package changes to avoid redundant processing
+        serviceScope.launch {
+            packageChangeFlow.collectLatest { packageName ->
+                handlePackageChange(packageName)
             }
         }
     }
@@ -90,24 +105,29 @@ class ZenithAccessibilityService : AccessibilityService() {
         val packageName = event.packageName?.toString() ?: return
         if (packageName == this.packageName) return
 
-        serviceScope.launch {
-            handlePackageChange(packageName)
-        }
+        packageChangeFlow.tryEmit(packageName)
     }
 
     private suspend fun handlePackageChange(currentApp: String) {
-        sessionUsageOverlayManager.updateForegroundApp(currentApp)
+        val currentTime = System.currentTimeMillis()
+
+        // Hanya evaluasi jika: Aplikasi berubah ATAU sudah lewat 5 detik sejak evaluasi terakhir
+        if (currentApp == lastForegroundApp && currentTime - lastEvaluationTime < 5000) {
+            return
+        }
+        lastEvaluationTime = currentTime
+
+        if (currentApp != lastForegroundApp) {
+            sessionUsageOverlayManager.updateForegroundApp(currentApp)
+            currentShieldCache = shieldRepository.getShieldByPackageName(currentApp)
+            lastUsageFetchTime = 0L
+        }
+
         if (shouldBypassBlocking(currentApp)) {
             lastForegroundApp = currentApp
             return
         }
 
-        if (currentApp != lastForegroundApp) {
-            currentShieldCache = shieldRepository.getShieldByPackageName(currentApp)
-            lastUsageFetchTime = 0L
-        }
-
-        val currentTime = System.currentTimeMillis()
         val allowedUntil = allowedApps[currentApp] ?: 0L
         
         updateUsageTime(currentApp)
@@ -145,8 +165,8 @@ class ZenithAccessibilityService : AccessibilityService() {
         val limitMillis = shield.timeLimitMinutes * 60 * 1000L
         val remainingMillis = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
         
-        // Hanya update database jika perubahan signifikan (> 30 detik) untuk mengurangi I/O
-        if (kotlin.math.abs(shield.remainingTimeMillis - remainingMillis) > 30000) {
+        // Naikkan threshold ke 60 detik (dari 30 detik) untuk mengurangi write I/O ke database
+        if (kotlin.math.abs(shield.remainingTimeMillis - remainingMillis) > 60000) {
             val updatedShield = shield.copy(
                 remainingTimeMillis = remainingMillis,
                 lastUsedTimestamp = currentTime
@@ -160,7 +180,8 @@ class ZenithAccessibilityService : AccessibilityService() {
         val shield = currentShieldCache ?: shieldRepository.getShieldByPackageName(targetPackageName)
         if (shield != null && !InterceptOverlayManager.isShowing) {
             val totalUsageToday = getTotalUsageToday(targetPackageName)
-            val delayDurationSeconds = preferencesRepository.userPreferencesFlow.first().delayAppDurationSeconds
+            val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
+            val delayDurationSeconds = prefs.delayAppDurationSeconds
             
             val currentTime = System.currentTimeMillis()
             val lastAction = shield.lastDelayStartTimestamp
@@ -228,18 +249,19 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private fun getTotalUsageToday(packageName: String): Long {
-        val calendar = java.util.Calendar.getInstance()
         val endTime = System.currentTimeMillis()
         
-        calendar.timeInMillis = endTime
-        calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
-        calendar.set(java.util.Calendar.MINUTE, 0)
-        calendar.set(java.util.Calendar.SECOND, 0)
-        calendar.set(java.util.Calendar.MILLISECOND, 0)
-        val startTime = calendar.timeInMillis
+        synchronized(reusableCalendar) {
+            reusableCalendar.timeInMillis = endTime
+            reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+            reusableCalendar.set(java.util.Calendar.MINUTE, 0)
+            reusableCalendar.set(java.util.Calendar.SECOND, 0)
+            reusableCalendar.set(java.util.Calendar.MILLISECOND, 0)
+            val startTime = reusableCalendar.timeInMillis
 
-        val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, endTime)
-        return stats?.find { it.packageName == packageName }?.totalTimeVisible ?: 0L
+            val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, endTime)
+            return stats?.find { it.packageName == packageName }?.totalTimeVisible ?: 0L
+        }
     }
 
     private fun goToHomeScreen() {
@@ -252,8 +274,11 @@ class ZenithAccessibilityService : AccessibilityService() {
     private fun checkSchedules(packageName: String): Boolean {
         if (shouldBypassBlocking(packageName)) return false
         
-        val now = java.util.Calendar.getInstance()
-        val currentTotalMinutes = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
+        val now = System.currentTimeMillis()
+        val currentTotalMinutes = synchronized(reusableCalendar) {
+            reusableCalendar.timeInMillis = now
+            reusableCalendar.get(java.util.Calendar.HOUR_OF_DAY) * 60 + reusableCalendar.get(java.util.Calendar.MINUTE)
+        }
         
         for (ps in parsedSchedulesCache) {
             val isInInterval = if (ps.startMinutes <= ps.endMinutes) {

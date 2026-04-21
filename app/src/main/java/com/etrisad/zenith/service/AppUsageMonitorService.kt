@@ -10,6 +10,7 @@ import android.content.Intent
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.etrisad.zenith.data.local.database.ZenithDatabase
+import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +29,7 @@ class AppUsageMonitorService : Service() {
     private lateinit var overlayManager: InterceptOverlayManager
     private lateinit var sessionUsageOverlayManager: SessionUsageOverlayManager
     private val usageStatsManager by lazy { getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager }
+    private val powerManager by lazy { getSystemService(POWER_SERVICE) as android.os.PowerManager }
     private val reusableEvent = UsageEvents.Event()
     private val reusableCalendar = java.util.Calendar.getInstance()
     private var lastForegroundApp: String? = null
@@ -40,6 +42,7 @@ class AppUsageMonitorService : Service() {
     private val launcherPackages = mutableSetOf<String>()
     private val systemAppCache = mutableMapOf<String, Boolean>()
     private var lastLauncherRefreshTime = 0L
+    private var currentPreferences: UserPreferences? = null
     
     // Cache untuk jadwal agar tidak perlu parsing string setiap detik
     private class ParsedSchedule(
@@ -53,8 +56,8 @@ class AppUsageMonitorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        val database = ZenithDatabase.getDatabase(this)
-        shieldRepository = ShieldRepository(database.shieldDao(), database.scheduleDao())
+        val app = application as com.etrisad.zenith.ZenithApplication
+        shieldRepository = app.shieldRepository
         preferencesRepository = UserPreferencesRepository(this)
         overlayManager = InterceptOverlayManager(this)
         sessionUsageOverlayManager = SessionUsageOverlayManager(this)
@@ -79,6 +82,7 @@ class AppUsageMonitorService : Service() {
 
         serviceScope.launch {
             preferencesRepository.userPreferencesFlow.collect { preferences ->
+                currentPreferences = preferences
                 whitelistedPackages.clear()
                 whitelistedPackages.addAll(preferences.whitelistedPackages)
             }
@@ -93,6 +97,12 @@ class AppUsageMonitorService : Service() {
     private fun startMonitoring() {
         serviceScope.launch {
             while (true) {
+                // 1. Matikan monitoring jika layar mati untuk menghemat CPU & baterai
+                if (!powerManager.isInteractive) {
+                    delay(5000)
+                    continue
+                }
+
                 if (ZenithAccessibilityService.isServiceRunning) {
                     currentShieldCache = null
                     lastUsageFetchTime = 0L
@@ -123,7 +133,7 @@ class AppUsageMonitorService : Service() {
 
                     if (shouldBypassBlocking(currentApp)) {
                         lastForegroundApp = currentApp
-                        delay(1000)
+                        delay(4000) // Delay lebih lama untuk aplikasi whitelisted
                         continue
                     }
 
@@ -133,7 +143,7 @@ class AppUsageMonitorService : Service() {
                     if (currentTime > allowedUntil && !InterceptOverlayManager.isShowing) {
                         if (checkSchedules(currentApp)) {
                             lastForegroundApp = currentApp
-                            delay(1000)
+                            delay(2000)
                             continue
                         }
 
@@ -160,8 +170,9 @@ class AppUsageMonitorService : Service() {
                 }
                 
                 lastForegroundApp = currentApp
-                // Tingkatkan delay polling sedikit jika tidak ada aplikasi yang sedang di-shield
-                val pollDelay = if (currentShieldCache != null) 1000L else 1500L
+                // Tingkatkan delay polling untuk menghemat baterai/CPU
+                // 2 detik jika ada shield aktif, 4 detik jika idle
+                val pollDelay = if (currentShieldCache != null) 2000L else 4000L
                 delay(pollDelay)
             }
         }
@@ -177,7 +188,7 @@ class AppUsageMonitorService : Service() {
             lastUsageFetchTime = currentTime
         }
 
-        val prefs = preferencesRepository.userPreferencesFlow.first()
+        val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
         val rechargeDurationMillis = prefs.emergencyRechargeDurationMinutes * 60 * 1000L
 
         var updatedShield = shield
@@ -196,7 +207,8 @@ class AppUsageMonitorService : Service() {
         val limitMillis = shield.timeLimitMinutes * 60 * 1000L
         val remainingMillis = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
         
-        if (kotlin.math.abs(shield.remainingTimeMillis - remainingMillis) > 10000 || updatedShield != shield) {
+        // Naikkan threshold ke 60 detik (dari 10 detik) untuk mengurangi write I/O ke database
+        if (kotlin.math.abs(shield.remainingTimeMillis - remainingMillis) > 60000 || updatedShield != shield) {
             val finalShield = updatedShield.copy(
                 remainingTimeMillis = remainingMillis,
                 lastUsedTimestamp = currentTime
@@ -515,8 +527,9 @@ class AppUsageMonitorService : Service() {
 
     private fun getForegroundApp(): String? {
         val time = System.currentTimeMillis()
+        // Kurangi lookback window ke 3 detik untuk efisiensi
         val usageEvents = try {
-            usageStatsManager.queryEvents(time - 5000, time)
+            usageStatsManager.queryEvents(time - 3000, time)
         } catch (_: Exception) { null } ?: return lastForegroundApp
         
         var lastPackage: String? = null

@@ -6,7 +6,16 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 
+import com.etrisad.zenith.data.local.database.ZenithDatabase
+import com.etrisad.zenith.data.repository.ShieldRepository
+
 class ZenithApplication : Application(), ImageLoaderFactory {
+
+    val shieldRepository: ShieldRepository by lazy {
+        val database = ZenithDatabase.getDatabase(this)
+        ShieldRepository(database.shieldDao(), database.scheduleDao())
+    }
+
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)
             .memoryCache {
@@ -31,8 +40,9 @@ class ZenithApplication : Application(), ImageLoaderFactory {
         super.onTrimMemory(level)
         // Agresif membersihkan cache saat sistem butuh RAM
         if (level >= TRIM_MEMORY_MODERATE) {
-            ImageLoader(this).memoryCache?.clear()
-            System.gc()
+            // Gunakan singleton image loader, jangan buat baru
+            coil.Coil.imageLoader(this).memoryCache?.clear()
+            // Jangan panggil System.gc() terlalu sering karena memicu CPU spike
         }
     }
 }
