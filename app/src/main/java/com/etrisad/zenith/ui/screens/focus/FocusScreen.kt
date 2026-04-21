@@ -5,6 +5,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -31,6 +33,7 @@ import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.intl.Locale
@@ -943,7 +946,7 @@ fun MultiAppPickerBottomSheet(
                             shape = shape,
                             colors = CardDefaults.cardColors(
                                 containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                                               else MaterialTheme.colorScheme.surfaceContainerHigh
+                                else MaterialTheme.colorScheme.surfaceContainerHigh
                             )
                         ) {
                             ListItem(
@@ -1160,19 +1163,27 @@ fun ScheduleSettingsBottomSheet(
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                SegmentedButton(
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ScheduleModeOptionButton(
+                    label = "Block",
+                    icon = Icons.Outlined.Block,
                     selected = mode == ScheduleMode.BLOCK,
                     onClick = { mode = ScheduleMode.BLOCK },
-                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                    icon = { Icon(Icons.Outlined.Block, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                ) { Text("Block") }
-                SegmentedButton(
+                    isFirst = true,
+                    isLast = false
+                )
+                ScheduleModeOptionButton(
+                    label = "Allow",
+                    icon = Icons.Outlined.CheckCircleOutline,
                     selected = mode == ScheduleMode.ALLOW,
                     onClick = { mode = ScheduleMode.ALLOW },
-                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                    icon = { Icon(Icons.Outlined.CheckCircleOutline, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                ) { Text("Active") }
+                    isFirst = false,
+                    isLast = true
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -1185,12 +1196,12 @@ fun ScheduleSettingsBottomSheet(
                     keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
                 ),
                 leadingIcon = { Icon(Icons.Outlined.Bolt, contentDescription = null) },
-                supportingText = { 
+                supportingText = {
                     Text(
-                        if (mode == ScheduleMode.ALLOW) 
-                            "Apps not in the list will be limited to this many uses" 
+                        if (mode == ScheduleMode.ALLOW)
+                            "Apps not in the list will be limited to this many uses"
                         else "Selected apps can be used this many times in emergency"
-                    ) 
+                    )
                 }
             )
 
@@ -1214,6 +1225,7 @@ fun ScheduleSettingsBottomSheet(
         }
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1770,6 +1782,110 @@ fun FocusSettingsBottomSheet(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+
+@Composable
+fun RowScope.ScheduleModeOptionButton(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    isFirst: Boolean,
+    isLast: Boolean
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val widthScale by animateFloatAsState(
+        targetValue = when {
+            isPressed -> 1.5f
+            selected -> 1.25f
+            else -> 1.0f
+        },
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "WidthScale"
+    )
+
+    val backgroundColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.secondaryContainer
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "BgColor"
+    )
+
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "ContentColor"
+    )
+
+    val innerRadius by animateDpAsState(
+        targetValue = if (selected) 24.dp else 8.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "InnerRadius"
+    )
+
+    val outerRadius = 24.dp
+
+    val shape = when {
+        selected -> CircleShape
+        isFirst -> RoundedCornerShape(
+            topStart = outerRadius,
+            bottomStart = outerRadius,
+            topEnd = innerRadius,
+            bottomEnd = innerRadius
+        )
+        isLast -> RoundedCornerShape(
+            topEnd = outerRadius,
+            bottomEnd = outerRadius,
+            topStart = innerRadius,
+            bottomStart = innerRadius
+        )
+        else -> RoundedCornerShape(innerRadius)
+    }
+
+    Box(
+        modifier = Modifier
+            .weight(widthScale)
+            .height(48.dp)
+            .clip(shape)
+            .background(backgroundColor)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = contentColor,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1
+            )
         }
     }
 }
