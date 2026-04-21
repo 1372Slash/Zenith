@@ -257,7 +257,7 @@ class AppUsageMonitorService : Service() {
                             val prefs = preferencesRepository.userPreferencesFlow.first()
                             if (prefs.sessionUsageOverlayEnabled) {
                                 serviceScope.launch(Dispatchers.Main) {
-                                    sessionUsageOverlayManager.showHUD(minutes)
+                                    sessionUsageOverlayManager.showHUD(minutes, prefs.sessionUsageOverlaySize)
                                 }
                             }
                         }
@@ -478,7 +478,7 @@ class AppUsageMonitorService : Service() {
                             val prefs = preferencesRepository.userPreferencesFlow.first()
                             if (prefs.sessionUsageOverlayEnabled) {
                                 serviceScope.launch(Dispatchers.Main) {
-                                    sessionUsageOverlayManager.showHUD(minutes)
+                                    sessionUsageOverlayManager.showHUD(minutes, prefs.sessionUsageOverlaySize)
                                 }
                             }
                         }

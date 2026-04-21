@@ -22,7 +22,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.data.preferences.ThemeConfig
@@ -84,6 +86,11 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
                 preferencesRepository.setSessionUsageOverlayEnabled(enabled)
             }
         },
+        onSessionUsageOverlaySizeChange = { size ->
+            coroutineScope.launch {
+                preferencesRepository.setSessionUsageOverlaySize(size)
+            }
+        },
         showWhitelistSheet = showWhitelistSheet,
         onShowWhitelistSheetChange = { showWhitelistSheet = it },
         onSetWhitelistedPackages = { packages ->
@@ -104,6 +111,7 @@ fun SettingsScreenContent(
     onSetEmergencyRecharge: (Int) -> Unit,
     onSetDelayAppDuration: (Int) -> Unit,
     onSessionUsageOverlayEnabledChange: (Boolean) -> Unit,
+    onSessionUsageOverlaySizeChange: (Int) -> Unit,
     showWhitelistSheet: Boolean,
     onShowWhitelistSheetChange: (Boolean) -> Unit,
     onSetWhitelistedPackages: (Set<String>) -> Unit
@@ -200,8 +208,20 @@ fun SettingsScreenContent(
                     checked = preferences.sessionUsageOverlayEnabled,
                     onCheckedChange = onSessionUsageOverlayEnabledChange,
                     icon = Icons.Outlined.Timer,
-                    shape = RoundedCornerShape(8.dp)
+                    shape = if (preferences.sessionUsageOverlayEnabled) 
+                        RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+                    else RoundedCornerShape(8.dp)
                 )
+            }
+
+            if (preferences.sessionUsageOverlayEnabled) {
+                item {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    HUDSizeSettings(
+                        size = preferences.sessionUsageOverlaySize,
+                        onSizeChange = onSessionUsageOverlaySizeChange
+                    )
+                }
             }
 
             item {
@@ -799,6 +819,97 @@ fun SettingsActionItem(
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun HUDSizeSettings(
+    size: Int,
+    onSizeChange: (Int) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "HUD Size",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.PhotoSizeSelectSmall, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                
+                Slider(
+                    value = size.toFloat(),
+                    onValueChange = { newValue -> onSizeChange(newValue.toInt()) },
+                    valueRange = 50f..200f,
+                    modifier = Modifier.weight(1f).padding(horizontal = 16.dp)
+                )
+                
+                Icon(Icons.Outlined.PhotoSizeSelectLarge, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            
+            Text(
+                text = "Size: $size%",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            // Preview
+            Text(
+                text = "Preview",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+            
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                val scale = size / 100f
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .padding(4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularWavyProgressIndicator(
+                        progress = { 0.75f },
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                        amplitude = { 1.5f },
+                        wavelength = 20.dp
+                    )
+                    Text(
+                        text = "15m",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            }
         }
     }
 }

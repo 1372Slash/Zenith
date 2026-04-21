@@ -30,6 +30,7 @@ class UserPreferencesRepository(private val context: Context) {
         val EMERGENCY_RECHARGE_DURATION_MINUTES = intPreferencesKey("emergency_recharge_duration_minutes")
         val DELAY_APP_DURATION_SECONDS = intPreferencesKey("delay_app_duration_seconds")
         val SESSION_USAGE_OVERLAY_ENABLED = booleanPreferencesKey("session_usage_overlay_enabled")
+        val SESSION_USAGE_OVERLAY_SIZE = intPreferencesKey("session_usage_overlay_size")
         val WHITELISTED_PACKAGES = stringPreferencesKey("whitelisted_packages")
     }
 
@@ -51,6 +52,7 @@ class UserPreferencesRepository(private val context: Context) {
             val emergencyRechargeDuration = preferences[PreferencesKeys.EMERGENCY_RECHARGE_DURATION_MINUTES] ?: 60
             val delayAppDuration = preferences[PreferencesKeys.DELAY_APP_DURATION_SECONDS] ?: 30
             val sessionUsageOverlayEnabled = preferences[PreferencesKeys.SESSION_USAGE_OVERLAY_ENABLED] ?: false
+            val sessionUsageOverlaySize = preferences[PreferencesKeys.SESSION_USAGE_OVERLAY_SIZE] ?: 100
             val whitelistedPackages = preferences[PreferencesKeys.WHITELISTED_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
             UserPreferences(
                 themeConfig = themeConfig,
@@ -60,6 +62,7 @@ class UserPreferencesRepository(private val context: Context) {
                 emergencyRechargeDurationMinutes = emergencyRechargeDuration,
                 delayAppDurationSeconds = delayAppDuration,
                 sessionUsageOverlayEnabled = sessionUsageOverlayEnabled,
+                sessionUsageOverlaySize = sessionUsageOverlaySize,
                 whitelistedPackages = whitelistedPackages
             )
         }
@@ -106,6 +109,12 @@ class UserPreferencesRepository(private val context: Context) {
         }
     }
 
+    suspend fun setSessionUsageOverlaySize(size: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.SESSION_USAGE_OVERLAY_SIZE] = size
+        }
+    }
+
     suspend fun setWhitelistedPackages(packages: Set<String>) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.WHITELISTED_PACKAGES] = packages.joinToString(",")
@@ -121,5 +130,6 @@ data class UserPreferences(
     val emergencyRechargeDurationMinutes: Int = 60,
     val delayAppDurationSeconds: Int = 30,
     val sessionUsageOverlayEnabled: Boolean = false,
+    val sessionUsageOverlaySize: Int = 100,
     val whitelistedPackages: Set<String> = emptySet()
 )

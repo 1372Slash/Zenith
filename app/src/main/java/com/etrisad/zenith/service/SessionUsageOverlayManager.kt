@@ -43,7 +43,7 @@ class SessionUsageOverlayManager(private val context: Context) {
     private var lifecycleOwner: MyLifecycleOwner? = null
     private var viewModelStore: ViewModelStore? = null
 
-    fun showHUD(durationMinutes: Int) {
+    fun showHUD(durationMinutes: Int, size: Int) {
         if (overlayView != null) {
             hideHUD()
         }
@@ -75,6 +75,7 @@ class SessionUsageOverlayManager(private val context: Context) {
                 ZenithTheme {
                     SessionUsageHUD(
                         durationMinutes = durationMinutes,
+                        size = size,
                         onDrag = { dx, dy ->
                             params.x += dx.roundToInt()
                             params.y += dy.roundToInt()
@@ -138,33 +139,38 @@ class SessionUsageOverlayManager(private val context: Context) {
 @Composable
 fun SessionUsageHUD(
     durationMinutes: Int,
+    size: Int,
     onDrag: (Float, Float) -> Unit,
     onFinish: () -> Unit
 ) {
     val totalSeconds = durationMinutes * 60
     var secondsLeft by remember { mutableIntStateOf(totalSeconds) }
-    
+    var visible by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
+        visible = true
         while (secondsLeft > 0) {
             delay(1000)
             secondsLeft--
         }
-        onFinish()
+        visible = false
     }
 
     val progress = secondsLeft.toFloat() / totalSeconds.toFloat()
-
-    // Motion Spring animations
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { visible = true }
+    val scaleFactor = size / 100f
 
     val scale by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
+        targetValue = if (visible) scaleFactor else 0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessLow
         ),
-        label = "HUDScale"
+        label = "HUDScale",
+        finishedListener = {
+            if (!visible) {
+                onFinish()
+            }
+        }
     )
 
     Surface(
@@ -173,6 +179,7 @@ fun SessionUsageHUD(
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
+                alpha = scale.coerceIn(0f, 1f)
             }
             .pointerInput(Unit) {
                 detectDragGestures { change, dragAmount ->
