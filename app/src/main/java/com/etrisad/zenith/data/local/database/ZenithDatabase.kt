@@ -9,22 +9,26 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.etrisad.zenith.data.local.dao.ScheduleDao
 import com.etrisad.zenith.data.local.dao.ShieldDao
+import com.etrisad.zenith.data.local.dao.DailyUsageDao
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
+import com.etrisad.zenith.data.local.entity.DailyUsageEntity
 import com.etrisad.zenith.data.local.Converters
 
 @Database(
-    entities = [ShieldEntity::class, ScheduleEntity::class],
-    version = 13,
+    entities = [ShieldEntity::class, ScheduleEntity::class, DailyUsageEntity::class],
+    version = 14,
     exportSchema = true,
     autoMigrations = [
-        androidx.room.AutoMigration(from = 12, to = 13)
+        androidx.room.AutoMigration(from = 12, to = 13),
+        androidx.room.AutoMigration(from = 13, to = 14)
     ]
 )
 @TypeConverters(Converters::class)
 abstract class ZenithDatabase : RoomDatabase() {
     abstract fun shieldDao(): ShieldDao
     abstract fun scheduleDao(): ScheduleDao
+    abstract fun dailyUsageDao(): DailyUsageDao
 
     companion object {
         @Volatile
