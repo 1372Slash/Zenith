@@ -1,6 +1,9 @@
 package com.etrisad.zenith.ui.screens.settings
 
 import android.app.WallpaperManager
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import com.google.accompanist.drawablepainter.rememberDrawablePainter
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
@@ -32,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.data.preferences.ThemeConfig
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.util.BackupUtils
 import kotlinx.coroutines.launch
 
 @Composable
@@ -52,6 +56,38 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
     )
     val coroutineScope = rememberCoroutineScope()
     var showWhitelistSheet by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val backupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+        onResult = { uri ->
+            uri?.let {
+                coroutineScope.launch {
+                    BackupUtils.backupDatabase(context, it).onSuccess {
+                        Toast.makeText(context, "Backup successful!", Toast.LENGTH_SHORT).show()
+                    }.onFailure { e ->
+                        Toast.makeText(context, "Backup failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    )
+
+    val restoreLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { uri ->
+            uri?.let {
+                coroutineScope.launch {
+                    BackupUtils.restoreDatabase(context, it).onSuccess {
+                        Toast.makeText(context, "Restore successful! Restarting app...", Toast.LENGTH_LONG).show()
+                        BackupUtils.restartApp(context)
+                    }.onFailure { e ->
+                        Toast.makeText(context, "Restore failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    )
 
     SettingsScreenContent(
         preferences = preferences,
@@ -106,7 +142,9 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
             coroutineScope.launch {
                 preferencesRepository.setWhitelistedPackages(packages)
             }
-        }
+        },
+        onBackup = { backupLauncher.launch("zenith_backup_${System.currentTimeMillis()}.db") },
+        onRestore = { restoreLauncher.launch(arrayOf("application/octet-stream", "*/*")) }
     )
 }
 
@@ -124,7 +162,9 @@ fun SettingsScreenContent(
     onSessionUsageOverlayOpacityChange: (Int) -> Unit,
     showWhitelistSheet: Boolean,
     onShowWhitelistSheetChange: (Boolean) -> Unit,
-    onSetWhitelistedPackages: (Set<String>) -> Unit
+    onSetWhitelistedPackages: (Set<String>) -> Unit,
+    onBackup: () -> Unit,
+    onRestore: () -> Unit
 ) {
     var showTargetSheet by remember { mutableStateOf(false) }
     var showEmergencyRechargeSheet by remember { mutableStateOf(false) }
@@ -243,6 +283,32 @@ fun SettingsScreenContent(
                     summary = "${preferences.whitelistedPackages.size} apps bypassed",
                     onClick = { onShowWhitelistSheetChange(true) },
                     icon = Icons.Outlined.VerifiedUser,
+                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                PreferenceCategory(title = "Data Management")
+            }
+
+            item {
+                SettingsActionItem(
+                    title = "Backup Data",
+                    summary = "Save your settings and schedules to a file",
+                    onClick = onBackup,
+                    icon = Icons.Outlined.Backup,
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                SettingsActionItem(
+                    title = "Restore Data",
+                    summary = "Load data from a previous backup file",
+                    onClick = onRestore,
+                    icon = Icons.Outlined.Restore,
                     shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                 )
             }

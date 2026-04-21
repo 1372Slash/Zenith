@@ -13,7 +13,14 @@ import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.Converters
 
-@Database(entities = [ShieldEntity::class, ScheduleEntity::class], version = 12, exportSchema = false)
+@Database(
+    entities = [ShieldEntity::class, ScheduleEntity::class],
+    version = 13,
+    exportSchema = true,
+    autoMigrations = [
+        androidx.room.AutoMigration(from = 12, to = 13)
+    ]
+)
 @TypeConverters(Converters::class)
 abstract class ZenithDatabase : RoomDatabase() {
     abstract fun shieldDao(): ShieldDao
@@ -124,13 +131,19 @@ abstract class ZenithDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, 
-                        MIGRATION_6_7, MIGRATION_7_8, MIGRATION_9_10, 
-                        MIGRATION_10_11, MIGRATION_11_12
+                        MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, 
+                        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12
                     )
+                    .fallbackToDestructiveMigrationOnDowngrade()
                     .build()
                 INSTANCE = instance
                 instance
             }
+        }
+
+        fun closeDatabase() {
+            INSTANCE?.close()
+            INSTANCE = null
         }
     }
 }
