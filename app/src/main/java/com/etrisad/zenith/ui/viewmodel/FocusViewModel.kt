@@ -126,20 +126,18 @@ class FocusViewModel(
 
     private fun updateInstalledAppsFilter() {
         val query = _uiState.value.searchQuery
-        val shieldedPackages = allShields.map { it.packageName }.toSet()
 
         val filtered = if (query.isBlank()) {
-            _allInstalledApps.value.filter { it.packageName !in shieldedPackages }
+            _allInstalledApps.value
         } else {
             _allInstalledApps.value.filter {
-                (it.appName.contains(query, ignoreCase = true) ||
-                        it.packageName.contains(query, ignoreCase = true)) &&
-                        it.packageName !in shieldedPackages
+                it.appName.contains(query, ignoreCase = true) ||
+                        it.packageName.contains(query, ignoreCase = true)
             }
         }
 
         // Get top used apps from system usage stats
-        val topApps = getTopUsedApps(limit = 6).filter { it.packageName !in shieldedPackages }
+        val topApps = getTopUsedApps(limit = 6)
 
         _uiState.value = _uiState.value.copy(
             installedApps = filtered,
@@ -234,7 +232,8 @@ class FocusViewModel(
         name: String,
         startTime: String,
         endTime: String,
-        mode: ScheduleMode
+        mode: ScheduleMode,
+        maxEmergencyUses: Int = 3
     ) {
         val packageNames = _uiState.value.selectedAppsForSchedule.toList()
         if (packageNames.isEmpty()) return
@@ -247,7 +246,9 @@ class FocusViewModel(
                     packageNames = packageNames,
                     startTime = startTime,
                     endTime = endTime,
-                    mode = mode
+                    mode = mode,
+                    emergencyUseCount = editing.emergencyUseCount,
+                    maxEmergencyUses = maxEmergencyUses
                 )
             } else {
                 ScheduleEntity(
@@ -255,7 +256,9 @@ class FocusViewModel(
                     packageNames = packageNames,
                     startTime = startTime,
                     endTime = endTime,
-                    mode = mode
+                    mode = mode,
+                    emergencyUseCount = maxEmergencyUses,
+                    maxEmergencyUses = maxEmergencyUses
                 )
             }
             

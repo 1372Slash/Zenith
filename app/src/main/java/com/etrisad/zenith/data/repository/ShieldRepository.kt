@@ -49,4 +49,8 @@ class ShieldRepository(
     suspend fun getActiveSchedules(): List<ScheduleEntity> {
         return scheduleDao.getActiveSchedules()
     }
+
+    suspend fun getScheduleById(id: Long): ScheduleEntity? {
+        return scheduleDao.getScheduleById(id)
+    }
 }

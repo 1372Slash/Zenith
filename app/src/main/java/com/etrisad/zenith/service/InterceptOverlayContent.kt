@@ -22,7 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Size
+
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -72,7 +72,7 @@ fun InterceptOverlayContent(
     val isDelayEnabled = shield?.isDelayAppEnabled == true && shield.type == FocusType.SHIELD
     
     val initialProgress = remember(shield, delayDurationSeconds) {
-        if (isDelayEnabled && shield != null && shield.lastDelayStartTimestamp > 0 && delayDurationSeconds > 0) {
+        if (isDelayEnabled && shield.lastDelayStartTimestamp > 0 && delayDurationSeconds > 0) {
             val elapsed = System.currentTimeMillis() - shield.lastDelayStartTimestamp
             (elapsed.toFloat() / (delayDurationSeconds * 1000f)).coerceIn(0f, 1f)
         } else {
@@ -81,7 +81,7 @@ fun InterceptOverlayContent(
     }
 
     val delayProgressAnimatable = remember { Animatable(initialProgress) }
-    var isDelaying by remember { mutableStateOf(isDelayEnabled && shield?.lastDelayStartTimestamp != 0L && initialProgress < 1f) }
+    var isDelaying by remember { mutableStateOf(isDelayEnabled && shield.lastDelayStartTimestamp != 0L && initialProgress < 1f) }
 
     val motivationalMessages = remember {
         listOf(
@@ -610,9 +610,11 @@ fun ScheduleOverlayContent(
     packageName: String,
     appName: String,
     schedule: ScheduleEntity,
+    onAllowUse: (Int, Boolean) -> Unit,
     onCloseApp: () -> Unit
 ) {
     var showContent by remember { mutableStateOf(false) }
+    var isEmergencyUnlocked by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     
@@ -661,7 +663,7 @@ fun ScheduleOverlayContent(
             val elapsed = (nowMin - startMin).coerceIn(0, total)
 
             value = elapsed.toFloat() / total.toFloat()
-            kotlinx.coroutines.delay(10000) // Update every 10 seconds
+            delay(10000) // Update every 10 seconds
         }
     }
 
@@ -696,13 +698,35 @@ fun ScheduleOverlayContent(
                 shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Column(
-                    modifier = Modifier
-                        .padding(24.dp)
-                        .fillMaxWidth()
-                        .navigationBarsPadding(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    // Emergency Indicator
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 28.dp, end = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Outlined.Bolt,
+                            null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Emergency: ${schedule.emergencyUseCount}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .fillMaxWidth()
+                            .navigationBarsPadding(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                     Box(
                         modifier = Modifier
                             .width(40.dp)
@@ -791,7 +815,36 @@ fun ScheduleOverlayContent(
                         Spacer(modifier = Modifier.height(24.dp))
                     }
 
-                    Button(
+                    if (!isEmergencyUnlocked) {
+                        if (schedule.emergencyUseCount > 0) {
+                            EmergencyButton(onEmergencyUse = { isEmergencyUnlocked = true })
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "Emergency Use: Select Duration",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            DurationButtonsGrid { minutes ->
+                                scope.launch {
+                                    showContent = false
+                                    delay(400)
+                                    onAllowUse(minutes, true)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
+                    }
+
+                    TextButton(
                         onClick = {
                             scope.launch {
                                 showContent = false
@@ -800,7 +853,9 @@ fun ScheduleOverlayContent(
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.large
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
                     ) {
                         Text("Close App", fontWeight = FontWeight.Bold)
                     }
@@ -808,6 +863,7 @@ fun ScheduleOverlayContent(
             }
         }
     }
+}
 }
 
 private fun formatCountdown(millis: Long): String {
@@ -979,7 +1035,6 @@ fun DurationButton(
         ) { enabled ->
             if (!enabled) {
                 Box(contentAlignment = Alignment.Center) {
-                    val density = androidx.compose.ui.platform.LocalDensity.current
                     CircularWavyProgressIndicator(
                         progress = { progressState.value },
                         modifier = Modifier.size(36.dp),

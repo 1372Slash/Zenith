@@ -17,5 +17,7 @@ data class ScheduleEntity(
     val startTime: String, // HH:mm
     val endTime: String, // HH:mm
     val mode: ScheduleMode,
-    val isActive: Boolean = true
+    val isActive: Boolean = true,
+    val emergencyUseCount: Int = 0,
+    val maxEmergencyUses: Int = 3
 )

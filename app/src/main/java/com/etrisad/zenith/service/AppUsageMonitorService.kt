@@ -384,6 +384,18 @@ class AppUsageMonitorService : Service() {
                 packageName = packageName,
                 appName = appName,
                 schedule = schedule,
+                onAllowUse = { minutes, isEmergency ->
+                    serviceScope.launch {
+                        if (isEmergency) {
+                            val currentSchedule = shieldRepository.getScheduleById(schedule.id) ?: return@launch
+                            val updatedSchedule = currentSchedule.copy(
+                                emergencyUseCount = (currentSchedule.emergencyUseCount - 1).coerceAtLeast(0)
+                            )
+                            shieldRepository.updateSchedule(updatedSchedule)
+                            allowedApps[packageName] = System.currentTimeMillis() + (minutes * 60 * 1000L)
+                        }
+                    }
+                },
                 onCloseApp = {
                     goToHomeScreen()
                 }

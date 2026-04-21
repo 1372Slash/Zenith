@@ -83,6 +83,7 @@ class InterceptOverlayManager(private val context: Context) {
         packageName: String,
         appName: String,
         schedule: com.etrisad.zenith.data.local.entity.ScheduleEntity,
+        onAllowUse: (Int, Boolean) -> Unit,
         onCloseApp: () -> Unit
     ) {
         if (overlayView != null) return
@@ -104,6 +105,10 @@ class InterceptOverlayManager(private val context: Context) {
                             packageName = packageName,
                             appName = appName,
                             schedule = schedule,
+                            onAllowUse = { minutes, isEmergency ->
+                                hideOverlay()
+                                onAllowUse(minutes, isEmergency)
+                            },
                             onCloseApp = {
                                 hideOverlay()
                                 onCloseApp()

@@ -188,8 +188,8 @@ fun FocusScreen(
                 uiState = uiState,
                 editingSchedule = uiState.editingSchedule,
                 onDismiss = { viewModel.closeScheduleSettings() },
-                onSave = { name, start, end, mode ->
-                    viewModel.saveSchedule(name, start, end, mode)
+                onSave = { name, start, end, mode, maxEmergency ->
+                    viewModel.saveSchedule(name, start, end, mode, maxEmergency)
                 },
                 onEditApps = {
                     // Jangan reset selectedAppsForSchedule
@@ -472,11 +472,27 @@ fun ScheduleItem(
                 supportingContent = {
                     val modeText = schedule.mode.name.lowercase().replaceFirstChar { it.uppercase() }
                     val statusText = if (isActiveNow) "Active" else "Inactive"
-                    Text(
-                        text = "${schedule.startTime} - ${schedule.endTime} • $modeText • $statusText • ${schedule.packageNames.size} apps",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isActiveNow) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Column {
+                        Text(
+                            text = "${schedule.startTime} - ${schedule.endTime} • $modeText • $statusText • ${schedule.packageNames.size} apps",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isActiveNow) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Outlined.Bolt,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "${schedule.emergencyUseCount}/${schedule.maxEmergencyUses} emergency uses left",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 },
                 leadingContent = {
                     MultiAppIconGroup(
@@ -973,7 +989,7 @@ fun ScheduleSettingsBottomSheet(
     uiState: FocusUiState,
     editingSchedule: ScheduleEntity? = null,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, ScheduleMode) -> Unit,
+    onSave: (String, String, String, ScheduleMode, Int) -> Unit,
     onEditApps: () -> Unit
 ) {
     val context = LocalContext.current
@@ -990,6 +1006,7 @@ fun ScheduleSettingsBottomSheet(
 
     var name by remember { mutableStateOf(editingSchedule?.name ?: "My Schedule") }
     var mode by remember { mutableStateOf(editingSchedule?.mode ?: ScheduleMode.BLOCK) }
+    var maxEmergencyUses by remember { mutableStateOf(editingSchedule?.maxEmergencyUses?.toString() ?: "3") }
     var isEditingName by remember { mutableStateOf(false) }
 
     val initialStart = editingSchedule?.startTime?.split(":")?.map { it.toInt() } ?: listOf(9, 0)
@@ -1158,13 +1175,32 @@ fun ScheduleSettingsBottomSheet(
                 ) { Text("Active") }
             }
 
+            Spacer(modifier = Modifier.height(24.dp))
+            OutlinedTextField(
+                value = maxEmergencyUses,
+                onValueChange = { if (it.all { char -> char.isDigit() }) maxEmergencyUses = it },
+                label = { Text("Max Emergency Uses") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                ),
+                leadingIcon = { Icon(Icons.Outlined.Bolt, contentDescription = null) },
+                supportingText = { 
+                    Text(
+                        if (mode == ScheduleMode.ALLOW) 
+                            "Apps not in the list will be limited to this many uses" 
+                        else "Selected apps can be used this many times in emergency"
+                    ) 
+                }
+            )
+
             Spacer(modifier = Modifier.height(32.dp))
 
             Button(
                 onClick = {
                     val startStr = String.format(currentLocale, "%02d:%02d", startTimeState.hour, startTimeState.minute)
                     val endStr = String.format(currentLocale, "%02d:%02d", endTimeState.hour, endTimeState.minute)
-                    onSave(name, startStr, endStr, mode)
+                    onSave(name, startStr, endStr, mode, maxEmergencyUses.toIntOrNull() ?: 3)
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.large

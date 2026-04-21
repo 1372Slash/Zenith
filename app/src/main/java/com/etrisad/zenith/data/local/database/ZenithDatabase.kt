@@ -13,7 +13,7 @@ import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.Converters
 
-@Database(entities = [ShieldEntity::class, ScheduleEntity::class], version = 9, exportSchema = false)
+@Database(entities = [ShieldEntity::class, ScheduleEntity::class], version = 11, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class ZenithDatabase : RoomDatabase() {
     abstract fun shieldDao(): ShieldDao
@@ -22,6 +22,32 @@ abstract class ZenithDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var INSTANCE: ZenithDatabase? = null
+
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Handle possible missing columns if previous migrations were skipped or partial
+                try {
+                    db.execSQL("ALTER TABLE schedules ADD COLUMN emergencyUseCount INTEGER NOT NULL DEFAULT 0")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("ALTER TABLE schedules ADD COLUMN maxEmergencyUses INTEGER NOT NULL DEFAULT 3")
+                } catch (_: Exception) {}
+            }
+        }
+
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Placeholder if version 9 was an empty migration or handled elsewhere
+            }
+        }
+
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                try {
+                    db.execSQL("ALTER TABLE schedules ADD COLUMN maxEmergencyUses INTEGER NOT NULL DEFAULT 3")
+                } catch (_: Exception) {}
+            }
+        }
 
         private val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -63,7 +89,7 @@ abstract class ZenithDatabase : RoomDatabase() {
                     ZenithDatabase::class.java,
                     "zenith_database"
                 )
-                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_9_10)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

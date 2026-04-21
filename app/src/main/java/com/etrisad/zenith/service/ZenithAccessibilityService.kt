@@ -174,6 +174,12 @@ class ZenithAccessibilityService : AccessibilityService() {
             return false
         }
 
+        // Check if app is temporarily allowed via emergency bypass
+        val allowedUntil = allowedApps[packageName] ?: 0L
+        if (System.currentTimeMillis() <= allowedUntil) {
+            return false
+        }
+
         val currentTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
         val activeSchedulesSnapshot = activeSchedules // Use snapshot to avoid concurrent modification issues
 
@@ -223,6 +229,18 @@ class ZenithAccessibilityService : AccessibilityService() {
                 packageName = packageName,
                 appName = appName,
                 schedule = schedule,
+                onAllowUse = { minutes, isEmergency ->
+                    serviceScope.launch {
+                        if (isEmergency) {
+                            val currentSchedule = shieldRepository.getScheduleById(schedule.id) ?: return@launch
+                            val updatedSchedule = currentSchedule.copy(
+                                emergencyUseCount = (currentSchedule.emergencyUseCount - 1).coerceAtLeast(0)
+                            )
+                            shieldRepository.updateSchedule(updatedSchedule)
+                            allowedApps[packageName] = System.currentTimeMillis() + (minutes * 60 * 1000L)
+                        }
+                    }
+                },
                 onCloseApp = {
                     performGlobalAction(GLOBAL_ACTION_HOME)
                 }
