@@ -114,6 +114,7 @@ class AppUsageMonitorService : Service() {
                 }
 
                 if (currentApp != null && currentApp != packageName) {
+                    sessionUsageOverlayManager.updateForegroundApp(currentApp)
                     // Reset cache if app changed
                     if (currentApp != lastForegroundApp) {
                         currentShieldCache = shieldRepository.getShieldByPackageName(currentApp)
@@ -257,7 +258,12 @@ class AppUsageMonitorService : Service() {
                             val prefs = preferencesRepository.userPreferencesFlow.first()
                             if (prefs.sessionUsageOverlayEnabled) {
                                 serviceScope.launch(Dispatchers.Main) {
-                                    sessionUsageOverlayManager.showHUD(minutes, prefs.sessionUsageOverlaySize)
+                                    sessionUsageOverlayManager.showHUD(
+                                        targetPackageName,
+                                        minutes,
+                                        prefs.sessionUsageOverlaySize,
+                                        prefs.sessionUsageOverlayOpacity
+                                    )
                                 }
                             }
                         }
@@ -478,7 +484,12 @@ class AppUsageMonitorService : Service() {
                             val prefs = preferencesRepository.userPreferencesFlow.first()
                             if (prefs.sessionUsageOverlayEnabled) {
                                 serviceScope.launch(Dispatchers.Main) {
-                                    sessionUsageOverlayManager.showHUD(minutes, prefs.sessionUsageOverlaySize)
+                                    sessionUsageOverlayManager.showHUD(
+                                        packageName,
+                                        minutes,
+                                        prefs.sessionUsageOverlaySize,
+                                        prefs.sessionUsageOverlayOpacity
+                                    )
                                 }
                             }
                         }

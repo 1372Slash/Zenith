@@ -2,14 +2,12 @@ package com.etrisad.zenith.service
 
 import android.content.Context
 import android.graphics.PixelFormat
-import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
-import android.view.MotionEvent
-import android.view.View
 import android.view.WindowManager
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -18,13 +16,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.*
@@ -43,10 +38,16 @@ class SessionUsageOverlayManager(private val context: Context) {
     private var lifecycleOwner: MyLifecycleOwner? = null
     private var viewModelStore: ViewModelStore? = null
 
-    fun showHUD(durationMinutes: Int, size: Int) {
+    private var targetPackageName: String? = null
+    private var isVisibleState = mutableStateOf(false)
+
+    fun showHUD(packageName: String, durationMinutes: Int, size: Int, opacity: Int) {
         if (overlayView != null) {
             hideHUD()
         }
+        
+        targetPackageName = packageName
+        isVisibleState.value = true
 
         val vStore = ViewModelStore()
         viewModelStore = vStore
@@ -76,6 +77,8 @@ class SessionUsageOverlayManager(private val context: Context) {
                     SessionUsageHUD(
                         durationMinutes = durationMinutes,
                         size = size,
+                        opacity = opacity,
+                        isVisible = isVisibleState,
                         onDrag = { dx, dy ->
                             params.x += dx.roundToInt()
                             params.y += dy.roundToInt()
@@ -121,8 +124,17 @@ class SessionUsageOverlayManager(private val context: Context) {
                 overlayView = null
                 lifecycleOwner = null
                 viewModelStore = null
+                targetPackageName = null
+                isVisibleState.value = false
             }
         }
+    }
+
+    fun updateForegroundApp(packageName: String) {
+        val target = targetPackageName ?: return
+        // Cek jika app yang sedang dibuka mengandung target package (misal: "com.instagram.android")
+        // atau jika target package mengandung app yang sedang dibuka.
+        isVisibleState.value = packageName.contains(target) || target.contains(packageName)
     }
 
     private class MyLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner {
@@ -140,76 +152,85 @@ class SessionUsageOverlayManager(private val context: Context) {
 fun SessionUsageHUD(
     durationMinutes: Int,
     size: Int,
+    opacity: Int,
+    isVisible: State<Boolean>,
     onDrag: (Float, Float) -> Unit,
     onFinish: () -> Unit
 ) {
     val totalSeconds = durationMinutes * 60
     var secondsLeft by remember { mutableIntStateOf(totalSeconds) }
-    var visible by remember { mutableStateOf(false) }
+    var animatingOut by remember { mutableStateOf(false) }
+    var entranceAnimationStarted by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        visible = true
+        entranceAnimationStarted = true
         while (secondsLeft > 0) {
             delay(1000)
             secondsLeft--
         }
-        visible = false
+        animatingOut = true
     }
 
     val progress = secondsLeft.toFloat() / totalSeconds.toFloat()
     val scaleFactor = size / 100f
+    
+    val showHUD = isVisible.value && !animatingOut && entranceAnimationStarted
 
     val scale by animateFloatAsState(
-        targetValue = if (visible) scaleFactor else 0f,
+        targetValue = if (showHUD) scaleFactor else 0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessLow
         ),
         label = "HUDScale",
         finishedListener = {
-            if (!visible) {
+            if (animatingOut) {
                 onFinish()
             }
         }
     )
 
-    Surface(
-        modifier = Modifier
-            .size(80.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                alpha = scale.coerceIn(0f, 1f)
-            }
-            .pointerInput(Unit) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    onDrag(dragAmount.x, dragAmount.y)
-                }
-            },
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-        tonalElevation = 8.dp,
-        shadowElevation = 4.dp
+    Box(
+        modifier = Modifier.padding(32.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            CircularWavyProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxSize().padding(4.dp),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                amplitude = { 1.5f },
-                wavelength = 20.dp
-            )
-            
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = if (secondsLeft >= 60) "${secondsLeft / 60}m" else "${secondsLeft}s",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    lineHeight = 16.sp
+        Surface(
+            modifier = Modifier
+                .size(80.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    alpha = (scale / scaleFactor).coerceIn(0f, 1f) * (opacity / 100f)
+                }
+                .pointerInput(Unit) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        onDrag(dragAmount.x, dragAmount.y)
+                    }
+                },
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 0.dp
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                CircularWavyProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxSize().padding(4.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    amplitude = { 1.5f },
+                    wavelength = 20.dp
                 )
+                
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = if (secondsLeft >= 60) "${secondsLeft / 60}m" else "${secondsLeft}s",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        lineHeight = 16.sp
+                    )
+                }
             }
         }
     }

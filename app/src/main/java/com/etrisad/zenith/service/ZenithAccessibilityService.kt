@@ -96,6 +96,7 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun handlePackageChange(currentApp: String) {
+        sessionUsageOverlayManager.updateForegroundApp(currentApp)
         if (shouldBypassBlocking(currentApp)) {
             lastForegroundApp = currentApp
             return
@@ -200,7 +201,12 @@ class ZenithAccessibilityService : AccessibilityService() {
                             val prefs = preferencesRepository.userPreferencesFlow.first()
                             if (prefs.sessionUsageOverlayEnabled) {
                                 serviceScope.launch(Dispatchers.Main) {
-                                    sessionUsageOverlayManager.showHUD(minutes, prefs.sessionUsageOverlaySize)
+                                    sessionUsageOverlayManager.showHUD(
+                                        packageName,
+                                        minutes,
+                                        prefs.sessionUsageOverlaySize,
+                                        prefs.sessionUsageOverlayOpacity
+                                    )
                                 }
                             }
                         }
@@ -300,7 +306,12 @@ class ZenithAccessibilityService : AccessibilityService() {
                             val prefs = preferencesRepository.userPreferencesFlow.first()
                             if (prefs.sessionUsageOverlayEnabled) {
                                 serviceScope.launch(Dispatchers.Main) {
-                                    sessionUsageOverlayManager.showHUD(minutes, prefs.sessionUsageOverlaySize)
+                                    sessionUsageOverlayManager.showHUD(
+                                        packageName,
+                                        minutes,
+                                        prefs.sessionUsageOverlaySize,
+                                        prefs.sessionUsageOverlayOpacity
+                                    )
                                 }
                             }
                         }

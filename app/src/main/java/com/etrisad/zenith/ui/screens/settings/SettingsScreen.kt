@@ -1,5 +1,7 @@
 package com.etrisad.zenith.ui.screens.settings
 
+import android.app.WallpaperManager
+import com.google.accompanist.drawablepainter.rememberDrawablePainter
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -43,6 +45,8 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
             emergencyRechargeDurationMinutes = 60,
             delayAppDurationSeconds = 30,
             sessionUsageOverlayEnabled = false,
+            sessionUsageOverlaySize = 100,
+            sessionUsageOverlayOpacity = 90,
             whitelistedPackages = emptySet()
         )
     )
@@ -91,6 +95,11 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
                 preferencesRepository.setSessionUsageOverlaySize(size)
             }
         },
+        onSessionUsageOverlayOpacityChange = { opacity ->
+            coroutineScope.launch {
+                preferencesRepository.setSessionUsageOverlayOpacity(opacity)
+            }
+        },
         showWhitelistSheet = showWhitelistSheet,
         onShowWhitelistSheetChange = { showWhitelistSheet = it },
         onSetWhitelistedPackages = { packages ->
@@ -112,6 +121,7 @@ fun SettingsScreenContent(
     onSetDelayAppDuration: (Int) -> Unit,
     onSessionUsageOverlayEnabledChange: (Boolean) -> Unit,
     onSessionUsageOverlaySizeChange: (Int) -> Unit,
+    onSessionUsageOverlayOpacityChange: (Int) -> Unit,
     showWhitelistSheet: Boolean,
     onShowWhitelistSheetChange: (Boolean) -> Unit,
     onSetWhitelistedPackages: (Set<String>) -> Unit
@@ -217,9 +227,11 @@ fun SettingsScreenContent(
             if (preferences.sessionUsageOverlayEnabled) {
                 item {
                     Spacer(modifier = Modifier.height(2.dp))
-                    HUDSizeSettings(
+                    HUDAppearanceSettings(
                         size = preferences.sessionUsageOverlaySize,
-                        onSizeChange = onSessionUsageOverlaySizeChange
+                        opacity = preferences.sessionUsageOverlayOpacity,
+                        onSizeChange = onSessionUsageOverlaySizeChange,
+                        onOpacityChange = onSessionUsageOverlayOpacityChange
                     )
                 }
             }
@@ -825,10 +837,21 @@ fun SettingsActionItem(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun HUDSizeSettings(
+fun HUDAppearanceSettings(
     size: Int,
-    onSizeChange: (Int) -> Unit
+    opacity: Int,
+    onSizeChange: (Int) -> Unit,
+    onOpacityChange: (Int) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val wallpaperDrawable = remember {
+        try {
+            WallpaperManager.getInstance(context).drawable
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
@@ -838,7 +861,7 @@ fun HUDSizeSettings(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "HUD Size",
+                text = "HUD Appearance",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -846,21 +869,39 @@ fun HUDSizeSettings(
             
             Spacer(modifier = Modifier.height(16.dp))
             
+            // Size Slider
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.PhotoSizeSelectSmall, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                
                 Slider(
                     value = size.toFloat(),
-                    onValueChange = { newValue -> onSizeChange(newValue.toInt()) },
+                    onValueChange = { onSizeChange(it.toInt()) },
                     valueRange = 50f..200f,
                     modifier = Modifier.weight(1f).padding(horizontal = 16.dp)
                 )
-                
                 Icon(Icons.Outlined.PhotoSizeSelectLarge, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            
             Text(
                 text = "Size: $size%",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Opacity Slider
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Opacity, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Slider(
+                    value = opacity.toFloat(),
+                    onValueChange = { onOpacityChange(it.toInt()) },
+                    valueRange = 20f..100f,
+                    modifier = Modifier.weight(1f).padding(horizontal = 16.dp)
+                )
+                Icon(Icons.Outlined.Contrast, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(
+                text = "Opacity: $opacity%",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -879,9 +920,21 @@ fun HUDSizeSettings(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(120.dp),
+                    .height(150.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
+                if (wallpaperDrawable != null) {
+                    androidx.compose.foundation.Image(
+                        painter = rememberDrawablePainter(wallpaperDrawable),
+                        contentDescription = null,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.2f)))
+                }
+
                 val scale = size / 100f
                 Box(
                     modifier = Modifier
@@ -889,9 +942,10 @@ fun HUDSizeSettings(
                         .graphicsLayer {
                             scaleX = scale
                             scaleY = scale
+                            alpha = opacity / 100f
                         }
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .background(MaterialTheme.colorScheme.surface)
                         .padding(4.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -899,14 +953,15 @@ fun HUDSizeSettings(
                         progress = { 0.75f },
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         amplitude = { 1.5f },
                         wavelength = 20.dp
                     )
                     Text(
                         text = "15m",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Black
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
