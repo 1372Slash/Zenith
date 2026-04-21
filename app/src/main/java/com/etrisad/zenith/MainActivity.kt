@@ -20,6 +20,7 @@ import com.etrisad.zenith.ui.viewmodel.FocusViewModelFactory
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
 import com.etrisad.zenith.ui.viewmodel.HomeViewModelFactory
 
+import com.etrisad.zenith.service.DailyUsageWorker
 import android.os.Build
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.first
@@ -32,8 +33,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val database = ZenithDatabase.getDatabase(this)
-        val shieldRepository = ShieldRepository(database.shieldDao(), database.scheduleDao())
+        val shieldRepository = ShieldRepository(database.shieldDao(), database.scheduleDao(), database.dailyUsageDao())
         val userPreferencesRepository = UserPreferencesRepository(this)
+
+        // Schedule daily usage sync
+        DailyUsageWorker.schedule(applicationContext)
 
         // Secara otomatis aktifkan dynamic color jika perangkat mendukung (Android 12+)
         lifecycleScope.launch {

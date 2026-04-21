@@ -1,7 +1,9 @@
 package com.etrisad.zenith.data.repository
 
+import com.etrisad.zenith.data.local.dao.DailyUsageDao
 import com.etrisad.zenith.data.local.dao.ScheduleDao
 import com.etrisad.zenith.data.local.dao.ShieldDao
+import com.etrisad.zenith.data.local.entity.DailyUsageEntity
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import kotlinx.coroutines.CoroutineScope
@@ -14,7 +16,8 @@ import kotlinx.coroutines.launch
 
 class ShieldRepository(
     private val shieldDao: ShieldDao,
-    private val scheduleDao: ScheduleDao
+    private val scheduleDao: ScheduleDao,
+    private val dailyUsageDao: DailyUsageDao
 ) {
     private val repositoryScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
@@ -30,6 +33,19 @@ class ShieldRepository(
                 _allShieldsCache.value = it
             }
         }
+    }
+
+    // Daily Usage Methods
+    fun getLastNDaysGlobalUsage(days: Int): Flow<List<DailyUsageEntity>> {
+        return dailyUsageDao.getLastNDaysGlobalUsage(days)
+    }
+
+    fun getLastNDaysUsageForPackage(packageName: String, days: Int): Flow<List<DailyUsageEntity>> {
+        return dailyUsageDao.getLastNDaysUsageForPackage(packageName, days)
+    }
+
+    suspend fun insertDailyUsage(usage: DailyUsageEntity) {
+        dailyUsageDao.insertDailyUsage(usage)
     }
 
     suspend fun getShieldByPackageName(packageName: String): ShieldEntity? {
