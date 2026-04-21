@@ -54,6 +54,13 @@ class AppUsageMonitorService : Service() {
     )
     private var parsedSchedulesCache = listOf<ParsedSchedule>()
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == "SEND_TEST_NOTIFICATION") {
+            sendTestNotification()
+        }
+        return START_STICKY
+    }
+
     override fun onCreate() {
         super.onCreate()
         val app = application as com.etrisad.zenith.ZenithApplication
@@ -89,10 +96,27 @@ class AppUsageMonitorService : Service() {
         }
 
         startForeground(NOTIFICATION_ID, createNotification())
+        createGoalNotificationChannel() // Pastikan channel dibuat saat startup
         startMonitoring()
     }
 
+    private fun createGoalNotificationChannel() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val channelId = "zenith_goal_channel"
+            val manager = getSystemService(NotificationManager::class.java)
+            if (manager.getNotificationChannel(channelId) == null) {
+                val channel = NotificationChannel(
+                    channelId, "Goal Reminders", NotificationManager.IMPORTANCE_DEFAULT
+                ).apply {
+                    description = "Notifies you when you reach your app usage goals"
+                }
+                manager.createNotificationChannel(channel)
+            }
+        }
+    }
+
     private var lastCheckedDay = -1
+    private val notifiedGoals = mutableSetOf<String>() // Simpan package goal yang sudah dikirim notif hari ini
 
     private fun startMonitoring() {
         serviceScope.launch {
@@ -119,6 +143,7 @@ class AppUsageMonitorService : Service() {
                     val currentDay = reusableCalendar.get(java.util.Calendar.DAY_OF_YEAR)
                     if (lastCheckedDay != -1 && currentDay != lastCheckedDay) {
                         updateStreaks()
+                        notifiedGoals.clear() // Reset notifikasi saat ganti hari
                     }
                     lastCheckedDay = currentDay
                 }
@@ -237,7 +262,45 @@ class AppUsageMonitorService : Service() {
             )
             shieldRepository.updateShield(finalShield)
             currentShieldCache = finalShield
+            
+            // CEK GOAL REMINDER
+            if (shield.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL) {
+                if (cachedTotalUsage >= limitMillis && !notifiedGoals.contains(packageName)) {
+                    sendGoalReachedNotification(shield.appName, packageName)
+                    notifiedGoals.add(packageName)
+                }
+            }
         }
+    }
+
+    private fun sendGoalReachedNotification(appName: String, packageName: String) {
+        val channelId = "zenith_goal_channel"
+        val manager = getSystemService(NotificationManager::class.java)
+        
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Goal Achieved! 🎯")
+            .setContentText("You've reached your target usage for $appName. Keep it up!")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+
+        manager.notify(packageName.hashCode(), notification)
+    }
+
+    fun sendTestNotification() {
+        val channelId = "zenith_goal_channel"
+        val manager = getSystemService(NotificationManager::class.java)
+        
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Test Notification ✅")
+            .setContentText("Notifications are working correctly!")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+
+        manager.notify(999, notification)
     }
 
     private suspend fun checkIfAppIsShielded(targetPackageName: String) {

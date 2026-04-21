@@ -24,6 +24,11 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.etrisad.zenith.util.hasUsageStatsPermission
 import com.etrisad.zenith.util.isAccessibilityServiceEnabled
+import com.etrisad.zenith.util.hasNotificationPermission
+import com.etrisad.zenith.service.AppUsageMonitorService
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.preferences.ThemeConfig
@@ -47,8 +52,21 @@ fun PermissionBottomSheet(
     var hasUsageStats by remember { mutableStateOf(hasUsageStatsPermission(context)) }
     var hasOverlay by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
     var hasAccessibility by remember { mutableStateOf(isAccessibilityServiceEnabled(context)) }
+    var hasNotifications by remember { mutableStateOf(hasNotificationPermission(context)) }
 
-    val allGranted = hasUsageStats && hasOverlay && (hasAccessibility || preferences.accessibilityDisabled)
+    val notificationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            hasNotifications = isGranted
+            if (isGranted) {
+                context.startService(Intent(context, AppUsageMonitorService::class.java).apply {
+                    action = "SEND_TEST_NOTIFICATION"
+                })
+            }
+        }
+    )
+
+    val allGranted = hasUsageStats && hasOverlay && hasNotifications && (hasAccessibility || preferences.accessibilityDisabled)
 
     // Re-check permissions when returning to the app
     DisposableEffect(lifecycleOwner) {
@@ -57,8 +75,9 @@ fun PermissionBottomSheet(
                 hasUsageStats = hasUsageStatsPermission(context)
                 hasOverlay = Settings.canDrawOverlays(context)
                 hasAccessibility = isAccessibilityServiceEnabled(context)
+                hasNotifications = hasNotificationPermission(context)
                 
-                if (hasUsageStats && hasOverlay && (hasAccessibility || preferences.accessibilityDisabled)) {
+                if (hasUsageStats && hasOverlay && hasNotifications && (hasAccessibility || preferences.accessibilityDisabled)) {
                     onAllPermissionsGranted()
                 }
             }
@@ -105,6 +124,27 @@ fun PermissionBottomSheet(
             Spacer(modifier = Modifier.height(24.dp))
 
             PermissionItemRow(
+                title = "Notifications",
+                description = "For Goal Reminders and status",
+                isGranted = hasNotifications,
+                onClick = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    }
+                },
+                icon = Icons.Outlined.Notifications,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            PermissionItemRow(
                 title = "Usage Stats",
                 description = "To track app usage time",
                 isGranted = hasUsageStats,
@@ -114,7 +154,7 @@ fun PermissionBottomSheet(
                     })
                 },
                 icon = Icons.Outlined.BarChart,
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                shape = RoundedCornerShape(8.dp)
             )
 
             Spacer(modifier = Modifier.height(4.dp))

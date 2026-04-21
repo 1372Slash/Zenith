@@ -36,3 +36,11 @@ fun hasUsageStatsPermission(context: Context): Boolean {
     )
     return mode == AppOpsManager.MODE_ALLOWED
 }
+
+fun hasNotificationPermission(context: Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    } else {
+        androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
+    }
+}

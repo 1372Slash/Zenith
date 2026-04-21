@@ -28,22 +28,39 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.etrisad.zenith.ui.theme.ZenithTheme
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.*
 import kotlin.math.roundToInt
 
 class SessionUsageOverlayManager(private val context: Context) {
 
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
     private data class HUDInstance(
-        val packageName: String,
         val overlayView: ComposeView,
         val lifecycleOwner: MyLifecycleOwner,
-        val viewModelStore: ViewModelStore,
-        val isVisibleState: MutableState<Boolean>
+        val viewModelStore: ViewModelStore
     )
 
-    private val activeHUDs = mutableListOf<HUDInstance>()
+    private class Session(
+        val packageName: String,
+        val totalSeconds: Int,
+        val size: Int,
+        val opacity: Int,
+        val onSessionEnd: () -> Unit,
+        initialX: Int,
+        initialY: Int
+    ) {
+        val secondsLeftState = mutableIntStateOf(totalSeconds)
+        val isVisibleState = mutableStateOf(true)
+        var hudInstance: HUDInstance? = null
+        var timerJob: Job? = null
+        var x: Int = initialX
+        var y: Int = initialY
+    }
+
+    private val activeSessions = mutableListOf<Session>()
     private val MAX_HUDS = 4
 
     fun showHUD(
@@ -53,17 +70,33 @@ class SessionUsageOverlayManager(private val context: Context) {
         opacity: Int,
         onSessionEnd: () -> Unit = {}
     ) {
-        // Jika sudah ada HUD untuk package ini, jangan buat baru
-        if (activeHUDs.any { it.packageName == packageName }) return
+        if (activeSessions.any { it.packageName == packageName }) return
 
-        // Batasi maksimal 4 instance, hapus yang paling lama jika penuh
-        if (activeHUDs.size >= MAX_HUDS) {
-            hideHUD(activeHUDs.first().packageName)
+        if (activeSessions.size >= MAX_HUDS) {
+            hideHUD(activeSessions.first().packageName)
         }
 
-        val isVisibleState = mutableStateOf(true)
+        val totalSeconds = durationMinutes * 60
+        val session = Session(
+            packageName, totalSeconds, size, opacity, onSessionEnd,
+            100, 200 + (activeSessions.size * 50)
+        )
+        activeSessions.add(session)
+
+        session.timerJob = scope.launch {
+            while (session.secondsLeftState.intValue > 0) {
+                delay(1000)
+                session.secondsLeftState.intValue--
+            }
+            // Jika tidak ada HUD aktif (sedang di luar app), hapus session segera
+            if (session.hudInstance == null) {
+                hideHUD(session.packageName)
+            }
+        }
+    }
+
+    private fun createHUDInstance(session: Session): HUDInstance {
         val vStore = ViewModelStore()
-        
         val lOwner = MyLifecycleOwner()
         lOwner.performRestore(null)
         lOwner.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -78,28 +111,30 @@ class SessionUsageOverlayManager(private val context: Context) {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 100
-            y = 200 + (activeHUDs.size * 50) // Beri sedikit offset agar tidak menumpuk persis
+            x = session.x
+            y = session.y
         }
 
         val composeView = ComposeView(context).apply {
             setContent {
                 ZenithTheme {
                     SessionUsageHUD(
-                        durationMinutes = durationMinutes,
-                        size = size,
-                        opacity = opacity,
-                        isVisible = isVisibleState,
+                        secondsLeft = session.secondsLeftState.intValue,
+                        totalSeconds = session.totalSeconds,
+                        size = session.size,
+                        opacity = session.opacity,
+                        isVisible = session.isVisibleState.value,
                         onDrag = { dx, dy ->
                             params.x += dx.roundToInt()
                             params.y += dy.roundToInt()
+                            session.x = params.x
+                            session.y = params.y
                             try {
                                 windowManager.updateViewLayout(this, params)
                             } catch (_: Exception) { }
                         },
                         onFinish = {
-                            hideHUD(packageName)
-                            onSessionEnd()
+                            hideHUD(session.packageName)
                         }
                     )
                 }
@@ -114,29 +149,36 @@ class SessionUsageOverlayManager(private val context: Context) {
 
         try {
             windowManager.addView(composeView, params)
-            activeHUDs.add(HUDInstance(packageName, composeView, lOwner, vStore, isVisibleState))
             lOwner.handleLifecycleEvent(Lifecycle.Event.ON_START)
             lOwner.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        return HUDInstance(composeView, lOwner, vStore)
+    }
+
+    private fun destroyHUDInstance(hud: HUDInstance) {
+        try {
+            hud.lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+            hud.lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+            hud.lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+            hud.overlayView.disposeComposition()
+            windowManager.removeViewImmediate(hud.overlayView)
+            hud.viewModelStore.clear()
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
     fun hideHUD(packageName: String? = null) {
-        val iterator = activeHUDs.iterator()
+        val iterator = activeSessions.iterator()
         while (iterator.hasNext()) {
-            val hud = iterator.next()
-            if (packageName == null || hud.packageName == packageName) {
-                try {
-                    hud.lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
-                    hud.lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
-                    hud.lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-                    hud.overlayView.disposeComposition()
-                    windowManager.removeViewImmediate(hud.overlayView)
-                    hud.viewModelStore.clear()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+            val session = iterator.next()
+            if (packageName == null || session.packageName == packageName) {
+                session.timerJob?.cancel()
+                session.hudInstance?.let { destroyHUDInstance(it) }
+                session.onSessionEnd()
                 iterator.remove()
                 if (packageName != null) break
             }
@@ -144,30 +186,27 @@ class SessionUsageOverlayManager(private val context: Context) {
     }
 
     fun updateForegroundApp(packageName: String) {
-        activeHUDs.forEach { hud ->
-            val isCurrentlyVisible = hud.isVisibleState.value
-            val shouldBeVisible = packageName == hud.packageName || packageName.startsWith("${hud.packageName}.")
-
-            if (isCurrentlyVisible != shouldBeVisible) {
-                hud.isVisibleState.value = shouldBeVisible
-
-                // Perbarui WindowManager flags dan ukuran untuk mencegah gangguan hitbox
-                val view = hud.overlayView
-                val params = view.layoutParams as? WindowManager.LayoutParams
-                if (params != null) {
-                    if (shouldBeVisible) {
-                        params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
-                        params.width = WindowManager.LayoutParams.WRAP_CONTENT
-                        params.height = WindowManager.LayoutParams.WRAP_CONTENT
-                    } else {
-                        params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                        // Kecilkan ukuran ke 1x1 agar benar-benar tidak menghalangi sentuhan
-                        params.width = 1
-                        params.height = 1
+        scope.launch {
+            activeSessions.forEach { session ->
+                val isForeground = packageName.contains(session.packageName) || session.packageName.contains(packageName)
+                if (isForeground) {
+                    session.isVisibleState.value = true
+                    if (session.hudInstance == null && session.secondsLeftState.intValue > 0) {
+                        session.hudInstance = createHUDInstance(session)
                     }
-                    try {
-                        windowManager.updateViewLayout(view, params)
-                    } catch (_: Exception) {}
+                } else {
+                    if (session.hudInstance != null && session.isVisibleState.value) {
+                        session.isVisibleState.value = false
+                        // Berikan waktu untuk animasi keluar selesai (sekitar 500ms)
+                        launch {
+                            delay(500)
+                            // Cek kembali, jika masih tidak foreground, baru hancurkan
+                            if (!session.isVisibleState.value && session.hudInstance != null) {
+                                destroyHUDInstance(session.hudInstance!!)
+                                session.hudInstance = null
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -186,31 +225,25 @@ class SessionUsageOverlayManager(private val context: Context) {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SessionUsageHUD(
-    durationMinutes: Int,
+    secondsLeft: Int,
+    totalSeconds: Int,
     size: Int,
     opacity: Int,
-    isVisible: State<Boolean>,
+    isVisible: Boolean,
     onDrag: (Float, Float) -> Unit,
     onFinish: () -> Unit
 ) {
-    val totalSeconds = durationMinutes * 60
-    var secondsLeft by remember { mutableIntStateOf(totalSeconds) }
-    var animatingOut by remember { mutableStateOf(false) }
     var entranceAnimationStarted by remember { mutableStateOf(false) }
+    val animatingOut = secondsLeft <= 0
 
     LaunchedEffect(Unit) {
         entranceAnimationStarted = true
-        while (secondsLeft > 0) {
-            delay(1000)
-            secondsLeft--
-        }
-        animatingOut = true
     }
 
     val progress = secondsLeft.toFloat() / totalSeconds.toFloat()
     val scaleFactor = size / 100f
     
-    val showHUD = isVisible.value && !animatingOut && entranceAnimationStarted
+    val showHUD = isVisible && !animatingOut && entranceAnimationStarted
 
     val scale by animateFloatAsState(
         targetValue = if (showHUD) scaleFactor else 0f,
@@ -229,17 +262,12 @@ fun SessionUsageHUD(
     Box(
         modifier = Modifier
             .wrapContentSize()
-            .then(
-                if (showHUD && scale > 0.1f) {
-                    Modifier.pointerInput(scaleFactor) {
-                        detectDragGestures { change, dragAmount ->
-                            change.consume()
-                            // Apply scale factor to drag amount to keep HUD pinned to finger
-                            onDrag(dragAmount.x * scale, dragAmount.y * scale)
-                        }
-                    }
-                } else Modifier
-            ),
+            .pointerInput(scaleFactor) {
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    onDrag(dragAmount.x * scale, dragAmount.y * scale)
+                }
+            },
         contentAlignment = Alignment.Center
     ) {
         Surface(
@@ -250,8 +278,6 @@ fun SessionUsageHUD(
                     scaleX = scale
                     scaleY = scale
                     alpha = (scale / scaleFactor).coerceIn(0f, 1f) * (opacity / 100f)
-                    
-                    // Penting: Pastikan transformasi terjadi dari titik tengah
                     transformOrigin = androidx.compose.ui.graphics.TransformOrigin.Center
                 },
             shape = CircleShape,
