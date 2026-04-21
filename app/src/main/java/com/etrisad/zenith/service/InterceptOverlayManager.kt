@@ -169,8 +169,8 @@ class InterceptOverlayManager(private val context: Context) {
                 lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
                 lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
                 
-                windowManager.removeView(it)
-                it.disposeComposition()
+                it.disposeComposition() // Panggil dispose sebelum remove
+                windowManager.removeViewImmediate(it) // Gunakan removeViewImmediate untuk pelepasan instan
                 
                 viewModelStore?.clear()
             } catch (e: Exception) {
@@ -180,6 +180,8 @@ class InterceptOverlayManager(private val context: Context) {
                 lifecycleOwner = null
                 viewModelStore = null
                 isShowing = false
+                // Hint kepada GC bahwa kita baru saja melepaskan objek besar (ComposeView)
+                System.gc()
             }
         }
     }

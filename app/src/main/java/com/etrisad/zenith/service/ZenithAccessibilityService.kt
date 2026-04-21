@@ -24,7 +24,7 @@ class ZenithAccessibilityService : AccessibilityService() {
     private lateinit var preferencesRepository: UserPreferencesRepository
     private lateinit var overlayManager: InterceptOverlayManager
     private val usageStatsManager by lazy { getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager }
-    
+
     private var lastForegroundApp: String? = null
     private var currentShieldCache: com.etrisad.zenith.data.local.entity.ShieldEntity? = null
     private var lastUsageFetchTime = 0L
@@ -32,6 +32,15 @@ class ZenithAccessibilityService : AccessibilityService() {
     private val allowedApps = mutableMapOf<String, Long>()
     private var activeSchedules = listOf<com.etrisad.zenith.data.local.entity.ScheduleEntity>()
     private var whitelistedPackages = setOf<String>()
+
+    private class ParsedSchedule(
+        val id: Long,
+        val startMinutes: Int,
+        val endMinutes: Int,
+        val mode: com.etrisad.zenith.data.local.entity.ScheduleMode,
+        val packageNames: Set<String>
+    )
+    private var parsedSchedulesCache = listOf<ParsedSchedule>()
 
     companion object {
         var isServiceRunning = false
@@ -49,6 +58,17 @@ class ZenithAccessibilityService : AccessibilityService() {
         serviceScope.launch {
             shieldRepository.allSchedules.collect { schedules ->
                 activeSchedules = schedules.filter { it.isActive }
+                parsedSchedulesCache = activeSchedules.map { s ->
+                    val startParts = s.startTime.split(":")
+                    val endParts = s.endTime.split(":")
+                    ParsedSchedule(
+                        id = s.id,
+                        startMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 0) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0),
+                        endMinutes = (endParts.getOrNull(0)?.toIntOrNull() ?: 0) * 60 + (endParts.getOrNull(1)?.toIntOrNull() ?: 0),
+                        mode = s.mode,
+                        packageNames = s.packageNames.toSet()
+                    )
+                }
             }
         }
 
@@ -109,7 +129,8 @@ class ZenithAccessibilityService : AccessibilityService() {
         val shield = currentShieldCache ?: return
         val currentTime = System.currentTimeMillis()
 
-        if (currentTime - lastUsageFetchTime > 5000) {
+        // Naikkan interval fetch dari 5 detik ke 15 detik untuk mengurangi beban CPU/RAM
+        if (currentTime - lastUsageFetchTime > 15000) {
             cachedTotalUsage = getTotalUsageToday(packageName)
             lastUsageFetchTime = currentTime
         }
@@ -117,7 +138,8 @@ class ZenithAccessibilityService : AccessibilityService() {
         val limitMillis = shield.timeLimitMinutes * 60 * 1000L
         val remainingMillis = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
         
-        if (kotlin.math.abs(shield.remainingTimeMillis - remainingMillis) > 10000) {
+        // Hanya update database jika perubahan signifikan (> 30 detik) untuk mengurangi I/O
+        if (kotlin.math.abs(shield.remainingTimeMillis - remainingMillis) > 30000) {
             val updatedShield = shield.copy(
                 remainingTimeMillis = remainingMillis,
                 lastUsedTimestamp = currentTime
@@ -182,17 +204,17 @@ class ZenithAccessibilityService : AccessibilityService() {
 
     private fun getTotalUsageToday(packageName: String): Long {
         val calendar = java.util.Calendar.getInstance()
+        val endTime = System.currentTimeMillis()
+        
+        calendar.timeInMillis = endTime
         calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
         calendar.set(java.util.Calendar.MINUTE, 0)
         calendar.set(java.util.Calendar.SECOND, 0)
         calendar.set(java.util.Calendar.MILLISECOND, 0)
         val startTime = calendar.timeInMillis
-        val endTime = System.currentTimeMillis()
 
         val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, endTime)
-        return stats?.find { it.packageName == packageName }?.let {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) it.totalTimeVisible else it.totalTimeInForeground
-        } ?: 0L
+        return stats?.find { it.packageName == packageName }?.totalTimeVisible ?: 0L
     }
 
     private fun goToHomeScreen() {
@@ -204,18 +226,40 @@ class ZenithAccessibilityService : AccessibilityService() {
 
     private fun checkSchedules(packageName: String): Boolean {
         if (shouldBypassBlocking(packageName)) return false
-        val currentTime = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
         
-        for (schedule in activeSchedules) {
-            if (isTimeInInterval(currentTime, schedule.startTime, schedule.endTime)) {
-                if ((schedule.mode == com.etrisad.zenith.data.local.entity.ScheduleMode.BLOCK && packageName in schedule.packageNames) ||
-                    (schedule.mode == com.etrisad.zenith.data.local.entity.ScheduleMode.ALLOW && packageName !in schedule.packageNames)) {
-                    showScheduleOverlay(packageName, schedule)
-                    return true
+        val now = java.util.Calendar.getInstance()
+        val currentTotalMinutes = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
+        
+        for (ps in parsedSchedulesCache) {
+            val isInInterval = if (ps.startMinutes <= ps.endMinutes) {
+                currentTotalMinutes in ps.startMinutes..ps.endMinutes
+            } else {
+                currentTotalMinutes >= ps.startMinutes || currentTotalMinutes <= ps.endMinutes
+            }
+
+            if (isInInterval) {
+                when (ps.mode) {
+                    com.etrisad.zenith.data.local.entity.ScheduleMode.BLOCK -> {
+                        if (packageName in ps.packageNames) {
+                            showScheduleOverlayFromParsed(packageName, ps)
+                            return true
+                        }
+                    }
+                    com.etrisad.zenith.data.local.entity.ScheduleMode.ALLOW -> {
+                        if (packageName !in ps.packageNames) {
+                            showScheduleOverlayFromParsed(packageName, ps)
+                            return true
+                        }
+                    }
                 }
             }
         }
         return false
+    }
+
+    private fun showScheduleOverlayFromParsed(packageName: String, ps: ParsedSchedule) {
+        val originalSchedule = activeSchedules.find { it.id == ps.id } ?: return
+        showScheduleOverlay(packageName, originalSchedule)
     }
 
     private fun shouldBypassBlocking(packageName: String): Boolean {
@@ -252,9 +296,15 @@ class ZenithAccessibilityService : AccessibilityService() {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        if (level >= TRIM_MEMORY_RUNNING_LOW) {
+        if (level >= TRIM_MEMORY_MODERATE) {
             currentShieldCache = null
             lastUsageFetchTime = 0L
+            allowedApps.clear()
+            // Paksa SQLite melepaskan cache memorinya
+            try {
+                ZenithDatabase.getDatabase(this).openHelper.writableDatabase.execSQL("PRAGMA shrink_memory")
+            } catch (_: Exception) {}
+            System.gc()
         }
     }
 

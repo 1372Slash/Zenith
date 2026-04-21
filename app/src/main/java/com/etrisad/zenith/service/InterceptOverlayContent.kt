@@ -59,7 +59,10 @@ fun InterceptOverlayContent(
     val context = LocalContext.current
     val appIcon = remember(packageName) {
         try {
-            context.packageManager.getApplicationIcon(packageName)
+            val drawable = context.packageManager.getApplicationIcon(packageName)
+            // Downsample bitmap secara drastis ke 120px untuk menghemat RAM.
+            // Dari ~1MB menjadi ~60KB per ikon.
+            drawable.toBitmap(width = 120, height = 120).asImageBitmap()
         } catch (_: Exception) {
             null
         }
@@ -134,13 +137,18 @@ fun InterceptOverlayContent(
         }
     }
 
-    val isPeriodExpired = shield != null && 
-        (System.currentTimeMillis() - shield.lastPeriodResetTimestamp > shield.refreshPeriodMinutes * 60 * 1000L)
+    val isPeriodExpired = remember(shield) {
+        shield != null && (System.currentTimeMillis() - shield.lastPeriodResetTimestamp > shield.refreshPeriodMinutes * 60 * 1000L)
+    }
     
-    val currentUses = if (isPeriodExpired) 0 else (shield?.currentPeriodUses ?: 0)
+    val currentUses = remember(shield, isPeriodExpired) {
+        if (isPeriodExpired) 0 else (shield?.currentPeriodUses ?: 0)
+    }
     val maxUses = shield?.maxUsesPerPeriod ?: 5
-    val isUsesExceeded = currentUses >= maxUses
-    val isTimeLimitReached = shield != null && totalUsageToday >= (shield.timeLimitMinutes * 60 * 1000L)
+    val isUsesExceeded = remember(currentUses, maxUses) { currentUses >= maxUses }
+    val isTimeLimitReached = remember(shield, totalUsageToday) {
+        shield != null && totalUsageToday >= (shield.timeLimitMinutes * 60 * 1000L)
+    }
     
     val refreshTimeLeftMillis = if (shield != null) {
         val nextRefresh = shield.lastPeriodResetTimestamp + (shield.refreshPeriodMinutes * 60 * 1000L)
@@ -261,7 +269,7 @@ fun InterceptOverlayContent(
                         ) {
                             if (appIcon != null) {
                                 Image(
-                                    bitmap = appIcon.toBitmap().asImageBitmap(),
+                                    bitmap = appIcon,
                                     contentDescription = null,
                                     modifier = Modifier.size(60.dp),
                                     contentScale = ContentScale.Fit
@@ -620,7 +628,10 @@ fun ScheduleOverlayContent(
     
     val appIcon = remember(packageName) {
         try {
-            context.packageManager.getApplicationIcon(packageName)
+            val drawable = context.packageManager.getApplicationIcon(packageName)
+            // Downsample bitmap secara drastis ke 120px untuk menghemat RAM.
+            // Dari ~1MB menjadi ~60KB per ikon.
+            drawable.toBitmap(width = 120, height = 120).asImageBitmap()
         } catch (_: Exception) {
             null
         }
@@ -637,10 +648,13 @@ fun ScheduleOverlayContent(
     }
 
     val progress by produceState(initialValue = 0f) {
+        val calendar = java.util.Calendar.getInstance()
+        
         while (true) {
-            val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
-            val calendar = java.util.Calendar.getInstance()
-            val currentStr = sdf.format(calendar.time)
+            calendar.timeInMillis = System.currentTimeMillis()
+            val nowH = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+            val nowM = calendar.get(java.util.Calendar.MINUTE)
+            val nowTotalMin = nowH * 60 + nowM
 
             fun toMinutes(timeStr: String): Int {
                 return try {
@@ -651,19 +665,18 @@ fun ScheduleOverlayContent(
 
             val startMin = toMinutes(schedule.startTime)
             var endMin = toMinutes(schedule.endTime)
-            var nowMin = toMinutes(currentStr)
+            var currentMin = nowTotalMin
 
-            // Handle schedule spanning across midnight
             if (endMin <= startMin) {
                 endMin += 24 * 60
-                if (nowMin < startMin) nowMin += 24 * 60
+                if (currentMin < startMin) currentMin += 24 * 60
             }
 
             val total = (endMin - startMin).coerceAtLeast(1)
-            val elapsed = (nowMin - startMin).coerceIn(0, total)
+            val elapsed = (currentMin - startMin).coerceIn(0, total)
 
             value = elapsed.toFloat() / total.toFloat()
-            delay(10000) // Update every 10 seconds
+            delay(30000) // Update setiap 30 detik saja, jadwal tidak butuh presisi detik
         }
     }
 
@@ -746,7 +759,7 @@ fun ScheduleOverlayContent(
                     ) {
                         if (appIcon != null) {
                             Image(
-                                bitmap = appIcon.toBitmap().asImageBitmap(),
+                                bitmap = appIcon,
                                 contentDescription = null,
                                 modifier = Modifier.size(60.dp),
                                 contentScale = ContentScale.Fit
