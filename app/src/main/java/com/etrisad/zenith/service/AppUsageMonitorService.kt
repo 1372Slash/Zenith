@@ -140,6 +140,28 @@ class AppUsageMonitorService : Service() {
 
                     val allowedUntil = allowedApps[currentApp] ?: 0L
                     updateUsageTime(currentApp)
+                    
+                    // Pastikan HUD muncul jika sesi masih aktif (misal setelah service restart atau HUD terhapus)
+                    if (allowedUntil > currentTime) {
+                        val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
+                        if (prefs.sessionUsageOverlayEnabled) {
+                            val remainingMinutes = ((allowedUntil - currentTime) / 60000L).toInt().coerceAtLeast(1)
+                            serviceScope.launch(Dispatchers.Main) {
+                                sessionUsageOverlayManager.showHUD(
+                                    currentApp,
+                                    remainingMinutes,
+                                    prefs.sessionUsageOverlaySize,
+                                    prefs.sessionUsageOverlayOpacity,
+                                    onSessionEnd = {
+                                        allowedApps[currentApp] = 0L
+                                        serviceScope.launch {
+                                            checkIfAppIsShielded(currentApp)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
 
                     if (currentTime > allowedUntil && !InterceptOverlayManager.isShowing) {
                         if (checkSchedules(currentApp)) {

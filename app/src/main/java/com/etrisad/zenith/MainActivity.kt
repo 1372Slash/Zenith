@@ -20,6 +20,11 @@ import com.etrisad.zenith.ui.viewmodel.FocusViewModelFactory
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
 import com.etrisad.zenith.ui.viewmodel.HomeViewModelFactory
 
+import android.os.Build
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -29,6 +34,19 @@ class MainActivity : ComponentActivity() {
         val database = ZenithDatabase.getDatabase(this)
         val shieldRepository = ShieldRepository(database.shieldDao(), database.scheduleDao())
         val userPreferencesRepository = UserPreferencesRepository(this)
+
+        // Secara otomatis aktifkan dynamic color jika perangkat mendukung (Android 12+)
+        lifecycleScope.launch {
+            val prefs = userPreferencesRepository.userPreferencesFlow.first()
+            // Jika preferensi belum pernah disetel atau perangkat baru didukung
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // Opsional: Anda bisa memaksa 'true' hanya jika user belum pernah mengubahnya
+                // Namun sesuai permintaan, kita lgsg apply jika support.
+                userPreferencesRepository.setDynamicColor(true)
+            } else {
+                userPreferencesRepository.setDynamicColor(false)
+            }
+        }
         
         val homeViewModelFactory = HomeViewModelFactory(applicationContext, shieldRepository)
         val homeViewModel = ViewModelProvider(this, homeViewModelFactory)[HomeViewModel::class.java]

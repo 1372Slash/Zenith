@@ -145,7 +145,31 @@ class SessionUsageOverlayManager(private val context: Context) {
 
     fun updateForegroundApp(packageName: String) {
         activeHUDs.forEach { hud ->
-            hud.isVisibleState.value = packageName.contains(hud.packageName) || hud.packageName.contains(packageName)
+            val isCurrentlyVisible = hud.isVisibleState.value
+            val shouldBeVisible = packageName == hud.packageName || packageName.startsWith("${hud.packageName}.")
+
+            if (isCurrentlyVisible != shouldBeVisible) {
+                hud.isVisibleState.value = shouldBeVisible
+
+                // Perbarui WindowManager flags dan ukuran untuk mencegah gangguan hitbox
+                val view = hud.overlayView
+                val params = view.layoutParams as? WindowManager.LayoutParams
+                if (params != null) {
+                    if (shouldBeVisible) {
+                        params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                        params.width = WindowManager.LayoutParams.WRAP_CONTENT
+                        params.height = WindowManager.LayoutParams.WRAP_CONTENT
+                    } else {
+                        params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                        // Kecilkan ukuran ke 1x1 agar benar-benar tidak menghalangi sentuhan
+                        params.width = 1
+                        params.height = 1
+                    }
+                    try {
+                        windowManager.updateViewLayout(view, params)
+                    } catch (_: Exception) {}
+                }
+            }
         }
     }
 
@@ -205,13 +229,17 @@ fun SessionUsageHUD(
     Box(
         modifier = Modifier
             .wrapContentSize()
-            .pointerInput(scaleFactor) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    // Apply scale factor to drag amount to keep HUD pinned to finger
-                    onDrag(dragAmount.x * scale, dragAmount.y * scale)
-                }
-            },
+            .then(
+                if (showHUD && scale > 0.1f) {
+                    Modifier.pointerInput(scaleFactor) {
+                        detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            // Apply scale factor to drag amount to keep HUD pinned to finger
+                            onDrag(dragAmount.x * scale, dragAmount.y * scale)
+                        }
+                    }
+                } else Modifier
+            ),
         contentAlignment = Alignment.Center
     ) {
         Surface(

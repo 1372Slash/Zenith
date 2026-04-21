@@ -1,55 +1,55 @@
 package com.etrisad.zenith.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = ZenithPrimary,
-    onPrimary = ZenithOnPrimary,
-    primaryContainer = ZenithPrimaryContainer,
-    onPrimaryContainer = ZenithOnPrimaryContainer,
-    secondary = ZenithSecondary,
-    onSecondary = ZenithOnSecondary,
-    secondaryContainer = ZenithSecondaryContainer,
-    onSecondaryContainer = ZenithOnSecondaryContainer,
-    tertiary = ZenithTertiary,
-    onTertiary = ZenithOnTertiary,
-    tertiaryContainer = ZenithTertiaryContainer,
-    onTertiaryContainer = ZenithOnTertiaryContainer,
-    background = ZenithBackground,
-    onBackground = ZenithOnBackground,
-    surface = ZenithSurface,
-    onSurface = ZenithOnSurface,
-    error = ZenithError,
-    onError = ZenithOnError
+    primary = PrimaryDark,
+    onPrimary = OnPrimaryDark,
+    primaryContainer = PrimaryContainerDark,
+    onPrimaryContainer = OnPrimaryContainerDark,
+    secondary = SecondaryDark,
+    onSecondary = OnSecondaryDark,
+    secondaryContainer = SecondaryContainerDark,
+    onSecondaryContainer = OnSecondaryContainerDark,
+    tertiary = TertiaryDark,
+    onTertiary = OnTertiaryDark,
+    tertiaryContainer = TertiaryContainerDark,
+    onTertiaryContainer = OnTertiaryContainerDark,
+    error = ErrorDark,
+    onError = OnErrorDark,
+    background = BackgroundDark,
+    onBackground = OnSurfaceDark,
+    surface = SurfaceDark,
+    onSurface = OnSurfaceDark,
+    surfaceVariant = SurfaceVariantDark,
+    onSurfaceVariant = OnSurfaceVariantDark
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = ZenithPrimary,
-    onPrimary = ZenithOnPrimary,
-    primaryContainer = ZenithPrimaryContainer,
-    onPrimaryContainer = ZenithOnPrimaryContainer,
-    secondary = ZenithSecondary,
-    onSecondary = ZenithOnSecondary,
-    secondaryContainer = ZenithSecondaryContainer,
-    onSecondaryContainer = ZenithOnSecondaryContainer,
-    tertiary = ZenithTertiary,
-    onTertiary = ZenithOnTertiary,
-    tertiaryContainer = ZenithTertiaryContainer,
-    onTertiaryContainer = ZenithOnTertiaryContainer,
-    // Slightly lighter background for light mode
-    background = Color(0xFFFBFDF8),
-    onBackground = Color(0xFF191C19),
-    surface = Color(0xFFFBFDF8),
-    onSurface = Color(0xFF191C19),
-    error = ZenithError,
-    onError = ZenithOnError
+    primary = PrimaryLight,
+    onPrimary = OnPrimaryLight,
+    primaryContainer = PrimaryContainerLight,
+    onPrimaryContainer = OnPrimaryContainerLight,
+    secondary = SecondaryLight,
+    onSecondary = OnSecondaryLight,
+    secondaryContainer = SecondaryContainerLight,
+    onSecondaryContainer = OnSecondaryContainerLight,
+    tertiary = TertiaryLight,
+    onTertiary = OnTertiaryLight,
+    tertiaryContainer = TertiaryContainerLight,
+    onTertiaryContainer = OnTertiaryContainerLight,
+    error = ErrorLight,
+    onError = OnErrorLight,
+    background = BackgroundLight,
+    onBackground = OnSurfaceLight,
+    surface = SurfaceLight,
+    onSurface = OnSurfaceLight,
+    surfaceVariant = SurfaceVariantLight,
+    onSurfaceVariant = OnSurfaceVariantLight
 )
 
 @Composable
