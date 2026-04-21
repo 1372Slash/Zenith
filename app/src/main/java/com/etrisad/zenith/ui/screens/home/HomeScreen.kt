@@ -66,15 +66,7 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val preferences by userPreferencesRepository.userPreferencesFlow.collectAsState(
-        initial = com.etrisad.zenith.data.preferences.UserPreferences(
-            themeConfig = com.etrisad.zenith.data.preferences.ThemeConfig.FOLLOW_SYSTEM,
-            dynamicColor = true,
-            accessibilityDisabled = false,
-            screenTimeTargetMinutes = 0,
-            emergencyRechargeDurationMinutes = 60,
-            delayAppDurationSeconds = 30,
-            whitelistedPackages = emptySet()
-        )
+        initial = com.etrisad.zenith.data.preferences.UserPreferences()
     )
 
     val coroutineScope = rememberCoroutineScope()
@@ -1285,15 +1277,7 @@ fun HomeScreenPreview() {
                     ShieldEntity("com.duolingo", "Duolingo", FocusType.GOAL, 30, remainingTimeMillis = 10 * 60 * 1000L)
                 )
             ),
-            preferences = com.etrisad.zenith.data.preferences.UserPreferences(
-                themeConfig = com.etrisad.zenith.data.preferences.ThemeConfig.FOLLOW_SYSTEM,
-                dynamicColor = true,
-                accessibilityDisabled = false,
-                screenTimeTargetMinutes = 180, // 3h target
-                emergencyRechargeDurationMinutes = 60,
-                delayAppDurationSeconds = 30,
-                whitelistedPackages = emptySet()
-            ),
+            preferences = com.etrisad.zenith.data.preferences.UserPreferences(),
             onSetTarget = {},
             formatDuration = { "3h 30m" },
             onShieldSortTypeChange = {},

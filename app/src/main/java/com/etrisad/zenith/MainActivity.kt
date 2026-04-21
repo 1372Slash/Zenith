@@ -47,15 +47,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val userPreferences by userPreferencesRepository.userPreferencesFlow.collectAsState(
-                initial = com.etrisad.zenith.data.preferences.UserPreferences(
-                    com.etrisad.zenith.data.preferences.ThemeConfig.FOLLOW_SYSTEM,
-                    true,
-                    false,
-                    0,
-                    60,
-                    30,
-                    emptySet()
-                )
+                initial = com.etrisad.zenith.data.preferences.UserPreferences()
             )
 
             val darkTheme = when (userPreferences.themeConfig) {

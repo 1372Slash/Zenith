@@ -29,6 +29,7 @@ class UserPreferencesRepository(private val context: Context) {
         val SCREEN_TIME_TARGET = intPreferencesKey("screen_time_target")
         val EMERGENCY_RECHARGE_DURATION_MINUTES = intPreferencesKey("emergency_recharge_duration_minutes")
         val DELAY_APP_DURATION_SECONDS = intPreferencesKey("delay_app_duration_seconds")
+        val SESSION_USAGE_OVERLAY_ENABLED = booleanPreferencesKey("session_usage_overlay_enabled")
         val WHITELISTED_PACKAGES = stringPreferencesKey("whitelisted_packages")
     }
 
@@ -49,6 +50,7 @@ class UserPreferencesRepository(private val context: Context) {
             val screenTimeTarget = preferences[PreferencesKeys.SCREEN_TIME_TARGET] ?: 0
             val emergencyRechargeDuration = preferences[PreferencesKeys.EMERGENCY_RECHARGE_DURATION_MINUTES] ?: 60
             val delayAppDuration = preferences[PreferencesKeys.DELAY_APP_DURATION_SECONDS] ?: 30
+            val sessionUsageOverlayEnabled = preferences[PreferencesKeys.SESSION_USAGE_OVERLAY_ENABLED] ?: false
             val whitelistedPackages = preferences[PreferencesKeys.WHITELISTED_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
             UserPreferences(
                 themeConfig = themeConfig,
@@ -57,6 +59,7 @@ class UserPreferencesRepository(private val context: Context) {
                 screenTimeTargetMinutes = screenTimeTarget,
                 emergencyRechargeDurationMinutes = emergencyRechargeDuration,
                 delayAppDurationSeconds = delayAppDuration,
+                sessionUsageOverlayEnabled = sessionUsageOverlayEnabled,
                 whitelistedPackages = whitelistedPackages
             )
         }
@@ -97,6 +100,12 @@ class UserPreferencesRepository(private val context: Context) {
         }
     }
 
+    suspend fun setSessionUsageOverlayEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.SESSION_USAGE_OVERLAY_ENABLED] = enabled
+        }
+    }
+
     suspend fun setWhitelistedPackages(packages: Set<String>) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.WHITELISTED_PACKAGES] = packages.joinToString(",")
@@ -105,11 +114,12 @@ class UserPreferencesRepository(private val context: Context) {
 }
 
 data class UserPreferences(
-    val themeConfig: ThemeConfig,
-    val dynamicColor: Boolean,
-    val accessibilityDisabled: Boolean,
-    val screenTimeTargetMinutes: Int,
-    val emergencyRechargeDurationMinutes: Int,
-    val delayAppDurationSeconds: Int,
-    val whitelistedPackages: Set<String>
+    val themeConfig: ThemeConfig = ThemeConfig.FOLLOW_SYSTEM,
+    val dynamicColor: Boolean = true,
+    val accessibilityDisabled: Boolean = false,
+    val screenTimeTargetMinutes: Int = 0,
+    val emergencyRechargeDurationMinutes: Int = 60,
+    val delayAppDurationSeconds: Int = 30,
+    val sessionUsageOverlayEnabled: Boolean = false,
+    val whitelistedPackages: Set<String> = emptySet()
 )

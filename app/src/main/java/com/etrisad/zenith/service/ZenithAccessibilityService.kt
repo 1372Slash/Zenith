@@ -7,6 +7,9 @@ import android.content.Intent
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import com.etrisad.zenith.data.local.database.ZenithDatabase
+import com.etrisad.zenith.data.local.entity.ScheduleEntity
+import com.etrisad.zenith.data.local.entity.ScheduleMode
+import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
 import kotlinx.coroutines.CoroutineScope
@@ -23,21 +26,22 @@ class ZenithAccessibilityService : AccessibilityService() {
     private lateinit var shieldRepository: ShieldRepository
     private lateinit var preferencesRepository: UserPreferencesRepository
     private lateinit var overlayManager: InterceptOverlayManager
+    private lateinit var sessionUsageOverlayManager: SessionUsageOverlayManager
     private val usageStatsManager by lazy { getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager }
 
     private var lastForegroundApp: String? = null
-    private var currentShieldCache: com.etrisad.zenith.data.local.entity.ShieldEntity? = null
+    private var currentShieldCache: ShieldEntity? = null
     private var lastUsageFetchTime = 0L
     private var cachedTotalUsage = 0L
     private val allowedApps = mutableMapOf<String, Long>()
-    private var activeSchedules = listOf<com.etrisad.zenith.data.local.entity.ScheduleEntity>()
+    private var activeSchedules = listOf<ScheduleEntity>()
     private var whitelistedPackages = setOf<String>()
 
     private class ParsedSchedule(
         val id: Long,
         val startMinutes: Int,
         val endMinutes: Int,
-        val mode: com.etrisad.zenith.data.local.entity.ScheduleMode,
+        val mode: ScheduleMode,
         val packageNames: Set<String>
     )
     private var parsedSchedulesCache = listOf<ParsedSchedule>()
@@ -54,9 +58,10 @@ class ZenithAccessibilityService : AccessibilityService() {
         shieldRepository = ShieldRepository(database.shieldDao(), database.scheduleDao())
         preferencesRepository = UserPreferencesRepository(this)
         overlayManager = InterceptOverlayManager(this)
+        sessionUsageOverlayManager = SessionUsageOverlayManager(this)
 
         serviceScope.launch {
-            shieldRepository.allSchedules.collect { schedules ->
+            shieldRepository.allSchedules.collect { schedules: List<ScheduleEntity> ->
                 activeSchedules = schedules.filter { it.isActive }
                 parsedSchedulesCache = activeSchedules.map { s ->
                     val startParts = s.startTime.split(":")
@@ -191,6 +196,13 @@ class ZenithAccessibilityService : AccessibilityService() {
                             shieldRepository.updateShield(updatedShield)
                             currentShieldCache = updatedShield
                             allowedApps[targetPackageName] = System.currentTimeMillis() + (minutes * 60 * 1000L)
+
+                            val prefs = preferencesRepository.userPreferencesFlow.first()
+                            if (prefs.sessionUsageOverlayEnabled) {
+                                serviceScope.launch(Dispatchers.Main) {
+                                    sessionUsageOverlayManager.showHUD(minutes)
+                                }
+                            }
                         }
                     },
                     onCloseApp = { goToHomeScreen() },
@@ -272,7 +284,7 @@ class ZenithAccessibilityService : AccessibilityService() {
         return if (start <= end) current in start..end else current >= start || current <= end
     }
 
-    private fun showScheduleOverlay(packageName: String, schedule: com.etrisad.zenith.data.local.entity.ScheduleEntity) {
+    private fun showScheduleOverlay(packageName: String, schedule: ScheduleEntity) {
         serviceScope.launch(Dispatchers.Main) {
             overlayManager.showScheduleOverlay(
                 packageName = packageName,
@@ -284,6 +296,13 @@ class ZenithAccessibilityService : AccessibilityService() {
                             val currentSchedule = shieldRepository.getScheduleById(schedule.id) ?: return@launch
                             shieldRepository.updateSchedule(currentSchedule.copy(emergencyUseCount = currentSchedule.emergencyUseCount - 1))
                             allowedApps[packageName] = System.currentTimeMillis() + (minutes * 60 * 1000L)
+
+                            val prefs = preferencesRepository.userPreferencesFlow.first()
+                            if (prefs.sessionUsageOverlayEnabled) {
+                                serviceScope.launch(Dispatchers.Main) {
+                                    sessionUsageOverlayManager.showHUD(minutes)
+                                }
+                            }
                         }
                     }
                 },

@@ -40,6 +40,7 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
             screenTimeTargetMinutes = 0,
             emergencyRechargeDurationMinutes = 60,
             delayAppDurationSeconds = 30,
+            sessionUsageOverlayEnabled = false,
             whitelistedPackages = emptySet()
         )
     )
@@ -78,6 +79,11 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
                 preferencesRepository.setDelayAppDuration(seconds)
             }
         },
+        onSessionUsageOverlayEnabledChange = { enabled ->
+            coroutineScope.launch {
+                preferencesRepository.setSessionUsageOverlayEnabled(enabled)
+            }
+        },
         showWhitelistSheet = showWhitelistSheet,
         onShowWhitelistSheetChange = { showWhitelistSheet = it },
         onSetWhitelistedPackages = { packages ->
@@ -97,6 +103,7 @@ fun SettingsScreenContent(
     onSetTarget: (Int) -> Unit,
     onSetEmergencyRecharge: (Int) -> Unit,
     onSetDelayAppDuration: (Int) -> Unit,
+    onSessionUsageOverlayEnabledChange: (Boolean) -> Unit,
     showWhitelistSheet: Boolean,
     onShowWhitelistSheetChange: (Boolean) -> Unit,
     onSetWhitelistedPackages: (Set<String>) -> Unit
@@ -181,6 +188,18 @@ fun SettingsScreenContent(
                     },
                     onClick = { showDelayAppSheet = true },
                     icon = Icons.Outlined.History,
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                SettingsToggle(
+                    title = "Session Usage Overlay",
+                    description = "Show a floating HUD with remaining time when an app is allowed",
+                    checked = preferences.sessionUsageOverlayEnabled,
+                    onCheckedChange = onSessionUsageOverlayEnabledChange,
+                    icon = Icons.Outlined.Timer,
                     shape = RoundedCornerShape(8.dp)
                 )
             }

@@ -26,6 +26,7 @@ class AppUsageMonitorService : Service() {
     private lateinit var shieldRepository: ShieldRepository
     private lateinit var preferencesRepository: UserPreferencesRepository
     private lateinit var overlayManager: InterceptOverlayManager
+    private lateinit var sessionUsageOverlayManager: SessionUsageOverlayManager
     private val usageStatsManager by lazy { getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager }
     private val reusableEvent = UsageEvents.Event()
     private val reusableCalendar = java.util.Calendar.getInstance()
@@ -56,6 +57,7 @@ class AppUsageMonitorService : Service() {
         shieldRepository = ShieldRepository(database.shieldDao(), database.scheduleDao())
         preferencesRepository = UserPreferencesRepository(this)
         overlayManager = InterceptOverlayManager(this)
+        sessionUsageOverlayManager = SessionUsageOverlayManager(this)
 
         serviceScope.launch {
             shieldRepository.allSchedules.collect { schedules ->
@@ -251,6 +253,13 @@ class AppUsageMonitorService : Service() {
                             shieldRepository.updateShield(updatedShield)
                             currentShieldCache = updatedShield
                             allowedApps[targetPackageName] = System.currentTimeMillis() + (minutes * 60 * 1000L)
+                            
+                            val prefs = preferencesRepository.userPreferencesFlow.first()
+                            if (prefs.sessionUsageOverlayEnabled) {
+                                serviceScope.launch(Dispatchers.Main) {
+                                    sessionUsageOverlayManager.showHUD(minutes)
+                                }
+                            }
                         }
                     },
                     onCloseApp = {
@@ -465,6 +474,13 @@ class AppUsageMonitorService : Service() {
                             )
                             shieldRepository.updateSchedule(updatedSchedule)
                             allowedApps[packageName] = System.currentTimeMillis() + (minutes * 60 * 1000L)
+                            
+                            val prefs = preferencesRepository.userPreferencesFlow.first()
+                            if (prefs.sessionUsageOverlayEnabled) {
+                                serviceScope.launch(Dispatchers.Main) {
+                                    sessionUsageOverlayManager.showHUD(minutes)
+                                }
+                            }
                         }
                     }
                 },

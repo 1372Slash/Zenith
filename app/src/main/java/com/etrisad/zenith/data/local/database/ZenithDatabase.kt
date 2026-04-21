@@ -13,7 +13,7 @@ import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.Converters
 
-@Database(entities = [ShieldEntity::class, ScheduleEntity::class], version = 11, exportSchema = false)
+@Database(entities = [ShieldEntity::class, ScheduleEntity::class], version = 12, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class ZenithDatabase : RoomDatabase() {
     abstract fun shieldDao(): ShieldDao
@@ -82,6 +82,39 @@ abstract class ZenithDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Ensure all ShieldEntity fields are present
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN maxUsesPerPeriod INTEGER NOT NULL DEFAULT 5")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN refreshPeriodMinutes INTEGER NOT NULL DEFAULT 60")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN currentPeriodUses INTEGER NOT NULL DEFAULT 0")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN lastPeriodResetTimestamp INTEGER NOT NULL DEFAULT 0")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN isRemindersEnabled INTEGER NOT NULL DEFAULT 1")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN isStrictModeEnabled INTEGER NOT NULL DEFAULT 0")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN isAutoQuitEnabled INTEGER NOT NULL DEFAULT 0")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN remainingTimeMillis INTEGER NOT NULL DEFAULT 0")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN lastUsedTimestamp INTEGER NOT NULL DEFAULT 0")
+                } catch (_: Exception) {}
+            }
+        }
+
         fun getDatabase(context: Context): ZenithDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -89,8 +122,11 @@ abstract class ZenithDatabase : RoomDatabase() {
                     ZenithDatabase::class.java,
                     "zenith_database"
                 )
-                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_9_10)
-                    .fallbackToDestructiveMigration()
+                    .addMigrations(
+                        MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, 
+                        MIGRATION_6_7, MIGRATION_7_8, MIGRATION_9_10, 
+                        MIGRATION_10_11, MIGRATION_11_12
+                    )
                     .build()
                 INSTANCE = instance
                 instance

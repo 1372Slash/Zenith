@@ -44,15 +44,7 @@ fun MainScreen(
     val context = LocalContext.current
     
     val preferences by userPreferencesRepository.userPreferencesFlow.collectAsState(
-        initial = UserPreferences(
-            themeConfig = ThemeConfig.FOLLOW_SYSTEM,
-            dynamicColor = true,
-            accessibilityDisabled = false,
-            screenTimeTargetMinutes = 0,
-            emergencyRechargeDurationMinutes = 60,
-            delayAppDurationSeconds = 30,
-            whitelistedPackages = emptySet()
-        )
+        initial = UserPreferences()
     )
 
     var showPermissionSheet by remember { mutableStateOf(false) }
