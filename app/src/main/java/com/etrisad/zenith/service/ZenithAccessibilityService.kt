@@ -111,8 +111,8 @@ class ZenithAccessibilityService : AccessibilityService() {
     private suspend fun handlePackageChange(currentApp: String) {
         val currentTime = System.currentTimeMillis()
 
-        // Hanya evaluasi jika: Aplikasi berubah ATAU sudah lewat 5 detik sejak evaluasi terakhir
-        if (currentApp == lastForegroundApp && currentTime - lastEvaluationTime < 5000) {
+        // Hanya evaluasi jika: Aplikasi berubah ATAU sudah lewat 1 detik sejak evaluasi terakhir
+        if (currentApp == lastForegroundApp && currentTime - lastEvaluationTime < 1500) {
             return
         }
         lastEvaluationTime = currentTime

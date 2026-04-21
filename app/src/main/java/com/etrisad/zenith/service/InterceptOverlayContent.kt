@@ -659,14 +659,14 @@ fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, onGoalDismiss: () -
             animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
             label = "goalProgress"
         )
-        LinearProgressIndicator(
+        LinearWavyProgressIndicator(
             progress = { animatedProgressState.value },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(8.dp)
-                .clip(CircleShape),
+                .height(10.dp),
             color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            wavelength = 40.dp
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -777,14 +777,14 @@ fun ShieldSection(
                 animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
                 label = "progress"
             )
-            LinearProgressIndicator(
+            LinearWavyProgressIndicator(
                 progress = { animatedProgressState.value },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(CircleShape),
+                    .height(10.dp),
                 color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                wavelength = 40.dp
             )
         }
     }
@@ -853,11 +853,12 @@ fun GoalProgressMini(shield: ShieldEntity, totalUsageToday: Long) {
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
-        LinearProgressIndicator(
+        LinearWavyProgressIndicator(
             progress = { progress.coerceIn(0f, 1f) },
-            modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+            modifier = Modifier.fillMaxWidth().height(10.dp),
             color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            wavelength = 40.dp
         )
     }
 }
@@ -886,11 +887,12 @@ fun ShieldProgressMini(shield: ShieldEntity, totalUsageToday: Long) {
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
-        LinearProgressIndicator(
+        LinearWavyProgressIndicator(
             progress = { progress.coerceIn(0f, 1f) },
-            modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+            modifier = Modifier.fillMaxWidth().height(10.dp),
             color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            wavelength = 40.dp
         )
     }
 }
@@ -1046,12 +1048,13 @@ fun DelayInProgressSection(
         Spacer(modifier = Modifier.height(24.dp))
         
         Box(contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(
+            CircularWavyProgressIndicator(
                 progress = { delayProgressAnimatable.value },
-                modifier = Modifier.size(80.dp),
+                modifier = Modifier.size(100.dp),
                 color = MaterialTheme.colorScheme.primary,
+                amplitude = { 1f },
+                wavelength = 30.dp,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                strokeWidth = 6.dp
             )
             val secondsLeft = kotlin.math.ceil((1f - delayProgressAnimatable.value) * delayDurationSeconds).toInt()
             Text(
@@ -1373,12 +1376,13 @@ fun PortraitScheduleLayout(
             Spacer(modifier = Modifier.height(32.dp))
 
             if (schedule.mode == ScheduleMode.ALLOW) {
-                CircularProgressIndicator(
+                CircularWavyProgressIndicator(
                     progress = { progress },
-                    modifier = Modifier.size(100.dp),
+                    modifier = Modifier.size(120.dp),
                     color = MaterialTheme.colorScheme.primary,
+                    amplitude = { 1f },
+                    wavelength = 36.dp,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    strokeWidth = 8.dp
                 )
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -1539,12 +1543,12 @@ fun LandscapeScheduleLayout(
 
                 if (schedule.mode == ScheduleMode.ALLOW) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    CircularProgressIndicator(
+                    CircularWavyProgressIndicator(
                         progress = { progress },
-                        modifier = Modifier.size(70.dp),
+                        modifier = Modifier.size(80.dp),
                         color = MaterialTheme.colorScheme.primary,
+                        wavelength = 24.dp,
                         trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                        strokeWidth = 6.dp
                     )
                 }
             }
@@ -1762,12 +1766,14 @@ fun DurationButton(
         ) { enabled ->
             if (!enabled) {
                 Box(contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(
+                    CircularWavyProgressIndicator(
                         progress = { progressState.value },
-                        modifier = Modifier.size(32.dp),
+                        modifier = Modifier.size(36.dp),
                         color = MaterialTheme.colorScheme.primary,
                         trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                        strokeWidth = 4.dp
+                        stroke = Stroke(width = 6.dp.value),
+                        trackStroke = Stroke(width = 6.dp.value),
+                        wavelength = 12.dp
                     )
                     // Calculate countdown from progress for smooth transition
                     val secondsLeft = if (delaySeconds > 0) {

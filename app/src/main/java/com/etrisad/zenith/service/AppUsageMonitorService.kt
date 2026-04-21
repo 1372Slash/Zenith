@@ -99,7 +99,7 @@ class AppUsageMonitorService : Service() {
             while (true) {
                 // 1. Matikan monitoring jika layar mati untuk menghemat CPU & baterai
                 if (!powerManager.isInteractive) {
-                    delay(5000)
+                    delay(2000)
                     continue
                 }
 
@@ -133,7 +133,8 @@ class AppUsageMonitorService : Service() {
 
                     if (shouldBypassBlocking(currentApp)) {
                         lastForegroundApp = currentApp
-                        delay(4000) // Delay lebih lama untuk aplikasi whitelisted
+                        // Delay lebih singkat untuk aplikasi whitelisted agar tetap responsif saat switch
+                        delay(1500)
                         continue
                     }
 
@@ -143,7 +144,7 @@ class AppUsageMonitorService : Service() {
                     if (currentTime > allowedUntil && !InterceptOverlayManager.isShowing) {
                         if (checkSchedules(currentApp)) {
                             lastForegroundApp = currentApp
-                            delay(2000)
+                            delay(1500)
                             continue
                         }
 
@@ -170,9 +171,8 @@ class AppUsageMonitorService : Service() {
                 }
                 
                 lastForegroundApp = currentApp
-                // Tingkatkan delay polling untuk menghemat baterai/CPU
-                // 2 detik jika ada shield aktif, 4 detik jika idle
-                val pollDelay = if (currentShieldCache != null) 2000L else 4000L
+                // Optimasi delay polling: 500ms-1s untuk keseimbangan antara performa dan baterai
+                val pollDelay = if (currentShieldCache != null) 1000L else 1000L
                 delay(pollDelay)
             }
         }
