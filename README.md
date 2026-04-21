@@ -28,4 +28,4 @@ To function optimally, Zenith requires:
 ## License
 
 This project is created for learning and self-development purposes.
-(C) 2025 Zenith Team.
+[GNU GPL v3.0](LICENCE)
