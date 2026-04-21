@@ -1,5 +1,6 @@
 package com.etrisad.zenith.service
 
+import android.content.res.Configuration
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
@@ -29,6 +30,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -155,6 +157,9 @@ fun InterceptOverlayContent(
         (nextRefresh - System.currentTimeMillis()).coerceAtLeast(0L)
     } else 0L
 
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -186,429 +191,910 @@ fun InterceptOverlayContent(
         ) {
             Card(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .wrapContentHeight()
-                    .imePadding(), // Navigation bar padding dipindah ke dalam agar background kartu meluas ke bawah
+                    .let { 
+                        if (isLandscape) it.widthIn(max = 640.dp).wrapContentHeight() 
+                        else it.fillMaxWidth().wrapContentHeight() 
+                    }
+                    .align(Alignment.BottomCenter)
+                    .imePadding(),
                 shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
             ) {
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    // Uses & Emergency Indicators (Top of Bottom Sheet) - Only for SHIELD
-                    if (shield != null && shield.type == FocusType.SHIELD) {
-                        // Left: Uses
-                        Row(
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(top = 28.dp, start = 20.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Outlined.Timer,
-                                null,
-                                modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "$currentUses/$maxUses uses",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        // Right: Emergency
-                        Row(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(top = 28.dp, end = 20.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Outlined.Bolt,
-                                null,
-                                modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Emergency: ${shield.emergencyUseCount}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .padding(24.dp)
-                            .fillMaxWidth()
-                            .navigationBarsPadding(), // Memastikan konten tetap aman di atas navigation bar
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // Drag handle simulation
-                        Box(
-                            modifier = Modifier
-                                .width(40.dp)
-                                .height(4.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.outlineVariant)
-                        )
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        // App Icon
-                        Box(
-                            modifier = Modifier
-                                .size(80.dp)
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (appIcon != null) {
-                                Image(
-                                    bitmap = appIcon,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(60.dp),
-                                    contentScale = ContentScale.Fit
-                                )
-                            } else {
-                                Icon(
-                                    if (shield?.type == FocusType.GOAL) Icons.Outlined.Flag else Icons.Outlined.Block,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
+                if (isLandscape) {
+                    LandscapeInterceptLayout(
+                        packageName = packageName,
+                        appName = appName,
+                        appIcon = appIcon,
+                        shield = shield,
+                        totalUsageToday = totalUsageToday,
+                        isEmergencyUnlocked = isEmergencyUnlocked,
+                        isDelaying = isDelaying,
+                        randomMessage = randomMessage,
+                        delayProgressAnimatable = delayProgressAnimatable,
+                        delayDurationSeconds = delayDurationSeconds,
+                        isUsesExceeded = isUsesExceeded,
+                        isTimeLimitReached = isTimeLimitReached,
+                        refreshTimeLeftMillis = refreshTimeLeftMillis,
+                        currentUses = currentUses,
+                        maxUses = maxUses,
+                        onEmergencyClick = { isEmergencyUnlocked = true },
+                        onAllowUse = { minutes ->
+                            scope.launch {
+                                showContent = false
+                                delay(400)
+                                onAllowUse(minutes, isEmergencyUnlocked)
+                            }
+                        },
+                        onCloseApp = {
+                            scope.launch {
+                                showContent = false
+                                delay(400)
+                                onCloseApp()
+                            }
+                        },
+                        onGoalDismiss = {
+                            scope.launch {
+                                showContent = false
+                                delay(400)
+                                onGoalDismiss()
                             }
                         }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Text(
-                            text = if (shield?.type == FocusType.GOAL) "Goal Pursuit" else "Mindful Pause",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Text(
-                            text = appName,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = if (shield?.type == FocusType.GOAL) 
-                                "You're working towards your usage goal." 
-                                else "Zenith Shield is active for this app.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        if (shield != null && shield.type == FocusType.GOAL) {
-                            // GOAL UI
-                            val targetLimitMillis = shield.timeLimitMinutes * 60 * 1000L
-                            val progress = if (targetLimitMillis > 0) totalUsageToday.toFloat() / targetLimitMillis else 0f
-                            val remainingMillis = (targetLimitMillis - totalUsageToday).coerceAtLeast(0L)
-                            
-                            val estimateTime = remember(remainingMillis) {
-                                val finishTime = System.currentTimeMillis() + remainingMillis
-                                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(finishTime))
+                    )
+                } else {
+                    PortraitInterceptLayout(
+                        packageName = packageName,
+                        appName = appName,
+                        appIcon = appIcon,
+                        shield = shield,
+                        totalUsageToday = totalUsageToday,
+                        isEmergencyUnlocked = isEmergencyUnlocked,
+                        isDelaying = isDelaying,
+                        randomMessage = randomMessage,
+                        delayProgressAnimatable = delayProgressAnimatable,
+                        delayDurationSeconds = delayDurationSeconds,
+                        isUsesExceeded = isUsesExceeded,
+                        isTimeLimitReached = isTimeLimitReached,
+                        refreshTimeLeftMillis = refreshTimeLeftMillis,
+                        currentUses = currentUses,
+                        maxUses = maxUses,
+                        onEmergencyClick = { isEmergencyUnlocked = true },
+                        onAllowUse = { minutes ->
+                            scope.launch {
+                                showContent = false
+                                delay(400)
+                                onAllowUse(minutes, isEmergencyUnlocked)
                             }
-
-                            val motivationText = remember(progress) {
-                                when {
-                                    progress < 0.3f -> "Great start! Keep going."
-                                    progress < 0.6f -> "You're halfway there! Stay focused."
-                                    progress < 0.9f -> "Almost finished! You can do it."
-                                    else -> "Just a little more to go!"
-                                }
+                        },
+                        onCloseApp = {
+                            scope.launch {
+                                showContent = false
+                                delay(400)
+                                onCloseApp()
                             }
-
-                            Spacer(modifier = Modifier.height(24.dp))
-
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = "${(progress * 100).toInt()}% Done",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Text(
-                                        text = "Target: ${shield.timeLimitMinutes}m",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                
-                                Spacer(modifier = Modifier.height(8.dp))
-                                
-                                val animatedProgressState = animateFloatAsState(
-                                    targetValue = progress.coerceIn(0f, 1f),
-                                    animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
-                                    label = "goalProgress"
-                                )
-                                LinearWavyProgressIndicator(
-                                    progress = { animatedProgressState.value },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(10.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    wavelength = 40.dp
-                                )
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Timer,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "Estimated finish: $estimateTime",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(32.dp))
-
-                            Surface(
-                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Lightbulb,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Text(
-                                        text = motivationText,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(32.dp))
-
-                            Button(
-                                onClick = {
-                                    scope.launch {
-                                        showContent = false
-                                        delay(400)
-                                        onGoalDismiss()
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = MaterialTheme.shapes.large
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Outlined.CheckCircle, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Got it, let's continue", fontWeight = FontWeight.Bold)
-                                }
-                            }
-
-                        } else {
-                            // SHIELD UI (Original)
-                            // Usage Progress
-                            if (shield != null) {
-                                Spacer(modifier = Modifier.height(24.dp))
-                                val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
-                                val remainingMillis = (totalLimitMillis - totalUsageToday).coerceAtLeast(0L)
-                                val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
-                                
-                                Column(modifier = Modifier.fillMaxWidth()) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(
-                                            text = formatMillis(totalUsageToday),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = "${formatMillis(remainingMillis)} left today",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    val animatedProgressState = animateFloatAsState(
-                                        targetValue = progress.coerceIn(0f, 1f),
-                                        animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
-                                        label = "progress"
-                                    )
-                                    LinearWavyProgressIndicator(
-                                        progress = { animatedProgressState.value },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(10.dp),
-                                        color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        wavelength = 40.dp
-                                    )
-                                }
-                            }
-
-                            if ((isUsesExceeded || isTimeLimitReached) && !isEmergencyUnlocked) {
-                                Spacer(modifier = Modifier.height(32.dp))
-                                
-                                if (isUsesExceeded && !isTimeLimitReached) {
-                                    var countdownText by remember { mutableStateOf(formatCountdown(refreshTimeLeftMillis)) }
-                                    LaunchedEffect(refreshTimeLeftMillis) {
-                                        var current = refreshTimeLeftMillis
-                                        while (current > 0) {
-                                            delay(1000)
-                                            current -= 1000
-                                            countdownText = formatCountdown(current)
-                                        }
-                                    }
-
-                                    Text(
-                                        text = "Uses limit reached. Refresh in $countdownText",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.error,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Center
-                                    )
-                                } else {
-                                    Text(
-                                        text = "Daily limit reached. Come back tomorrow.",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.error,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-
-                                if (shield != null && shield.emergencyUseCount > 0) {
-                                    Spacer(modifier = Modifier.height(24.dp))
-                                    EmergencyButton(onEmergencyUse = { isEmergencyUnlocked = true })
-                                }
-                            } else {
-                                Spacer(modifier = Modifier.height(32.dp))
-
-                                AnimatedContent(
-                                    targetState = isDelaying,
-                                    transitionSpec = {
-                                        fadeIn(animationSpec = tween(500)) togetherWith
-                                                fadeOut(animationSpec = tween(500))
-                                    },
-                                    label = "delayContent"
-                                ) { delaying ->
-                                    if (delaying) {
-                                        Column(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                            Text(
-                                                text = randomMessage,
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                textAlign = TextAlign.Center,
-                                                modifier = Modifier.padding(horizontal = 16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.height(32.dp))
-                                            
-                                            Box(contentAlignment = Alignment.Center) {
-                                                CircularWavyProgressIndicator(
-                                                    progress = { delayProgressAnimatable.value },
-                                                    modifier = Modifier.size(120.dp),
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    amplitude = { 1f }, // Menggunakan nilai konstan atau lambda yang benar
-                                                    wavelength = 36.dp, // Menambah wavelength agar gelombang lebih jarang
-                                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                                )
-                                                val secondsLeft = kotlin.math.ceil((1f - delayProgressAnimatable.value) * delayDurationSeconds).toInt()
-                                                Text(
-                                                    text = "${secondsLeft}s",
-                                                    style = MaterialTheme.typography.headlineMedium,
-                                                    fontWeight = FontWeight.Black,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                            
-                                            Spacer(modifier = Modifier.height(24.dp))
-                                            Text(
-                                                text = "Mindfulness in progress...",
-                                                style = MaterialTheme.typography.labelLarge,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                            )
-                                        }
-                                    } else {
-                                        Column(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                            Text(
-                                                text = if (isEmergencyUnlocked) "Emergency Use: Select Duration" else "How long do you want to use it?",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
-
-                                            Spacer(modifier = Modifier.height(16.dp))
-
-                                            DurationButtonsGrid { minutes ->
-                                                scope.launch {
-                                                    showContent = false
-                                                    delay(400)
-                                                    onAllowUse(minutes, isEmergencyUnlocked)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(24.dp))
-
-                            TextButton(
-                                onClick = {
-                                    scope.launch {
-                                        showContent = false
-                                        delay(400)
-                                        onCloseApp()
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.error
-                                )
-                            ) {
-                                Text("Close App", fontWeight = FontWeight.Bold)
+                        },
+                        onGoalDismiss = {
+                            scope.launch {
+                                showContent = false
+                                delay(400)
+                                onGoalDismiss()
                             }
                         }
-                    }
+                    )
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun PortraitInterceptLayout(
+    packageName: String,
+    appName: String,
+    appIcon: androidx.compose.ui.graphics.ImageBitmap?,
+    shield: ShieldEntity?,
+    totalUsageToday: Long,
+    isEmergencyUnlocked: Boolean,
+    isDelaying: Boolean,
+    randomMessage: String,
+    delayProgressAnimatable: Animatable<Float, AnimationVector1D>,
+    delayDurationSeconds: Int,
+    isUsesExceeded: Boolean,
+    isTimeLimitReached: Boolean,
+    refreshTimeLeftMillis: Long,
+    currentUses: Int,
+    maxUses: Int,
+    onEmergencyClick: () -> Unit,
+    onAllowUse: (Int) -> Unit,
+    onCloseApp: () -> Unit,
+    onGoalDismiss: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        // Uses & Emergency Indicators (Top of Bottom Sheet) - Only for SHIELD
+        if (shield != null && shield.type == FocusType.SHIELD) {
+            // Left: Uses
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = 28.dp, start = 20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Outlined.Timer,
+                    null,
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "$currentUses/$maxUses uses",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Right: Emergency
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 28.dp, end = 20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Outlined.Bolt,
+                    null,
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "Emergency: ${shield.emergencyUseCount}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .padding(24.dp)
+                .fillMaxWidth()
+                .navigationBarsPadding(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Drag handle simulation
+            Box(
+                modifier = Modifier
+                    .width(40.dp)
+                    .height(4.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.outlineVariant)
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // App Icon
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                if (appIcon != null) {
+                    Image(
+                        bitmap = appIcon,
+                        contentDescription = null,
+                        modifier = Modifier.size(60.dp).clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        if (shield?.type == FocusType.GOAL) Icons.Outlined.Flag else Icons.Outlined.Block,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = if (shield?.type == FocusType.GOAL) "Goal Pursuit" else "Mindful Pause",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+
+            Text(
+                text = appName,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = if (shield?.type == FocusType.GOAL) 
+                    "You're working towards your usage goal." 
+                    else "Zenith Shield is active for this app.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (shield != null && shield.type == FocusType.GOAL) {
+                // GOAL UI
+                GoalSection(shield, totalUsageToday, onGoalDismiss)
+            } else {
+                // SHIELD UI
+                ShieldSection(
+                    shield = shield,
+                    totalUsageToday = totalUsageToday,
+                    isEmergencyUnlocked = isEmergencyUnlocked,
+                    isDelaying = isDelaying,
+                    randomMessage = randomMessage,
+                    delayProgressAnimatable = delayProgressAnimatable,
+                    delayDurationSeconds = delayDurationSeconds,
+                    isUsesExceeded = isUsesExceeded,
+                    isTimeLimitReached = isTimeLimitReached,
+                    refreshTimeLeftMillis = refreshTimeLeftMillis,
+                    onEmergencyClick = onEmergencyClick,
+                    onAllowUse = onAllowUse,
+                    onCloseApp = onCloseApp
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun LandscapeInterceptLayout(
+    packageName: String,
+    appName: String,
+    appIcon: androidx.compose.ui.graphics.ImageBitmap?,
+    shield: ShieldEntity?,
+    totalUsageToday: Long,
+    isEmergencyUnlocked: Boolean,
+    isDelaying: Boolean,
+    randomMessage: String,
+    delayProgressAnimatable: Animatable<Float, AnimationVector1D>,
+    delayDurationSeconds: Int,
+    isUsesExceeded: Boolean,
+    isTimeLimitReached: Boolean,
+    refreshTimeLeftMillis: Long,
+    currentUses: Int,
+    maxUses: Int,
+    onEmergencyClick: () -> Unit,
+    onAllowUse: (Int) -> Unit,
+    onCloseApp: () -> Unit,
+    onGoalDismiss: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(12.dp))
+        // Drag handle simulation
+        Box(
+            modifier = Modifier
+                .width(40.dp)
+                .height(4.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.outlineVariant)
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+                .padding(bottom = 24.dp, start = 24.dp, end = 24.dp, top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Left Column: App Info & Progress
+            Column(
+                modifier = Modifier
+                    .weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                // Indicators
+                if (shield != null && shield.type == FocusType.SHIELD) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.Timer, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(text = "$currentUses/$maxUses uses", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.Bolt, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(text = "Emergency: ${shield.emergencyUseCount}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (appIcon != null) {
+                        Image(
+                            bitmap = appIcon,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp).clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = appName,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = if (shield?.type == FocusType.GOAL) "Goal Pursuit" else "Mindful Pause",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = if (shield?.type == FocusType.GOAL)
+                        "You're working towards your usage goal."
+                    else "Zenith Shield is active for this app.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+
+                if (shield != null) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    if (shield.type == FocusType.GOAL) {
+                        GoalProgressMini(shield, totalUsageToday)
+                    } else {
+                        ShieldProgressMini(shield, totalUsageToday)
+                    }
+                }
+            }
+
+            // Right Column: Controls (Time buttons, Delay progress, Quit)
+            Column(
+                modifier = Modifier
+                    .weight(1.2f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                if (shield != null && shield.type == FocusType.GOAL) {
+                    GoalLandscapeContent(onGoalDismiss)
+                } else {
+                    ShieldLandscapeContent(
+                        shield = shield,
+                        isEmergencyUnlocked = isEmergencyUnlocked,
+                        isDelaying = isDelaying,
+                        randomMessage = randomMessage,
+                        delayProgressAnimatable = delayProgressAnimatable,
+                        delayDurationSeconds = delayDurationSeconds,
+                        isUsesExceeded = isUsesExceeded,
+                        isTimeLimitReached = isTimeLimitReached,
+                        refreshTimeLeftMillis = refreshTimeLeftMillis,
+                        onEmergencyClick = onEmergencyClick,
+                        onAllowUse = onAllowUse,
+                        onCloseApp = onCloseApp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, onGoalDismiss: () -> Unit) {
+    val targetLimitMillis = shield.timeLimitMinutes * 60 * 1000L
+    val progress = if (targetLimitMillis > 0) totalUsageToday.toFloat() / targetLimitMillis else 0f
+    val remainingMillis = (targetLimitMillis - totalUsageToday).coerceAtLeast(0L)
+    
+    val estimateTime = remember(remainingMillis) {
+        val finishTime = System.currentTimeMillis() + remainingMillis
+        SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(finishTime))
+    }
+
+    val motivationText = remember(progress) {
+        when {
+            progress < 0.3f -> "Great start! Keep going."
+            progress < 0.6f -> "You're halfway there! Stay focused."
+            progress < 0.9f -> "Almost finished! You can do it."
+            else -> "Just a little more to go!"
+        }
+    }
+
+    Spacer(modifier = Modifier.height(24.dp))
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "${(progress * 100).toInt()}% Done",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = "Target: ${shield.timeLimitMinutes}m",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        val animatedProgressState = animateFloatAsState(
+            targetValue = progress.coerceIn(0f, 1f),
+            animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
+            label = "goalProgress"
+        )
+        LinearWavyProgressIndicator(
+            progress = { animatedProgressState.value },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(10.dp),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            wavelength = 40.dp
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Outlined.Timer,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "Estimated finish: $estimateTime",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+
+    Spacer(modifier = Modifier.height(32.dp))
+
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Outlined.Lightbulb,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = motivationText,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        }
+    }
+
+    Spacer(modifier = Modifier.height(32.dp))
+
+    Button(
+        onClick = onGoalDismiss,
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.CheckCircle, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Got it, let's continue", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun ShieldSection(
+    shield: ShieldEntity?,
+    totalUsageToday: Long,
+    isEmergencyUnlocked: Boolean,
+    isDelaying: Boolean,
+    randomMessage: String,
+    delayProgressAnimatable: Animatable<Float, AnimationVector1D>,
+    delayDurationSeconds: Int,
+    isUsesExceeded: Boolean,
+    isTimeLimitReached: Boolean,
+    refreshTimeLeftMillis: Long,
+    onEmergencyClick: () -> Unit,
+    onAllowUse: (Int) -> Unit,
+    onCloseApp: () -> Unit
+) {
+    // Usage Progress
+    if (shield != null) {
+        Spacer(modifier = Modifier.height(24.dp))
+        val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
+        val remainingMillis = (totalLimitMillis - totalUsageToday).coerceAtLeast(0L)
+        val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
+        
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = formatMillis(totalUsageToday),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "${formatMillis(remainingMillis)} left today",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            val animatedProgressState = animateFloatAsState(
+                targetValue = progress.coerceIn(0f, 1f),
+                animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
+                label = "progress"
+            )
+            LinearWavyProgressIndicator(
+                progress = { animatedProgressState.value },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(10.dp),
+                color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                wavelength = 40.dp
+            )
+        }
+    }
+
+    if ((isUsesExceeded || isTimeLimitReached) && !isEmergencyUnlocked) {
+        LimitReachedSection(
+            isUsesExceeded = isUsesExceeded,
+            isTimeLimitReached = isTimeLimitReached,
+            refreshTimeLeftMillis = refreshTimeLeftMillis,
+            shield = shield,
+            onEmergencyClick = onEmergencyClick
+        )
+    } else {
+        Spacer(modifier = Modifier.height(32.dp))
+
+        AnimatedContent(
+            targetState = isDelaying,
+            transitionSpec = {
+                fadeIn(animationSpec = tween(500)) togetherWith
+                        fadeOut(animationSpec = tween(500))
+            },
+            label = "delayContent"
+        ) { delaying ->
+            if (delaying) {
+                DelayInProgressSection(randomMessage, delayProgressAnimatable, delayDurationSeconds)
+            } else {
+                DurationSelectionSection(isEmergencyUnlocked, onAllowUse)
+            }
+        }
+    }
+
+    Spacer(modifier = Modifier.height(24.dp))
+
+    TextButton(
+        onClick = onCloseApp,
+        modifier = Modifier.fillMaxWidth(),
+        colors = ButtonDefaults.textButtonColors(
+            contentColor = MaterialTheme.colorScheme.error
+        )
+    ) {
+        Text("Close App", fontWeight = FontWeight.Bold)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun GoalProgressMini(shield: ShieldEntity, totalUsageToday: Long) {
+    val targetLimitMillis = shield.timeLimitMinutes * 60 * 1000L
+    val progress = if (targetLimitMillis > 0) totalUsageToday.toFloat() / targetLimitMillis else 0f
+    
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "${(progress * 100).toInt()}%",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = "${shield.timeLimitMinutes}m",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        LinearWavyProgressIndicator(
+            progress = { progress.coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth().height(10.dp),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            wavelength = 40.dp
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun ShieldProgressMini(shield: ShieldEntity, totalUsageToday: Long) {
+    val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
+    val remainingMillis = (totalLimitMillis - totalUsageToday).coerceAtLeast(0L)
+    val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = formatMillis(totalUsageToday),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "${formatMillis(remainingMillis)} left",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        LinearWavyProgressIndicator(
+            progress = { progress.coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth().height(10.dp),
+            color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            wavelength = 40.dp
+        )
+    }
+}
+
+@Composable
+fun GoalLandscapeContent(onGoalDismiss: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            Icons.Outlined.CheckCircle,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Keep it up!",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(
+            onClick = onGoalDismiss,
+            modifier = Modifier.fillMaxWidth(0.8f),
+            shape = MaterialTheme.shapes.large
+        ) {
+            Text("Continue", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun ShieldLandscapeContent(
+    shield: ShieldEntity?,
+    isEmergencyUnlocked: Boolean,
+    isDelaying: Boolean,
+    randomMessage: String,
+    delayProgressAnimatable: Animatable<Float, AnimationVector1D>,
+    delayDurationSeconds: Int,
+    isUsesExceeded: Boolean,
+    isTimeLimitReached: Boolean,
+    refreshTimeLeftMillis: Long,
+    onEmergencyClick: () -> Unit,
+    onAllowUse: (Int) -> Unit,
+    onCloseApp: () -> Unit
+) {
+    if ((isUsesExceeded || isTimeLimitReached) && !isEmergencyUnlocked) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            LimitReachedContent(isUsesExceeded, isTimeLimitReached, refreshTimeLeftMillis)
+            if (shield != null && shield.emergencyUseCount > 0) {
+                Spacer(modifier = Modifier.height(16.dp))
+                EmergencyButton(onEmergencyUse = onEmergencyClick)
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            CloseAppTextButton(onCloseApp)
+        }
+    } else {
+        if (isDelaying) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                DelayInProgressSection(randomMessage, delayProgressAnimatable, delayDurationSeconds)
+                Spacer(modifier = Modifier.height(16.dp))
+                CloseAppTextButton(onCloseApp)
+            }
+        } else {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = if (isEmergencyUnlocked) "Emergency Use: Select Duration" else "How long do you want to use it?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                DurationButtonsGrid(onAllowUse)
+                Spacer(modifier = Modifier.height(12.dp))
+                CloseAppTextButton(onCloseApp)
+            }
+        }
+    }
+}
+
+@Composable
+fun LimitReachedSection(
+    isUsesExceeded: Boolean,
+    isTimeLimitReached: Boolean,
+    refreshTimeLeftMillis: Long,
+    shield: ShieldEntity?,
+    onEmergencyClick: () -> Unit
+) {
+    Spacer(modifier = Modifier.height(32.dp))
+    LimitReachedContent(isUsesExceeded, isTimeLimitReached, refreshTimeLeftMillis)
+    if (shield != null && shield.emergencyUseCount > 0) {
+        Spacer(modifier = Modifier.height(24.dp))
+        EmergencyButton(onEmergencyUse = onEmergencyClick)
+    }
+}
+
+@Composable
+fun LimitReachedContent(
+    isUsesExceeded: Boolean,
+    isTimeLimitReached: Boolean,
+    refreshTimeLeftMillis: Long
+) {
+    if (isUsesExceeded && !isTimeLimitReached) {
+        var countdownText by remember { mutableStateOf(formatCountdown(refreshTimeLeftMillis)) }
+        LaunchedEffect(refreshTimeLeftMillis) {
+            var current = refreshTimeLeftMillis
+            while (current > 0) {
+                delay(1000)
+                current -= 1000
+                countdownText = formatCountdown(current)
+            }
+        }
+
+        Text(
+            text = "Uses limit reached.\nRefresh in $countdownText",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.error,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+    } else {
+        Text(
+            text = "Daily limit reached.\nCome back tomorrow.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.error,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun DelayInProgressSection(
+    randomMessage: String,
+    delayProgressAnimatable: Animatable<Float, AnimationVector1D>,
+    delayDurationSeconds: Int
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = randomMessage,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Box(contentAlignment = Alignment.Center) {
+            CircularWavyProgressIndicator(
+                progress = { delayProgressAnimatable.value },
+                modifier = Modifier.size(100.dp),
+                color = MaterialTheme.colorScheme.primary,
+                amplitude = { 1f },
+                wavelength = 30.dp,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            )
+            val secondsLeft = kotlin.math.ceil((1f - delayProgressAnimatable.value) * delayDurationSeconds).toInt()
+            Text(
+                text = "${secondsLeft}s",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+fun DurationSelectionSection(isEmergencyUnlocked: Boolean, onAllowUse: (Int) -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = if (isEmergencyUnlocked) "Emergency Use: Select Duration" else "How long do you want to use it?",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        DurationButtonsGrid(onAllowUse)
+    }
+}
+
+@Composable
+fun CloseAppTextButton(onCloseApp: () -> Unit) {
+    TextButton(
+        onClick = onCloseApp,
+        modifier = Modifier.fillMaxWidth(),
+        colors = ButtonDefaults.textButtonColors(
+            contentColor = MaterialTheme.colorScheme.error
+        )
+    ) {
+        Text("Close App", fontWeight = FontWeight.Bold)
     }
 }
 
@@ -629,8 +1115,6 @@ fun ScheduleOverlayContent(
     val appIcon = remember(packageName) {
         try {
             val drawable = context.packageManager.getApplicationIcon(packageName)
-            // Downsample bitmap secara drastis ke 120px untuk menghemat RAM.
-            // Dari ~1MB menjadi ~60KB per ikon.
             drawable.toBitmap(width = 120, height = 120).asImageBitmap()
         } catch (_: Exception) {
             null
@@ -676,9 +1160,12 @@ fun ScheduleOverlayContent(
             val elapsed = (currentMin - startMin).coerceIn(0, total)
 
             value = elapsed.toFloat() / total.toFloat()
-            delay(30000) // Update setiap 30 detik saja, jadwal tidak butuh presisi detik
+            delay(30000) 
         }
     }
+
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     Box(
         modifier = Modifier
@@ -686,7 +1173,6 @@ fun ScheduleOverlayContent(
             .background(Color.Transparent),
         contentAlignment = Alignment.BottomCenter
     ) {
-        // Scrim background with fade animation
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -699,185 +1185,417 @@ fun ScheduleOverlayContent(
 
         AnimatedVisibility(
             visible = showContent,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            enter = slideInVertically(
+                initialOffsetY = { it },
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)
+            ) + fadeIn(),
+            exit = slideOutVertically(
+                targetOffsetY = { it },
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)
+            ) + fadeOut(),
             modifier = Modifier.fillMaxWidth()
         ) {
             Card(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .wrapContentHeight()
+                    .let { 
+                        if (isLandscape) it.widthIn(max = 640.dp).wrapContentHeight() 
+                        else it.fillMaxWidth().wrapContentHeight() 
+                    }
+                    .align(Alignment.BottomCenter)
                     .imePadding(),
                 shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
             ) {
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    // Emergency Indicator
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 28.dp, end = 20.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Outlined.Bolt,
-                            null,
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Emergency: ${schedule.emergencyUseCount}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .padding(24.dp)
-                            .fillMaxWidth()
-                            .navigationBarsPadding(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                    Box(
-                        modifier = Modifier
-                            .width(40.dp)
-                            .height(4.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.outlineVariant)
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Box(
-                        modifier = Modifier
-                            .size(80.dp)
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (appIcon != null) {
-                            Image(
-                                bitmap = appIcon,
-                                contentDescription = null,
-                                modifier = Modifier.size(60.dp),
-                                contentScale = ContentScale.Fit
-                            )
-                        } else {
-                            Icon(Icons.Outlined.Schedule, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = "Schedule Active: ${schedule.name}",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Text(
-                        text = appName,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    val modeText = if (schedule.mode == ScheduleMode.BLOCK) 
-                        "This app is blocked by your schedule." 
-                        else "Only selected apps are allowed during this schedule."
-
-                    Text(
-                        text = modeText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Outlined.Timer, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "${schedule.startTime} - ${schedule.endTime}",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    if (schedule.mode == ScheduleMode.ALLOW) {
-                        // Progress indicator for Allow mode
-                        CircularWavyProgressIndicator(
-                            progress = { progress },
-                            modifier = Modifier.size(120.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            amplitude = { 1f },
-                            wavelength = 36.dp,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                        )
-                        Spacer(modifier = Modifier.height(24.dp))
-                    }
-
-                    if (!isEmergencyUnlocked) {
-                        if (schedule.emergencyUseCount > 0) {
-                            EmergencyButton(onEmergencyUse = { isEmergencyUnlocked = true })
-                            Spacer(modifier = Modifier.height(24.dp))
-                        }
-                    } else {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = "Emergency Use: Select Duration",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            DurationButtonsGrid { minutes ->
-                                scope.launch {
-                                    showContent = false
-                                    delay(400)
-                                    onAllowUse(minutes, true)
-                                }
+                if (isLandscape) {
+                    LandscapeScheduleLayout(
+                        appName = appName,
+                        appIcon = appIcon,
+                        schedule = schedule,
+                        progress = progress,
+                        isEmergencyUnlocked = isEmergencyUnlocked,
+                        onEmergencyClick = { isEmergencyUnlocked = true },
+                        onAllowUse = { minutes ->
+                            scope.launch {
+                                showContent = false
+                                delay(400)
+                                onAllowUse(minutes, isEmergencyUnlocked)
                             }
-                            Spacer(modifier = Modifier.height(24.dp))
-                        }
-                    }
-
-                    TextButton(
-                        onClick = {
+                        },
+                        onCloseApp = {
                             scope.launch {
                                 showContent = false
                                 delay(400)
                                 onCloseApp()
                             }
+                        }
+                    )
+                } else {
+                    PortraitScheduleLayout(
+                        appName = appName,
+                        appIcon = appIcon,
+                        schedule = schedule,
+                        progress = progress,
+                        isEmergencyUnlocked = isEmergencyUnlocked,
+                        onEmergencyClick = { isEmergencyUnlocked = true },
+                        onAllowUse = { minutes ->
+                            scope.launch {
+                                showContent = false
+                                delay(400)
+                                onAllowUse(minutes, isEmergencyUnlocked)
+                            }
                         },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Text("Close App", fontWeight = FontWeight.Bold)
-                    }
+                        onCloseApp = {
+                            scope.launch {
+                                showContent = false
+                                delay(400)
+                                onCloseApp()
+                            }
+                        }
+                    )
                 }
             }
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun PortraitScheduleLayout(
+    appName: String,
+    appIcon: androidx.compose.ui.graphics.ImageBitmap?,
+    schedule: ScheduleEntity,
+    progress: Float,
+    isEmergencyUnlocked: Boolean,
+    onEmergencyClick: () -> Unit,
+    onAllowUse: (Int) -> Unit,
+    onCloseApp: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        // Emergency Indicator
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 28.dp, end = 20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Outlined.Bolt,
+                null,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "Emergency: ${schedule.emergencyUseCount}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .padding(24.dp)
+                .fillMaxWidth()
+                .navigationBarsPadding(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(40.dp)
+                    .height(4.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.outlineVariant)
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                if (appIcon != null) {
+                    Image(
+                        bitmap = appIcon,
+                        contentDescription = null,
+                        modifier = Modifier.size(60.dp).clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(Icons.Outlined.Schedule, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Schedule Active: ${schedule.name}",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+
+            Text(
+                text = appName,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val modeText = if (schedule.mode == ScheduleMode.BLOCK) 
+                "This app is blocked by your schedule." 
+                else "Only selected apps are allowed during this schedule."
+
+            Text(
+                text = modeText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Outlined.Timer, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "${schedule.startTime} - ${schedule.endTime}",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            if (schedule.mode == ScheduleMode.ALLOW) {
+                CircularWavyProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.size(120.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    amplitude = { 1f },
+                    wavelength = 36.dp,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            if (!isEmergencyUnlocked) {
+                if (schedule.emergencyUseCount > 0) {
+                    EmergencyButton(onEmergencyUse = onEmergencyClick)
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Emergency Use: Select Duration",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    DurationButtonsGrid(onAllowUse)
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
+
+            TextButton(
+                onClick = onCloseApp,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("Close App", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
 }
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun LandscapeScheduleLayout(
+    appName: String,
+    appIcon: androidx.compose.ui.graphics.ImageBitmap?,
+    schedule: ScheduleEntity,
+    progress: Float,
+    isEmergencyUnlocked: Boolean,
+    onEmergencyClick: () -> Unit,
+    onAllowUse: (Int) -> Unit,
+    onCloseApp: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(12.dp))
+        // Drag handle simulation
+        Box(
+            modifier = Modifier
+                .width(40.dp)
+                .height(4.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.outlineVariant)
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+                .padding(bottom = 24.dp, start = 24.dp, end = 24.dp, top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Left Column: App Info & Schedule Details
+            Column(
+                modifier = Modifier
+                    .weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                // Emergency Indicator
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Outlined.Bolt,
+                        null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Emergency: ${schedule.emergencyUseCount}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (appIcon != null) {
+                        Image(
+                            bitmap = appIcon,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp).clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = appName,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text = "Active: ${schedule.name}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                val modeText = if (schedule.mode == ScheduleMode.BLOCK)
+                    "This app is blocked by your schedule."
+                else "Only selected apps are allowed during this schedule."
+
+                Text(
+                    text = modeText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Timer, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "${schedule.startTime} - ${schedule.endTime}",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                if (schedule.mode == ScheduleMode.ALLOW) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    CircularWavyProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.size(80.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        wavelength = 24.dp,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    )
+                }
+            }
+
+            // Right Column: Controls
+            Column(
+                modifier = Modifier
+                    .weight(1.2f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                if (!isEmergencyUnlocked) {
+                    Text(
+                        text = if (schedule.mode == ScheduleMode.BLOCK) "Blocked by Schedule" else "Not on Allow-list",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    if (schedule.emergencyUseCount > 0) {
+                        EmergencyButton(onEmergencyUse = onEmergencyClick)
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                } else {
+                    Text(
+                        text = "Emergency Use: Select Duration",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    DurationButtonsGrid(onAllowUse)
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+                
+                TextButton(
+                    onClick = onCloseApp,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Close App", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
 
 private fun formatCountdown(millis: Long): String {
     val totalSeconds = (millis / 1000).coerceAtLeast(0)

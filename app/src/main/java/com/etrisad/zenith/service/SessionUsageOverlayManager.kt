@@ -34,28 +34,39 @@ import kotlin.math.roundToInt
 class SessionUsageOverlayManager(private val context: Context) {
 
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-    private var overlayView: ComposeView? = null
-    private var lifecycleOwner: MyLifecycleOwner? = null
-    private var viewModelStore: ViewModelStore? = null
+    
+    private data class HUDInstance(
+        val packageName: String,
+        val overlayView: ComposeView,
+        val lifecycleOwner: MyLifecycleOwner,
+        val viewModelStore: ViewModelStore,
+        val isVisibleState: MutableState<Boolean>
+    )
 
-    private var targetPackageName: String? = null
-    private var isVisibleState = mutableStateOf(false)
+    private val activeHUDs = mutableListOf<HUDInstance>()
+    private val MAX_HUDS = 4
 
-    fun showHUD(packageName: String, durationMinutes: Int, size: Int, opacity: Int) {
-        if (overlayView != null) {
-            hideHUD()
+    fun showHUD(
+        packageName: String,
+        durationMinutes: Int,
+        size: Int,
+        opacity: Int,
+        onSessionEnd: () -> Unit = {}
+    ) {
+        // Jika sudah ada HUD untuk package ini, jangan buat baru
+        if (activeHUDs.any { it.packageName == packageName }) return
+
+        // Batasi maksimal 4 instance, hapus yang paling lama jika penuh
+        if (activeHUDs.size >= MAX_HUDS) {
+            hideHUD(activeHUDs.first().packageName)
         }
-        
-        targetPackageName = packageName
-        isVisibleState.value = true
 
+        val isVisibleState = mutableStateOf(true)
         val vStore = ViewModelStore()
-        viewModelStore = vStore
-
+        
         val lOwner = MyLifecycleOwner()
         lOwner.performRestore(null)
         lOwner.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-        lifecycleOwner = lOwner
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -68,7 +79,7 @@ class SessionUsageOverlayManager(private val context: Context) {
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             x = 100
-            y = 200
+            y = 200 + (activeHUDs.size * 50) // Beri sedikit offset agar tidak menumpuk persis
         }
 
         val composeView = ComposeView(context).apply {
@@ -87,7 +98,8 @@ class SessionUsageOverlayManager(private val context: Context) {
                             } catch (_: Exception) { }
                         },
                         onFinish = {
-                            hideHUD()
+                            hideHUD(packageName)
+                            onSessionEnd()
                         }
                     )
                 }
@@ -102,7 +114,7 @@ class SessionUsageOverlayManager(private val context: Context) {
 
         try {
             windowManager.addView(composeView, params)
-            overlayView = composeView
+            activeHUDs.add(HUDInstance(packageName, composeView, lOwner, vStore, isVisibleState))
             lOwner.handleLifecycleEvent(Lifecycle.Event.ON_START)
             lOwner.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
         } catch (e: Exception) {
@@ -110,31 +122,31 @@ class SessionUsageOverlayManager(private val context: Context) {
         }
     }
 
-    fun hideHUD() {
-        overlayView?.let {
-            try {
-                lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
-                lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
-                lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-                it.disposeComposition()
-                windowManager.removeViewImmediate(it)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                overlayView = null
-                lifecycleOwner = null
-                viewModelStore = null
-                targetPackageName = null
-                isVisibleState.value = false
+    fun hideHUD(packageName: String? = null) {
+        val iterator = activeHUDs.iterator()
+        while (iterator.hasNext()) {
+            val hud = iterator.next()
+            if (packageName == null || hud.packageName == packageName) {
+                try {
+                    hud.lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+                    hud.lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+                    hud.lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+                    hud.overlayView.disposeComposition()
+                    windowManager.removeViewImmediate(hud.overlayView)
+                    hud.viewModelStore.clear()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                iterator.remove()
+                if (packageName != null) break
             }
         }
     }
 
     fun updateForegroundApp(packageName: String) {
-        val target = targetPackageName ?: return
-        // Cek jika app yang sedang dibuka mengandung target package (misal: "com.instagram.android")
-        // atau jika target package mengandung app yang sedang dibuka.
-        isVisibleState.value = packageName.contains(target) || target.contains(packageName)
+        activeHUDs.forEach { hud ->
+            hud.isVisibleState.value = packageName.contains(hud.packageName) || hud.packageName.contains(packageName)
+        }
     }
 
     private class MyLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner {
@@ -191,26 +203,32 @@ fun SessionUsageHUD(
     )
 
     Box(
-        modifier = Modifier.padding(32.dp),
+        modifier = Modifier
+            .wrapContentSize()
+            .pointerInput(scaleFactor) {
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    // Apply scale factor to drag amount to keep HUD pinned to finger
+                    onDrag(dragAmount.x * scale, dragAmount.y * scale)
+                }
+            },
         contentAlignment = Alignment.Center
     ) {
         Surface(
             modifier = Modifier
+                .padding(16.dp)
                 .size(80.dp)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
                     alpha = (scale / scaleFactor).coerceIn(0f, 1f) * (opacity / 100f)
-                }
-                .pointerInput(Unit) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        onDrag(dragAmount.x, dragAmount.y)
-                    }
+                    
+                    // Penting: Pastikan transformasi terjadi dari titik tengah
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin.Center
                 },
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surface,
-            shadowElevation = 0.dp
+            shadowElevation = 4.dp
         ) {
             Box(contentAlignment = Alignment.Center) {
                 CircularWavyProgressIndicator(

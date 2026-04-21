@@ -149,8 +149,9 @@ class AppUsageMonitorService : Service() {
                                     }
                                     currentShieldCache = currentShieldCache?.copy(lastDelayStartTimestamp = delayTimestamp)
                                 }
-                            } else if (currentApp != lastForegroundApp) {
+                            } else if (currentApp != lastForegroundApp || allowedUntil > 0) {
                                 checkIfAppIsShielded(currentApp)
+                                if (allowedUntil > 0) allowedApps[currentApp] = 0L
                             }
                         }
                     }
@@ -262,7 +263,13 @@ class AppUsageMonitorService : Service() {
                                         targetPackageName,
                                         minutes,
                                         prefs.sessionUsageOverlaySize,
-                                        prefs.sessionUsageOverlayOpacity
+                                        prefs.sessionUsageOverlayOpacity,
+                                        onSessionEnd = {
+                                            allowedApps[targetPackageName] = 0L
+                                            serviceScope.launch {
+                                                checkIfAppIsShielded(targetPackageName)
+                                            }
+                                        }
                                     )
                                 }
                             }
@@ -488,7 +495,13 @@ class AppUsageMonitorService : Service() {
                                         packageName,
                                         minutes,
                                         prefs.sessionUsageOverlaySize,
-                                        prefs.sessionUsageOverlayOpacity
+                                        prefs.sessionUsageOverlayOpacity,
+                                        onSessionEnd = {
+                                            allowedApps[packageName] = 0L
+                                            serviceScope.launch {
+                                                checkIfAppIsShielded(packageName)
+                                            }
+                                        }
                                     )
                                 }
                             }

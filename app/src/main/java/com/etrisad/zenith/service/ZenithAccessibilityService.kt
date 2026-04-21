@@ -123,8 +123,9 @@ class ZenithAccessibilityService : AccessibilityService() {
                 if (shield.isAutoQuitEnabled && allowedUntil > 0) {
                     goToHomeScreen()
                     allowedApps.remove(currentApp)
-                } else if (currentApp != lastForegroundApp) {
+                } else if (currentApp != lastForegroundApp || allowedUntil > 0) {
                     checkIfAppIsShielded(currentApp)
+                    if (allowedUntil > 0) allowedApps[currentApp] = 0L
                 }
             }
         }
@@ -205,7 +206,13 @@ class ZenithAccessibilityService : AccessibilityService() {
                                         packageName,
                                         minutes,
                                         prefs.sessionUsageOverlaySize,
-                                        prefs.sessionUsageOverlayOpacity
+                                        prefs.sessionUsageOverlayOpacity,
+                                        onSessionEnd = {
+                                            allowedApps[packageName] = 0L
+                                            serviceScope.launch {
+                                                checkIfAppIsShielded(packageName)
+                                            }
+                                        }
                                     )
                                 }
                             }
@@ -310,7 +317,13 @@ class ZenithAccessibilityService : AccessibilityService() {
                                         packageName,
                                         minutes,
                                         prefs.sessionUsageOverlaySize,
-                                        prefs.sessionUsageOverlayOpacity
+                                        prefs.sessionUsageOverlayOpacity,
+                                        onSessionEnd = {
+                                            allowedApps[packageName] = 0L
+                                            serviceScope.launch {
+                                                checkIfAppIsShielded(packageName)
+                                            }
+                                        }
                                     )
                                 }
                             }
