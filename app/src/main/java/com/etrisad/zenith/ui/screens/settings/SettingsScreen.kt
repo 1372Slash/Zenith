@@ -1071,7 +1071,7 @@ fun AboutCard() {
             
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Zenith v1.1",
+                    text = "Zenith v1.2",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
