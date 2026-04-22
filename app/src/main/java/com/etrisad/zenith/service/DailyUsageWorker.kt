@@ -1,9 +1,13 @@
 package com.etrisad.zenith.service
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.NotificationCompat
 import androidx.work.*
 import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.local.entity.DailyUsageEntity
@@ -74,6 +78,7 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         usages.add(DailyUsageEntity(date = dateString, packageName = "TOTAL", usageTimeMillis = totalUsage))
 
         dailyUsageDao.insertAll(usages)
+        sendDataSavedNotification()
 
         // Clean up old data (> 30 days to be safe, though 21 is required)
         val cleanupCal = Calendar.getInstance()
@@ -81,6 +86,30 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         dailyUsageDao.deleteOldUsage(dateFormat.format(cleanupCal.time))
 
         return Result.success()
+    }
+
+    private fun sendDataSavedNotification() {
+        val channelId = "zenith_usage_sync"
+        val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        
+        val channel = NotificationChannel(
+            channelId,
+            "Usage Sync",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Notifies when daily usage data is saved"
+        }
+        manager.createNotificationChannel(channel)
+
+        val notification = NotificationCompat.Builder(applicationContext, channelId)
+            .setContentTitle("Daily Report Prepared")
+            .setContentText("Your screen time usage for today has been safely saved.")
+            .setSmallIcon(android.R.drawable.ic_menu_save)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setAutoCancel(true)
+            .build()
+
+        manager.notify(999, notification)
     }
 
     companion object {
