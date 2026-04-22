@@ -77,9 +77,10 @@ class SessionUsageOverlayManager(private val context: Context) {
         }
 
         val totalSeconds = durationMinutes * 60
+        // Disesuaikan agar posisi visual lingkaran tetap konsisten dengan adanya buffer animasi (104, 204)
         val session = Session(
             packageName, totalSeconds, size, opacity, onSessionEnd,
-            100, 200 + (activeSessions.size * 50)
+            104, 204 + (activeSessions.size * 50)
         )
         activeSessions.add(session)
 
@@ -88,7 +89,6 @@ class SessionUsageOverlayManager(private val context: Context) {
                 delay(1000)
                 session.secondsLeftState.intValue--
             }
-            // Jika tidak ada HUD aktif (sedang di luar app), hapus session segera
             if (session.hudInstance == null) {
                 hideHUD(session.packageName)
             }
@@ -197,10 +197,8 @@ class SessionUsageOverlayManager(private val context: Context) {
                 } else {
                     if (session.hudInstance != null && session.isVisibleState.value) {
                         session.isVisibleState.value = false
-                        // Berikan waktu untuk animasi keluar selesai (sekitar 500ms)
                         launch {
                             delay(500)
-                            // Cek kembali, jika masih tidak foreground, baru hancurkan
                             if (!session.isVisibleState.value && session.hudInstance != null) {
                                 destroyHUDInstance(session.hudInstance!!)
                                 session.hudInstance = null
@@ -242,7 +240,6 @@ fun SessionUsageHUD(
 
     val progress = secondsLeft.toFloat() / totalSeconds.toFloat()
     val scaleFactor = size / 100f
-    
     val showHUD = isVisible && !animatingOut && entranceAnimationStarted
 
     val scale by animateFloatAsState(
@@ -259,48 +256,57 @@ fun SessionUsageHUD(
         }
     )
 
+    val baseSize = 80.dp
+    val animationBuffer = 24.dp // Ruang ekstra agar animasi bounce tidak terpotong
+
     Box(
         modifier = Modifier
-            .wrapContentSize()
+            // Ukuran luar (hitbox) sekarang mencakup baseSize + buffer, dikalikan scaleFactor
+            .size((baseSize + animationBuffer) * scaleFactor)
             .pointerInput(scaleFactor) {
                 detectDragGestures { change, dragAmount ->
                     change.consume()
-                    onDrag(dragAmount.x * scale, dragAmount.y * scale)
+                    onDrag(dragAmount.x, dragAmount.y)
                 }
             },
         contentAlignment = Alignment.Center
     ) {
-        Surface(
+        // Box internal untuk animasi visual
+        Box(
             modifier = Modifier
-                .padding(16.dp)
-                .size(80.dp)
+                .requiredSize(baseSize + animationBuffer)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
-                    alpha = (scale / scaleFactor).coerceIn(0f, 1f) * (opacity / 100f)
+                    alpha = if (scaleFactor > 0f) (scale / scaleFactor).coerceIn(0f, 1f) * (opacity / 100f) else 0f
                     transformOrigin = androidx.compose.ui.graphics.TransformOrigin.Center
                 },
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surface
+            contentAlignment = Alignment.Center
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                CircularWavyProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxSize().padding(4.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    amplitude = { 1.5f },
-                    wavelength = 20.dp
-                )
-                
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = if (secondsLeft >= 60) "${secondsLeft / 60}m" else "${secondsLeft}s",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 16.sp
+            Surface(
+                modifier = Modifier.requiredSize(baseSize),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    CircularWavyProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxSize().padding(4.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        amplitude = { 1.5f },
+                        wavelength = 20.dp
                     )
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = if (secondsLeft >= 60) "${secondsLeft / 60}m" else "${secondsLeft}s",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            lineHeight = 16.sp
+                        )
+                    }
                 }
             }
         }
