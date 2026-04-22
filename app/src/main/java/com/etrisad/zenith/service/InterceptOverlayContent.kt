@@ -989,7 +989,7 @@ fun ShieldLandscapeContent(
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                DurationButtonsGrid(remainingMinutes, onAllowUse)
+                DurationButtonsGrid(if (isEmergencyUnlocked) null else remainingMinutes, onAllowUse)
                 Spacer(modifier = Modifier.height(12.dp))
                 CloseAppTextButton(onCloseApp)
             }
@@ -1102,7 +1102,7 @@ fun DurationSelectionSection(remainingMinutes: Int?, isEmergencyUnlocked: Boolea
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        DurationButtonsGrid(remainingMinutes, onAllowUse)
+        DurationButtonsGrid(if (isEmergencyUnlocked) null else remainingMinutes, onAllowUse)
     }
 }
 
