@@ -387,17 +387,20 @@ class AppUsageMonitorService : Service() {
         val shield = currentShieldCache ?: return
         val currentTime = System.currentTimeMillis()
 
+        // Sync local cache with HUD for Goal-type apps every second
+        // This ensures the HUD timer moves forward even between system stat fetches
+        if (shield.type == FocusType.GOAL) {
+            serviceScope.launch(Dispatchers.Main) {
+                // We use cachedTotalUsage but add the time elapsed since the last fetch
+                val timeSinceFetch = if (lastUsageFetchTime > 0) currentTime - lastUsageFetchTime else 0L
+                sessionUsageOverlayManager.updateHUDUsage(packageName, cachedTotalUsage + timeSinceFetch)
+            }
+        }
+
         // Fetch dari sistem setiap 30 detik (efisien agar tidak memberatkan sistem)
         if (currentTime - lastUsageFetchTime > 30000) {
             cachedTotalUsage = getTotalUsageToday(packageName)
             lastUsageFetchTime = currentTime
-
-            // Sync HUD for Goal-type apps
-            if (shield.type == FocusType.GOAL) {
-                serviceScope.launch(Dispatchers.Main) {
-                    sessionUsageOverlayManager.updateHUDUsage(packageName, cachedTotalUsage)
-                }
-            }
         }
 
         val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()

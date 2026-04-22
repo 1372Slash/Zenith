@@ -217,7 +217,12 @@ class SessionUsageOverlayManager(private val context: Context) {
     fun updateHUDUsage(packageName: String, usageMillis: Long) {
         activeSessions.find { it.packageName == packageName }?.let { session ->
             if (session.isGoal) {
-                session.secondsElapsedState.intValue = (usageMillis / 1000).toInt()
+                val newSeconds = (usageMillis / 1000).toInt()
+                // Only update if the system value is greater than our local timer
+                // this prevents stale system stats from resetting the HUD progress backwards
+                if (newSeconds > session.secondsElapsedState.intValue) {
+                    session.secondsElapsedState.intValue = newSeconds
+                }
             }
         }
     }
