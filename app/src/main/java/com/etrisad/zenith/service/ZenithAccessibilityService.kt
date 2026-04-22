@@ -43,6 +43,9 @@ class ZenithAccessibilityService : AccessibilityService() {
     private var activeSchedules = listOf<ScheduleEntity>()
     private var whitelistedPackages = setOf<String>()
     private var currentPreferences: UserPreferences? = null
+    private var allShieldsCache = listOf<ShieldEntity>()
+    private var usageStatsCache: List<android.app.usage.UsageStats>? = null
+    private var lastUsageCacheTime = 0L
 
     private class ParsedSchedule(
         val id: Long,
@@ -66,6 +69,12 @@ class ZenithAccessibilityService : AccessibilityService() {
         preferencesRepository = UserPreferencesRepository(this)
         overlayManager = InterceptOverlayManager(this)
         sessionUsageOverlayManager = SessionUsageOverlayManager(this)
+
+        serviceScope.launch {
+            shieldRepository.allShields.collect { shields ->
+                allShieldsCache = shields
+            }
+        }
 
         serviceScope.launch {
             shieldRepository.allSchedules.collect { schedules: List<ScheduleEntity> ->
@@ -119,7 +128,7 @@ class ZenithAccessibilityService : AccessibilityService() {
 
         if (currentApp != lastForegroundApp) {
             sessionUsageOverlayManager.updateForegroundApp(currentApp)
-            currentShieldCache = shieldRepository.getShieldByPackageName(currentApp)
+            currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
             lastUsageFetchTime = 0L
         }
 
@@ -185,7 +194,7 @@ class ZenithAccessibilityService : AccessibilityService() {
         // Double check foreground app to prevent overlay appearing over wrong app
         if (targetPackageName != lastForegroundApp) return
 
-        val shield = currentShieldCache ?: shieldRepository.getShieldByPackageName(targetPackageName)
+        val shield = currentShieldCache ?: allShieldsCache.find { it.packageName == targetPackageName }
         if (shield != null && !InterceptOverlayManager.isShowing) {
             val totalUsageToday = getTotalUsageToday(targetPackageName)
             val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
@@ -281,19 +290,28 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private fun getTotalUsageToday(packageName: String): Long {
-        val endTime = System.currentTimeMillis()
+        val currentTime = System.currentTimeMillis()
         
-        synchronized(reusableCalendar) {
-            reusableCalendar.timeInMillis = endTime
-            reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
-            reusableCalendar.set(java.util.Calendar.MINUTE, 0)
-            reusableCalendar.set(java.util.Calendar.SECOND, 0)
-            reusableCalendar.set(java.util.Calendar.MILLISECOND, 0)
-            val startTime = reusableCalendar.timeInMillis
+        // Cache usage stats list for 3 seconds to avoid redundant system calls
+        var stats = usageStatsCache
+        if (stats == null || currentTime - lastUsageCacheTime > 3000) {
+            synchronized(reusableCalendar) {
+                reusableCalendar.timeInMillis = currentTime
+                reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                reusableCalendar.set(java.util.Calendar.MINUTE, 0)
+                reusableCalendar.set(java.util.Calendar.SECOND, 0)
+                reusableCalendar.set(java.util.Calendar.MILLISECOND, 0)
+                val startTime = reusableCalendar.timeInMillis
 
-            val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, endTime)
-            return stats?.find { it.packageName == packageName }?.totalTimeVisible ?: 0L
+                stats = try {
+                    usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, currentTime)
+                } catch (_: Exception) { null }
+                usageStatsCache = stats
+                lastUsageCacheTime = currentTime
+            }
         }
+        
+        return stats?.find { it.packageName == packageName }?.totalTimeVisible ?: 0L
     }
 
     private fun goToHomeScreen() {

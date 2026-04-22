@@ -50,6 +50,31 @@ class AppUsageMonitorService : Service() {
     private val systemAppCache = mutableMapOf<String, Boolean>()
     private var lastLauncherRefreshTime = 0L
     private var currentPreferences: UserPreferences? = null
+    private var allShieldsCache = listOf<ShieldEntity>()
+    private var goalShieldsCache = listOf<ShieldEntity>()
+    private var lastCheckedDayTimestamp = 0L
+    private var isScreenOn = true
+    private var isPowerSaveMode = false
+
+    // Global usage cache to prevent multiple system calls in one cycle
+    private var usageStatsCache: List<android.app.usage.UsageStats>? = null
+    private var lastUsageCacheTime = 0L
+
+    private val screenStateReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_ON -> isScreenOn = true
+                Intent.ACTION_SCREEN_OFF -> {
+                    isScreenOn = false
+                    currentShieldCache = null
+                    usageStatsCache = null
+                }
+                android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED -> {
+                    isPowerSaveMode = powerManager.isPowerSaveMode
+                }
+            }
+        }
+    }
     
     // Cache untuk jadwal agar tidak perlu parsing string setiap detik
     private class ParsedSchedule(
@@ -75,6 +100,15 @@ class AppUsageMonitorService : Service() {
         preferencesRepository = UserPreferencesRepository(this)
         overlayManager = InterceptOverlayManager(this)
         sessionUsageOverlayManager = SessionUsageOverlayManager(this)
+
+        serviceScope.launch {
+            shieldRepository.allShields.collect { shields ->
+                allShieldsCache = shields
+                goalShieldsCache = shields.filter { 
+                    it.type == FocusType.GOAL && it.goalReminderPeriodMinutes > 0 
+                }
+            }
+        }
 
         serviceScope.launch {
             shieldRepository.allSchedules.collect { schedules ->
@@ -104,6 +138,16 @@ class AppUsageMonitorService : Service() {
 
         startForeground(NOTIFICATION_ID, createNotification())
         createGoalNotificationChannel()
+        
+        val filter = android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+        }
+        registerReceiver(screenStateReceiver, filter)
+        isScreenOn = powerManager.isInteractive
+        isPowerSaveMode = powerManager.isPowerSaveMode
+
         startMonitoring()
         startGoalReminderCheck()
     }
@@ -112,23 +156,23 @@ class AppUsageMonitorService : Service() {
         serviceScope.launch {
             while (true) {
                 val currentTime = System.currentTimeMillis()
-                val allShields = shieldRepository.allShields.first()
-                val goals = allShields.filter { 
-                    it.type == FocusType.GOAL && it.goalReminderPeriodMinutes > 0 
-                }
+                val goals = goalShieldsCache
 
-                goals.forEach { goal ->
-                    // Jangan ingatkan jika aplikasi sedang dibuka
-                    if (goal.packageName == lastForegroundApp) return@forEach
-                    
-                    // Jangan ingatkan jika goal hari ini sudah tercapai
-                    val usageToday = getTotalUsageToday(goal.packageName)
-                    if (usageToday >= (goal.timeLimitMinutes * 60 * 1000L)) return@forEach
+                if (goals.isNotEmpty()) {
+                    val usageMap = getAllUsageToday()
+                    goals.forEach { goal ->
+                        // Jangan ingatkan jika aplikasi sedang dibuka
+                        if (goal.packageName == lastForegroundApp) return@forEach
+                        
+                        // Jangan ingatkan jika goal hari ini sudah tercapai
+                        val usageToday = usageMap[goal.packageName] ?: 0L
+                        if (usageToday >= (goal.timeLimitMinutes * 60 * 1000L)) return@forEach
 
-                    val periodMillis = goal.goalReminderPeriodMinutes * 60 * 1000L
-                    if (currentTime - goal.lastGoalReminderTimestamp >= periodMillis) {
-                        sendGoalSuggestionNotification(goal)
-                        shieldRepository.updateShield(goal.copy(lastGoalReminderTimestamp = currentTime))
+                        val periodMillis = goal.goalReminderPeriodMinutes * 60 * 1000L
+                        if (currentTime - goal.lastGoalReminderTimestamp >= periodMillis) {
+                            sendGoalSuggestionNotification(goal)
+                            shieldRepository.updateShield(goal.copy(lastGoalReminderTimestamp = currentTime))
+                        }
                     }
                 }
                 
@@ -204,51 +248,57 @@ class AppUsageMonitorService : Service() {
         serviceScope.launch {
             while (true) {
                 // 1. Matikan monitoring jika layar mati untuk menghemat CPU & baterai
-                if (!powerManager.isInteractive) {
-                    delay(2000)
+                if (!isScreenOn) {
+                    delay(5000)
                     continue
                 }
 
-                if (ZenithAccessibilityService.isServiceRunning) {
+                val isAccessibilityActive = ZenithAccessibilityService.isServiceRunning
+                
+                // Adaptive Polling Logic
+                if (isAccessibilityActive) {
+                    // Jika Accessibility aktif, polling ini melambat drastis (3 detik)
+                    // karena Accessibility sudah menghandle deteksi instan via event.
+                    // Ini menghemat baterai secara signifikan tanpa mengurangi performa.
                     currentShieldCache = null
+                    usageStatsCache = null
                     lastUsageFetchTime = 0L
-                    delay(1000)
+                    delay(3000) 
                     continue
                 }
 
                 val currentApp = getForegroundApp()
                 val currentTime = System.currentTimeMillis()
 
-                // Check for day change only every 60 seconds to save RAM
-                if (currentTime % 60000 < 2000) {
+                // Check for day change efficiently
+                if (currentTime - lastCheckedDayTimestamp > 60000) {
                     reusableCalendar.timeInMillis = currentTime
                     val currentDay = reusableCalendar.get(java.util.Calendar.DAY_OF_YEAR)
                     if (lastCheckedDay != -1 && currentDay != lastCheckedDay) {
                         updateStreaks()
-                        notifiedGoals.clear() // Reset notifikasi saat ganti hari
+                        notifiedGoals.clear() 
                     }
                     lastCheckedDay = currentDay
+                    lastCheckedDayTimestamp = currentTime
                 }
 
                 if (currentApp != null && currentApp != packageName) {
                     sessionUsageOverlayManager.updateForegroundApp(currentApp)
-                    // Reset cache if app changed
+                    
                     if (currentApp != lastForegroundApp) {
-                        currentShieldCache = shieldRepository.getShieldByPackageName(currentApp)
+                        currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
                         lastUsageFetchTime = 0L 
                     }
 
                     if (shouldBypassBlocking(currentApp)) {
                         lastForegroundApp = currentApp
-                        // Delay lebih singkat untuk aplikasi whitelisted agar tetap responsif saat switch
-                        delay(1000)
+                        delay(if (isPowerSaveMode) 2000L else 1000L)
                         continue
                     }
 
                     val allowedUntil = allowedApps[currentApp] ?: 0L
                     updateUsageTime(currentApp)
                     
-                    // Pastikan HUD muncul jika sesi masih aktif (misal setelah service restart atau HUD terhapus)
                     if (allowedUntil > currentTime) {
                         val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
                         if (prefs.sessionUsageOverlayEnabled) {
@@ -262,7 +312,7 @@ class AppUsageMonitorService : Service() {
                                     onSessionEnd = {
                                         allowedApps[currentApp] = 0L
                                         serviceScope.launch {
-                                            val shield = shieldRepository.getShieldByPackageName(currentApp)
+                                            val shield = allShieldsCache.find { it.packageName == currentApp }
                                             if (shield != null) {
                                                 val updated = shield.copy(lastSessionEndTimestamp = System.currentTimeMillis())
                                                 shieldRepository.updateShield(updated)
@@ -305,8 +355,15 @@ class AppUsageMonitorService : Service() {
                 }
                 
                 lastForegroundApp = currentApp
-                // Delay 500ms adalah sweet spot antara responsivitas dan hemat baterai
-                delay(500)
+                
+                // Adaptive Delay: Tetap responsif jika tanpa Accessibility
+                // 500ms adalah sweet spot untuk deteksi polling yang terasa cepat bagi user.
+                val delayTime = when {
+                    isPowerSaveMode -> 1200L
+                    currentApp == packageName -> 1000L
+                    else -> 500L
+                }
+                delay(delayTime)
             }
         }
     }
@@ -400,7 +457,7 @@ class AppUsageMonitorService : Service() {
         val currentForeground = getForegroundApp()
         if (targetPackageName != currentForeground) return
 
-        val shield = currentShieldCache ?: shieldRepository.getShieldByPackageName(targetPackageName)
+        val shield = currentShieldCache ?: allShieldsCache.find { it.packageName == targetPackageName }
         if (shield != null && !InterceptOverlayManager.isShowing) {
             val totalUsageToday = getTotalUsageToday(targetPackageName)
             val delayDurationSeconds = preferencesRepository.userPreferencesFlow.first().delayAppDurationSeconds
@@ -539,17 +596,7 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun getTotalUsageToday(packageName: String): Long {
-        val endTime = System.currentTimeMillis()
-        reusableCalendar.timeInMillis = endTime
-        reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
-        reusableCalendar.set(java.util.Calendar.MINUTE, 0)
-        reusableCalendar.set(java.util.Calendar.SECOND, 0)
-        reusableCalendar.set(java.util.Calendar.MILLISECOND, 0)
-        val startTime = reusableCalendar.timeInMillis
-
-        // Gunakan queryUsageStats biasa tapi langsung cari package-nya
-        // Ini jauh lebih ringan daripada queryAndAggregate yang membuat Map raksasa
-        val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, endTime)
+        val stats = getUsageStatsList()
         if (stats.isNullOrEmpty()) return 0L
         
         for (stat in stats) {
@@ -559,6 +606,32 @@ class AppUsageMonitorService : Service() {
         }
         
         return 0L
+    }
+
+    private fun getUsageStatsList(): List<android.app.usage.UsageStats>? {
+        val currentTime = System.currentTimeMillis()
+        // Cache usage stats list for 3 seconds to avoid redundant system calls
+        if (usageStatsCache != null && currentTime - lastUsageCacheTime < 3000) {
+            return usageStatsCache
+        }
+
+        reusableCalendar.timeInMillis = currentTime
+        reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        reusableCalendar.set(java.util.Calendar.MINUTE, 0)
+        reusableCalendar.set(java.util.Calendar.SECOND, 0)
+        reusableCalendar.set(java.util.Calendar.MILLISECOND, 0)
+        val startTime = reusableCalendar.timeInMillis
+
+        usageStatsCache = try {
+            usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, currentTime)
+        } catch (_: Exception) { null }
+        lastUsageCacheTime = currentTime
+        return usageStatsCache
+    }
+
+    private fun getAllUsageToday(): Map<String, Long> {
+        val stats = getUsageStatsList()
+        return stats?.associate { it.packageName to it.totalTimeVisible } ?: emptyMap()
     }
 
     private fun goToHomeScreen() {
@@ -648,13 +721,7 @@ class AppUsageMonitorService : Service() {
         if (packageName == this.packageName) return true
         if (packageName in whitelistedPackages) return true
         if (isLauncherOrSystemHome(packageName)) return true
-
-        val criticalSystemPackages = setOf(
-            "android", "com.android.systemui", "com.android.settings", "com.android.phone",
-            "com.android.server.telecom", "com.google.android.packageinstaller",
-            "com.android.packageinstaller", "com.google.android.permissioncontroller"
-        )
-        if (packageName in criticalSystemPackages) return true
+        if (packageName in CRITICAL_SYSTEM_PACKAGES) return true
 
         try {
             val isSystem = systemAppCache[packageName] ?: run {
@@ -665,11 +732,7 @@ class AppUsageMonitorService : Service() {
             }
             
             if (isSystem) {
-                val blockableSystemApps = setOf(
-                    "com.google.android.youtube", "com.android.chrome",
-                    "com.google.android.apps.youtube.music", "com.android.vending"
-                )
-                return packageName !in blockableSystemApps
+                return packageName !in BLOCKABLE_SYSTEM_APPS
             }
         } catch (_: Exception) { return true }
         return false
@@ -785,10 +848,22 @@ class AppUsageMonitorService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            unregisterReceiver(screenStateReceiver)
+        } catch (_: Exception) {}
         serviceJob.cancel()
     }
 
     companion object {
         private const val NOTIFICATION_ID = 101
+        private val CRITICAL_SYSTEM_PACKAGES = setOf(
+            "android", "com.android.systemui", "com.android.settings", "com.android.phone",
+            "com.android.server.telecom", "com.google.android.packageinstaller",
+            "com.android.packageinstaller", "com.google.android.permissioncontroller"
+        )
+        private val BLOCKABLE_SYSTEM_APPS = setOf(
+            "com.google.android.youtube", "com.android.chrome",
+            "com.google.android.apps.youtube.music", "com.android.vending"
+        )
     }
 }
