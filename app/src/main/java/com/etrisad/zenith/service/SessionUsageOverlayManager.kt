@@ -5,9 +5,12 @@ import android.graphics.PixelFormat
 import android.os.Bundle
 import android.view.Gravity
 import android.view.WindowManager
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -16,6 +19,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
@@ -34,10 +40,11 @@ import kotlin.math.roundToInt
 class SessionUsageOverlayManager(private val context: Context) {
 
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-    
+
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private var currentForegroundPackage: String = ""
+    private var foregroundUpdateJob: Job? = null
 
     private data class HUDInstance(
         val overlayView: ComposeView,
@@ -83,7 +90,6 @@ class SessionUsageOverlayManager(private val context: Context) {
         }
 
         val totalSeconds = durationMinutes * 60
-        // Disesuaikan agar posisi visual lingkaran tetap konsisten dengan adanya buffer animasi (104, 204)
         val session = Session(
             packageName, totalSeconds, size, opacity, isGoal, onSessionEnd,
             104, 204 + (activeSessions.size * 50)
@@ -101,9 +107,9 @@ class SessionUsageOverlayManager(private val context: Context) {
                 if (!isGoal && session.secondsLeftState.intValue <= 0) break
                 if (isGoal && session.secondsElapsedState.intValue >= session.totalSeconds) break
 
-                delay(1000)
+                // Maximum Efficiency: Update internal state every 10 seconds to minimize CPU wakes
+                delay(10000)
 
-                // Safety: Reset session if user is outside the app for more than 3 minutes
                 if (session.backgroundTimestamp != 0L &&
                     System.currentTimeMillis() - session.backgroundTimestamp > 180000L) {
                     hideHUD(session.packageName)
@@ -111,9 +117,9 @@ class SessionUsageOverlayManager(private val context: Context) {
                 }
 
                 if (isGoal) {
-                    session.secondsElapsedState.intValue++
+                    session.secondsElapsedState.intValue = (session.secondsElapsedState.intValue + 10).coerceAtMost(session.totalSeconds)
                 } else {
-                    session.secondsLeftState.intValue--
+                    session.secondsLeftState.intValue = (session.secondsLeftState.intValue - 10).coerceAtLeast(0)
                 }
             }
             if (session.hudInstance == null || (!isGoal && session.secondsLeftState.intValue <= 0) || (isGoal && session.secondsElapsedState.intValue >= session.totalSeconds)) {
@@ -146,11 +152,11 @@ class SessionUsageOverlayManager(private val context: Context) {
             setContent {
                 ZenithTheme {
                     SessionUsageHUD(
-                        secondsLeft = if (session.isGoal) session.secondsElapsedState.intValue else session.secondsLeftState.intValue,
+                        secondsLeftProvider = { if (session.isGoal) session.secondsElapsedState.intValue else session.secondsLeftState.intValue },
                         totalSeconds = session.totalSeconds,
                         size = session.size,
                         opacity = session.opacity,
-                        isVisible = session.isVisibleState.value,
+                        isVisibleProvider = { session.isVisibleState.value },
                         isGoal = session.isGoal,
                         onDrag = { dx, dy ->
                             params.x += dx.roundToInt()
@@ -194,7 +200,6 @@ class SessionUsageOverlayManager(private val context: Context) {
             hud.overlayView.disposeComposition()
             windowManager.removeViewImmediate(hud.overlayView)
             hud.viewModelStore.clear()
-            System.gc()
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -218,8 +223,6 @@ class SessionUsageOverlayManager(private val context: Context) {
         activeSessions.find { it.packageName == packageName }?.let { session ->
             if (session.isGoal) {
                 val newSeconds = (usageMillis / 1000).toInt()
-                // Only update if the system value is greater than our local timer
-                // this prevents stale system stats from resetting the HUD progress backwards
                 if (newSeconds > session.secondsElapsedState.intValue) {
                     session.secondsElapsedState.intValue = newSeconds
                 }
@@ -228,8 +231,11 @@ class SessionUsageOverlayManager(private val context: Context) {
     }
 
     fun updateForegroundApp(packageName: String) {
+        if (currentForegroundPackage == packageName) return
         currentForegroundPackage = packageName
-        scope.launch {
+        
+        foregroundUpdateJob?.cancel()
+        foregroundUpdateJob = scope.launch {
             activeSessions.forEach { session ->
                 val isForeground = packageName.contains(session.packageName) || session.packageName.contains(packageName)
                 if (isForeground) {
@@ -267,100 +273,166 @@ class SessionUsageOverlayManager(private val context: Context) {
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Immutable
+private data class HUDColors(
+    val surface: Color,
+    val primary: Color,
+    val onSurface: Color,
+    val track: Color
+)
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun SessionUsageHUD(
-    secondsLeft: Int,
+    secondsLeftProvider: () -> Int,
     totalSeconds: Int,
     size: Int,
     opacity: Int,
-    isVisible: Boolean,
+    isVisibleProvider: () -> Boolean,
     isGoal: Boolean = false,
     onDrag: (Float, Float) -> Unit,
     onFinish: () -> Unit
 ) {
-    var entranceAnimationStarted by remember { mutableStateOf(false) }
-    val animatingOut = if (isGoal) secondsLeft >= totalSeconds else secondsLeft <= 0
+    CompositionLocalProvider(LocalRippleConfiguration provides null) {
+        val entranceAnimationStarted = remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { entranceAnimationStarted.value = true }
 
-    LaunchedEffect(Unit) {
-        entranceAnimationStarted = true
-    }
-
-    val progress = if (isGoal) {
-        secondsLeft.toFloat() / totalSeconds.toFloat()
-    } else {
-        secondsLeft.toFloat() / totalSeconds.toFloat()
-    }
-    val scaleFactor = size / 100f
-    val showHUD = isVisible && !animatingOut && entranceAnimationStarted
-
-    val scale by animateFloatAsState(
-        targetValue = if (showHUD) scaleFactor else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "HUDScale",
-        finishedListener = {
-            if (animatingOut) {
-                onFinish()
+        val animatingOutState = remember {
+            derivedStateOf {
+                val secondsLeft = secondsLeftProvider()
+                if (isGoal) secondsLeft >= totalSeconds else secondsLeft <= 0
             }
         }
-    )
 
-    val baseSize = 80.dp
-    val animationBuffer = 24.dp // Ruang ekstra agar animasi bounce tidak terpotong
+        val scaleFactor = remember(size) { size / 100f }
+        val showHUDState = remember {
+            derivedStateOf {
+                isVisibleProvider() && !animatingOutState.value && entranceAnimationStarted.value
+            }
+        }
 
-    Box(
-        modifier = Modifier
-            // Ukuran luar (hitbox) sekarang mencakup baseSize + buffer, dikalikan scaleFactor
-            .size((baseSize + animationBuffer) * scaleFactor)
-            .pointerInput(scaleFactor) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    onDrag(dragAmount.x, dragAmount.y)
-                }
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        // Box internal untuk animasi visual
+        val scaleState = animateFloatAsState(
+            targetValue = if (showHUDState.value) scaleFactor else 0f,
+            animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow),
+            label = "HUDScale",
+            finishedListener = { if (animatingOutState.value) onFinish() }
+        )
+
+        // Cache theme colors once to avoid lookups in dynamic parts
+        val colorScheme = MaterialTheme.colorScheme
+        val hudColors = remember(colorScheme) {
+            HUDColors(
+                surface = colorScheme.surface,
+                primary = colorScheme.primary,
+                onSurface = colorScheme.onSurface,
+                track = colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            )
+        }
+
+        val baseSize = 80.dp
+        val animationBuffer = 24.dp
+
         Box(
             modifier = Modifier
-                .requiredSize(baseSize + animationBuffer)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    alpha = if (scaleFactor > 0f) (scale / scaleFactor).coerceIn(0f, 1f) * (opacity / 100f) else 0f
-                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin.Center
+                .size((baseSize + animationBuffer) * scaleFactor)
+                .pointerInput(scaleFactor) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        onDrag(dragAmount.x, dragAmount.y)
+                    }
                 },
             contentAlignment = Alignment.Center
         ) {
-            Surface(
-                modifier = Modifier.requiredSize(baseSize),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surface
+            Box(
+                modifier = Modifier
+                    .requiredSize(baseSize + animationBuffer)
+                    .graphicsLayer {
+                        val scale = scaleState.value
+                        scaleX = scale
+                        scaleY = scale
+                        alpha = if (scaleFactor > 0f) (scale / scaleFactor).coerceIn(0f, 1f) * (opacity / 100f) else 0f
+                        transformOrigin = TransformOrigin.Center
+                    },
+                contentAlignment = Alignment.Center
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    CircularWavyProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier.fillMaxSize().padding(4.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        amplitude = { 1.5f },
-                        wavelength = 20.dp
+                // Static background (doesn't recompose on timer ticks)
+                Box(
+                    modifier = Modifier
+                        .requiredSize(baseSize)
+                        .background(hudColors.surface, CircleShape)
+                        .clip(CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Optimized Progress: Recomposes only every 5s
+                    HUDProgress(
+                        secondsLeftProvider = secondsLeftProvider,
+                        totalSeconds = totalSeconds,
+                        color = hudColors.primary,
+                        trackColor = hudColors.track
                     )
 
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = if (secondsLeft >= 60) "${secondsLeft / 60}m" else "${secondsLeft}s",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            lineHeight = 16.sp
-                        )
-                    }
+                    // Optimized Text: Recomposes only every 5s
+                    HUDTimerText(secondsLeftProvider, hudColors.onSurface)
                 }
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun HUDProgress(
+    secondsLeftProvider: () -> Int,
+    totalSeconds: Int,
+    color: Color,
+    trackColor: Color
+) {
+    // Snapped progress: only updates every 10 seconds
+    val snappedProgress by remember(totalSeconds) {
+        derivedStateOf {
+            val seconds = secondsLeftProvider()
+            val snappedSeconds = (seconds / 10) * 10
+            snappedSeconds.toFloat() / totalSeconds.toFloat()
+        }
+    }
+
+    val progressAnimatable = remember { Animatable(snappedProgress) }
+    LaunchedEffect(snappedProgress) {
+        progressAnimatable.animateTo(
+            targetValue = snappedProgress,
+            animationSpec = tween(durationMillis = 2000, easing = LinearEasing)
+        )
+    }
+
+    CircularWavyProgressIndicator(
+        progress = { progressAnimatable.value },
+        modifier = Modifier.fillMaxSize().padding(4.dp),
+        color = color,
+        trackColor = trackColor,
+        amplitude = { 1.5f },
+        wavelength = 20.dp
+    )
+}
+
+@Composable
+private fun HUDTimerText(secondsProvider: () -> Int, color: Color) {
+    val text by remember {
+        derivedStateOf {
+            val rawSeconds = secondsProvider()
+            // Snap text update to every 10 seconds
+            val snappedSeconds = (rawSeconds / 10) * 10
+            if (snappedSeconds >= 60) {
+                "${snappedSeconds / 60}m"
+            } else {
+                "${snappedSeconds}s"
+            }
+        }
+    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Black,
+        color = color,
+        lineHeight = 16.sp
+    )
 }
