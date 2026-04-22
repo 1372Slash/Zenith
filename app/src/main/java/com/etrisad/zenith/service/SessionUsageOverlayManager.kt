@@ -166,6 +166,7 @@ class SessionUsageOverlayManager(private val context: Context) {
             hud.overlayView.disposeComposition()
             windowManager.removeViewImmediate(hud.overlayView)
             hud.viewModelStore.clear()
+            System.gc()
         } catch (e: Exception) {
             e.printStackTrace()
         }

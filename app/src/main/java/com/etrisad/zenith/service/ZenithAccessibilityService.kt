@@ -5,6 +5,7 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.app.usage.UsageStats
 import android.view.accessibility.AccessibilityEvent
 import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
@@ -41,10 +42,10 @@ class ZenithAccessibilityService : AccessibilityService() {
     private var cachedTotalUsage = 0L
     private val allowedApps = mutableMapOf<String, Long>()
     private var activeSchedules = listOf<ScheduleEntity>()
-    private var whitelistedPackages = setOf<String>()
+    private var whitelistedPackages = emptySet<String>()
     private var currentPreferences: UserPreferences? = null
     private var allShieldsCache = listOf<ShieldEntity>()
-    private var usageStatsCache: List<android.app.usage.UsageStats>? = null
+    private var usageStatsCache: List<UsageStats>? = null
     private var lastUsageCacheTime = 0L
 
     private class ParsedSchedule(
@@ -424,6 +425,11 @@ class ZenithAccessibilityService : AccessibilityService() {
             currentShieldCache = null
             lastUsageFetchTime = 0L
             allowedApps.clear()
+            allShieldsCache = emptyList<ShieldEntity>()
+            activeSchedules = emptyList<ScheduleEntity>()
+            parsedSchedulesCache = emptyList<ParsedSchedule>()
+            usageStatsCache = null
+            lastUsageCacheTime = 0L
             // Paksa SQLite melepaskan cache memorinya
             try {
                 ZenithDatabase.getDatabase(this).openHelper.writableDatabase.execSQL("PRAGMA shrink_memory")

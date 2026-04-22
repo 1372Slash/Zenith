@@ -45,8 +45,8 @@ class AppUsageMonitorService : Service() {
     private var cachedTotalUsage = 0L
     private val allowedApps = mutableMapOf<String, Long>()
     private var activeSchedules = listOf<com.etrisad.zenith.data.local.entity.ScheduleEntity>()
-    private var whitelistedPackages = mutableSetOf<String>()
-    private val launcherPackages = mutableSetOf<String>()
+    private var whitelistedPackages = emptySet<String>()
+    private var launcherPackages = emptySet<String>()
     private val systemAppCache = mutableMapOf<String, Boolean>()
     private var lastLauncherRefreshTime = 0L
     private var currentPreferences: UserPreferences? = null
@@ -131,8 +131,7 @@ class AppUsageMonitorService : Service() {
         serviceScope.launch {
             preferencesRepository.userPreferencesFlow.collect { preferences ->
                 currentPreferences = preferences
-                whitelistedPackages.clear()
-                whitelistedPackages.addAll(preferences.whitelistedPackages)
+                whitelistedPackages = preferences.whitelistedPackages
             }
         }
 
@@ -159,13 +158,12 @@ class AppUsageMonitorService : Service() {
                 val goals = goalShieldsCache
 
                 if (goals.isNotEmpty()) {
-                    val usageMap = getAllUsageToday()
                     goals.forEach { goal ->
                         // Jangan ingatkan jika aplikasi sedang dibuka
                         if (goal.packageName == lastForegroundApp) return@forEach
                         
                         // Jangan ingatkan jika goal hari ini sudah tercapai
-                        val usageToday = usageMap[goal.packageName] ?: 0L
+                        val usageToday = getTotalUsageToday(goal.packageName)
                         if (usageToday >= (goal.timeLimitMinutes * 60 * 1000L)) return@forEach
 
                         val periodMillis = goal.goalReminderPeriodMinutes * 60 * 1000L
@@ -687,10 +685,11 @@ class AppUsageMonitorService : Service() {
             try {
                 val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
                 val launchers = packageManager.queryIntentActivities(homeIntent, android.content.pm.PackageManager.MATCH_ALL)
-                launcherPackages.clear()
+                val newLauncherSet = mutableSetOf<String>()
                 for (resolveInfo in launchers) {
-                    launcherPackages.add(resolveInfo.activityInfo.packageName)
+                    newLauncherSet.add(resolveInfo.activityInfo.packageName)
                 }
+                launcherPackages = newLauncherSet
                 lastLauncherRefreshTime = now
             } catch (_: Exception) {}
         }
@@ -803,11 +802,7 @@ class AppUsageMonitorService : Service() {
 
     override fun onLowMemory() {
         super.onLowMemory()
-        currentShieldCache = null
-        allowedApps.clear()
-        systemAppCache.clear()
-        launcherPackages.clear()
-        System.gc()
+        onTrimMemory(TRIM_MEMORY_COMPLETE)
     }
 
     override fun onTrimMemory(level: Int) {
@@ -817,7 +812,9 @@ class AppUsageMonitorService : Service() {
             lastUsageFetchTime = 0L
             allowedApps.clear()
             systemAppCache.clear()
-            launcherPackages.clear()
+            launcherPackages = emptySet()
+            usageStatsCache = null
+            lastUsageCacheTime = 0L
             lastLauncherRefreshTime = 0L
             try {
                 ZenithDatabase.getDatabase(this).openHelper.writableDatabase.execSQL("PRAGMA shrink_memory")
