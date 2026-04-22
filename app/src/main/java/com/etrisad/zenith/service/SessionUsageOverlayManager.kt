@@ -50,16 +50,19 @@ class SessionUsageOverlayManager(private val context: Context) {
         val totalSeconds: Int,
         val size: Int,
         val opacity: Int,
+        val isGoal: Boolean,
         val onSessionEnd: () -> Unit,
         initialX: Int,
         initialY: Int
     ) {
+        val secondsElapsedState = mutableIntStateOf(0)
         val secondsLeftState = mutableIntStateOf(totalSeconds)
         val isVisibleState = mutableStateOf(true)
         var hudInstance: HUDInstance? = null
         var timerJob: Job? = null
         var x: Int = initialX
         var y: Int = initialY
+        var backgroundTimestamp: Long = 0L
     }
 
     private val activeSessions = mutableListOf<Session>()
@@ -70,6 +73,7 @@ class SessionUsageOverlayManager(private val context: Context) {
         durationMinutes: Int,
         size: Int,
         opacity: Int,
+        isGoal: Boolean = false,
         onSessionEnd: () -> Unit = {}
     ) {
         if (activeSessions.any { it.packageName == packageName }) return
@@ -81,7 +85,7 @@ class SessionUsageOverlayManager(private val context: Context) {
         val totalSeconds = durationMinutes * 60
         // Disesuaikan agar posisi visual lingkaran tetap konsisten dengan adanya buffer animasi (104, 204)
         val session = Session(
-            packageName, totalSeconds, size, opacity, onSessionEnd,
+            packageName, totalSeconds, size, opacity, isGoal, onSessionEnd,
             104, 204 + (activeSessions.size * 50)
         )
         activeSessions.add(session)
@@ -93,11 +97,26 @@ class SessionUsageOverlayManager(private val context: Context) {
         }
 
         session.timerJob = scope.launch {
-            while (session.secondsLeftState.intValue > 0) {
+            while (true) {
+                if (!isGoal && session.secondsLeftState.intValue <= 0) break
+                if (isGoal && session.secondsElapsedState.intValue >= session.totalSeconds) break
+
                 delay(1000)
-                session.secondsLeftState.intValue--
+
+                // Safety: Reset session if user is outside the app for more than 3 minutes
+                if (session.backgroundTimestamp != 0L &&
+                    System.currentTimeMillis() - session.backgroundTimestamp > 180000L) {
+                    hideHUD(session.packageName)
+                    return@launch
+                }
+
+                if (isGoal) {
+                    session.secondsElapsedState.intValue++
+                } else {
+                    session.secondsLeftState.intValue--
+                }
             }
-            if (session.hudInstance == null) {
+            if (session.hudInstance == null || (!isGoal && session.secondsLeftState.intValue <= 0) || (isGoal && session.secondsElapsedState.intValue >= session.totalSeconds)) {
                 hideHUD(session.packageName)
             }
         }
@@ -127,11 +146,12 @@ class SessionUsageOverlayManager(private val context: Context) {
             setContent {
                 ZenithTheme {
                     SessionUsageHUD(
-                        secondsLeft = session.secondsLeftState.intValue,
+                        secondsLeft = if (session.isGoal) session.secondsElapsedState.intValue else session.secondsLeftState.intValue,
                         totalSeconds = session.totalSeconds,
                         size = session.size,
                         opacity = session.opacity,
                         isVisible = session.isVisibleState.value,
+                        isGoal = session.isGoal,
                         onDrag = { dx, dy ->
                             params.x += dx.roundToInt()
                             params.y += dy.roundToInt()
@@ -194,19 +214,31 @@ class SessionUsageOverlayManager(private val context: Context) {
         }
     }
 
+    fun updateHUDUsage(packageName: String, usageMillis: Long) {
+        activeSessions.find { it.packageName == packageName }?.let { session ->
+            if (session.isGoal) {
+                session.secondsElapsedState.intValue = (usageMillis / 1000).toInt()
+            }
+        }
+    }
+
     fun updateForegroundApp(packageName: String) {
         currentForegroundPackage = packageName
         scope.launch {
             activeSessions.forEach { session ->
                 val isForeground = packageName.contains(session.packageName) || session.packageName.contains(packageName)
                 if (isForeground) {
+                    session.backgroundTimestamp = 0L
                     session.isVisibleState.value = true
-                    if (session.hudInstance == null && session.secondsLeftState.intValue > 0) {
+                    if (session.hudInstance == null && ((!session.isGoal && session.secondsLeftState.intValue > 0) || (session.isGoal && session.secondsElapsedState.intValue < session.totalSeconds))) {
                         session.hudInstance = createHUDInstance(session)
                     }
                 } else {
-                    if (session.hudInstance != null && session.isVisibleState.value) {
+                    if (session.isVisibleState.value) {
                         session.isVisibleState.value = false
+                        if (session.backgroundTimestamp == 0L) {
+                            session.backgroundTimestamp = System.currentTimeMillis()
+                        }
                         launch {
                             delay(500)
                             if (!session.isVisibleState.value && session.hudInstance != null) {
@@ -238,17 +270,22 @@ fun SessionUsageHUD(
     size: Int,
     opacity: Int,
     isVisible: Boolean,
+    isGoal: Boolean = false,
     onDrag: (Float, Float) -> Unit,
     onFinish: () -> Unit
 ) {
     var entranceAnimationStarted by remember { mutableStateOf(false) }
-    val animatingOut = secondsLeft <= 0
+    val animatingOut = if (isGoal) secondsLeft >= totalSeconds else secondsLeft <= 0
 
     LaunchedEffect(Unit) {
         entranceAnimationStarted = true
     }
 
-    val progress = secondsLeft.toFloat() / totalSeconds.toFloat()
+    val progress = if (isGoal) {
+        secondsLeft.toFloat() / totalSeconds.toFloat()
+    } else {
+        secondsLeft.toFloat() / totalSeconds.toFloat()
+    }
     val scaleFactor = size / 100f
     val showHUD = isVisible && !animatingOut && entranceAnimationStarted
 

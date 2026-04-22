@@ -155,26 +155,29 @@ class AppUsageMonitorService : Service() {
         serviceScope.launch {
             while (true) {
                 val currentTime = System.currentTimeMillis()
+                // Gunakan cache terbaru dari database
                 val goals = goalShieldsCache
 
                 if (goals.isNotEmpty()) {
                     goals.forEach { goal ->
-                        // Jangan ingatkan jika aplikasi sedang dibuka
+                        // Jangan ingatkan jika aplikasi sedang dibuka (lastForegroundApp adalah aplikasi ini)
                         if (goal.packageName == lastForegroundApp) return@forEach
                         
                         // Jangan ingatkan jika goal hari ini sudah tercapai
                         val usageToday = getTotalUsageToday(goal.packageName)
-                        if (usageToday >= (goal.timeLimitMinutes * 60 * 1000L)) return@forEach
+                        val limitMillis = goal.timeLimitMinutes * 60 * 1000L
+                        if (usageToday >= limitMillis) return@forEach
 
                         val periodMillis = goal.goalReminderPeriodMinutes * 60 * 1000L
-                        if (currentTime - goal.lastGoalReminderTimestamp >= periodMillis) {
+                        if (periodMillis > 0 && currentTime - goal.lastGoalReminderTimestamp >= periodMillis) {
                             sendGoalSuggestionNotification(goal)
+                            // Update timestamp agar tidak muncul berulang kali sebelum interval berikutnya
                             shieldRepository.updateShield(goal.copy(lastGoalReminderTimestamp = currentTime))
                         }
                     }
                 }
                 
-                // Check every minute
+                // Cek setiap 30 detik untuk akurasi yang lebih baik
                 delay(60000)
             }
         }
@@ -301,25 +304,39 @@ class AppUsageMonitorService : Service() {
                         val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
                         if (prefs.sessionUsageOverlayEnabled) {
                             val remainingMinutes = ((allowedUntil - currentTime) / 60000L).toInt().coerceAtLeast(1)
-                            serviceScope.launch(Dispatchers.Main) {
-                                sessionUsageOverlayManager.showHUD(
-                                    currentApp,
-                                    remainingMinutes,
-                                    prefs.sessionUsageOverlaySize,
-                                    prefs.sessionUsageOverlayOpacity,
-                                    onSessionEnd = {
-                                        allowedApps[currentApp] = 0L
-                                        serviceScope.launch {
-                                            val shield = allShieldsCache.find { it.packageName == currentApp }
-                                            if (shield != null) {
-                                                val updated = shield.copy(lastSessionEndTimestamp = System.currentTimeMillis())
-                                                shieldRepository.updateShield(updated)
-                                                currentShieldCache = updated
+                            val shield = currentShieldCache
+                            val isGoal = shield?.type == FocusType.GOAL
+
+                            // Jika goal sudah tercapai hari ini, jangan tampilkan HUD
+                            val limitMillis = (shield?.timeLimitMinutes ?: 0) * 60 * 1000L
+                            if (isGoal && cachedTotalUsage >= limitMillis && limitMillis > 0) {
+                                // Lanjutkan monitoring tanpa menampilkan HUD
+                            } else {
+                                val duration = if (isGoal) shield?.timeLimitMinutes ?: 0 else remainingMinutes
+                                serviceScope.launch(Dispatchers.Main) {
+                                    sessionUsageOverlayManager.showHUD(
+                                        currentApp,
+                                        duration,
+                                        prefs.sessionUsageOverlaySize,
+                                        prefs.sessionUsageOverlayOpacity,
+                                        isGoal = isGoal,
+                                        onSessionEnd = {
+                                            allowedApps[currentApp] = 0L
+                                            serviceScope.launch {
+                                                val s = allShieldsCache.find { it.packageName == currentApp }
+                                                if (s != null) {
+                                                    val updated = s.copy(lastSessionEndTimestamp = System.currentTimeMillis())
+                                                    shieldRepository.updateShield(updated)
+                                                    currentShieldCache = updated
+                                                }
+                                                checkIfAppIsShielded(currentApp)
                                             }
-                                            checkIfAppIsShielded(currentApp)
                                         }
+                                    )
+                                    if (isGoal) {
+                                        sessionUsageOverlayManager.updateHUDUsage(currentApp, cachedTotalUsage)
                                     }
-                                )
+                                }
                             }
                         }
                     }
@@ -370,10 +387,17 @@ class AppUsageMonitorService : Service() {
         val shield = currentShieldCache ?: return
         val currentTime = System.currentTimeMillis()
 
-        // Fetch dari sistem setiap 5 detik (efisien namun tetap akurat)
-        if (currentTime - lastUsageFetchTime > 5000) {
+        // Fetch dari sistem setiap 30 detik (efisien agar tidak memberatkan sistem)
+        if (currentTime - lastUsageFetchTime > 30000) {
             cachedTotalUsage = getTotalUsageToday(packageName)
             lastUsageFetchTime = currentTime
+
+            // Sync HUD for Goal-type apps
+            if (shield.type == FocusType.GOAL) {
+                serviceScope.launch(Dispatchers.Main) {
+                    sessionUsageOverlayManager.updateHUDUsage(packageName, cachedTotalUsage)
+                }
+            }
         }
 
         val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
@@ -405,6 +429,8 @@ class AppUsageMonitorService : Service() {
             val finalShield = updatedShield.copy(
                 remainingTimeMillis = remainingMillis,
                 lastUsedTimestamp = currentTime,
+                // PENTING: Update lastGoalReminderTimestamp saat aplikasi digunakan
+                // agar interval pengingat dihitung sejak aplikasi terakhir ditutup.
                 lastGoalReminderTimestamp = if (shield.type == FocusType.GOAL) currentTime else shield.lastGoalReminderTimestamp
             )
             shieldRepository.updateShield(finalShield)
@@ -520,19 +546,33 @@ class AppUsageMonitorService : Service() {
                             
                             val prefs = preferencesRepository.userPreferencesFlow.first()
                             if (prefs.sessionUsageOverlayEnabled) {
-                                serviceScope.launch(Dispatchers.Main) {
-                                    sessionUsageOverlayManager.showHUD(
-                                        targetPackageName,
-                                        minutes,
-                                        prefs.sessionUsageOverlaySize,
-                                        prefs.sessionUsageOverlayOpacity,
-                                        onSessionEnd = {
-                                            allowedApps[targetPackageName] = 0L
-                                            serviceScope.launch {
-                                                checkIfAppIsShielded(targetPackageName)
+                                val isGoal = updatedShield.type == FocusType.GOAL
+                                val limitMillis = updatedShield.timeLimitMinutes * 60 * 1000L
+                                val currentUsage = getTotalUsageToday(targetPackageName)
+
+                                if (isGoal && currentUsage >= limitMillis && limitMillis > 0) {
+                                    // Goal sudah tercapai, tidak perlu tampilkan HUD
+                                } else {
+                                    val duration = if (isGoal) updatedShield.timeLimitMinutes else minutes
+
+                                    serviceScope.launch(Dispatchers.Main) {
+                                        sessionUsageOverlayManager.showHUD(
+                                            targetPackageName,
+                                            duration,
+                                            prefs.sessionUsageOverlaySize,
+                                            prefs.sessionUsageOverlayOpacity,
+                                            isGoal = isGoal,
+                                            onSessionEnd = {
+                                                allowedApps[targetPackageName] = 0L
+                                                serviceScope.launch {
+                                                    checkIfAppIsShielded(targetPackageName)
+                                                }
                                             }
+                                        )
+                                        if (isGoal) {
+                                            sessionUsageOverlayManager.updateHUDUsage(targetPackageName, currentUsage)
                                         }
-                                    )
+                                    }
                                 }
                             }
                         }
