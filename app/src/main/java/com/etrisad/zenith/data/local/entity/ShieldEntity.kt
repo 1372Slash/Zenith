@@ -27,6 +27,8 @@ data class ShieldEntity(
     val lastPeriodResetTimestamp: Long = 0L,
     val lastEmergencyRechargeTimestamp: Long = 0L,
     val goalReminderPeriodMinutes: Int = 0, // New field for Goal
+    @androidx.room.ColumnInfo(defaultValue = "0")
+    val lastGoalReminderTimestamp: Long = 0L,
     val isDelayAppEnabled: Boolean = false,
     val lastDelayStartTimestamp: Long = 0L,
     val currentStreak: Int = 0,

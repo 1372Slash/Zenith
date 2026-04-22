@@ -90,16 +90,17 @@ fun InterceptOverlayContent(
 
     val motivationalMessages = remember {
         listOf(
-            "Time for a quick stretch! 🧘",
-            "Have you had enough water today? 💧",
-            "Take 3 deep breaths... 💨",
-            "Ready to crush your goals? 🚀",
-            "Productivity is a marathon, not a sprint. 🏃",
-            "Check your to-do list for a quick win! ✅",
-            "A small step today is a big leap tomorrow. ✨",
-            "Stay focused, stay mindful. 🧠",
-            "Remember your homework or tasks! 📚",
-            "Do one small productive thing now. ⚡"
+            "Time for a quick stretch!",
+            "Have you had enough water today?",
+            "Take 3 deep breaths...",
+            "Ready to crush your goals?",
+            "Productivity is a marathon, not a sprint.",
+            "Check your to-do list for a quick win!",
+            "A small step today is a big leap tomorrow.",
+            "Stay focused, stay mindful.",
+            "Remember your homework or tasks!",
+            "Do one small productive thing now.",
+            "Do 15 Pushup"
         )
     }
     val randomMessage = remember(isDelaying) {

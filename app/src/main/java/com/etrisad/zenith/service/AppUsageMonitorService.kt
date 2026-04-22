@@ -3,12 +3,19 @@ package com.etrisad.zenith.service
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import com.etrisad.zenith.data.local.entity.FocusType
+import com.etrisad.zenith.data.local.entity.ScheduleMode
+import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
@@ -33,7 +40,7 @@ class AppUsageMonitorService : Service() {
     private val reusableEvent = UsageEvents.Event()
     private val reusableCalendar = java.util.Calendar.getInstance()
     private var lastForegroundApp: String? = null
-    private var currentShieldCache: com.etrisad.zenith.data.local.entity.ShieldEntity? = null
+    private var currentShieldCache: ShieldEntity? = null
     private var lastUsageFetchTime = 0L
     private var cachedTotalUsage = 0L
     private val allowedApps = mutableMapOf<String, Long>()
@@ -49,7 +56,7 @@ class AppUsageMonitorService : Service() {
         val id: Long,
         val startMinutes: Int,
         val endMinutes: Int,
-        val mode: com.etrisad.zenith.data.local.entity.ScheduleMode,
+        val mode: ScheduleMode,
         val packageNames: Set<String>
     )
     private var parsedSchedulesCache = listOf<ParsedSchedule>()
@@ -96,8 +103,83 @@ class AppUsageMonitorService : Service() {
         }
 
         startForeground(NOTIFICATION_ID, createNotification())
-        createGoalNotificationChannel() // Pastikan channel dibuat saat startup
+        createGoalNotificationChannel()
         startMonitoring()
+        startGoalReminderCheck()
+    }
+
+    private fun startGoalReminderCheck() {
+        serviceScope.launch {
+            while (true) {
+                val currentTime = System.currentTimeMillis()
+                val allShields = shieldRepository.allShields.first()
+                val goals = allShields.filter { 
+                    it.type == FocusType.GOAL && it.goalReminderPeriodMinutes > 0 
+                }
+
+                goals.forEach { goal ->
+                    // Jangan ingatkan jika aplikasi sedang dibuka
+                    if (goal.packageName == lastForegroundApp) return@forEach
+                    
+                    // Jangan ingatkan jika goal hari ini sudah tercapai
+                    val usageToday = getTotalUsageToday(goal.packageName)
+                    if (usageToday >= (goal.timeLimitMinutes * 60 * 1000L)) return@forEach
+
+                    val periodMillis = goal.goalReminderPeriodMinutes * 60 * 1000L
+                    if (currentTime - goal.lastGoalReminderTimestamp >= periodMillis) {
+                        sendGoalSuggestionNotification(goal)
+                        shieldRepository.updateShield(goal.copy(lastGoalReminderTimestamp = currentTime))
+                    }
+                }
+                
+                // Check every minute
+                delay(60000)
+            }
+        }
+    }
+
+    private fun sendGoalSuggestionNotification(goal: ShieldEntity) {
+        val channelId = "zenith_goal_channel"
+        val manager = getSystemService(NotificationManager::class.java)
+        
+        val intent = packageManager.getLaunchIntentForPackage(goal.packageName)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 
+            goal.packageName.hashCode(), 
+            intent, 
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val iconBitmap = try {
+            val drawable = packageManager.getApplicationIcon(goal.packageName)
+            if (drawable is BitmapDrawable) {
+                drawable.bitmap
+            } else {
+                val bitmap = Bitmap.createBitmap(
+                    drawable.intrinsicWidth.coerceAtLeast(1),
+                    drawable.intrinsicHeight.coerceAtLeast(1),
+                    Bitmap.Config.ARGB_8888
+                )
+                val canvas = Canvas(bitmap)
+                drawable.setBounds(0, 0, canvas.width, canvas.height)
+                drawable.draw(canvas)
+                bitmap
+            }
+        } catch (e: Exception) {
+            null
+        }
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Time for ${goal.appName}?")
+            .setContentText("Your goal setting suggests it's time to open ${goal.appName} and make some progress!")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setLargeIcon(iconBitmap)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        manager.notify(goal.packageName.hashCode() + 1000, notification)
     }
 
     private fun createGoalNotificationChannel() {
@@ -267,13 +349,14 @@ class AppUsageMonitorService : Service() {
         if (shouldUpdateDB) {
             val finalShield = updatedShield.copy(
                 remainingTimeMillis = remainingMillis,
-                lastUsedTimestamp = currentTime
+                lastUsedTimestamp = currentTime,
+                lastGoalReminderTimestamp = if (shield.type == FocusType.GOAL) currentTime else shield.lastGoalReminderTimestamp
             )
             shieldRepository.updateShield(finalShield)
             currentShieldCache = finalShield
             
             // CEK GOAL REMINDER
-            if (shield.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL) {
+            if (shield.type == FocusType.GOAL) {
                 if (cachedTotalUsage >= limitMillis && !notifiedGoals.contains(packageName)) {
                     sendGoalReachedNotification(shield.appName, packageName)
                     notifiedGoals.add(packageName)

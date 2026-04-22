@@ -1,0 +1,285 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 15,
+    "identityHash": "cc9abcbd8e308c09b7e9d69d14c90598",
+    "entities": [
+      {
+        "tableName": "shields",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`packageName` TEXT NOT NULL, `appName` TEXT NOT NULL, `type` TEXT NOT NULL, `timeLimitMinutes` INTEGER NOT NULL, `emergencyUseCount` INTEGER NOT NULL, `maxEmergencyUses` INTEGER NOT NULL, `isRemindersEnabled` INTEGER NOT NULL, `isStrictModeEnabled` INTEGER NOT NULL, `isAutoQuitEnabled` INTEGER NOT NULL, `remainingTimeMillis` INTEGER NOT NULL, `lastUsedTimestamp` INTEGER NOT NULL, `maxUsesPerPeriod` INTEGER NOT NULL, `refreshPeriodMinutes` INTEGER NOT NULL, `currentPeriodUses` INTEGER NOT NULL, `lastPeriodResetTimestamp` INTEGER NOT NULL, `lastEmergencyRechargeTimestamp` INTEGER NOT NULL, `goalReminderPeriodMinutes` INTEGER NOT NULL, `lastGoalReminderTimestamp` INTEGER NOT NULL DEFAULT 0, `isDelayAppEnabled` INTEGER NOT NULL, `lastDelayStartTimestamp` INTEGER NOT NULL, `currentStreak` INTEGER NOT NULL, `lastStreakUpdateTimestamp` INTEGER NOT NULL, `lastSessionEndTimestamp` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`packageName`))",
+        "fields": [
+          {
+            "fieldPath": "packageName",
+            "columnName": "packageName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "appName",
+            "columnName": "appName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timeLimitMinutes",
+            "columnName": "timeLimitMinutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "emergencyUseCount",
+            "columnName": "emergencyUseCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxEmergencyUses",
+            "columnName": "maxEmergencyUses",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isRemindersEnabled",
+            "columnName": "isRemindersEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isStrictModeEnabled",
+            "columnName": "isStrictModeEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isAutoQuitEnabled",
+            "columnName": "isAutoQuitEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "remainingTimeMillis",
+            "columnName": "remainingTimeMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastUsedTimestamp",
+            "columnName": "lastUsedTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxUsesPerPeriod",
+            "columnName": "maxUsesPerPeriod",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "refreshPeriodMinutes",
+            "columnName": "refreshPeriodMinutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentPeriodUses",
+            "columnName": "currentPeriodUses",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastPeriodResetTimestamp",
+            "columnName": "lastPeriodResetTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastEmergencyRechargeTimestamp",
+            "columnName": "lastEmergencyRechargeTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goalReminderPeriodMinutes",
+            "columnName": "goalReminderPeriodMinutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastGoalReminderTimestamp",
+            "columnName": "lastGoalReminderTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "isDelayAppEnabled",
+            "columnName": "isDelayAppEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastDelayStartTimestamp",
+            "columnName": "lastDelayStartTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentStreak",
+            "columnName": "currentStreak",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastStreakUpdateTimestamp",
+            "columnName": "lastStreakUpdateTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSessionEndTimestamp",
+            "columnName": "lastSessionEndTimestamp",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "packageName"
+          ]
+        }
+      },
+      {
+        "tableName": "schedules",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `packageNames` TEXT NOT NULL, `startTime` TEXT NOT NULL, `endTime` TEXT NOT NULL, `mode` TEXT NOT NULL, `isActive` INTEGER NOT NULL, `emergencyUseCount` INTEGER NOT NULL, `maxEmergencyUses` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "packageNames",
+            "columnName": "packageNames",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startTime",
+            "columnName": "startTime",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endTime",
+            "columnName": "endTime",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mode",
+            "columnName": "mode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isActive",
+            "columnName": "isActive",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "emergencyUseCount",
+            "columnName": "emergencyUseCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxEmergencyUses",
+            "columnName": "maxEmergencyUses",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "daily_usage",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `date` TEXT NOT NULL, `packageName` TEXT NOT NULL, `usageTimeMillis` INTEGER NOT NULL, `lastUpdated` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "packageName",
+            "columnName": "packageName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "usageTimeMillis",
+            "columnName": "usageTimeMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastUpdated",
+            "columnName": "lastUpdated",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_daily_usage_date_packageName",
+            "unique": true,
+            "columnNames": [
+              "date",
+              "packageName"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_daily_usage_date_packageName` ON `${TABLE_NAME}` (`date`, `packageName`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'cc9abcbd8e308c09b7e9d69d14c90598')"
+    ]
+  }
+}

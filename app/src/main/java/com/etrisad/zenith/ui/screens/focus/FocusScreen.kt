@@ -1514,20 +1514,20 @@ fun FocusSettingsBottomSheet(
     var isGoalDropdownExpanded by remember { mutableStateOf(false) }
 
     val refreshOptions = listOf(
-        "Per 30 Menit" to 30,
-        "Per 1 Jam" to 60,
-        "Per 2 Jam" to 120,
-        "Per 6 Jam" to 360,
-        "Per 12 Jam" to 720,
-        "Per 24 Jam" to 1440
+        "Every 30 Minutes" to 30,
+        "Every 1 Hour" to 60,
+        "Every 2 Hours" to 120,
+        "Every 6 Hours" to 360,
+        "Every 12 Hours" to 720,
+        "Every 24 Hours" to 1440
     )
 
     val goalReminderOptions = listOf(
-        "Setiap 1 Jam" to 60,
-        "Setiap 2 Jam" to 120,
-        "Setiap 4 Jam" to 240,
-        "Setiap 8 Jam" to 480,
-        "Sekali Sehari" to 1440
+        "Every 1 Hour" to 60,
+        "Every 2 Hours" to 120,
+        "Every 4 Hours" to 240,
+        "Every 8 Hours" to 480,
+        "Once a Day" to 1440
     )
 
     ModalBottomSheet(

@@ -333,6 +333,7 @@ class FocusViewModel(
                 lastPeriodResetTimestamp = existing?.lastPeriodResetTimestamp ?: System.currentTimeMillis(),
                 lastEmergencyRechargeTimestamp = existing?.lastEmergencyRechargeTimestamp ?: System.currentTimeMillis(),
                 goalReminderPeriodMinutes = goalReminderPeriodMinutes,
+                lastGoalReminderTimestamp = existing?.lastGoalReminderTimestamp ?: 0L,
                 isDelayAppEnabled = if (type == FocusType.SHIELD) isDelayAppEnabled else false
             )
             shieldRepository.insertShield(shield)

@@ -17,11 +17,12 @@ import com.etrisad.zenith.data.local.Converters
 
 @Database(
     entities = [ShieldEntity::class, ScheduleEntity::class, DailyUsageEntity::class],
-    version = 14,
+    version = 15,
     exportSchema = true,
     autoMigrations = [
         androidx.room.AutoMigration(from = 12, to = 13),
-        androidx.room.AutoMigration(from = 13, to = 14)
+        androidx.room.AutoMigration(from = 13, to = 14),
+        androidx.room.AutoMigration(from = 14, to = 15)
     ]
 )
 @TypeConverters(Converters::class)
