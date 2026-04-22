@@ -67,26 +67,22 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
             ?.activityInfo?.packageName
         val excludePackages = setOfNotNull(applicationContext.packageName, launcherPackage)
 
-        // Query usage stats
-        val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, endTime)
+        // Query usage stats - gunakan queryAndAggregateUsageStats untuk konsistensi dengan UI aplikasi
+        val stats = usm.queryAndAggregateUsageStats(startTime, System.currentTimeMillis().coerceAtMost(endTime))
         
         val usages = mutableListOf<DailyUsageEntity>()
         var totalUsage = 0L
 
-        // Aggregation per package
-        val aggregatedStats = mutableMapOf<String, Long>()
-        stats.forEach { stat ->
-            val pkg = stat.packageName
+        // Ambil data yang sudah diagregasi oleh sistem
+        stats.forEach { (pkg, stat) ->
             if (pkg in excludePackages || pkg !in launcherApps) return@forEach
+            
+            // Gunakan logika penentuan waktu yang sama dengan HomeViewModel
             val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
             if (time > 0) {
-                aggregatedStats[pkg] = maxOf(aggregatedStats[pkg] ?: 0L, time)
+                usages.add(DailyUsageEntity(date = dateString, packageName = pkg, usageTimeMillis = time))
+                totalUsage += time
             }
-        }
-
-        aggregatedStats.forEach { (pkg, time) ->
-            usages.add(DailyUsageEntity(date = dateString, packageName = pkg, usageTimeMillis = time))
-            totalUsage += time
         }
 
         // Save total global usage

@@ -5,12 +5,7 @@ import android.graphics.PixelFormat
 import android.os.Bundle
 import android.view.Gravity
 import android.view.WindowManager
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -363,7 +358,7 @@ fun SessionUsageHUD(
                         .clip(CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Optimized Progress: Recomposes only every 5s
+                    // Optimized Progress: Recomposes only every 10s
                     HUDProgress(
                         secondsLeftProvider = secondsLeftProvider,
                         totalSeconds = totalSeconds,
@@ -371,7 +366,7 @@ fun SessionUsageHUD(
                         trackColor = hudColors.track
                     )
 
-                    // Optimized Text: Recomposes only every 5s
+                    // Optimized Text: Recomposes only every 10s
                     HUDTimerText(secondsLeftProvider, hudColors.onSurface)
                 }
             }
@@ -397,20 +392,31 @@ private fun HUDProgress(
     }
 
     val progressAnimatable = remember { Animatable(snappedProgress) }
+
     LaunchedEffect(snappedProgress) {
+        // Only animate the progress value itself
         progressAnimatable.animateTo(
             targetValue = snappedProgress,
-            animationSpec = tween(durationMillis = 2000, easing = LinearEasing)
+            animationSpec = tween(durationMillis = 2000, easing = FastOutSlowInEasing)
         )
     }
 
     CircularWavyProgressIndicator(
         progress = { progressAnimatable.value },
-        modifier = Modifier.fillMaxSize().padding(4.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(4.dp)
+            .graphicsLayer {
+                // Isolate rendering for performance
+                clip = true
+                shape = CircleShape
+            },
         color = color,
         trackColor = trackColor,
-        amplitude = { 1.5f },
-        wavelength = 20.dp
+        // Keep it wavy but static for maximum CPU efficiency and stability
+        amplitude = { 1f },
+        wavelength = 20.dp,
+        waveSpeed = 0.dp
     )
 }
 
@@ -419,7 +425,6 @@ private fun HUDTimerText(secondsProvider: () -> Int, color: Color) {
     val text by remember {
         derivedStateOf {
             val rawSeconds = secondsProvider()
-            // Snap text update to every 10 seconds
             val snappedSeconds = (rawSeconds / 10) * 10
             if (snappedSeconds >= 60) {
                 "${snappedSeconds / 60}m"
@@ -428,11 +433,29 @@ private fun HUDTimerText(secondsProvider: () -> Int, color: Color) {
             }
         }
     }
+
+    // Motion: Subtle pop animation when the text changes
+    val textScale = remember { Animatable(1f) }
+    LaunchedEffect(text) {
+        textScale.animateTo(
+            targetValue = 1.15f,
+            animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)
+        )
+        textScale.animateTo(
+            targetValue = 1f,
+            animationSpec = spring(Spring.DampingRatioLowBouncy, Spring.StiffnessLow)
+        )
+    }
+
     Text(
         text = text,
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.Black,
         color = color,
-        lineHeight = 16.sp
+        lineHeight = 16.sp,
+        modifier = Modifier.graphicsLayer {
+            scaleX = textScale.value
+            scaleY = textScale.value
+        }
     )
 }
