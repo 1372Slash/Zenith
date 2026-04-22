@@ -130,7 +130,7 @@ class AppUsageMonitorService : Service() {
                 if (ZenithAccessibilityService.isServiceRunning) {
                     currentShieldCache = null
                     lastUsageFetchTime = 0L
-                    delay(10000)
+                    delay(1000)
                     continue
                 }
 
@@ -159,7 +159,7 @@ class AppUsageMonitorService : Service() {
                     if (shouldBypassBlocking(currentApp)) {
                         lastForegroundApp = currentApp
                         // Delay lebih singkat untuk aplikasi whitelisted agar tetap responsif saat switch
-                        delay(1500)
+                        delay(1000)
                         continue
                     }
 
@@ -180,6 +180,12 @@ class AppUsageMonitorService : Service() {
                                     onSessionEnd = {
                                         allowedApps[currentApp] = 0L
                                         serviceScope.launch {
+                                            val shield = shieldRepository.getShieldByPackageName(currentApp)
+                                            if (shield != null) {
+                                                val updated = shield.copy(lastSessionEndTimestamp = System.currentTimeMillis())
+                                                shieldRepository.updateShield(updated)
+                                                currentShieldCache = updated
+                                            }
                                             checkIfAppIsShielded(currentApp)
                                         }
                                     }
@@ -191,7 +197,7 @@ class AppUsageMonitorService : Service() {
                     if (currentTime > allowedUntil && !InterceptOverlayManager.isShowing) {
                         if (checkSchedules(currentApp)) {
                             lastForegroundApp = currentApp
-                            delay(1500)
+                            delay(1000)
                             continue
                         }
 
@@ -201,11 +207,10 @@ class AppUsageMonitorService : Service() {
                                 goToHomeScreen()
                                 allowedApps.remove(currentApp)
                                 if (shield.isDelayAppEnabled) {
-                                    val delayTimestamp = System.currentTimeMillis()
                                     serviceScope.launch {
-                                        shieldRepository.updateShield(shield.copy(lastDelayStartTimestamp = delayTimestamp))
+                                        shieldRepository.updateShield(shield.copy(lastDelayStartTimestamp = 0L))
                                     }
-                                    currentShieldCache = currentShieldCache?.copy(lastDelayStartTimestamp = delayTimestamp)
+                                    currentShieldCache = currentShieldCache?.copy(lastDelayStartTimestamp = 0L)
                                 }
                             } else if (currentApp != lastForegroundApp || allowedUntil > 0) {
                                 checkIfAppIsShielded(currentApp)
@@ -218,9 +223,8 @@ class AppUsageMonitorService : Service() {
                 }
                 
                 lastForegroundApp = currentApp
-                // Optimasi delay polling: 500ms-1s untuk keseimbangan antara performa dan baterai
-                val pollDelay = if (currentShieldCache != null) 1000L else 1000L
-                delay(pollDelay)
+                // Delay 500ms adalah sweet spot antara responsivitas dan hemat baterai
+                delay(500)
             }
         }
     }
@@ -229,8 +233,8 @@ class AppUsageMonitorService : Service() {
         val shield = currentShieldCache ?: return
         val currentTime = System.currentTimeMillis()
 
-        // Naikkan interval fetch ke 15 detik (sama seperti di Accessibility Service)
-        if (currentTime - lastUsageFetchTime > 15000) {
+        // Fetch dari sistem setiap 5 detik (efisien namun tetap akurat)
+        if (currentTime - lastUsageFetchTime > 5000) {
             cachedTotalUsage = getTotalUsageToday(packageName)
             lastUsageFetchTime = currentTime
         }
@@ -254,8 +258,13 @@ class AppUsageMonitorService : Service() {
         val limitMillis = shield.timeLimitMinutes * 60 * 1000L
         val remainingMillis = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
         
-        // Naikkan threshold ke 60 detik (dari 10 detik) untuk mengurangi write I/O ke database
-        if (kotlin.math.abs(shield.remainingTimeMillis - remainingMillis) > 60000 || updatedShield != shield) {
+        // Strategi Adaptive Write:
+        // Update DB setiap 10 detik, ATAU jika sisa waktu < 1 menit (agar blokir sigap)
+        val timeSinceLastUsed = currentTime - shield.lastUsedTimestamp
+        val isNearLimit = remainingMillis < 60000 
+        val shouldUpdateDB = timeSinceLastUsed > 10000 || (isNearLimit && timeSinceLastUsed > 2000) || updatedShield != shield
+
+        if (shouldUpdateDB) {
             val finalShield = updatedShield.copy(
                 remainingTimeMillis = remainingMillis,
                 lastUsedTimestamp = currentTime
@@ -304,6 +313,10 @@ class AppUsageMonitorService : Service() {
     }
 
     private suspend fun checkIfAppIsShielded(targetPackageName: String) {
+        // Pastikan aplikasi yang akan diblokir benar-benar sedang di foreground
+        val currentForeground = getForegroundApp()
+        if (targetPackageName != currentForeground) return
+
         val shield = currentShieldCache ?: shieldRepository.getShieldByPackageName(targetPackageName)
         if (shield != null && !InterceptOverlayManager.isShowing) {
             val totalUsageToday = getTotalUsageToday(targetPackageName)
@@ -311,16 +324,27 @@ class AppUsageMonitorService : Service() {
             
             val currentTime = System.currentTimeMillis()
             val lastAction = shield.lastDelayStartTimestamp
-            val isRecentlyUsed = lastAction != 0L && (currentTime - lastAction) < 30 * 60 * 1000L
+            
+            // Cek Grace Period: Jika user sudah tidak memakai aplikasi lebih dari 30 menit,
+            // maka untuk pembukaan pertama kali ini delay tidak akan muncul.
+            val lastSessionEnd = shield.lastSessionEndTimestamp
+            val isGracePeriodActive = lastSessionEnd != 0L && (currentTime - lastSessionEnd > 30 * 60 * 1000L)
 
-            val shieldWithTimestamp = if (shield.isDelayAppEnabled && isRecentlyUsed) {
-                val updated = shield.copy(lastDelayStartTimestamp = currentTime)
-                serviceScope.launch { shieldRepository.updateShield(updated) }
-                updated
-            } else {
-                if (shield.isDelayAppEnabled && lastAction != 0L) {
-                    serviceScope.launch { shieldRepository.updateShield(shield.copy(lastDelayStartTimestamp = 0L)) }
+            val shieldWithTimestamp = if (shield.isDelayAppEnabled) {
+                if (isGracePeriodActive) {
+                    // Beri izin langsung tanpa delay untuk pembukaan pertama setelah 30 menit
+                    shield.copy(lastDelayStartTimestamp = currentTime - (delayDurationSeconds * 1000L) - 1000)
+                } else if (lastAction == 0L) {
+                    // Jika baru pertama kali butuh delay, set timestamp SEKARANG
+                    val updated = shield.copy(lastDelayStartTimestamp = currentTime)
+                    serviceScope.launch { shieldRepository.updateShield(updated) }
+                    updated
+                } else {
+                    // Jika delay sudah ada (baik masih jalan atau sudah selesai), 
+                    // JANGAN update ke currentTime agar hitungan waktu tetap berjalan maju dari titik awal.
+                    shield
                 }
+            } else {
                 shield
             }
 
@@ -331,27 +355,30 @@ class AppUsageMonitorService : Service() {
                     shield = shieldWithTimestamp,
                     totalUsageToday = totalUsageToday,
                     delayDurationSeconds = delayDurationSeconds,
-                    onAllowUse = { minutes, isEmergency ->
-                        serviceScope.launch {
-                            val currentShield = shieldRepository.getShieldByPackageName(targetPackageName) ?: return@launch
-                            val updatedShield = if (isEmergency) {
-                                val isFirstChargeUsed = currentShield.emergencyUseCount == currentShield.maxEmergencyUses
-                                currentShield.copy(
-                                    emergencyUseCount = (currentShield.emergencyUseCount - 1).coerceAtLeast(0),
-                                    lastEmergencyRechargeTimestamp = if (isFirstChargeUsed) System.currentTimeMillis() else currentShield.lastEmergencyRechargeTimestamp,
-                                    lastDelayStartTimestamp = System.currentTimeMillis() 
-                                )
-                            } else {
-                                val periodExpired = System.currentTimeMillis() - currentShield.lastPeriodResetTimestamp > currentShield.refreshPeriodMinutes * 60 * 1000L
-                                currentShield.copy(
-                                    currentPeriodUses = if (periodExpired) 1 else currentShield.currentPeriodUses + 1,
-                                    lastPeriodResetTimestamp = if (periodExpired) System.currentTimeMillis() else currentShield.lastPeriodResetTimestamp,
-                                    lastDelayStartTimestamp = System.currentTimeMillis() 
-                                )
-                            }
-                            shieldRepository.updateShield(updatedShield)
-                            currentShieldCache = updatedShield
-                            allowedApps[targetPackageName] = System.currentTimeMillis() + (minutes * 60 * 1000L)
+                            onAllowUse = { minutes, isEmergency ->
+                                val currentTime = System.currentTimeMillis()
+                                serviceScope.launch {
+                                    val currentShield = shieldRepository.getShieldByPackageName(targetPackageName) ?: return@launch
+                                    val updatedShield = if (isEmergency) {
+                                        val isFirstChargeUsed = currentShield.emergencyUseCount == currentShield.maxEmergencyUses
+                                        currentShield.copy(
+                                            emergencyUseCount = (currentShield.emergencyUseCount - 1).coerceAtLeast(0),
+                                            lastEmergencyRechargeTimestamp = if (isFirstChargeUsed) System.currentTimeMillis() else currentShield.lastEmergencyRechargeTimestamp,
+                                            lastDelayStartTimestamp = 0L,
+                                            lastSessionEndTimestamp = currentTime
+                                        )
+                                    } else {
+                                        val periodExpired = System.currentTimeMillis() - currentShield.lastPeriodResetTimestamp > currentShield.refreshPeriodMinutes * 60 * 1000L
+                                        currentShield.copy(
+                                            currentPeriodUses = if (periodExpired) 1 else currentShield.currentPeriodUses + 1,
+                                            lastPeriodResetTimestamp = if (periodExpired) System.currentTimeMillis() else currentShield.lastPeriodResetTimestamp,
+                                            lastDelayStartTimestamp = 0L,
+                                            lastSessionEndTimestamp = currentTime
+                                        )
+                                    }
+                                    shieldRepository.updateShield(updatedShield)
+                                    currentShieldCache = updatedShield
+                                    allowedApps[targetPackageName] = currentTime + (minutes * 60 * 1000L)
                             
                             val prefs = preferencesRepository.userPreferencesFlow.first()
                             if (prefs.sessionUsageOverlayEnabled) {

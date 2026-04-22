@@ -111,8 +111,8 @@ class ZenithAccessibilityService : AccessibilityService() {
     private suspend fun handlePackageChange(currentApp: String) {
         val currentTime = System.currentTimeMillis()
 
-        // Hanya evaluasi jika: Aplikasi berubah ATAU sudah lewat 1 detik sejak evaluasi terakhir
-        if (currentApp == lastForegroundApp && currentTime - lastEvaluationTime < 1500) {
+        // Evaluasi lebih sering (setiap 500ms) agar lebih sigap
+        if (currentApp == lastForegroundApp && currentTime - lastEvaluationTime < 500) {
             return
         }
         lastEvaluationTime = currentTime
@@ -156,8 +156,8 @@ class ZenithAccessibilityService : AccessibilityService() {
         val shield = currentShieldCache ?: return
         val currentTime = System.currentTimeMillis()
 
-        // Naikkan interval fetch dari 5 detik ke 15 detik untuk mengurangi beban CPU/RAM
-        if (currentTime - lastUsageFetchTime > 15000) {
+        // Fetch dari sistem setiap 5 detik (seimbang antara akurasi & CPU)
+        if (currentTime - lastUsageFetchTime > 5000) {
             cachedTotalUsage = getTotalUsageToday(packageName)
             lastUsageFetchTime = currentTime
         }
@@ -165,8 +165,13 @@ class ZenithAccessibilityService : AccessibilityService() {
         val limitMillis = shield.timeLimitMinutes * 60 * 1000L
         val remainingMillis = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
         
-        // Naikkan threshold ke 60 detik (dari 30 detik) untuk mengurangi write I/O ke database
-        if (kotlin.math.abs(shield.remainingTimeMillis - remainingMillis) > 60000) {
+        // Strategi Adaptive Write:
+        // Update DB setiap 10 detik, ATAU jika sisa waktu < 1 menit (agar blokir sigap)
+        val timeSinceLastUsed = currentTime - shield.lastUsedTimestamp
+        val isNearLimit = remainingMillis < 60000 
+        val shouldUpdateDB = timeSinceLastUsed > 10000 || (isNearLimit && timeSinceLastUsed > 2000)
+
+        if (shouldUpdateDB) {
             val updatedShield = shield.copy(
                 remainingTimeMillis = remainingMillis,
                 lastUsedTimestamp = currentTime
@@ -177,6 +182,9 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun checkIfAppIsShielded(targetPackageName: String) {
+        // Double check foreground app to prevent overlay appearing over wrong app
+        if (targetPackageName != lastForegroundApp) return
+
         val shield = currentShieldCache ?: shieldRepository.getShieldByPackageName(targetPackageName)
         if (shield != null && !InterceptOverlayManager.isShowing) {
             val totalUsageToday = getTotalUsageToday(targetPackageName)
@@ -185,12 +193,27 @@ class ZenithAccessibilityService : AccessibilityService() {
             
             val currentTime = System.currentTimeMillis()
             val lastAction = shield.lastDelayStartTimestamp
-            val isRecentlyUsed = lastAction != 0L && (currentTime - lastAction) < 30 * 60 * 1000L
+            
+            // Cek Grace Period: Jika user sudah tidak memakai aplikasi lebih dari 30 menit,
+            // maka untuk pembukaan pertama kali ini delay tidak akan muncul.
+            val lastSessionEnd = shield.lastSessionEndTimestamp
+            val isGracePeriodActive = lastSessionEnd != 0L && (currentTime - lastSessionEnd > 30 * 60 * 1000L)
 
-            val shieldWithTimestamp = if (shield.isDelayAppEnabled && isRecentlyUsed) {
-                val updated = shield.copy(lastDelayStartTimestamp = currentTime)
-                serviceScope.launch { shieldRepository.updateShield(updated) }
-                updated
+            val shieldWithTimestamp = if (shield.isDelayAppEnabled) {
+                if (isGracePeriodActive) {
+                    // Beri izin langsung tanpa delay untuk pembukaan pertama setelah 30 menit
+                    val updated = shield.copy(lastDelayStartTimestamp = currentTime - (delayDurationSeconds * 1000L) - 1000)
+                    updated
+                } else if (lastAction == 0L) {
+                    // Jika baru pertama kali butuh delay, set timestamp SEKARANG
+                    val updated = shield.copy(lastDelayStartTimestamp = currentTime)
+                    serviceScope.launch { shieldRepository.updateShield(updated) }
+                    updated
+                } else {
+                    // Jika delay masih aktif atau sudah selesai, biarkan timestamp yang lama.
+                    // Jangan update ke currentTime agar hitungan waktu tetap berjalan maju dari titik awal.
+                    shield
+                }
             } else {
                 shield
             }
@@ -203,22 +226,25 @@ class ZenithAccessibilityService : AccessibilityService() {
                     totalUsageToday = totalUsageToday,
                     delayDurationSeconds = delayDurationSeconds,
                     onAllowUse = { minutes, isEmergency ->
+                        val currentTimeOnUnlock = System.currentTimeMillis()
                         serviceScope.launch {
                             val currentShield = shieldRepository.getShieldByPackageName(targetPackageName) ?: return@launch
                             val updatedShield = if (isEmergency) {
                                 currentShield.copy(
                                     emergencyUseCount = (currentShield.emergencyUseCount - 1).coerceAtLeast(0),
-                                    lastDelayStartTimestamp = System.currentTimeMillis()
+                                    lastDelayStartTimestamp = 0L,
+                                    lastSessionEndTimestamp = currentTimeOnUnlock
                                 )
                             } else {
                                 currentShield.copy(
                                     currentPeriodUses = currentShield.currentPeriodUses + 1,
-                                    lastDelayStartTimestamp = System.currentTimeMillis()
+                                    lastDelayStartTimestamp = 0L,
+                                    lastSessionEndTimestamp = currentTimeOnUnlock
                                 )
                             }
                             shieldRepository.updateShield(updatedShield)
                             currentShieldCache = updatedShield
-                            allowedApps[targetPackageName] = System.currentTimeMillis() + (minutes * 60 * 1000L)
+                            allowedApps[targetPackageName] = currentTimeOnUnlock + (minutes * 60 * 1000L)
 
                             val prefs = preferencesRepository.userPreferencesFlow.first()
                             if (prefs.sessionUsageOverlayEnabled) {
@@ -231,6 +257,12 @@ class ZenithAccessibilityService : AccessibilityService() {
                                         onSessionEnd = {
                                             allowedApps[packageName] = 0L
                                             serviceScope.launch {
+                                                val shield = shieldRepository.getShieldByPackageName(packageName)
+                                                if (shield != null) {
+                                                    val updated = shield.copy(lastSessionEndTimestamp = System.currentTimeMillis())
+                                                    shieldRepository.updateShield(updated)
+                                                    currentShieldCache = updated
+                                                }
                                                 checkIfAppIsShielded(packageName)
                                             }
                                         }
@@ -346,6 +378,12 @@ class ZenithAccessibilityService : AccessibilityService() {
                                         onSessionEnd = {
                                             allowedApps[packageName] = 0L
                                             serviceScope.launch {
+                                                val shield = shieldRepository.getShieldByPackageName(packageName)
+                                                if (shield != null) {
+                                                    val updated = shield.copy(lastSessionEndTimestamp = System.currentTimeMillis())
+                                                    shieldRepository.updateShield(updated)
+                                                    currentShieldCache = updated
+                                                }
                                                 checkIfAppIsShielded(packageName)
                                             }
                                         }
