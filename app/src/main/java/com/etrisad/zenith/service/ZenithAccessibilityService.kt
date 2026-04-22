@@ -200,10 +200,10 @@ class ZenithAccessibilityService : AccessibilityService() {
             val totalUsageToday = getTotalUsageToday(targetPackageName)
             val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
             val delayDurationSeconds = prefs.delayAppDurationSeconds
-            
+
             val currentTime = System.currentTimeMillis()
             val lastAction = shield.lastDelayStartTimestamp
-            
+
             // Cek Grace Period: Jika user sudah tidak memakai aplikasi lebih dari 30 menit,
             // maka untuk pembukaan pertama kali ini delay tidak akan muncul.
             val lastSessionEnd = shield.lastSessionEndTimestamp

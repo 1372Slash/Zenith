@@ -152,6 +152,13 @@ fun InterceptOverlayContent(
     val isTimeLimitReached = remember(shield, totalUsageToday) {
         shield != null && totalUsageToday >= (shield.timeLimitMinutes * 60 * 1000L)
     }
+
+    val remainingMinutes = remember(shield, totalUsageToday) {
+        shield?.let {
+            val limitMillis = it.timeLimitMinutes * 60 * 1000L
+            ((limitMillis - totalUsageToday) / (60 * 1000L)).toInt().coerceAtLeast(0)
+        }
+    }
     
     val refreshTimeLeftMillis = if (shield != null) {
         val nextRefresh = shield.lastPeriodResetTimestamp + (shield.refreshPeriodMinutes * 60 * 1000L)
@@ -206,11 +213,11 @@ fun InterceptOverlayContent(
             ) {
                 if (isLandscape) {
                     LandscapeInterceptLayout(
-                        packageName = packageName,
                         appName = appName,
                         appIcon = appIcon,
                         shield = shield,
                         totalUsageToday = totalUsageToday,
+                        remainingMinutes = remainingMinutes,
                         isEmergencyUnlocked = isEmergencyUnlocked,
                         isDelaying = isDelaying,
                         randomMessage = randomMessage,
@@ -246,11 +253,11 @@ fun InterceptOverlayContent(
                     )
                 } else {
                     PortraitInterceptLayout(
-                        packageName = packageName,
                         appName = appName,
                         appIcon = appIcon,
                         shield = shield,
                         totalUsageToday = totalUsageToday,
+                        remainingMinutes = remainingMinutes,
                         isEmergencyUnlocked = isEmergencyUnlocked,
                         isDelaying = isDelaying,
                         randomMessage = randomMessage,
@@ -293,11 +300,11 @@ fun InterceptOverlayContent(
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PortraitInterceptLayout(
-    packageName: String,
     appName: String,
     appIcon: androidx.compose.ui.graphics.ImageBitmap?,
     shield: ShieldEntity?,
     totalUsageToday: Long,
+    remainingMinutes: Int?,
     isEmergencyUnlocked: Boolean,
     isDelaying: Boolean,
     randomMessage: String,
@@ -435,6 +442,7 @@ fun PortraitInterceptLayout(
                 // SHIELD UI
                 ShieldSection(
                     shield = shield,
+                    remainingMinutes = remainingMinutes,
                     totalUsageToday = totalUsageToday,
                     isEmergencyUnlocked = isEmergencyUnlocked,
                     isDelaying = isDelaying,
@@ -456,11 +464,11 @@ fun PortraitInterceptLayout(
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LandscapeInterceptLayout(
-    packageName: String,
     appName: String,
     appIcon: androidx.compose.ui.graphics.ImageBitmap?,
     shield: ShieldEntity?,
     totalUsageToday: Long,
+    remainingMinutes: Int?,
     isEmergencyUnlocked: Boolean,
     isDelaying: Boolean,
     randomMessage: String,
@@ -594,6 +602,8 @@ fun LandscapeInterceptLayout(
                 } else {
                     ShieldLandscapeContent(
                         shield = shield,
+                        remainingMinutes = remainingMinutes,
+                        totalUsageToday = totalUsageToday,
                         isEmergencyUnlocked = isEmergencyUnlocked,
                         isDelaying = isDelaying,
                         randomMessage = randomMessage,
@@ -618,7 +628,7 @@ fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, onGoalDismiss: () -
     val targetLimitMillis = shield.timeLimitMinutes * 60 * 1000L
     val progress = if (targetLimitMillis > 0) totalUsageToday.toFloat() / targetLimitMillis else 0f
     val remainingMillis = (targetLimitMillis - totalUsageToday).coerceAtLeast(0L)
-    
+
     val estimateTime = remember(remainingMillis) {
         val finishTime = System.currentTimeMillis() + remainingMillis
         SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(finishTime))
@@ -652,9 +662,9 @@ fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, onGoalDismiss: () -
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        
+
         Spacer(modifier = Modifier.height(8.dp))
-        
+
         val animatedProgressState = animateFloatAsState(
             targetValue = progress.coerceIn(0f, 1f),
             animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
@@ -736,6 +746,7 @@ fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, onGoalDismiss: () -
 @Composable
 fun ShieldSection(
     shield: ShieldEntity?,
+    remainingMinutes: Int?,
     totalUsageToday: Long,
     isEmergencyUnlocked: Boolean,
     isDelaying: Boolean,
@@ -750,12 +761,14 @@ fun ShieldSection(
     onCloseApp: () -> Unit
 ) {
     // Usage Progress
+    var remainingMinutes: Int? = null
     if (shield != null) {
         Spacer(modifier = Modifier.height(24.dp))
         val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
         val remainingMillis = (totalLimitMillis - totalUsageToday).coerceAtLeast(0L)
+        remainingMinutes = (remainingMillis / 60000).toInt()
         val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
-        
+
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -812,7 +825,7 @@ fun ShieldSection(
             if (delaying) {
                 DelayInProgressSection(randomMessage, delayProgressAnimatable, delayDurationSeconds)
             } else {
-                DurationSelectionSection(isEmergencyUnlocked, onAllowUse)
+                DurationSelectionSection(remainingMinutes, isEmergencyUnlocked, onAllowUse)
             }
         }
     }
@@ -835,7 +848,7 @@ fun ShieldSection(
 fun GoalProgressMini(shield: ShieldEntity, totalUsageToday: Long) {
     val targetLimitMillis = shield.timeLimitMinutes * 60 * 1000L
     val progress = if (targetLimitMillis > 0) totalUsageToday.toFloat() / targetLimitMillis else 0f
-    
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -931,6 +944,8 @@ fun GoalLandscapeContent(onGoalDismiss: () -> Unit) {
 @Composable
 fun ShieldLandscapeContent(
     shield: ShieldEntity?,
+    remainingMinutes: Int?,
+    totalUsageToday: Long = 0,
     isEmergencyUnlocked: Boolean,
     isDelaying: Boolean,
     randomMessage: String,
@@ -943,6 +958,11 @@ fun ShieldLandscapeContent(
     onAllowUse: (Int) -> Unit,
     onCloseApp: () -> Unit
 ) {
+    val remainingMinutes = if (shield != null) {
+        val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
+        ((totalLimitMillis - totalUsageToday).coerceAtLeast(0L) / 60000).toInt()
+    } else null
+
     if ((isUsesExceeded || isTimeLimitReached) && !isEmergencyUnlocked) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             LimitReachedContent(isUsesExceeded, isTimeLimitReached, refreshTimeLeftMillis)
@@ -969,7 +989,7 @@ fun ShieldLandscapeContent(
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                DurationButtonsGrid(onAllowUse)
+                DurationButtonsGrid(remainingMinutes, onAllowUse)
                 Spacer(modifier = Modifier.height(12.dp))
                 CloseAppTextButton(onCloseApp)
             }
@@ -1069,7 +1089,7 @@ fun DelayInProgressSection(
 }
 
 @Composable
-fun DurationSelectionSection(isEmergencyUnlocked: Boolean, onAllowUse: (Int) -> Unit) {
+fun DurationSelectionSection(remainingMinutes: Int?, isEmergencyUnlocked: Boolean, onAllowUse: (Int) -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -1082,7 +1102,7 @@ fun DurationSelectionSection(isEmergencyUnlocked: Boolean, onAllowUse: (Int) -> 
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        DurationButtonsGrid(onAllowUse)
+        DurationButtonsGrid(remainingMinutes, onAllowUse)
     }
 }
 
@@ -1112,7 +1132,7 @@ fun ScheduleOverlayContent(
     var isEmergencyUnlocked by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    
+
     val appIcon = remember(packageName) {
         try {
             val drawable = context.packageManager.getApplicationIcon(packageName)
@@ -1134,7 +1154,7 @@ fun ScheduleOverlayContent(
 
     val progress by produceState(initialValue = 0f) {
         val calendar = java.util.Calendar.getInstance()
-        
+
         while (true) {
             calendar.timeInMillis = System.currentTimeMillis()
             val nowH = calendar.get(java.util.Calendar.HOUR_OF_DAY)
@@ -1161,7 +1181,7 @@ fun ScheduleOverlayContent(
             val elapsed = (currentMin - startMin).coerceIn(0, total)
 
             value = elapsed.toFloat() / total.toFloat()
-            delay(30000) 
+            delay(30000)
         }
     }
 
@@ -1198,9 +1218,9 @@ fun ScheduleOverlayContent(
         ) {
             Card(
                 modifier = Modifier
-                    .let { 
-                        if (isLandscape) it.widthIn(max = 640.dp).wrapContentHeight() 
-                        else it.fillMaxWidth().wrapContentHeight() 
+                    .let {
+                        if (isLandscape) it.widthIn(max = 640.dp).wrapContentHeight()
+                        else it.fillMaxWidth().wrapContentHeight()
                     }
                     .align(Alignment.BottomCenter)
                     .imePadding(),
@@ -1347,8 +1367,8 @@ fun PortraitScheduleLayout(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            val modeText = if (schedule.mode == ScheduleMode.BLOCK) 
-                "This app is blocked by your schedule." 
+            val modeText = if (schedule.mode == ScheduleMode.BLOCK)
+                "This app is blocked by your schedule."
                 else "Only selected apps are allowed during this schedule."
 
             Text(
@@ -1404,7 +1424,7 @@ fun PortraitScheduleLayout(
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    DurationButtonsGrid(onAllowUse)
+                    DurationButtonsGrid(null, onAllowUse)
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }
@@ -1482,7 +1502,7 @@ fun LandscapeScheduleLayout(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Box(
@@ -1581,10 +1601,10 @@ fun LandscapeScheduleLayout(
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    DurationButtonsGrid(onAllowUse)
+                    DurationButtonsGrid(null, onAllowUse)
                     Spacer(modifier = Modifier.height(12.dp))
                 }
-                
+
                 TextButton(
                     onClick = onCloseApp,
                     modifier = Modifier.fillMaxWidth(),
@@ -1690,15 +1710,23 @@ fun EmergencyButton(onEmergencyUse: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun DurationButtonsGrid(onAllowUse: (Int) -> Unit) {
+fun DurationButtonsGrid(remainingMinutes: Int?, onAllowUse: (Int) -> Unit) {
+    val b20 = if (remainingMinutes != null && remainingMinutes < 20) remainingMinutes else 20
+    val b10 = if (remainingMinutes != null && remainingMinutes < 10) (remainingMinutes * 0.5).toInt().coerceAtLeast(1) else 10
+    val b5 = if (remainingMinutes != null && remainingMinutes < 5) {
+        // Use 75% as per user example (4m -> 3m)
+        (remainingMinutes * 0.75).toInt().coerceAtLeast(1)
+    } else 5
+    val b2 = if (remainingMinutes != null && remainingMinutes < 2) remainingMinutes else 2
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            DurationButton(minutes = 2, delaySeconds = 0, onAllowUse = onAllowUse, modifier = Modifier.weight(1f))
-            DurationButton(minutes = 5, delaySeconds = 3, onAllowUse = onAllowUse, modifier = Modifier.weight(1f))
+            DurationButton(minutes = b2, delaySeconds = 0, onAllowUse = onAllowUse, modifier = Modifier.weight(1f))
+            DurationButton(minutes = b5, delaySeconds = 3, onAllowUse = onAllowUse, modifier = Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            DurationButton(minutes = 10, delaySeconds = 6, onAllowUse = onAllowUse, modifier = Modifier.weight(1f))
-            DurationButton(minutes = 20, delaySeconds = 10, onAllowUse = onAllowUse, modifier = Modifier.weight(1f))
+            DurationButton(minutes = b10, delaySeconds = 6, onAllowUse = onAllowUse, modifier = Modifier.weight(1f))
+            DurationButton(minutes = b20, delaySeconds = 10, onAllowUse = onAllowUse, modifier = Modifier.weight(1f))
         }
     }
 }
@@ -1759,7 +1787,7 @@ fun DurationButton(
         AnimatedContent(
             targetState = isEnabled,
             transitionSpec = {
-                (fadeIn(animationSpec = tween(400)) + 
+                (fadeIn(animationSpec = tween(400)) +
                  scaleIn(initialScale = 0.8f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)))
                     .togetherWith(fadeOut(animationSpec = tween(200)))
             },
@@ -1780,7 +1808,7 @@ fun DurationButton(
                     val secondsLeft = if (delaySeconds > 0) {
                         kotlin.math.ceil(delaySeconds * (1f - progressState.value)).toInt().coerceAtLeast(1)
                     } else 0
-                    
+
                     if (secondsLeft > 0) {
                         Text(
                             text = secondsLeft.toString(),
