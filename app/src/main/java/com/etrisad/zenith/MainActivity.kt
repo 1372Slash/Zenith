@@ -22,11 +22,14 @@ import com.etrisad.zenith.ui.viewmodel.HomeViewModelFactory
 
 import com.etrisad.zenith.service.DailyUsageWorker
 import android.os.Build
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -83,7 +86,13 @@ class MainActivity : ComponentActivity() {
                 darkTheme = darkTheme,
                 dynamicColor = userPreferences.dynamicColor
             ) {
-                MainScreen(homeViewModel, focusViewModel, userPreferencesRepository)
+                val windowSizeClass = calculateWindowSizeClass(this)
+                MainScreen(
+                    homeViewModel = homeViewModel,
+                    focusViewModel = focusViewModel,
+                    userPreferencesRepository = userPreferencesRepository,
+                    windowSizeClass = windowSizeClass
+                )
             }
         }
     }
