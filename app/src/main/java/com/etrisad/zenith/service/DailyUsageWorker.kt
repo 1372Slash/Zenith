@@ -18,18 +18,33 @@ import java.util.concurrent.TimeUnit
 class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        val isBackup = inputData.getBoolean("is_backup", false)
+        val calendar = Calendar.getInstance()
+        val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
+
+        // Jika ini adalah tugas backup, hanya jalankan di jendela jam 23:00 - 23:59
+        if (isBackup && currentHour != 23) {
+            return Result.success()
+        }
+
         val database = ZenithDatabase.getDatabase(applicationContext)
         val dailyUsageDao = database.dailyUsageDao()
         val usm = applicationContext.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val pm = applicationContext.packageManager
 
-        // Get yesterday's date string
-        val calendar = Calendar.getInstance()
-        calendar.add(Calendar.DAY_OF_YEAR, -1)
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+        // LOGIKA PENYELAMAT DATA:
+        // Jika ini bukan backup, dan dijalankan antara jam 00:00 - 09:00 pagi,
+        // kemungkinan besar ini adalah tugas semalam yang tertunda karena HP mati.
+        // Maka kita harus menyimpan data untuk "KEMARIN".
+        if (!isBackup && currentHour < 9) {
+            calendar.add(Calendar.DAY_OF_YEAR, -1)
+        }
+
         val dateString = dateFormat.format(calendar.time)
 
-        // Set range for yesterday [00:00:00, 23:59:59]
+        // Set range untuk hari target [00:00:00, 23:59:59]
         calendar.set(Calendar.HOUR_OF_DAY, 0)
         calendar.set(Calendar.MINUTE, 0)
         calendar.set(Calendar.SECOND, 0)
@@ -78,12 +93,14 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         usages.add(DailyUsageEntity(date = dateString, packageName = "TOTAL", usageTimeMillis = totalUsage))
 
         dailyUsageDao.insertAll(usages)
-        sendDataSavedNotification()
-
-        // Clean up old data (> 30 days to be safe, though 21 is required)
-        val cleanupCal = Calendar.getInstance()
-        cleanupCal.add(Calendar.DAY_OF_YEAR, -30)
-        dailyUsageDao.deleteOldUsage(dateFormat.format(cleanupCal.time))
+        
+        if (!isBackup) {
+            sendDataSavedNotification()
+            // Simpan data selama 21 hari sesuai kebutuhan
+            val cleanupCal = Calendar.getInstance()
+            cleanupCal.add(Calendar.DAY_OF_YEAR, -21)
+            dailyUsageDao.deleteOldUsage(dateFormat.format(cleanupCal.time))
+        }
 
         return Result.success()
     }
@@ -113,38 +130,60 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
     }
 
     companion object {
-        private const val WORK_NAME = "DailyUsageSyncWorker"
+        private const val WORK_NAME_MAIN = "DailyUsageSyncWorker"
+        private const val WORK_NAME_BACKUP = "DailyUsageSyncWorkerBackup"
 
         fun schedule(context: Context) {
+            scheduleMainSync(context)
+            scheduleBackupSync(context)
+        }
+
+        private fun scheduleMainSync(context: Context) {
             val constraints = Constraints.Builder()
-                .setRequiresBatteryNotLow(false)
+                .setRequiresBatteryNotLow(true)
                 .build()
 
-            // Calculate delay until next midnight
             val calendar = Calendar.getInstance()
             val now = calendar.timeInMillis
             
-            // Set to 23:59:50 to ensure it runs before actual midnight
+            // Set ke 23:50 untuk menyimpan data sebelum hari berganti
             calendar.set(Calendar.HOUR_OF_DAY, 23)
-            calendar.set(Calendar.MINUTE, 59)
-            calendar.set(Calendar.SECOND, 50)
+            calendar.set(Calendar.MINUTE, 50)
+            calendar.set(Calendar.SECOND, 0)
             
-            var delay = calendar.timeInMillis - now
-            if (delay < 0) {
-                // If it's already past 23:59:50, schedule for next day
+            if (calendar.timeInMillis <= now) {
                 calendar.add(Calendar.DAY_OF_YEAR, 1)
-                delay = calendar.timeInMillis - now
             }
+            val delay = calendar.timeInMillis - now
 
             val dailyWorkRequest = PeriodicWorkRequestBuilder<DailyUsageWorker>(1, TimeUnit.DAYS)
                 .setInitialDelay(delay, TimeUnit.MILLISECONDS)
                 .setConstraints(constraints)
+                .setInputData(workDataOf("is_backup" to false))
                 .build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                WORK_NAME,
+                WORK_NAME_MAIN,
                 ExistingPeriodicWorkPolicy.UPDATE,
                 dailyWorkRequest
+            )
+        }
+
+        private fun scheduleBackupSync(context: Context) {
+            val constraints = Constraints.Builder()
+                .setRequiresBatteryNotLow(true)
+                .build()
+
+            // Jalankan setiap 20 menit. Worker hanya akan mengeksekusi logika jika jam berada di antara 23:00-23:59
+            val backupWorkRequest = PeriodicWorkRequestBuilder<DailyUsageWorker>(20, TimeUnit.MINUTES)
+                .setConstraints(constraints)
+                .setInputData(workDataOf("is_backup" to true))
+                .build()
+
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                WORK_NAME_BACKUP,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                backupWorkRequest
             )
         }
     }
