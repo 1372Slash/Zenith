@@ -37,6 +37,8 @@ class SessionUsageOverlayManager(private val context: Context) {
     
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
+    private var currentForegroundPackage: String = ""
+
     private data class HUDInstance(
         val overlayView: ComposeView,
         val lifecycleOwner: MyLifecycleOwner,
@@ -83,6 +85,12 @@ class SessionUsageOverlayManager(private val context: Context) {
             104, 204 + (activeSessions.size * 50)
         )
         activeSessions.add(session)
+
+        val isForeground = currentForegroundPackage.contains(packageName) ||
+                packageName.contains(currentForegroundPackage)
+        if (isForeground && session.hudInstance == null) {
+            session.hudInstance = createHUDInstance(session)
+        }
 
         session.timerJob = scope.launch {
             while (session.secondsLeftState.intValue > 0) {
@@ -187,6 +195,7 @@ class SessionUsageOverlayManager(private val context: Context) {
     }
 
     fun updateForegroundApp(packageName: String) {
+        currentForegroundPackage = packageName
         scope.launch {
             activeSessions.forEach { session ->
                 val isForeground = packageName.contains(session.packageName) || session.packageName.contains(packageName)
