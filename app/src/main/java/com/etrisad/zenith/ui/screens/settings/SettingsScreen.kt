@@ -57,6 +57,10 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
     )
     val coroutineScope = rememberCoroutineScope()
     var showWhitelistSheet by remember { mutableStateOf(false) }
+    var showRestoreConfirmSheet by remember { mutableStateOf(false) }
+    var restoreMetadata by remember { mutableStateOf<BackupUtils.BackupMetadata?>(null) }
+    var pendingRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    
     val context = androidx.compose.ui.platform.LocalContext.current
 
     val backupManager = remember { BackupManager(context) }
@@ -102,11 +106,13 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
         onResult = { uri ->
             uri?.let {
                 coroutineScope.launch {
-                    BackupUtils.restoreDatabase(context, it).onSuccess {
-                        Toast.makeText(context, "Restore successful! Restarting app...", Toast.LENGTH_LONG).show()
-                        BackupUtils.restartApp(context)
-                    }.onFailure { e ->
-                        Toast.makeText(context, "Restore failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    val metadata = BackupUtils.getBackupMetadata(context, it)
+                    if (metadata != null) {
+                        restoreMetadata = metadata
+                        pendingRestoreUri = it
+                        showRestoreConfirmSheet = true
+                    } else {
+                        Toast.makeText(context, "Invalid backup file", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -191,6 +197,27 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
             }
         }
     )
+
+    if (showRestoreConfirmSheet && restoreMetadata != null && pendingRestoreUri != null) {
+        RestoreConfirmationBottomSheet(
+            metadata = restoreMetadata!!,
+            onDismiss = {
+                showRestoreConfirmSheet = false
+                pendingRestoreUri = null
+            },
+            onConfirm = {
+                coroutineScope.launch {
+                    showRestoreConfirmSheet = false
+                    BackupUtils.restoreDatabase(context, pendingRestoreUri!!).onSuccess {
+                        Toast.makeText(context, "Restore successful! Restarting app...", Toast.LENGTH_LONG).show()
+                        BackupUtils.restartApp(context)
+                    }.onFailure { e ->
+                        Toast.makeText(context, "Restore failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -469,6 +496,195 @@ fun SettingsScreenContent(
             }
         )
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RestoreConfirmationBottomSheet(
+    metadata: BackupUtils.BackupMetadata,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+                .navigationBarsPadding(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Surface(
+                modifier = Modifier.size(64.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.errorContainer
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Outlined.WarningAmber,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Restore Data?",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = "Restoring will permanently overwrite your current settings and data with the selected backup.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                ),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Backup Contents",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    BackupDetailItem(
+                        icon = Icons.Outlined.Storage,
+                        label = "Database",
+                        status = if (metadata.hasDatabase) "Available" else "Not found",
+                        isAvailable = metadata.hasDatabase
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    BackupDetailItem(
+                        icon = Icons.Outlined.Settings,
+                        label = "User Preferences",
+                        status = if (metadata.hasPreferences) "Available" else "Not found",
+                        isAvailable = metadata.hasPreferences
+                    )
+
+                    if (metadata.latestUsageDate != null && metadata.latestUsageMillis != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        BackupDetailItem(
+                            icon = Icons.Outlined.History,
+                            label = "Latest Record",
+                            status = "${metadata.latestUsageDate} - ${formatDuration(metadata.latestUsageMillis)}",
+                            isAvailable = true
+                        )
+                    }
+                    
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Total Size",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = formatFileSize(metadata.fileSize),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Cancel")
+                }
+                
+                Button(
+                    onClick = onConfirm,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Restore")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BackupDetailItem(
+    icon: ImageVector,
+    label: String,
+    status: String,
+    isAvailable: Boolean
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = if (isAvailable) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = status,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (isAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+        )
+    }
+}
+
+private fun formatDuration(millis: Long): String {
+    val totalMinutes = millis / (1000 * 60)
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+    return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+}
+
+private fun formatFileSize(size: Long): String {
+    if (size <= 0) return "0 B"
+    val units = arrayOf("B", "KB", "MB", "GB", "TB")
+    val digitGroups = (Math.log10(size.toDouble()) / Math.log10(1024.0)).toInt()
+    return String.format("%.1f %s", size / Math.pow(1024.0, digitGroups.toDouble()), units[digitGroups])
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
