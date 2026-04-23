@@ -17,7 +17,7 @@ import com.etrisad.zenith.data.local.Converters
 
 @Database(
     entities = [ShieldEntity::class, ScheduleEntity::class, DailyUsageEntity::class],
-    version = 15,
+    version = 16,
     exportSchema = true,
     autoMigrations = [
         androidx.room.AutoMigration(from = 12, to = 13),
@@ -127,6 +127,13 @@ abstract class ZenithDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE shields ADD COLUMN isPaused INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE shields ADD COLUMN pauseEndTimestamp INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getDatabase(context: Context): ZenithDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -137,7 +144,8 @@ abstract class ZenithDatabase : RoomDatabase() {
                     .addMigrations(
                         MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, 
                         MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, 
-                        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12
+                        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
+                        MIGRATION_15_16
                     )
                     .setJournalMode(RoomDatabase.JournalMode.TRUNCATE) // Mengurangi file jurnal untuk hemat RAM/Storage
                     .fallbackToDestructiveMigrationOnDowngrade()

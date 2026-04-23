@@ -39,7 +39,9 @@ data class AppDetailUiState(
     val usageHistory: List<DailyUsage> = emptyList(),
     val currentStreak: Int = 0,
     val bestStreak: Int = 0,
-    val shieldEntity: ShieldEntity? = null
+    val shieldEntity: ShieldEntity? = null,
+    val isPaused: Boolean = false,
+    val pauseEndTimestamp: Long = 0L
 )
 
 data class HomeUiState(
@@ -293,9 +295,40 @@ class HomeViewModel(
                     usageHistory     = history.reversed(),
                     currentStreak    = shield?.currentStreak ?: 0,
                     bestStreak       = shield?.currentStreak ?: 0,
-                    shieldEntity     = shield
+                    shieldEntity     = shield,
+                    isPaused         = shield?.isPaused ?: false,
+                    pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L
                 )
             }
+        }
+    }
+
+    fun pauseShield(durationHours: Int?) {
+        val shield = _appDetailUiState.value.shieldEntity ?: return
+        val pauseEndTimestamp = if (durationHours != null) {
+            System.currentTimeMillis() + (durationHours * 60 * 60 * 1000L)
+        } else {
+            0L // Indefinite
+        }
+
+        viewModelScope.launch {
+            val updatedShield = shield.copy(
+                isPaused = true,
+                pauseEndTimestamp = pauseEndTimestamp
+            )
+            shieldRepository.updateShield(updatedShield)
+            // loadAppDetail will be triggered by repository collection or we can update local state
+        }
+    }
+
+    fun resumeShield() {
+        val shield = _appDetailUiState.value.shieldEntity ?: return
+        viewModelScope.launch {
+            val updatedShield = shield.copy(
+                isPaused = false,
+                pauseEndTimestamp = 0L
+            )
+            shieldRepository.updateShield(updatedShield)
         }
     }
 

@@ -34,5 +34,9 @@ data class ShieldEntity(
     val currentStreak: Int = 0,
     val lastStreakUpdateTimestamp: Long = 0L,
     @androidx.room.ColumnInfo(defaultValue = "0")
-    val lastSessionEndTimestamp: Long = 0L
+    val lastSessionEndTimestamp: Long = 0L,
+    @androidx.room.ColumnInfo(defaultValue = "0")
+    val isPaused: Boolean = false,
+    @androidx.room.ColumnInfo(defaultValue = "0")
+    val pauseEndTimestamp: Long = 0L // 0 means indefinitely
 )

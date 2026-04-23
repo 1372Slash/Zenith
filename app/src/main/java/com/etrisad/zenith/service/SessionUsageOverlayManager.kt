@@ -68,7 +68,7 @@ class SessionUsageOverlayManager(private val context: Context) {
     }
 
     private val activeSessions = mutableListOf<Session>()
-    private val MAX_HUDS = 4
+    private val MaxHuds = 4
 
     fun showHUD(
         packageName: String,
@@ -80,7 +80,7 @@ class SessionUsageOverlayManager(private val context: Context) {
     ) {
         if (activeSessions.any { it.packageName == packageName }) return
 
-        if (activeSessions.size >= MAX_HUDS) {
+        if (activeSessions.size >= MaxHuds) {
             hideHUD(activeSessions.first().packageName)
         }
 
