@@ -55,6 +55,7 @@ class AppUsageMonitorService : Service() {
     private val launcherAppCache = mutableMapOf<String, Boolean>()
     private var lastLauncherRefreshTime = 0L
     private var currentPreferences: UserPreferences? = null
+    private var lastResetDate = ""
     private var allShieldsCache = listOf<ShieldEntity>()
     private var allShieldsMap = emptyMap<String, ShieldEntity>()
     private var goalShieldsCache = listOf<ShieldEntity>()
@@ -143,8 +144,22 @@ class AppUsageMonitorService : Service() {
             val preferences = preferencesRepository.userPreferencesFlow.first()
             currentPreferences = preferences
             whitelistedPackages = preferences.whitelistedPackages
+            lastResetDate = preferences.lastResetDate
             
             val now = System.currentTimeMillis()
+            
+            // Check if day changed while phone was off
+            val currentDate = getCurrentDateString(now)
+            if (lastResetDate.isNotEmpty() && lastResetDate != currentDate) {
+                updateStreaks()
+                notifiedGoals.clear()
+                preferencesRepository.setLastResetDate(currentDate)
+                lastResetDate = currentDate
+            } else if (lastResetDate.isEmpty()) {
+                preferencesRepository.setLastResetDate(currentDate)
+                lastResetDate = currentDate
+            }
+
             nextDayTimestamp = calculateNextDayTimestamp(now)
             startOfDayTimestamp = calculateStartOfDayTimestamp(now)
 
@@ -154,6 +169,7 @@ class AppUsageMonitorService : Service() {
             preferencesRepository.userPreferencesFlow.collect { newPreferences ->
                 currentPreferences = newPreferences
                 whitelistedPackages = newPreferences.whitelistedPackages
+                lastResetDate = newPreferences.lastResetDate
             }
         }
 
@@ -413,12 +429,26 @@ class AppUsageMonitorService : Service() {
     }
 
     private suspend fun checkDayChange(currentTime: Long) {
-        if (currentTime >= nextDayTimestamp) {
+        val currentDate = getCurrentDateString(currentTime)
+        
+        if (lastResetDate.isNotEmpty() && currentDate != lastResetDate) {
             updateStreaks()
             notifiedGoals.clear()
+            
+            preferencesRepository.setLastResetDate(currentDate)
+            lastResetDate = currentDate
+            
             nextDayTimestamp = calculateNextDayTimestamp(currentTime)
             startOfDayTimestamp = calculateStartOfDayTimestamp(currentTime)
+        } else if (lastResetDate.isEmpty()) {
+            preferencesRepository.setLastResetDate(currentDate)
+            lastResetDate = currentDate
         }
+    }
+
+    private fun getCurrentDateString(time: Long): String {
+        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        return sdf.format(java.util.Date(time))
     }
 
     private fun calculateStartOfDayTimestamp(currentTime: Long): Long {
