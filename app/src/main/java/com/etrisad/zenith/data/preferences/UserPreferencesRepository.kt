@@ -34,6 +34,9 @@ class UserPreferencesRepository(private val context: Context) {
         val SESSION_USAGE_OVERLAY_OPACITY = intPreferencesKey("session_usage_overlay_opacity")
         val WHITELISTED_PACKAGES = stringPreferencesKey("whitelisted_packages")
         val LAST_RESET_DATE = stringPreferencesKey("last_reset_date")
+        val AUTO_BACKUP_ENABLED = booleanPreferencesKey("auto_backup_enabled")
+        val BACKUP_DIRECTORY_URI = stringPreferencesKey("backup_directory_uri")
+        val BACKUP_INTERVAL_HOURS = intPreferencesKey("backup_interval_hours")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -58,6 +61,9 @@ class UserPreferencesRepository(private val context: Context) {
             val sessionUsageOverlayOpacity = preferences[PreferencesKeys.SESSION_USAGE_OVERLAY_OPACITY] ?: 90
             val whitelistedPackages = preferences[PreferencesKeys.WHITELISTED_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
             val lastResetDate = preferences[PreferencesKeys.LAST_RESET_DATE] ?: ""
+            val autoBackupEnabled = preferences[PreferencesKeys.AUTO_BACKUP_ENABLED] ?: false
+            val backupDirectoryUri = preferences[PreferencesKeys.BACKUP_DIRECTORY_URI] ?: ""
+            val backupIntervalHours = preferences[PreferencesKeys.BACKUP_INTERVAL_HOURS] ?: 3
             UserPreferences(
                 themeConfig = themeConfig,
                 dynamicColor = dynamicColor,
@@ -69,7 +75,10 @@ class UserPreferencesRepository(private val context: Context) {
                 sessionUsageOverlaySize = sessionUsageOverlaySize,
                 sessionUsageOverlayOpacity = sessionUsageOverlayOpacity,
                 whitelistedPackages = whitelistedPackages,
-                lastResetDate = lastResetDate
+                lastResetDate = lastResetDate,
+                autoBackupEnabled = autoBackupEnabled,
+                backupDirectoryUri = backupDirectoryUri,
+                backupIntervalHours = backupIntervalHours
             )
         }
 
@@ -138,6 +147,24 @@ class UserPreferencesRepository(private val context: Context) {
             preferences[PreferencesKeys.LAST_RESET_DATE] = date
         }
     }
+
+    suspend fun setAutoBackupEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.AUTO_BACKUP_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setBackupDirectoryUri(uri: String) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.BACKUP_DIRECTORY_URI] = uri
+        }
+    }
+
+    suspend fun setBackupIntervalHours(hours: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.BACKUP_INTERVAL_HOURS] = hours
+        }
+    }
 }
 
 data class UserPreferences(
@@ -151,5 +178,8 @@ data class UserPreferences(
     val sessionUsageOverlaySize: Int = 100,
     val sessionUsageOverlayOpacity: Int = 90,
     val whitelistedPackages: Set<String> = emptySet(),
-    val lastResetDate: String = ""
+    val lastResetDate: String = "",
+    val autoBackupEnabled: Boolean = false,
+    val backupDirectoryUri: String = "",
+    val backupIntervalHours: Int = 3
 )

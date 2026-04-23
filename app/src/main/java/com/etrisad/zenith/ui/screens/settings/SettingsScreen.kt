@@ -36,6 +36,7 @@ import com.etrisad.zenith.data.preferences.ThemeConfig
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.util.BackupUtils
+import com.etrisad.zenith.worker.BackupManager
 import kotlinx.coroutines.launch
 
 @Composable
@@ -58,6 +59,8 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
     var showWhitelistSheet by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    val backupManager = remember { BackupManager(context) }
+
     val backupLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
         onResult = { uri ->
@@ -67,6 +70,27 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
                         Toast.makeText(context, "Backup successful!", Toast.LENGTH_SHORT).show()
                     }.onFailure { e ->
                         Toast.makeText(context, "Backup failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    )
+
+    val directoryPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree(),
+        onResult = { uri ->
+            uri?.let {
+                // Grant persistent permission
+                context.contentResolver.takePersistableUriPermission(
+                    it,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                            android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+                coroutineScope.launch {
+                    preferencesRepository.setBackupDirectoryUri(it.toString())
+                    // Reschedule if enabled
+                    if (preferences.autoBackupEnabled) {
+                        backupManager.scheduleBackup(preferences.backupIntervalHours, it.toString())
                     }
                 }
             }
@@ -144,7 +168,28 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
             }
         },
         onBackup = { backupLauncher.launch("zenith_backup_${System.currentTimeMillis()}.db") },
-        onRestore = { restoreLauncher.launch(arrayOf("application/octet-stream", "*/*")) }
+        onRestore = { restoreLauncher.launch(arrayOf("application/octet-stream", "*/*")) },
+        onAutoBackupEnabledChange = { enabled ->
+            coroutineScope.launch {
+                preferencesRepository.setAutoBackupEnabled(enabled)
+                if (enabled && preferences.backupDirectoryUri.isNotEmpty()) {
+                    backupManager.scheduleBackup(preferences.backupIntervalHours, preferences.backupDirectoryUri)
+                } else {
+                    backupManager.cancelBackup()
+                }
+            }
+        },
+        onPickBackupDirectory = {
+            directoryPickerLauncher.launch(null)
+        },
+        onSetBackupInterval = { hours ->
+            coroutineScope.launch {
+                preferencesRepository.setBackupIntervalHours(hours)
+                if (preferences.autoBackupEnabled && preferences.backupDirectoryUri.isNotEmpty()) {
+                    backupManager.scheduleBackup(hours, preferences.backupDirectoryUri)
+                }
+            }
+        }
     )
 }
 
@@ -164,7 +209,10 @@ fun SettingsScreenContent(
     onShowWhitelistSheetChange: (Boolean) -> Unit,
     onSetWhitelistedPackages: (Set<String>) -> Unit,
     onBackup: () -> Unit,
-    onRestore: () -> Unit
+    onRestore: () -> Unit,
+    onAutoBackupEnabledChange: (Boolean) -> Unit,
+    onPickBackupDirectory: () -> Unit,
+    onSetBackupInterval: (Int) -> Unit
 ) {
     var showTargetSheet by remember { mutableStateOf(false) }
     var showEmergencyRechargeSheet by remember { mutableStateOf(false) }
@@ -293,9 +341,35 @@ fun SettingsScreenContent(
             }
 
             item {
+                SettingsToggle(
+                    title = "Auto Backup",
+                    description = "Periodically backup your database to a folder",
+                    checked = preferences.autoBackupEnabled,
+                    onCheckedChange = onAutoBackupEnabledChange,
+                    icon = Icons.Outlined.AutoMode,
+                    shape = if (preferences.autoBackupEnabled)
+                        RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                    else RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                )
+            }
+
+            if (preferences.autoBackupEnabled) {
+                item {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    AutoBackupSettings(
+                        directoryUri = preferences.backupDirectoryUri,
+                        intervalHours = preferences.backupIntervalHours,
+                        onPickDirectory = onPickBackupDirectory,
+                        onSetInterval = onSetBackupInterval
+                    )
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
                 SettingsActionItem(
-                    title = "Backup Data",
-                    summary = "Save your settings and schedules to a file",
+                    title = "Manual Backup",
+                    summary = "Save your settings and schedules to a file now",
                     onClick = onBackup,
                     icon = Icons.Outlined.Backup,
                     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
@@ -897,6 +971,77 @@ fun SettingsActionItem(
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
+        }
+    }
+}
+
+@Composable
+fun AutoBackupSettings(
+    directoryUri: String,
+    intervalHours: Int,
+    onPickDirectory: () -> Unit,
+    onSetInterval: (Int) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Auto Backup Configuration",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Directory Picker Item
+            Surface(
+                onClick = onPickDirectory,
+                color = Color.Transparent,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Backup Location", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = if (directoryUri.isEmpty()) "Not selected" else "Folder selected",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (directoryUri.isEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Interval Selector
+            Text("Backup Interval", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            val intervals = listOf(3, 6, 12, 24)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                intervals.forEach { hours ->
+                    FilterChip(
+                        selected = intervalHours == hours,
+                        onClick = { onSetInterval(hours) },
+                        label = { Text("${hours}h") },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
         }
     }
 }
