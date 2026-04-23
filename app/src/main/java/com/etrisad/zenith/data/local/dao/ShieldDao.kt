@@ -23,6 +23,9 @@ interface ShieldDao {
     @Update
     suspend fun updateShield(shield: ShieldEntity)
 
+    @Query("UPDATE shields SET remainingTimeMillis = timeLimitMinutes * 60 * 1000")
+    suspend fun resetAllRemainingTimes()
+
     @Delete
     suspend fun deleteShield(shield: ShieldEntity)
     

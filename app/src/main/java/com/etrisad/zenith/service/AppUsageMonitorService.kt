@@ -277,7 +277,14 @@ class AppUsageMonitorService : Service() {
                     val currentDay = reusableCalendar.get(java.util.Calendar.DAY_OF_YEAR)
                     if (lastCheckedDay != -1 && currentDay != lastCheckedDay) {
                         updateStreaks()
-                        notifiedGoals.clear() 
+                        shieldRepository.resetAllRemainingTimes()
+                        notifiedGoals.clear()
+                        // Reset usage caches and force refresh on day change
+                        usageStatsCache = null
+                        lastUsageCacheTime = 0L
+                        lastUsageFetchTime = 0L
+                        cachedTotalUsage = 0L
+                        currentShieldCache = null
                     }
                     lastCheckedDay = currentDay
                     lastCheckedDayTimestamp = currentTime
@@ -286,7 +293,7 @@ class AppUsageMonitorService : Service() {
                 if (currentApp != null && currentApp != packageName) {
                     sessionUsageOverlayManager.updateForegroundApp(currentApp)
                     
-                    if (currentApp != lastForegroundApp) {
+                    if (currentApp != lastForegroundApp || currentShieldCache == null) {
                         currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
                         lastUsageFetchTime = 0L 
                     }
@@ -398,6 +405,7 @@ class AppUsageMonitorService : Service() {
         }
 
         // Fetch dari sistem setiap 30 detik (efisien agar tidak memberatkan sistem)
+        // Reset lastUsageFetchTime jika terjadi pergantian hari untuk memastikan data hari baru diambil
         if (currentTime - lastUsageFetchTime > 30000) {
             cachedTotalUsage = getTotalUsageToday(packageName)
             lastUsageFetchTime = currentTime
@@ -596,14 +604,22 @@ class AppUsageMonitorService : Service() {
         if (shields.isEmpty()) return
 
         val currentTime = System.currentTimeMillis()
+        // Evaluasi penggunaan kemarin untuk menentukan streak
         reusableCalendar.timeInMillis = currentTime
+        reusableCalendar.add(java.util.Calendar.DAY_OF_YEAR, -1)
         reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
         reusableCalendar.set(java.util.Calendar.MINUTE, 0)
         reusableCalendar.set(java.util.Calendar.SECOND, 0)
         reusableCalendar.set(java.util.Calendar.MILLISECOND, 0)
         val startTime = reusableCalendar.timeInMillis
         
-        val usageMap = usageStatsManager.queryAndAggregateUsageStats(startTime, currentTime)
+        reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, 23)
+        reusableCalendar.set(java.util.Calendar.MINUTE, 59)
+        reusableCalendar.set(java.util.Calendar.SECOND, 59)
+        reusableCalendar.set(java.util.Calendar.MILLISECOND, 999)
+        val endTime = reusableCalendar.timeInMillis
+        
+        val usageMap = usageStatsManager.queryAndAggregateUsageStats(startTime, endTime)
 
         shields.forEach { shield ->
             val stats = usageMap[shield.packageName]

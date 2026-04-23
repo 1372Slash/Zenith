@@ -218,9 +218,9 @@ class SessionUsageOverlayManager(private val context: Context) {
         activeSessions.find { it.packageName == packageName }?.let { session ->
             if (session.isGoal) {
                 val newSeconds = (usageMillis / 1000).toInt()
-                if (newSeconds > session.secondsElapsedState.intValue) {
-                    session.secondsElapsedState.intValue = newSeconds
-                }
+                // Atur nilai secara langsung agar sinkron dengan data sistem, 
+                // termasuk saat reset waktu di jam 00.00
+                session.secondsElapsedState.intValue = newSeconds
             }
         }
     }

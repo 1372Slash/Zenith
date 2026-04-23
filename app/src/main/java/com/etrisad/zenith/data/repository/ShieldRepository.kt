@@ -69,6 +69,10 @@ class ShieldRepository(
         shieldDao.updateShield(shield)
     }
 
+    suspend fun resetAllRemainingTimes() {
+        shieldDao.resetAllRemainingTimes()
+    }
+
     suspend fun deleteShield(shield: ShieldEntity) {
         shieldDao.deleteShield(shield)
     }

@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Build
 import android.app.usage.UsageStats
 import android.view.accessibility.AccessibilityEvent
+import java.util.Calendar
 import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
@@ -47,6 +48,8 @@ class ZenithAccessibilityService : AccessibilityService() {
     private var allShieldsCache = listOf<ShieldEntity>()
     private var usageStatsCache: List<UsageStats>? = null
     private var lastUsageCacheTime = 0L
+    private var lastCheckedDay = -1
+    private var lastCheckedDayTimestamp = 0L
 
     private class ParsedSchedule(
         val id: Long,
@@ -120,6 +123,22 @@ class ZenithAccessibilityService : AccessibilityService() {
 
     private suspend fun handlePackageChange(currentApp: String) {
         val currentTime = System.currentTimeMillis()
+
+        // Check for day change efficiently
+        if (currentTime - lastCheckedDayTimestamp > 60000) {
+            reusableCalendar.timeInMillis = currentTime
+            val currentDay = reusableCalendar.get(Calendar.DAY_OF_YEAR)
+            if (lastCheckedDay != -1 && currentDay != lastCheckedDay) {
+                // Reset usage caches on day change
+                usageStatsCache = null
+                lastUsageCacheTime = 0L
+                lastUsageFetchTime = 0L
+                cachedTotalUsage = 0L
+                currentShieldCache = null
+            }
+            lastCheckedDay = currentDay
+            lastCheckedDayTimestamp = currentTime
+        }
 
         // Evaluasi lebih sering (setiap 500ms) agar lebih sigap
         if (currentApp == lastForegroundApp && currentTime - lastEvaluationTime < 500) {
