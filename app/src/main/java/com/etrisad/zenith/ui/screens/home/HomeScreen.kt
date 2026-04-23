@@ -57,6 +57,7 @@ import kotlin.math.abs
 
 import androidx.compose.ui.text.style.TextAlign
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import kotlinx.coroutines.delay
 
 import kotlinx.coroutines.launch
 

@@ -288,7 +288,7 @@ fun AppHeader(
             // Pause Indicator Badge
             if (isPaused) {
                 val currentTime = remember { mutableLongStateOf(System.currentTimeMillis()) }
-                
+
                 // Optimasi CPU: Hanya jalankan timer jika ada durasi tertentu
                 if (pauseEndTimestamp > 0L) {
                     LaunchedEffect(pauseEndTimestamp) {
@@ -769,7 +769,7 @@ fun ResumeCard(
     shape: androidx.compose.ui.graphics.Shape
 ) {
     val currentTime = remember { mutableLongStateOf(System.currentTimeMillis()) }
-    
+
     LaunchedEffect(Unit) {
         while (true) {
             currentTime.longValue = System.currentTimeMillis()
@@ -778,7 +778,7 @@ fun ResumeCard(
     }
 
     val remainingMillis = remember(pauseEndTimestamp, currentTime.longValue) {
-        if (pauseEndTimestamp == 0L) -1L 
+        if (pauseEndTimestamp == 0L) -1L
         else (pauseEndTimestamp - currentTime.longValue).coerceAtLeast(0L)
     }
 

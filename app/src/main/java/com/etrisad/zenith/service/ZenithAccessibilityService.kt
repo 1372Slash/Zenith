@@ -158,8 +158,14 @@ class ZenithAccessibilityService : AccessibilityService() {
         }
 
         val allowedUntil = allowedApps[currentApp] ?: 0L
-        
         updateUsageTime(currentApp)
+
+        // Cek apakah Shield/Goal sedang di-pause
+        val shield = currentShieldCache
+        if (shield != null && isPaused(shield)) {
+            lastForegroundApp = currentApp
+            return
+        }
 
         if (currentTime > allowedUntil && !InterceptOverlayManager.isShowing) {
             if (checkSchedules(currentApp)) {
@@ -380,6 +386,12 @@ class ZenithAccessibilityService : AccessibilityService() {
     private fun showScheduleOverlayFromParsed(packageName: String, ps: ParsedSchedule) {
         val originalSchedule = activeSchedules.find { it.id == ps.id } ?: return
         showScheduleOverlay(packageName, originalSchedule)
+    }
+
+    private fun isPaused(shield: ShieldEntity): Boolean {
+        if (!shield.isPaused) return false
+        if (shield.pauseEndTimestamp == 0L) return true // Pause selamanya
+        return System.currentTimeMillis() < shield.pauseEndTimestamp // Belum melewati batas waktu pause
     }
 
     private fun shouldBypassBlocking(packageName: String): Boolean {

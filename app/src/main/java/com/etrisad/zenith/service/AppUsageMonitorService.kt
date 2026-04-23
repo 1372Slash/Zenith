@@ -163,6 +163,9 @@ class AppUsageMonitorService : Service() {
                         // Jangan ingatkan jika aplikasi sedang dibuka (lastForegroundApp adalah aplikasi ini)
                         if (goal.packageName == lastForegroundApp) return@forEach
                         
+                        // Jangan ingatkan jika sedang di-pause
+                        if (isPaused(goal)) return@forEach
+                        
                         // Jangan ingatkan jika goal hari ini sudah tercapai
                         val usageToday = getTotalUsageToday(goal.packageName)
                         val limitMillis = goal.timeLimitMinutes * 60 * 1000L
@@ -307,7 +310,11 @@ class AppUsageMonitorService : Service() {
                     val allowedUntil = allowedApps[currentApp] ?: 0L
                     updateUsageTime(currentApp)
                     
-                    if (allowedUntil > currentTime) {
+                    // Jika aplikasi di-pause, jangan tampilkan HUD atau Intercept Overlay
+                    val shieldForPauseCheck = currentShieldCache
+                    val isAppPaused = shieldForPauseCheck != null && isPaused(shieldForPauseCheck)
+
+                    if (!isAppPaused && allowedUntil > currentTime) {
                         val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
                         if (prefs.sessionUsageOverlayEnabled) {
                             val remainingMinutes = ((allowedUntil - currentTime) / 60000L).toInt().coerceAtLeast(1)
@@ -348,7 +355,7 @@ class AppUsageMonitorService : Service() {
                         }
                     }
 
-                    if (currentTime > allowedUntil && !InterceptOverlayManager.isShowing) {
+                    if (!isAppPaused && currentTime > allowedUntil && !InterceptOverlayManager.isShowing) {
                         if (checkSchedules(currentApp)) {
                             lastForegroundApp = currentApp
                             delay(1000)
@@ -448,7 +455,7 @@ class AppUsageMonitorService : Service() {
             currentShieldCache = finalShield
             
             // CEK GOAL REMINDER
-            if (shield.type == FocusType.GOAL) {
+            if (shield.type == FocusType.GOAL && !isPaused(shield)) {
                 if (cachedTotalUsage >= limitMillis && !notifiedGoals.contains(packageName)) {
                     sendGoalReachedNotification(shield.appName, packageName)
                     notifiedGoals.add(packageName)
@@ -627,6 +634,14 @@ class AppUsageMonitorService : Service() {
             
             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
             
+            // Paused apps are exempt from streak reset if mereka gagal memenuhi target,
+            // tapi tetep dapet streak kalau berhasil memenuhi target? 
+            // Sesuai requirement: "exempt from intercept overlays while still having their usage tracked".
+            // Biasanya pause berarti "libur", jadi streak harusnya dipertahankan atau tidak diproses.
+            // Namun agar simple dan tetap fair, kita proses saja usage-nya seperti biasa.
+            // Jika user ingin streak aman saat libur, itu logic yang lebih kompleks.
+            // Untuk sekarang, kita ikuti logic: tetap track usage.
+            
             var shouldIncrement = false
             if (shield.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL) {
                 if (totalUsageToday >= limitMillis && limitMillis > 0) {
@@ -736,6 +751,12 @@ class AppUsageMonitorService : Service() {
     private fun showScheduleOverlayFromParsed(packageName: String, ps: ParsedSchedule) {
         val originalSchedule = activeSchedules.find { it.id == ps.id } ?: return
         showScheduleOverlay(packageName, originalSchedule)
+    }
+
+    private fun isPaused(shield: ShieldEntity): Boolean {
+        if (!shield.isPaused) return false
+        if (shield.pauseEndTimestamp == 0L) return true // Pause selamanya
+        return System.currentTimeMillis() < shield.pauseEndTimestamp // Belum melewati batas waktu pause
     }
 
     private fun isLauncherOrSystemHome(packageName: String): Boolean {
