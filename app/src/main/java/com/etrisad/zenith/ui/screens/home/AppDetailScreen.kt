@@ -26,17 +26,21 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.graphics.shapes.toPath
 import com.etrisad.zenith.data.local.entity.FocusType
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -83,7 +87,9 @@ fun AppDetailScreen(
                     packageName = uiState.packageName,
                     icon = uiState.icon,
                     focusType = uiState.type,
-                    isActive = isFocusActive
+                    isActive = isFocusActive,
+                    isPaused = uiState.shieldEntity?.isPaused ?: false,
+                    pauseEndTimestamp = uiState.shieldEntity?.pauseEndTimestamp ?: 0L
                 )
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -147,7 +153,11 @@ fun AppDetailScreen(
                     // Placeholder during loading to prevent layout jump and ensure animation triggers correctly later
                     Box(modifier = Modifier.fillMaxWidth().height(250.dp))
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                if (uiState.shieldEntity != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                } else {
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
             }
 
             item {
@@ -160,20 +170,39 @@ fun AppDetailScreen(
                     if (shield != null) {
                         var showPauseSheet by remember { mutableStateOf(false) }
 
-                        if (shield.isPaused) {
-                            ResumeCard(
-                                pauseEndTimestamp = shield.pauseEndTimestamp,
-                                onResume = { viewModel.resumeShield() },
-                                formatDuration = { viewModel.formatDuration(it) },
-                                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-                            )
-                        } else {
-                            PauseShieldCard(
-                                onPauseClick = { showPauseSheet = true },
-                                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                        Column {
+                            AnimatedContent(
+                                targetState = shield.isPaused,
+                                transitionSpec = {
+                                    (fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f))
+                                        .togetherWith(fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.95f))
+                                },
+                                label = "PauseResumeTransition"
+                            ) { isPaused ->
+                                if (isPaused) {
+                                    ResumeCard(
+                                        pauseEndTimestamp = shield.pauseEndTimestamp,
+                                        onResume = { viewModel.resumeShield() },
+                                        formatDuration = { viewModel.formatDuration(it) },
+                                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+                                    )
+                                } else {
+                                    PauseShieldCard(
+                                        onPauseClick = { showPauseSheet = true },
+                                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+                                    )
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(2.dp))
+
+                            DeleteShieldCard(
+                                onDelete = {
+                                    viewModel.deleteShieldFromDetail()
+                                },
+                                shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
 
                         if (showPauseSheet) {
                             PauseBottomSheet(
@@ -187,21 +216,6 @@ fun AppDetailScreen(
                     }
                 }
             }
-
-            item {
-                AnimatedVisibility(
-                    visible = uiState.shieldEntity != null,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
-                ) {
-                    DeleteShieldCard(
-                        onDelete = {
-                            viewModel.deleteShieldFromDetail()
-                        },
-                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                    )
-                }
-            }
         }
     }
 }
@@ -212,30 +226,105 @@ fun AppHeader(
     @Suppress("UNUSED_PARAMETER") packageName: String,
     icon: android.graphics.drawable.Drawable?,
     focusType: FocusType?,
-    isActive: Boolean
+    isActive: Boolean,
+    isPaused: Boolean = false,
+    pauseEndTimestamp: Long = 0L
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp), // Beri ruang agar badge tidak terpotong di bagian atas
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (icon != null) {
-            Image(
-                painter = BitmapPainter(icon.toBitmap().asImageBitmap()),
-                contentDescription = null,
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Outlined.Android, contentDescription = null, modifier = Modifier.size(48.dp))
+        Box(contentAlignment = Alignment.Center) {
+            // Main App Icon
+            if (icon != null) {
+                Image(
+                    painter = BitmapPainter(icon.toBitmap().asImageBitmap()),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Outlined.Android, contentDescription = null, modifier = Modifier.size(48.dp))
+                }
+            }
+
+            // Pause Indicator Badge
+            if (isPaused) {
+                val currentTime = remember { mutableLongStateOf(System.currentTimeMillis()) }
+                
+                // Optimasi CPU: Hanya jalankan timer jika ada durasi tertentu
+                if (pauseEndTimestamp > 0L) {
+                    LaunchedEffect(pauseEndTimestamp) {
+                        while (currentTime.longValue < pauseEndTimestamp) {
+                            delay(1000)
+                            currentTime.longValue = System.currentTimeMillis()
+                        }
+                    }
+                }
+
+                val remainingMillis = remember(pauseEndTimestamp, currentTime.longValue) {
+                    if (pauseEndTimestamp == 0L) -1L
+                    else (pauseEndTimestamp - currentTime.longValue).coerceAtLeast(0L)
+                }
+
+                val initialPauseDuration = remember(pauseEndTimestamp) {
+                    // Logic to estimate initial duration if not stored: 1, 6, 24 hours
+                    val diff = pauseEndTimestamp - System.currentTimeMillis()
+                    when {
+                        diff <= 3600000L -> 3600000L // 1h
+                        diff <= 21600000L -> 21600000L // 6h
+                        else -> 86400000L // 24h
+                    }
+                }
+
+                val progress = remember(remainingMillis) {
+                    if (pauseEndTimestamp == 0L) 1f
+                    else (remainingMillis.toFloat() / initialPauseDuration).coerceIn(0f, 1f)
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(90.dp) // Slightly larger than icon to host the badge
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(32.dp)
+                            .offset(x = 4.dp, y = (-4).dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 4.dp,
+                        shadowElevation = 4.dp
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(
+                                progress = { if (pauseEndTimestamp == 0L) 1f else progress },
+                                modifier = Modifier.size(26.dp),
+                                color = MaterialTheme.colorScheme.secondary,
+                                strokeWidth = 2.dp,
+                                trackColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f),
+                                strokeCap = StrokeCap.Round
+                            )
+                            Icon(
+                                imageVector = Icons.Outlined.Pause,
+                                contentDescription = "Paused",
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -324,7 +413,7 @@ fun UsageCard(
             ) {
                 if (focusType != null) {
                     val isGoal = focusType == FocusType.GOAL
-                    
+
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = if (isGoal) {
@@ -735,7 +824,7 @@ fun ResumeCard(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        "Estimasi waktu aktif kembali: $resumeTimeStr",
+                        "Estimated time: $resumeTimeStr",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline
                     )
@@ -752,6 +841,7 @@ fun PauseBottomSheet(
     onConfirmPause: (Int?) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
     var currentPhase by remember { mutableIntStateOf(1) }
 
     ModalBottomSheet(
@@ -768,20 +858,44 @@ fun PauseBottomSheet(
         ) {
             AnimatedContent(
                 targetState = currentPhase,
+                transitionSpec = {
+                    if (targetState > initialState) {
+                        (slideInHorizontally { it } + fadeIn(animationSpec = tween(400))).togetherWith(
+                            slideOutHorizontally { -it } + fadeOut(animationSpec = tween(200))
+                        )
+                    } else {
+                        (slideInHorizontally { -it } + fadeIn(animationSpec = tween(400))).togetherWith(
+                            slideOutHorizontally { it } + fadeOut(animationSpec = tween(200))
+                        )
+                    }.using(SizeTransform(clip = false))
+                },
                 label = "PausePhaseTransition"
             ) { phase ->
                 when (phase) {
                     1 -> PhaseOnePuzzle(onComplete = { currentPhase = 2 })
                     2 -> PhaseTwoHold(onComplete = { currentPhase = 3 })
                     3 -> PhaseThreeLoading(onComplete = { currentPhase = 4 })
-                    4 -> PhaseFourSelection(onConfirm = onConfirmPause)
+                    4 -> SuccessPopup(onDismiss = { currentPhase = 5 })
+                    5 -> PhaseFourSelection(
+                        onConfirm = { duration ->
+                            scope.launch {
+                                sheetState.hide()
+                                onConfirmPause(duration)
+                            }
+                        }
+                    )
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             TextButton(
-                onClick = onDismiss,
+                onClick = {
+                    scope.launch {
+                        sheetState.hide()
+                        onDismiss()
+                    }
+                },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Nevermind", color = MaterialTheme.colorScheme.outline)
@@ -860,40 +974,80 @@ fun PhaseOnePuzzle(onComplete: () -> Unit) {
 
 @Composable
 fun Lever(isOn: Boolean, onToggle: (Boolean) -> Unit) {
-    val thumbOffset by animateFloatAsState(
-        targetValue = if (isOn) 1f else 0f,
-        animationSpec = spring(stiffness = Spring.StiffnessLow),
-        label = "LeverThumb"
+    val scope = rememberCoroutineScope()
+    // Menggunakan Animatable dengan batas (bounds) agar tidak keluar kontainer
+    val thumbPosition = remember { 
+        Animatable(if (isOn) 1f else 0f).apply {
+            updateBounds(0f, 1f)
+        }
+    }
+
+    // Animasi perubahan warna agar halus
+    val knobColor by animateColorAsState(
+        targetValue = if (isOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+        animationSpec = tween(durationMillis = 300),
+        label = "LeverColor"
     )
+
+    // Sinkronisasi dengan perubahan state eksternal
+    LaunchedEffect(isOn) {
+        thumbPosition.animateTo(
+            targetValue = if (isOn) 1f else 0f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioLowBouncy, // Mengurangi pantulan berlebih
+                stiffness = Spring.StiffnessLow
+            )
+        )
+    }
+
+    var totalWidth by remember { mutableFloatStateOf(0f) }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(24.dp))
-            .padding(horizontal = 4.dp),
+            .padding(horizontal = 4.dp)
+            .onSizeChanged { totalWidth = it.width.toFloat() }
+            .pointerInput(isOn) {
+                detectTapGestures { onToggle(!isOn) }
+            }
+            .pointerInput(isOn) {
+                detectHorizontalDragGestures(
+                    onHorizontalDrag = { _, dragAmount ->
+                        val travel = totalWidth * 0.7f
+                        if (travel > 0) {
+                            val newValue = (thumbPosition.value + dragAmount / travel).coerceIn(0f, 1f)
+                            scope.launch { thumbPosition.snapTo(newValue) }
+                        }
+                    },
+                    onDragEnd = {
+                        val targetState = thumbPosition.value > 0.5f
+                        onToggle(targetState)
+                        
+                        if (targetState == isOn) {
+                            scope.launch {
+                                thumbPosition.animateTo(
+                                    if (isOn) 1f else 0f,
+                                    spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMedium)
+                                )
+                            }
+                        }
+                    }
+                )
+            },
         contentAlignment = Alignment.CenterStart
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectTapGestures { onToggle(!isOn) }
-                }
-        )
-        
         // Knob
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.3f)
                 .fillMaxHeight(0.8f)
                 .graphicsLayer {
-                    translationX = (size.width * 2.33f) * thumbOffset
+                    val travelDistance = size.width * 2.333f
+                    translationX = thumbPosition.value * travelDistance
                 }
-                .background(
-                    if (isOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                    CircleShape
-                )
+                .background(knobColor, CircleShape)
         )
     }
 }
@@ -981,37 +1135,46 @@ fun PhaseThreeLoading(onComplete: () -> Unit) {
 
 @Composable
 fun PhaseFourSelection(onConfirm: (Int?) -> Unit) {
-    var showSuccess by remember { mutableStateOf(true) }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("Access Granted", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("How long should we pause?", style = MaterialTheme.typography.bodyMedium)
+        Spacer(modifier = Modifier.height(32.dp))
 
-    if (showSuccess) {
-        SuccessPopup(onDismiss = { showSuccess = false })
-    } else {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Access Granted", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("How long should we pause?", style = MaterialTheme.typography.bodyMedium)
-            Spacer(modifier = Modifier.height(32.dp))
+        val options = listOf(
+            "1 Hour" to 1,
+            "6 Hours" to 6,
+            "24 Hours" to 24,
+            "Until I resume" to null
+        )
 
-            val options = listOf(
-                "1 Hour" to 1,
-                "6 Hours" to 6,
-                "24 Hours" to 24,
-                "Until I resume" to null
-            )
+        options.forEachIndexed { index, (label, value) ->
+            val shape = when (index) {
+                0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+                options.size - 1 -> RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                else -> RoundedCornerShape(4.dp)
+            }
 
-            options.forEach { (label, value) ->
-                Button(
-                    onClick = { onConfirm(value) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+            Surface(
+                onClick = { onConfirm(value) },
+                shape = shape,
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier.padding(20.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(label, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+            }
+            if (index < options.size - 1) {
+                Spacer(modifier = Modifier.height(2.dp))
             }
         }
     }

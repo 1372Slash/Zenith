@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.entity.DailyUsageEntity
 import com.etrisad.zenith.data.repository.ShieldRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -70,6 +71,8 @@ class HomeViewModel(
     private val _appDetailUiState = MutableStateFlow(AppDetailUiState())
     val appDetailUiState: StateFlow<AppDetailUiState> = _appDetailUiState.asStateFlow()
 
+    private var appDetailJob: Job? = null
+
     // History from database
     private var globalHistory: List<DailyUsageEntity> = emptyList()
     private var currentAppHistory: List<DailyUsageEntity> = emptyList()
@@ -79,6 +82,21 @@ class HomeViewModel(
             shieldRepository.allShields.collect { shields ->
                 allShields = shields
                 updateShieldedLists()
+
+                // Update detail if open to reflect changes immediately (e.g. pause/resume)
+                val currentPkg = _appDetailUiState.value.packageName
+                if (currentPkg.isNotEmpty()) {
+                    shields.find { it.packageName == currentPkg }?.let { shield ->
+                        _appDetailUiState.update { it.copy(
+                            shieldEntity = shield,
+                            type = shield.type,
+                            isPaused = shield.isPaused,
+                            pauseEndTimestamp = shield.pauseEndTimestamp,
+                            currentStreak = shield.currentStreak,
+                            bestStreak = shield.currentStreak
+                        ) }
+                    }
+                }
             }
         }
 
@@ -236,21 +254,19 @@ class HomeViewModel(
     }
 
     fun loadAppDetail(packageName: String) {
-        viewModelScope.launch {
+        appDetailJob?.cancel()
+        appDetailJob = viewModelScope.launch {
             val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val pm  = context.packageManager
-            val now = System.currentTimeMillis()
             val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-
             val todayStart = getMidnight(0)
 
-            // ── TODAY ──────────────────────────────────────────────────────────
-            val todayUsage = usm.queryAndAggregateUsageStats(todayStart, now)
-                .getUsageTime(packageName)
-
             // ── HISTORY (From DB) ──────────────────────────────────────────────
-            // We observe the DB for this package
             shieldRepository.getLastNDaysUsageForPackage(packageName, 21).collect { historyFromDb ->
+                val currentNow = System.currentTimeMillis()
+                val currentTodayUsage = usm.queryAndAggregateUsageStats(todayStart, currentNow)
+                    .getUsageTime(packageName)
+
                 val yesterdayUsage = historyFromDb.find { 
                     val cal = Calendar.getInstance()
                     cal.add(Calendar.DAY_OF_YEAR, -1)
@@ -262,7 +278,7 @@ class HomeViewModel(
                     val dateStr = dateFormat.format(Date(dStart))
                     
                     val dayTotal = if (i == 0) {
-                        todayUsage
+                        currentTodayUsage
                     } else {
                         historyFromDb.find { it.date == dateStr }?.usageTimeMillis ?: 0L
                     }
@@ -270,8 +286,8 @@ class HomeViewModel(
                 }
 
                 val percentageChange = when {
-                    yesterdayUsage > 0 -> ((todayUsage - yesterdayUsage).toFloat() / yesterdayUsage) * 100
-                    todayUsage > 0     -> 100f
+                    yesterdayUsage > 0 -> ((currentTodayUsage - yesterdayUsage).toFloat() / yesterdayUsage) * 100
+                    currentTodayUsage > 0     -> 100f
                     else               -> 0f
                 }
 
@@ -284,12 +300,12 @@ class HomeViewModel(
                     icon    = pm.getApplicationIcon(appInfo)
                 } catch (_: Exception) {}
 
-                _appDetailUiState.value = AppDetailUiState(
+                _appDetailUiState.update { it.copy(
                     packageName      = packageName,
                     appName          = appName,
                     icon             = icon,
                     type             = shield?.type,
-                    todayUsage       = todayUsage,
+                    todayUsage       = currentTodayUsage,
                     yesterdayUsage   = yesterdayUsage,
                     percentageChange = percentageChange,
                     usageHistory     = history.reversed(),
@@ -298,7 +314,7 @@ class HomeViewModel(
                     shieldEntity     = shield,
                     isPaused         = shield?.isPaused ?: false,
                     pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L
-                )
+                ) }
             }
         }
     }
@@ -311,23 +327,38 @@ class HomeViewModel(
             0L // Indefinite
         }
 
+        val updatedShield = shield.copy(
+            isPaused = true,
+            pauseEndTimestamp = pauseEndTimestamp
+        )
+
+        // Segera update UI state untuk feedback instan
+        _appDetailUiState.update { it.copy(
+            shieldEntity = updatedShield,
+            isPaused = true,
+            pauseEndTimestamp = pauseEndTimestamp
+        ) }
+
         viewModelScope.launch {
-            val updatedShield = shield.copy(
-                isPaused = true,
-                pauseEndTimestamp = pauseEndTimestamp
-            )
             shieldRepository.updateShield(updatedShield)
-            // loadAppDetail will be triggered by repository collection or we can update local state
         }
     }
 
     fun resumeShield() {
         val shield = _appDetailUiState.value.shieldEntity ?: return
+        val updatedShield = shield.copy(
+            isPaused = false,
+            pauseEndTimestamp = 0L
+        )
+
+        // Segera update UI state untuk feedback instan
+        _appDetailUiState.update { it.copy(
+            shieldEntity = updatedShield,
+            isPaused = false,
+            pauseEndTimestamp = 0L
+        ) }
+
         viewModelScope.launch {
-            val updatedShield = shield.copy(
-                isPaused = false,
-                pauseEndTimestamp = 0L
-            )
             shieldRepository.updateShield(updatedShield)
         }
     }
