@@ -20,6 +20,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
@@ -230,6 +232,24 @@ fun AppHeader(
     isPaused: Boolean = false,
     pauseEndTimestamp: Long = 0L
 ) {
+    // Animasi saturasi: 1f (normal) ke 0f (grayscale)
+    val saturation by animateFloatAsState(
+        targetValue = if (isPaused) 0f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
+        label = "IconSaturation"
+    )
+
+    val iconAlpha by animateFloatAsState(
+        targetValue = if (isPaused) 0.6f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
+        label = "IconAlpha"
+    )
+
+    val colorFilter = remember(saturation) {
+        val matrix = ColorMatrix().apply { setToSaturation(saturation) }
+        ColorFilter.colorMatrix(matrix)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -245,7 +265,8 @@ fun AppHeader(
                     modifier = Modifier
                         .size(80.dp)
                         .clip(CircleShape),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.Crop,
+                    colorFilter = colorFilter
                 )
             } else {
                 Box(
@@ -255,7 +276,12 @@ fun AppHeader(
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Outlined.Android, contentDescription = null, modifier = Modifier.size(48.dp))
+                    Icon(
+                        imageVector = Icons.Outlined.Android, 
+                        contentDescription = null, 
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = iconAlpha)
+                    )
                 }
             }
 

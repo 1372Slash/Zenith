@@ -23,7 +23,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Matrix
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
@@ -1076,6 +1079,24 @@ fun ShieldItem(
         }
     }
 
+    // Animasi saturasi: 1f (normal) ke 0f (grayscale)
+    val saturation by animateFloatAsState(
+        targetValue = if (shield.isPaused) 0f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
+        label = "IconSaturation"
+    )
+
+    val iconAlpha by animateFloatAsState(
+        targetValue = if (shield.isPaused) 0.6f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
+        label = "IconAlpha"
+    )
+
+    val colorFilter = remember(saturation) {
+        val matrix = ColorMatrix().apply { setToSaturation(saturation) }
+        ColorFilter.colorMatrix(matrix)
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -1107,24 +1128,80 @@ fun ShieldItem(
                     )
                 },
                 leadingContent = {
-                    if (appIcon != null) {
-                        Image(
-                            painter = BitmapPainter(appIcon.toBitmap().asImageBitmap()),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Outlined.Android, contentDescription = null)
+                    Box(
+                        modifier = Modifier.size(46.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (appIcon != null) {
+                            Image(
+                                painter = BitmapPainter(appIcon.toBitmap().asImageBitmap()),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop,
+                                colorFilter = colorFilter
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Android, 
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = iconAlpha)
+                                )
+                            }
+                        }
+
+                        if (shield.isPaused) {
+                            val currentTime = System.currentTimeMillis()
+                            val remainingMillis = if (shield.pauseEndTimestamp == 0L) -1L
+                            else (shield.pauseEndTimestamp - currentTime).coerceAtLeast(0L)
+
+                            val initialPauseDuration = remember(shield.pauseEndTimestamp) {
+                                val diff = shield.pauseEndTimestamp - currentTime
+                                when {
+                                    diff <= 3600000L -> 3600000L // 1h
+                                    diff <= 21600000L -> 21600000L // 6h
+                                    else -> 86400000L // 24h
+                                }
+                            }
+
+                            val progress = if (shield.pauseEndTimestamp == 0L) 1f
+                            else (remainingMillis.toFloat() / initialPauseDuration).coerceIn(0f, 1f)
+
+                            Surface(
+                                color = MaterialTheme.colorScheme.surface,
+                                shape = CircleShape,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(18.dp)
+                                    .offset(x = 2.dp, y = (-2).dp),
+                                tonalElevation = 4.dp,
+                                shadowElevation = 4.dp
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(
+                                        progress = { progress },
+                                        modifier = Modifier.size(14.dp),
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        strokeWidth = 1.5.dp,
+                                        trackColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f),
+                                        strokeCap = StrokeCap.Round
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Outlined.Pause,
+                                        contentDescription = "Paused",
+                                        modifier = Modifier.size(8.dp),
+                                        tint = MaterialTheme.colorScheme.secondary
+                                    )
+                                }
+                            }
                         }
                     }
                 },
