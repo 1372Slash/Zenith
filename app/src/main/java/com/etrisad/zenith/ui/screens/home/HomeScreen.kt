@@ -14,7 +14,7 @@ import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Whatshot
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -1136,19 +1136,30 @@ fun ShieldItem(
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (shield.currentStreak > 0) {
-                            Icon(
-                                imageVector = Icons.Default.Whatshot,
-                                contentDescription = "Streak",
-                                modifier = Modifier.size(16.dp),
-                                tint = Color(0xFFFF9800)
-                            )
-                            Text(
-                                text = "${shield.currentStreak}",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFFF9800),
-                                modifier = Modifier.padding(start = 2.dp, end = 8.dp)
-                            )
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.LocalFireDepartment,
+                                        contentDescription = "Streak",
+                                        modifier = Modifier.size(14.dp),
+                                        tint = MaterialTheme.colorScheme.onTertiary
+                                    )
+                                    Text(
+                                        text = "${shield.currentStreak}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onTertiary,
+                                        modifier = Modifier.padding(start = 4.dp)
+                                    )
+                                }
+                            }
                         }
                         Text(
                             text = "$percentage%",

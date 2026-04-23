@@ -803,19 +803,30 @@ fun ShieldConfigItem(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (shield.currentStreak > 0) {
-                        Icon(
-                            imageVector = Icons.Default.Whatshot,
-                            contentDescription = "Streak",
-                            modifier = Modifier.size(18.dp),
-                            tint = Color(0xFFFF9800)
-                        )
-                        Text(
-                            text = "${shield.currentStreak}",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFFF9800),
-                            modifier = Modifier.padding(start = 2.dp, end = 12.dp)
-                        )
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.padding(end = 12.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.LocalFireDepartment,
+                                    contentDescription = "Streak",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onTertiary
+                                )
+                                Text(
+                                    text = "${shield.currentStreak}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onTertiary,
+                                    modifier = Modifier.padding(start = 4.dp)
+                                )
+                            }
+                        }
                     }
                     Text(
                         text = "$percentage%",
