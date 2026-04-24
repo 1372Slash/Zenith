@@ -774,13 +774,57 @@ class AppUsageMonitorService : Service() {
 
         val startTime = getStartOfDay()
 
-        usageStatsCache = try {
-            val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, currentTime)
-            stats?.forEach { 
-                dailyUsageCache[it.packageName] = it.totalTimeVisible
+        // Menggunakan queryEvents untuk menghitung penggunaan secara manual lebih akurat daripada queryUsageStats(INTERVAL_DAILY)
+        // Hal ini karena INTERVAL_DAILY seringkali mengalami bug reset lebih awal di sekitar jam 23:00-00:00 (tergantung sistem Android)
+        try {
+            val events = usageStatsManager.queryEvents(startTime, currentTime)
+            val event = android.app.usage.UsageEvents.Event()
+            val tempUsageMap = mutableMapOf<String, Long>()
+            val lastAppOpenTime = mutableMapOf<String, Long>()
+
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                val pkg = event.packageName ?: continue
+
+                when (event.eventType) {
+                    android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED,
+                    android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND -> {
+                        lastAppOpenTime[pkg] = event.timeStamp
+                    }
+                    android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED,
+                    android.app.usage.UsageEvents.Event.MOVE_TO_BACKGROUND -> {
+                        val openTime = lastAppOpenTime[pkg]
+                        if (openTime != null) {
+                            val duration = event.timeStamp - openTime
+                            if (duration > 0) {
+                                tempUsageMap[pkg] = (tempUsageMap[pkg] ?: 0L) + duration
+                            }
+                            lastAppOpenTime.remove(pkg)
+                        }
+                    }
+                }
             }
-            stats
-        } catch (_: Exception) { null }
+
+            // Tambahkan durasi untuk aplikasi yang masih di foreground saat ini
+            lastAppOpenTime.forEach { (pkg, openTime) ->
+                val duration = currentTime - openTime
+                if (duration > 0) {
+                    tempUsageMap[pkg] = (tempUsageMap[pkg] ?: 0L) + duration
+                }
+            }
+
+            // Update dailyUsageCache dengan data hasil perhitungan manual yang lebih stabil
+            tempUsageMap.forEach { (pkg, usage) ->
+                dailyUsageCache[pkg] = usage
+            }
+            
+            // Tetap panggil queryUsageStats hanya untuk memenuhi return type jika diperlukan fungsi lain,
+            // namun dailyUsageCache sudah diisi oleh data yang lebih akurat di atas.
+            usageStatsCache = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, currentTime)
+        } catch (e: Exception) {
+            usageStatsCache = null
+        }
+
         lastUsageCacheTime = currentTime
         return usageStatsCache
     }
