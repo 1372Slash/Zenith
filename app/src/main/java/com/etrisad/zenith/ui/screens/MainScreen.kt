@@ -111,10 +111,16 @@ fun MainScreen(
                     NavigationBar {
                         val currentDestination = navBackStackEntry?.destination
                         navItems.forEach { screen ->
+                            val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
                             NavigationBarItem(
-                                icon = { Icon(screen.icon, contentDescription = null) },
+                                icon = {
+                                    Icon(
+                                        imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
+                                        contentDescription = null
+                                    )
+                                },
                                 label = { Text(screen.title) },
-                                selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                                selected = selected,
                                 onClick = {
                                     if (currentDestination?.route != screen.route) {
                                         navController.navigate(screen.route) {
@@ -162,10 +168,16 @@ fun MainScreen(
                     ) {
                         val currentDestination = navBackStackEntry?.destination
                         navItems.forEach { screen ->
+                            val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
                             NavigationRailItem(
-                                icon = { Icon(screen.icon, contentDescription = null) },
+                                icon = {
+                                    Icon(
+                                        imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
+                                        contentDescription = null
+                                    )
+                                },
                                 label = { Text(screen.title) },
-                                selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                                selected = selected,
                                 onClick = {
                                     if (currentDestination?.route != screen.route) {
                                         navController.navigate(screen.route) {
