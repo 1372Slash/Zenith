@@ -49,7 +49,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AppDetailScreen(
-    @Suppress("UNUSED_PARAMETER") packageName: String,
+    packageName: String,
     viewModel: HomeViewModel,
     onBack: () -> Unit
 ) {
@@ -57,6 +57,12 @@ fun AppDetailScreen(
 
     LaunchedEffect(packageName) {
         viewModel.loadAppDetail(packageName)
+    }
+
+    DisposableEffect(packageName) {
+        onDispose {
+            viewModel.clearAppDetail(packageName)
+        }
     }
 
     Scaffold(

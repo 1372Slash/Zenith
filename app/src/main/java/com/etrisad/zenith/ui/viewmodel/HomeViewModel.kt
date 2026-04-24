@@ -86,16 +86,15 @@ class HomeViewModel(
                 // Update detail if open to reflect changes immediately (e.g. pause/resume)
                 val currentPkg = _appDetailUiState.value.packageName
                 if (currentPkg.isNotEmpty()) {
-                    shields.find { it.packageName == currentPkg }?.let { shield ->
-                        _appDetailUiState.update { it.copy(
-                            shieldEntity = shield,
-                            type = shield.type,
-                            isPaused = shield.isPaused,
-                            pauseEndTimestamp = shield.pauseEndTimestamp,
-                            currentStreak = shield.currentStreak,
-                            bestStreak = shield.currentStreak
-                        ) }
-                    }
+                    val shield = shields.find { it.packageName == currentPkg }
+                    _appDetailUiState.update { it.copy(
+                        shieldEntity = shield,
+                        type = shield?.type,
+                        isPaused = shield?.isPaused ?: false,
+                        pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L,
+                        currentStreak = shield?.currentStreak ?: 0,
+                        bestStreak = shield?.currentStreak ?: 0
+                    ) }
                 }
             }
         }
@@ -243,23 +242,51 @@ class HomeViewModel(
             catch (_: PackageManager.NameNotFoundException) { app }
         }
 
-        _uiState.value = _uiState.value.copy(
+        // Live calculation for shields/goals
+        val liveShields = allShields.map { shield ->
+            val usage = todayRawStats.getUsageTime(shield.packageName)
+            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+            shield.copy(remainingTimeMillis = (limitMillis - usage).coerceAtLeast(0L))
+        }
+
+        _uiState.update { it.copy(
             totalScreenTime      = totalToday,
             yesterdayScreenTime  = totalYesterday,
             percentageChange     = percentageChange,
             dailyUsageHistory    = history.reversed(), // oldest → newest
             topApps              = topApps,
-            allAppsUsage         = allAppsUsage
-        )
+            allAppsUsage         = allAppsUsage,
+            activeShields = sortShields(liveShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.SHIELD }, it.shieldSortType),
+            activeGoals   = sortShields(liveShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL }, it.goalSortType)
+        ) }
     }
 
     fun loadAppDetail(packageName: String) {
+        if (_appDetailUiState.value.packageName == packageName && appDetailJob?.isActive == true) return
+        
+        val isNewPackage = _appDetailUiState.value.packageName != packageName
         appDetailJob?.cancel()
+        
+        if (isNewPackage) {
+            _appDetailUiState.value = AppDetailUiState(packageName = packageName)
+        }
+
         appDetailJob = viewModelScope.launch {
             val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val pm  = context.packageManager
             val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             val todayStart = getMidnight(0)
+
+            // Load app info immediately
+            var appName = packageName
+            var icon: android.graphics.drawable.Drawable? = null
+            try {
+                val appInfo = pm.getApplicationInfo(packageName, 0)
+                appName = pm.getApplicationLabel(appInfo).toString()
+                icon    = pm.getApplicationIcon(appInfo)
+            } catch (_: Exception) {}
+
+            _appDetailUiState.update { it.copy(appName = appName, icon = icon) }
 
             // ── HISTORY (From DB) ──────────────────────────────────────────────
             shieldRepository.getLastNDaysUsageForPackage(packageName, 21).collect { historyFromDb ->
@@ -292,13 +319,6 @@ class HomeViewModel(
                 }
 
                 val shield = allShields.find { it.packageName == packageName }
-                var appName = packageName
-                var icon: android.graphics.drawable.Drawable? = null
-                try {
-                    val appInfo = pm.getApplicationInfo(packageName, 0)
-                    appName = pm.getApplicationLabel(appInfo).toString()
-                    icon    = pm.getApplicationIcon(appInfo)
-                } catch (_: Exception) {}
 
                 _appDetailUiState.update { it.copy(
                     packageName      = packageName,
@@ -405,9 +425,41 @@ class HomeViewModel(
             while (true) {
                 delay(10000)
                 refreshUsageStats()
-                val currentDetailPkg = _appDetailUiState.value.packageName
-                if (currentDetailPkg.isNotEmpty()) loadAppDetail(currentDetailPkg)
+                refreshCurrentAppDetailUsage()
             }
+        }
+    }
+
+    private fun refreshCurrentAppDetailUsage() {
+        val uiState = _appDetailUiState.value
+        val packageName = uiState.packageName
+        if (packageName.isEmpty()) return
+
+        viewModelScope.launch {
+            val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+            val todayStart = getMidnight(0)
+            val currentNow = System.currentTimeMillis()
+            val currentTodayUsage = usm.queryAndAggregateUsageStats(todayStart, currentNow)
+                .getUsageTime(packageName)
+
+            val yesterdayUsage = uiState.yesterdayUsage
+            val percentageChange = when {
+                yesterdayUsage > 0 -> ((currentTodayUsage - yesterdayUsage).toFloat() / yesterdayUsage) * 100
+                currentTodayUsage > 0 -> 100f
+                else -> 0f
+            }
+
+            _appDetailUiState.update { it.copy(
+                todayUsage = currentTodayUsage,
+                percentageChange = percentageChange
+            ) }
+        }
+    }
+
+    fun clearAppDetail(packageName: String) {
+        if (_appDetailUiState.value.packageName == packageName) {
+            appDetailJob?.cancel()
+            _appDetailUiState.value = AppDetailUiState()
         }
     }
 
@@ -415,7 +467,7 @@ class HomeViewModel(
         val shield = _appDetailUiState.value.shieldEntity ?: return
         viewModelScope.launch {
             shieldRepository.deleteShield(shield)
-            _appDetailUiState.value = _appDetailUiState.value.copy(type = null, shieldEntity = null)
+            _appDetailUiState.update { it.copy(type = null, shieldEntity = null) }
         }
     }
 

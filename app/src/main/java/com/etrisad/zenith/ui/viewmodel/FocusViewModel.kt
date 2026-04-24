@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -70,6 +71,7 @@ class FocusViewModel(
             }
         }
         loadInstalledApps()
+        startRealTimeUpdates()
     }
 
     fun onShieldSortTypeChange(sortType: ShieldSortType) {
@@ -83,13 +85,39 @@ class FocusViewModel(
     }
 
     private fun updateShieldedLists() {
-        val shields = allShields.filter { it.type == FocusType.SHIELD }
-        val goals = allShields.filter { it.type == FocusType.GOAL }
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
+        val now = System.currentTimeMillis()
+        val calendar = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val stats = usm.queryAndAggregateUsageStats(calendar.timeInMillis, now)
+
+        val liveShields = allShields.map { shield ->
+            val usageStat = stats[shield.packageName]
+            val usage = usageStat?.let { it.totalTimeVisible.coerceAtLeast(it.totalTimeInForeground) } ?: 0L
+            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+            shield.copy(remainingTimeMillis = (limitMillis - usage).coerceAtLeast(0L))
+        }
+
+        val shields = liveShields.filter { it.type == FocusType.SHIELD }
+        val goals = liveShields.filter { it.type == FocusType.GOAL }
 
         _uiState.value = _uiState.value.copy(
             activeShields = sortShields(shields, _uiState.value.shieldSortType),
             activeGoals = sortShields(goals, _uiState.value.goalSortType)
         )
+    }
+
+    private fun startRealTimeUpdates() {
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(10000)
+                updateShieldedLists()
+            }
+        }
     }
 
     private fun sortShields(shields: List<ShieldEntity>, sortType: ShieldSortType): List<ShieldEntity> {
