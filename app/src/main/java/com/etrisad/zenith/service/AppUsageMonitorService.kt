@@ -43,6 +43,8 @@ class AppUsageMonitorService : Service() {
     private var currentShieldCache: ShieldEntity? = null
     private var lastUsageFetchTime = 0L
     private var cachedTotalUsage = 0L
+    private var sessionStartTime = 0L
+    private var baseUsageAtSessionStart = 0L
     private val allowedApps = mutableMapOf<String, Long>()
     private var activeSchedules = listOf<com.etrisad.zenith.data.local.entity.ScheduleEntity>()
     private var whitelistedPackages = emptySet<String>()
@@ -283,6 +285,10 @@ class AppUsageMonitorService : Service() {
                 val currentApp = getForegroundApp()
                 val currentTime = System.currentTimeMillis()
 
+                if (currentApp != null) {
+                    overlayManager.checkAndHide(currentApp)
+                }
+
                 // Refresh launcher packages every 60s
                 if (launcherPackages.isEmpty() || currentTime - lastLauncherRefreshTime > 60000) {
                     try {
@@ -319,6 +325,18 @@ class AppUsageMonitorService : Service() {
                     if (currentApp != lastForegroundApp || currentShieldCache == null) {
                         currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
                         lastUsageFetchTime = 0L 
+                        sessionStartTime = currentTime
+                        
+                        val systemUsage = getTotalUsageToday(currentApp)
+                        val startOfDay = getStartOfDay()
+                        val shield = currentShieldCache
+                        val dbUsage = if (shield != null && shield.lastUsedTimestamp >= startOfDay) {
+                            val limitMillis = (shield.timeLimitMinutes * 60 * 1000L)
+                            (limitMillis - shield.remainingTimeMillis).coerceAtLeast(0L)
+                        } else 0L
+                        
+                        baseUsageAtSessionStart = maxOf(systemUsage, dbUsage)
+                        cachedTotalUsage = baseUsageAtSessionStart
                     }
 
                     if (shouldBypassBlocking(currentApp)) {
@@ -421,22 +439,35 @@ class AppUsageMonitorService : Service() {
         val shield = currentShieldCache ?: return
         val currentTime = System.currentTimeMillis()
 
-        // Sync local cache with HUD for Goal-type apps every second
-        // This ensures the HUD timer moves forward even between system stat fetches
-        if (shield.type == FocusType.GOAL && currentTime - lastHUDUpdateTime > HUD_UPDATE_INTERVAL) {
-            lastHUDUpdateTime = currentTime
-            serviceScope.launch(Dispatchers.Main) {
-                // We use cachedTotalUsage but add the time elapsed since the last fetch
-                val timeSinceFetch = if (lastUsageFetchTime > 0) currentTime - lastUsageFetchTime else 0L
-                sessionUsageOverlayManager.updateHUDUsage(packageName, cachedTotalUsage + timeSinceFetch)
+        val sessionElapsed = currentTime - sessionStartTime
+        val currentTotalUsage = baseUsageAtSessionStart + sessionElapsed
+        cachedTotalUsage = currentTotalUsage
+
+        // Sync with HUD for Goal-type apps every 2 seconds (or 1s if near limit)
+        if (shield.type == FocusType.GOAL) {
+            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+            val remaining = (limitMillis - currentTotalUsage).coerceAtLeast(0L)
+            val uiUpdateInterval = if (remaining < 60000) 1000L else 2000L
+
+            if (currentTime - lastHUDUpdateTime > uiUpdateInterval) {
+                lastHUDUpdateTime = currentTime
+                serviceScope.launch(Dispatchers.Main) {
+                    sessionUsageOverlayManager.updateHUDUsage(packageName, currentTotalUsage)
+                }
             }
         }
 
-        // Fetch dari sistem setiap 30 detik (efisien agar tidak memberatkan sistem)
-        // Reset lastUsageFetchTime jika terjadi pergantian hari untuk memastikan data hari baru diambil
+        // Periodic system sync every 30 seconds to keep base usage anchored
         if (currentTime - lastUsageFetchTime > 30000) {
-            cachedTotalUsage = getTotalUsageToday(packageName)
-            dailyUsageCache[packageName] = cachedTotalUsage
+            val systemUsage = getTotalUsageToday(packageName)
+            val startOfDay = getStartOfDay()
+            
+            val dbUsage = if (shield.lastUsedTimestamp >= startOfDay) {
+                val limitMillis = (shield.timeLimitMinutes * 60 * 1000L)
+                (limitMillis - shield.remainingTimeMillis).coerceAtLeast(0L)
+            } else 0L
+            
+            baseUsageAtSessionStart = maxOf(systemUsage, dbUsage) - (currentTime - sessionStartTime)
             lastUsageFetchTime = currentTime
         }
 

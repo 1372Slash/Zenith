@@ -129,68 +129,68 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun handlePackageChange(currentApp: String) {
-        val currentTime = System.currentTimeMillis()
-
-        // Check for day change efficiently
-        if (currentTime - lastCheckedDayTimestamp > 60000) {
-            reusableCalendar.timeInMillis = currentTime
-            val currentDay = reusableCalendar.get(Calendar.DAY_OF_YEAR)
-            if (lastCheckedDay != -1 && currentDay != lastCheckedDay) {
-                // Reset usage caches on day change
-                usageStatsCache = null
-                lastUsageCacheTime = 0L
-                lastUsageFetchTime = 0L
-                cachedTotalUsage = 0L
-                currentShieldCache = null
-                notifiedGoals.clear()
-
-                // Reset session for the current app if it crosses midnight
-                baseUsageAtSessionStart = 0L
-                sessionStartTime = currentTime
-                
-                if (currentPreferences?.sessionUsageOverlayEnabled == true) {
-                    serviceScope.launch(Dispatchers.Main) {
-                        sessionUsageOverlayManager.updateHUDUsage(currentApp, 0L)
-                    }
-                }
-            }
-            lastCheckedDay = currentDay
-            lastCheckedDayTimestamp = currentTime
-        }
-
-        // Evaluasi lebih sering (setiap 500ms) agar lebih sigap
-        if (currentApp == lastForegroundApp && currentTime - lastEvaluationTime < 500) {
-            return
-        }
-        lastEvaluationTime = currentTime
+        overlayManager.checkAndHide(currentApp)
 
         if (currentApp != lastForegroundApp) {
             sessionUsageOverlayManager.updateForegroundApp(currentApp)
             currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
             lastUsageFetchTime = 0L
-            sessionStartTime = currentTime
+            sessionStartTime = System.currentTimeMillis()
             baseUsageAtSessionStart = getTotalUsageToday(currentApp)
             cachedTotalUsage = baseUsageAtSessionStart
-        }
-
-        if (shouldBypassBlocking(currentApp)) {
             lastForegroundApp = currentApp
-            return
         }
 
-        val allowedUntil = allowedApps[currentApp] ?: 0L
-        updateUsageTime(currentApp)
+        // Monitoring loop for this specific package
+        // This will be cancelled by collectLatest if packageChangeFlow emits a NEW package
+        while (lastForegroundApp == currentApp) {
+            val currentTime = System.currentTimeMillis()
 
-        val shield = currentShieldCache
-        val isAppPaused = shield != null && isPaused(shield)
+            // 1. Day change check efficiently
+            if (currentTime - lastCheckedDayTimestamp > 60000) {
+                reusableCalendar.timeInMillis = currentTime
+                val currentDay = reusableCalendar.get(Calendar.DAY_OF_YEAR)
+                if (lastCheckedDay != -1 && currentDay != lastCheckedDay) {
+                    // Reset usage caches on day change
+                    usageStatsCache = null
+                    lastUsageCacheTime = 0L
+                    lastUsageFetchTime = 0L
+                    cachedTotalUsage = 0L
+                    currentShieldCache = null
+                    notifiedGoals.clear()
 
-        // Goal HUD logic: Show if it's a goal and not yet reached
-        if (shield != null && shield.type == FocusType.GOAL && !isAppPaused) {
-            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
-            if (cachedTotalUsage < limitMillis) {
-                val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
-                if (prefs.sessionUsageOverlayEnabled) {
-                    if (currentApp != lastForegroundApp) {
+                    // Reset session for the current app if it crosses midnight
+                    baseUsageAtSessionStart = 0L
+                    sessionStartTime = currentTime
+                    
+                    if (currentPreferences?.sessionUsageOverlayEnabled == true) {
+                        serviceScope.launch(Dispatchers.Main) {
+                            sessionUsageOverlayManager.updateHUDUsage(currentApp, 0L)
+                        }
+                    }
+                }
+                lastCheckedDay = currentDay
+                lastCheckedDayTimestamp = currentTime
+            }
+
+            // 2. Bypass check
+            if (shouldBypassBlocking(currentApp)) {
+                delay(2000)
+                continue
+            }
+
+            // 3. Update usage and sync HUD
+            updateUsageTime(currentApp)
+
+            val shield = currentShieldCache
+            val isAppPaused = shield != null && isPaused(shield)
+
+            // 4. Goal HUD logic: Show if it's a goal and not yet reached
+            if (shield != null && shield.type == FocusType.GOAL && !isAppPaused) {
+                val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+                if (cachedTotalUsage < limitMillis) {
+                    val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
+                    if (prefs.sessionUsageOverlayEnabled) {
                         serviceScope.launch(Dispatchers.Main) {
                             sessionUsageOverlayManager.showHUD(
                                 currentApp,
@@ -199,37 +199,30 @@ class ZenithAccessibilityService : AccessibilityService() {
                                 prefs.sessionUsageOverlayOpacity,
                                 isGoal = true
                             )
-                            sessionUsageOverlayManager.updateHUDUsage(currentApp, cachedTotalUsage)
                         }
                     }
                 }
             }
-        }
 
-        // Cek apakah Shield/Goal sedang di-pause
-        if (isAppPaused) {
-            lastForegroundApp = currentApp
-            return
-        }
-
-        if (currentTime > allowedUntil && !InterceptOverlayManager.isShowing) {
-            if (checkSchedules(currentApp)) {
-                lastForegroundApp = currentApp
-                return
-            }
-
-            val shield = currentShieldCache
-            if (shield != null) {
-                if (shield.isAutoQuitEnabled && allowedUntil > 0) {
-                    goToHomeScreen()
-                    allowedApps.remove(currentApp)
-                } else if (currentApp != lastForegroundApp || allowedUntil > 0) {
-                    checkIfAppIsShielded(currentApp)
-                    if (allowedUntil > 0) allowedApps[currentApp] = 0L
+            // 5. Blocking logic
+            if (!isAppPaused) {
+                val allowedUntil = allowedApps[currentApp] ?: 0L
+                if (currentTime > allowedUntil && !InterceptOverlayManager.isShowing) {
+                    if (checkSchedules(currentApp)) {
+                        // scheduled block - loop continues
+                    } else if (shield != null) {
+                        if (shield.isAutoQuitEnabled && allowedUntil > 0) {
+                            goToHomeScreen()
+                            allowedApps.remove(currentApp)
+                        } else {
+                            checkIfAppIsShielded(currentApp)
+                        }
+                    }
                 }
             }
+
+            delay(1000)
         }
-        lastForegroundApp = currentApp
     }
 
     private suspend fun updateUsageTime(packageName: String) {
@@ -243,9 +236,11 @@ class ZenithAccessibilityService : AccessibilityService() {
         if (shield.type == FocusType.GOAL) {
             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
             val remaining = (limitMillis - currentTotalUsage).coerceAtLeast(0L)
+            
+            // Update HUD every 2 seconds for live goals, or more frequently if near limit
             val uiUpdateInterval = when {
-                remaining < 300000 -> 5000L // Setiap 5 detik jika < 5 menit
-                else -> 15000L // Setiap 15 detik jika masih jauh
+                remaining < 60000 -> 1000L // Every second when near limit
+                else -> 2000L
             }
 
             if (currentTime - lastUsageFetchTime >= uiUpdateInterval) {

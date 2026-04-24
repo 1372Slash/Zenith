@@ -98,12 +98,33 @@ class SessionUsageOverlayManager(private val context: Context) {
         }
 
         session.timerJob = scope.launch {
+            var lastUpdateMillis = System.currentTimeMillis()
             while (true) {
                 if (!isGoal && session.secondsLeftState.intValue <= 0) break
                 if (isGoal && session.secondsElapsedState.intValue >= session.totalSeconds) break
 
-                // Maximum Efficiency: Update internal state every 10 seconds to minimize CPU wakes
-                delay(10000)
+                // Adaptive Delay Logic based on remaining time to save CPU
+                val updateInterval = if (isGoal) {
+                    // Goal Adaptive Delay: Smooth when near limit, light otherwise
+                    val remainingSeconds = (session.totalSeconds - session.secondsElapsedState.intValue).coerceAtLeast(0)
+                    when {
+                        remainingSeconds < 60 -> 1000L  // < 1 min: 1s update
+                        remainingSeconds < 300 -> 2500L // < 5 min: 2.5s update
+                        else -> 5000L                   // > 5 min: 5s update
+                    }
+                } else {
+                    // Shield Adaptive Delay: Matching service polling logic
+                    val remainingMillis = session.secondsLeftState.intValue * 1000L
+                    when {
+                        remainingMillis > 3600000 -> 80000L  // > 1 hour: 8s delay
+                        remainingMillis > 600000 -> 50000L   // > 10 min: 5s delay
+                        remainingMillis > 300000 -> 30000L   // > 5 min: 3s delay
+                        remainingMillis > 60000 -> 15000L    // > 1 min: 1.5s delay
+                        else -> 10000L                       // < 1 min: 1s delay
+                    }
+                }
+
+                delay(updateInterval)
 
                 if (session.backgroundTimestamp != 0L &&
                     System.currentTimeMillis() - session.backgroundTimestamp > 180000L) {
@@ -111,10 +132,17 @@ class SessionUsageOverlayManager(private val context: Context) {
                     return@launch
                 }
 
-                if (isGoal) {
-                    session.secondsElapsedState.intValue = (session.secondsElapsedState.intValue + 10).coerceAtMost(session.totalSeconds)
-                } else {
-                    session.secondsLeftState.intValue = (session.secondsLeftState.intValue - 10).coerceAtLeast(0)
+                val now = System.currentTimeMillis()
+                val elapsedMillis = now - lastUpdateMillis
+                if (elapsedMillis >= 1000) {
+                    val secondsToProcess = (elapsedMillis / 1000).toInt()
+                    if (isGoal) {
+                        session.secondsElapsedState.intValue = (session.secondsElapsedState.intValue + secondsToProcess).coerceAtMost(session.totalSeconds)
+                    } else {
+                        session.secondsLeftState.intValue = (session.secondsLeftState.intValue - secondsToProcess).coerceAtLeast(0)
+                    }
+                    // Keep the remaining fraction of a second for the next update cycle
+                    lastUpdateMillis = now - (elapsedMillis % 1000)
                 }
             }
             if (session.hudInstance == null || (!isGoal && session.secondsLeftState.intValue <= 0) || (isGoal && session.secondsElapsedState.intValue >= session.totalSeconds)) {
@@ -382,12 +410,11 @@ private fun HUDProgress(
     color: Color,
     trackColor: Color
 ) {
-    // Snapped progress: only updates every 10 seconds
+    // Live progress: updates every second
     val snappedProgress by remember(totalSeconds) {
         derivedStateOf {
             val seconds = secondsLeftProvider()
-            val snappedSeconds = (seconds / 10) * 10
-            snappedSeconds.toFloat() / totalSeconds.toFloat()
+            seconds.toFloat() / totalSeconds.toFloat()
         }
     }
 
@@ -424,8 +451,7 @@ private fun HUDProgress(
 private fun HUDTimerText(secondsProvider: () -> Int, color: Color) {
     val text by remember {
         derivedStateOf {
-            val rawSeconds = secondsProvider()
-            val snappedSeconds = (rawSeconds / 10) * 10
+            val snappedSeconds = secondsProvider()
             if (snappedSeconds >= 60) {
                 "${snappedSeconds / 60}m"
             } else {

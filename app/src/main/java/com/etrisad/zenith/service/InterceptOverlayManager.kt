@@ -20,12 +20,21 @@ import com.etrisad.zenith.ui.theme.ZenithTheme
 class InterceptOverlayManager(private val context: Context) {
 
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-    private var overlayView: ComposeView? = null
-    private var lifecycleOwner: MyLifecycleOwner? = null
-    private var viewModelStore: ViewModelStore? = null
 
     companion object {
         var isShowing = false
+            private set
+        private var overlayView: ComposeView? = null
+        private var lifecycleOwner: MyLifecycleOwner? = null
+        private var viewModelStore: ViewModelStore? = null
+        private var currentPackage: String? = null
+
+        private val SYSTEM_UI_PACKAGES = setOf(
+            "com.android.systemui",
+            "android",
+            "com.android.settings",
+            "com.google.android.permissioncontroller"
+        )
     }
 
     fun showOverlay(
@@ -38,8 +47,9 @@ class InterceptOverlayManager(private val context: Context) {
         onCloseApp: () -> Unit,
         onGoalDismiss: () -> Unit
     ) {
-        if (overlayView != null) return
+        if (isShowing) return
         isShowing = true
+        currentPackage = packageName
 
         val vStore = ViewModelStore()
         viewModelStore = vStore
@@ -86,8 +96,9 @@ class InterceptOverlayManager(private val context: Context) {
         onAllowUse: (Int, Boolean) -> Unit,
         onCloseApp: () -> Unit
     ) {
-        if (overlayView != null) return
+        if (isShowing) return
         isShowing = true
+        currentPackage = packageName
 
         val vStore = ViewModelStore()
         viewModelStore = vStore
@@ -159,18 +170,44 @@ class InterceptOverlayManager(private val context: Context) {
             lOwner.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
         } catch (e: Exception) {
             e.printStackTrace()
+            isShowing = false
+            currentPackage = null
         }
     }
 
+    /**
+     * Memvalidasi apakah overlay masih relevan dengan aplikasi yang sedang aktif.
+     * Jika user berpindah ke aplikasi lain yang bukan bagian dari system UI atau Zenith,
+     * overlay akan disembunyikan.
+     */
+    fun checkAndHide(newPackage: String) {
+        if (!isShowing) return
+        
+        val target = currentPackage ?: return
+        
+        // Jangan hide jika user membuka System UI (notif/settings) atau kembali ke Zenith
+        if (newPackage == target || 
+            newPackage == context.packageName || 
+            newPackage in SYSTEM_UI_PACKAGES ||
+            newPackage.contains("launcher", ignoreCase = true) ||
+            newPackage.contains("home", ignoreCase = true)) {
+            return
+        }
+        
+        // Sembunyikan jika berpindah ke aplikasi lain
+        hideOverlay()
+    }
+
     fun hideOverlay() {
-        overlayView?.let {
+        val view = overlayView
+        if (view != null) {
             try {
                 lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
                 lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
                 lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
                 
-                it.disposeComposition() // Panggil dispose sebelum remove
-                windowManager.removeViewImmediate(it) // Gunakan removeViewImmediate untuk pelepasan instan
+                view.disposeComposition()
+                windowManager.removeViewImmediate(view)
                 
                 viewModelStore?.clear()
             } catch (e: Exception) {
@@ -179,12 +216,17 @@ class InterceptOverlayManager(private val context: Context) {
                 overlayView = null
                 lifecycleOwner = null
                 viewModelStore = null
+                currentPackage = null
                 isShowing = false
-                // Hint kepada GC bahwa kita baru saja melepaskan objek besar (ComposeView)
                 System.gc()
             }
+        } else {
+            // Clean up state even if view is already null
+            isShowing = false
+            currentPackage = null
         }
     }
+
 
     private class MyLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner {
         private val lifecycleRegistry = LifecycleRegistry(this)
