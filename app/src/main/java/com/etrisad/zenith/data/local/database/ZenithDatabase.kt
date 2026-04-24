@@ -17,13 +17,14 @@ import com.etrisad.zenith.data.local.Converters
 
 @Database(
     entities = [ShieldEntity::class, ScheduleEntity::class, DailyUsageEntity::class],
-    version = 17,
+    version = 18,
     exportSchema = true,
     autoMigrations = [
         androidx.room.AutoMigration(from = 12, to = 13),
         androidx.room.AutoMigration(from = 13, to = 14),
         androidx.room.AutoMigration(from = 14, to = 15),
-        androidx.room.AutoMigration(from = 15, to = 16)
+        androidx.room.AutoMigration(from = 15, to = 16),
+        androidx.room.AutoMigration(from = 17, to = 18)
     ]
 )
 @TypeConverters(Converters::class)
@@ -151,6 +152,14 @@ abstract class ZenithDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN bestStreak INTEGER NOT NULL DEFAULT 0")
+                } catch (_: Exception) {}
+            }
+        }
+
         fun getDatabase(context: Context): ZenithDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -162,7 +171,7 @@ abstract class ZenithDatabase : RoomDatabase() {
                         MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, 
                         MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, 
                         MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
-                        MIGRATION_15_16, MIGRATION_16_17
+                        MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18
                     )
                     .setJournalMode(RoomDatabase.JournalMode.TRUNCATE) // Mengurangi file jurnal untuk hemat RAM/Storage
                     .fallbackToDestructiveMigrationOnDowngrade()
