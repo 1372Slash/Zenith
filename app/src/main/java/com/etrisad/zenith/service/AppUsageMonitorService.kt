@@ -261,6 +261,9 @@ class AppUsageMonitorService : Service() {
 
     private fun startMonitoring() {
         serviceScope.launch {
+            // Initial streak and reset check upon startup
+            checkDayChangeOnStartup()
+
             while (true) {
                 // 1. Matikan monitoring jika layar mati untuk menghemat CPU & baterai
                 if (!isScreenOn) {
@@ -660,56 +663,88 @@ class AppUsageMonitorService : Service() {
         }
     }
 
+    private suspend fun checkDayChangeOnStartup() {
+        val prefs = preferencesRepository.userPreferencesFlow.first()
+        val lastCheckStr = prefs.lastStreakCheckDate
+        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        val todayStr = dateFormat.format(java.util.Date())
+
+        if (lastCheckStr.isNotEmpty() && lastCheckStr != todayStr) {
+            // Day has changed since last time service was running
+            updateStreaks()
+            shieldRepository.resetAllRemainingTimes()
+            notifiedGoals.clear()
+            dailyUsageCache.clear()
+        }
+        
+        if (lastCheckStr != todayStr) {
+            preferencesRepository.setLastStreakCheckDate(todayStr)
+        }
+        
+        reusableCalendar.timeInMillis = System.currentTimeMillis()
+        lastCheckedDay = reusableCalendar.get(java.util.Calendar.DAY_OF_YEAR)
+    }
+
     private suspend fun updateStreaks() {
         val shields = shieldRepository.allShields.first()
         if (shields.isEmpty()) return
 
         val currentTime = System.currentTimeMillis()
+        val todayCal = java.util.Calendar.getInstance().apply { timeInMillis = currentTime }
+        
         // Evaluasi penggunaan kemarin untuk menentukan streak
-        reusableCalendar.timeInMillis = currentTime
-        reusableCalendar.add(java.util.Calendar.DAY_OF_YEAR, -1)
-        reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
-        reusableCalendar.set(java.util.Calendar.MINUTE, 0)
-        reusableCalendar.set(java.util.Calendar.SECOND, 0)
-        reusableCalendar.set(java.util.Calendar.MILLISECOND, 0)
-        val startTime = reusableCalendar.timeInMillis
-        
-        reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, 23)
-        reusableCalendar.set(java.util.Calendar.MINUTE, 59)
-        reusableCalendar.set(java.util.Calendar.SECOND, 59)
-        reusableCalendar.set(java.util.Calendar.MILLISECOND, 999)
-        val endTime = reusableCalendar.timeInMillis
-        
+        val cal = java.util.Calendar.getInstance()
+        cal.timeInMillis = currentTime
+        cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        cal.set(java.util.Calendar.MINUTE, 0)
+        cal.set(java.util.Calendar.SECOND, 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        val startTime = cal.timeInMillis
+
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 23)
+        cal.set(java.util.Calendar.MINUTE, 59)
+        cal.set(java.util.Calendar.SECOND, 59)
+        cal.set(java.util.Calendar.MILLISECOND, 999)
+        val endTime = cal.timeInMillis
+
         val usageMap = usageStatsManager.queryAndAggregateUsageStats(startTime, endTime)
 
         shields.forEach { shield ->
+            // SAFETY: Jangan update jika sudah diupdate pada hari kalender yang sama
+            val lastUpdateCal = java.util.Calendar.getInstance().apply { 
+                timeInMillis = shield.lastStreakUpdateTimestamp 
+            }
+            
+            val isAlreadyUpdatedToday = lastUpdateCal.get(java.util.Calendar.YEAR) == todayCal.get(java.util.Calendar.YEAR) &&
+                    lastUpdateCal.get(java.util.Calendar.DAY_OF_YEAR) == todayCal.get(java.util.Calendar.DAY_OF_YEAR)
+            
+            if (isAlreadyUpdatedToday) return@forEach
+
             val stats = usageMap[shield.packageName]
-            val totalUsageToday = stats?.totalTimeVisible ?: 0L
-            
+            val totalUsageYesterday = stats?.let { 
+                it.totalTimeVisible.coerceAtLeast(it.totalTimeInForeground) 
+            } ?: 0L
+
             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
-            
-            // Paused apps are exempt from streak reset if mereka gagal memenuhi target,
-            // tapi tetep dapet streak kalau berhasil memenuhi target? 
-            // Sesuai requirement: "exempt from intercept overlays while still having their usage tracked".
-            // Biasanya pause berarti "libur", jadi streak harusnya dipertahankan atau tidak diproses.
-            // Namun agar simple dan tetap fair, kita proses saja usage-nya seperti biasa.
-            // Jika user ingin streak aman saat libur, itu logic yang lebih kompleks.
-            // Untuk sekarang, kita ikuti logic: tetap track usage.
-            
+
             var shouldIncrement = false
-            if (shield.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL) {
-                if (totalUsageToday >= limitMillis && limitMillis > 0) {
+            if (shield.type == FocusType.GOAL) {
+                if (totalUsageYesterday >= limitMillis && limitMillis > 0) {
                     shouldIncrement = true
                 }
             } else {
-                if (totalUsageToday <= limitMillis) {
+                if (totalUsageYesterday <= limitMillis) {
                     shouldIncrement = true
                 }
             }
 
             if (shouldIncrement) {
+                val newStreak = shield.currentStreak + 1
+                val newBest = maxOf(shield.bestStreak, newStreak)
                 shieldRepository.updateShield(shield.copy(
-                    currentStreak = shield.currentStreak + 1,
+                    currentStreak = newStreak,
+                    bestStreak = newBest,
                     lastStreakUpdateTimestamp = currentTime
                 ))
             } else {
@@ -719,6 +754,10 @@ class AppUsageMonitorService : Service() {
                 ))
             }
         }
+        
+        // Update preference date after successful update
+        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        preferencesRepository.setLastStreakCheckDate(dateFormat.format(java.util.Date(currentTime)))
     }
 
     private fun getTotalUsageToday(packageName: String): Long {

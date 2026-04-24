@@ -32,6 +32,7 @@ data class ShieldEntity(
     val isDelayAppEnabled: Boolean = false,
     val lastDelayStartTimestamp: Long = 0L,
     val currentStreak: Int = 0,
+    val bestStreak: Int = 0,
     val lastStreakUpdateTimestamp: Long = 0L,
     @androidx.room.ColumnInfo(defaultValue = "0")
     val lastSessionEndTimestamp: Long = 0L,

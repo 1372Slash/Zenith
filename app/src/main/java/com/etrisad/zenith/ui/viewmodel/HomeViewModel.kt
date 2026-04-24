@@ -93,7 +93,7 @@ class HomeViewModel(
                         isPaused = shield?.isPaused ?: false,
                         pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L,
                         currentStreak = shield?.currentStreak ?: 0,
-                        bestStreak = shield?.currentStreak ?: 0
+                        bestStreak = shield?.bestStreak ?: 0
                     ) }
                 }
             }
@@ -330,7 +330,7 @@ class HomeViewModel(
                     percentageChange = percentageChange,
                     usageHistory     = history.reversed(),
                     currentStreak    = shield?.currentStreak ?: 0,
-                    bestStreak       = shield?.currentStreak ?: 0,
+                    bestStreak       = shield?.bestStreak ?: 0,
                     shieldEntity     = shield,
                     isPaused         = shield?.isPaused ?: false,
                     pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L
