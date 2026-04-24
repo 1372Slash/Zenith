@@ -1,5 +1,7 @@
 package com.etrisad.zenith.service
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.accessibilityservice.AccessibilityService
 import android.app.usage.UsageStatsManager
 import android.content.Context
@@ -7,8 +9,10 @@ import android.content.Intent
 import android.os.Build
 import android.app.usage.UsageStats
 import android.view.accessibility.AccessibilityEvent
+import androidx.core.app.NotificationCompat
 import java.util.Calendar
 import com.etrisad.zenith.data.local.database.ZenithDatabase
+import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.local.entity.ShieldEntity
@@ -41,6 +45,9 @@ class ZenithAccessibilityService : AccessibilityService() {
     private var currentShieldCache: ShieldEntity? = null
     private var lastUsageFetchTime = 0L
     private var cachedTotalUsage = 0L
+    private var sessionStartTime = 0L
+    private var baseUsageAtSessionStart = 0L
+    private val notifiedGoals = mutableSetOf<String>()
     private val allowedApps = mutableMapOf<String, Long>()
     private var activeSchedules = listOf<ScheduleEntity>()
     private var whitelistedPackages = emptySet<String>()
@@ -135,6 +142,17 @@ class ZenithAccessibilityService : AccessibilityService() {
                 lastUsageFetchTime = 0L
                 cachedTotalUsage = 0L
                 currentShieldCache = null
+                notifiedGoals.clear()
+
+                // Reset session for the current app if it crosses midnight
+                baseUsageAtSessionStart = 0L
+                sessionStartTime = currentTime
+                
+                if (currentPreferences?.sessionUsageOverlayEnabled == true) {
+                    serviceScope.launch(Dispatchers.Main) {
+                        sessionUsageOverlayManager.updateHUDUsage(currentApp, 0L)
+                    }
+                }
             }
             lastCheckedDay = currentDay
             lastCheckedDayTimestamp = currentTime
@@ -150,6 +168,9 @@ class ZenithAccessibilityService : AccessibilityService() {
             sessionUsageOverlayManager.updateForegroundApp(currentApp)
             currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
             lastUsageFetchTime = 0L
+            sessionStartTime = currentTime
+            baseUsageAtSessionStart = getTotalUsageToday(currentApp)
+            cachedTotalUsage = baseUsageAtSessionStart
         }
 
         if (shouldBypassBlocking(currentApp)) {
@@ -160,9 +181,33 @@ class ZenithAccessibilityService : AccessibilityService() {
         val allowedUntil = allowedApps[currentApp] ?: 0L
         updateUsageTime(currentApp)
 
-        // Cek apakah Shield/Goal sedang di-pause
         val shield = currentShieldCache
-        if (shield != null && isPaused(shield)) {
+        val isAppPaused = shield != null && isPaused(shield)
+
+        // Goal HUD logic: Show if it's a goal and not yet reached
+        if (shield != null && shield.type == FocusType.GOAL && !isAppPaused) {
+            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+            if (cachedTotalUsage < limitMillis) {
+                val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
+                if (prefs.sessionUsageOverlayEnabled) {
+                    if (currentApp != lastForegroundApp) {
+                        serviceScope.launch(Dispatchers.Main) {
+                            sessionUsageOverlayManager.showHUD(
+                                currentApp,
+                                shield.timeLimitMinutes,
+                                prefs.sessionUsageOverlaySize,
+                                prefs.sessionUsageOverlayOpacity,
+                                isGoal = true
+                            )
+                            sessionUsageOverlayManager.updateHUDUsage(currentApp, cachedTotalUsage)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Cek apakah Shield/Goal sedang di-pause
+        if (isAppPaused) {
             lastForegroundApp = currentApp
             return
         }
@@ -191,10 +236,30 @@ class ZenithAccessibilityService : AccessibilityService() {
         val shield = currentShieldCache ?: return
         val currentTime = System.currentTimeMillis()
 
-        // Fetch dari sistem setiap 5 detik (seimbang antara akurasi & CPU)
-        if (currentTime - lastUsageFetchTime > 5000) {
-            cachedTotalUsage = getTotalUsageToday(packageName)
-            lastUsageFetchTime = currentTime
+        val sessionElapsed = currentTime - sessionStartTime
+        val currentTotalUsage = baseUsageAtSessionStart + sessionElapsed
+        cachedTotalUsage = currentTotalUsage
+
+        if (shield.type == FocusType.GOAL) {
+            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+            val remaining = (limitMillis - currentTotalUsage).coerceAtLeast(0L)
+            val uiUpdateInterval = when {
+                remaining < 300000 -> 5000L // Setiap 5 detik jika < 5 menit
+                else -> 15000L // Setiap 15 detik jika masih jauh
+            }
+
+            if (currentTime - lastUsageFetchTime >= uiUpdateInterval) {
+                serviceScope.launch(Dispatchers.Main) {
+                    sessionUsageOverlayManager.updateHUDUsage(packageName, currentTotalUsage)
+                }
+                lastUsageFetchTime = currentTime
+            }
+        } else {
+            // Fetch dari sistem setiap 5 detik untuk Shield (seimbang antara akurasi & CPU)
+            if (currentTime - lastUsageFetchTime > 5000) {
+                cachedTotalUsage = getTotalUsageToday(packageName)
+                lastUsageFetchTime = currentTime
+            }
         }
 
         val limitMillis = shield.timeLimitMinutes * 60 * 1000L
@@ -209,11 +274,43 @@ class ZenithAccessibilityService : AccessibilityService() {
         if (shouldUpdateDB) {
             val updatedShield = shield.copy(
                 remainingTimeMillis = remainingMillis,
-                lastUsedTimestamp = currentTime
+                lastUsedTimestamp = currentTime,
+                lastGoalReminderTimestamp = if (shield.type == FocusType.GOAL) currentTime else shield.lastGoalReminderTimestamp
             )
             shieldRepository.updateShield(updatedShield)
             currentShieldCache = updatedShield
+
+            if (shield.type == FocusType.GOAL && !isPaused(shield)) {
+                if (currentTotalUsage >= limitMillis && !notifiedGoals.contains(packageName)) {
+                    sendGoalReachedNotification(shield.appName, packageName)
+                    notifiedGoals.add(packageName)
+                }
+            }
         }
+    }
+
+    private fun sendGoalReachedNotification(appName: String, packageName: String) {
+        val channelId = "zenith_goal_channel"
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (manager.getNotificationChannel(channelId) == null) {
+                val channel = NotificationChannel(
+                    channelId, "Goal Reminders", NotificationManager.IMPORTANCE_DEFAULT
+                )
+                manager.createNotificationChannel(channel)
+            }
+        }
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Goal Achieved! 🎯")
+            .setContentText("You've reached your target usage for $appName. Keep it up!")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+
+        manager.notify(packageName.hashCode(), notification)
     }
 
     private suspend fun checkIfAppIsShielded(targetPackageName: String) {

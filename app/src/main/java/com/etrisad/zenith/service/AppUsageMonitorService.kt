@@ -312,7 +312,7 @@ class AppUsageMonitorService : Service() {
                         baseUsageAtSessionStart = getTotalUsageToday(currentApp)
                         sessionStartTime = currentTime
                         cachedTotalUsage = baseUsageAtSessionStart
-                        lastUsageFetchTime = currentTime
+                        lastUsageFetchTime = 0L // Force immediate HUD update on app change
                         
                         lastBypassPackage = currentApp
                         lastBypassResult = shouldBypassBlocking(currentApp)
@@ -440,6 +440,21 @@ class AppUsageMonitorService : Service() {
             
             nextDayTimestamp = calculateNextDayTimestamp(currentTime)
             startOfDayTimestamp = calculateStartOfDayTimestamp(currentTime)
+
+            // Reset session if it crosses midnight to ensure HUD and tracking start fresh
+            lastForegroundApp?.let { app ->
+                usageTimesMapCache = null // Force refresh usage stats for the new day
+                baseUsageAtSessionStart = getTotalUsageToday(app)
+                sessionStartTime = currentTime
+                cachedTotalUsage = baseUsageAtSessionStart
+                lastUsageFetchTime = 0L
+                
+                if (currentPreferences?.sessionUsageOverlayEnabled == true) {
+                    withContext(Dispatchers.Main) {
+                        sessionUsageOverlayManager.updateHUDUsage(app, cachedTotalUsage)
+                    }
+                }
+            }
         } else if (lastResetDate.isEmpty()) {
             preferencesRepository.setLastResetDate(currentDate)
             lastResetDate = currentDate
@@ -480,14 +495,13 @@ class AppUsageMonitorService : Service() {
         val currentTotalUsage = baseUsageAtSessionStart + sessionElapsed
         cachedTotalUsage = currentTotalUsage
 
-        // Adaptive HUD Update: Lebih jarang jika sisa waktu masih banyak
+        // Adaptive HUD Update: Lebih santai untuk menghemat CPU
         if (shield.type == FocusType.GOAL) {
             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
             val remaining = (limitMillis - currentTotalUsage).coerceAtLeast(0L)
             val uiUpdateInterval = when {
-                remaining < 60000 -> 1000L // Setiap detik jika < 1 menit
-                remaining < 300000 -> 2500L // Setiap 2.5 detik jika < 5 menit
-                else -> 5000L // Setiap 5 detik jika masih lama
+                remaining < 300000 -> 5000L // Setiap 5 detik jika < 5 menit (lebih hemat)
+                else -> 15000L // Setiap 15 detik jika masih jauh
             }
 
             if (currentTime - lastUsageFetchTime >= uiUpdateInterval) {
@@ -504,7 +518,7 @@ class AppUsageMonitorService : Service() {
         // Strategi Adaptive Write: Update DB setiap 30 detik atau jika sisa waktu < 1 menit
         val timeSinceLastUsed = currentTime - shield.lastUsedTimestamp
         val isNearLimit = remainingMillis < 60000 
-        val shouldUpdateDB = timeSinceLastUsed > 30000 || (isNearLimit && timeSinceLastUsed > 5000)
+        val shouldUpdateDB = timeSinceLastUsed > 30000 || (isNearLimit && timeSinceLastUsed > 10000)
 
         if (shouldUpdateDB) {
             val finalShield = shield.copy(

@@ -17,12 +17,13 @@ import com.etrisad.zenith.data.local.Converters
 
 @Database(
     entities = [ShieldEntity::class, ScheduleEntity::class, DailyUsageEntity::class],
-    version = 16,
+    version = 17,
     exportSchema = true,
     autoMigrations = [
         androidx.room.AutoMigration(from = 12, to = 13),
         androidx.room.AutoMigration(from = 13, to = 14),
-        androidx.room.AutoMigration(from = 14, to = 15)
+        androidx.room.AutoMigration(from = 14, to = 15),
+        androidx.room.AutoMigration(from = 15, to = 16)
     ]
 )
 @TypeConverters(Converters::class)
@@ -129,8 +130,24 @@ abstract class ZenithDatabase : RoomDatabase() {
 
         private val MIGRATION_15_16 = object : Migration(15, 16) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE shields ADD COLUMN isPaused INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE shields ADD COLUMN pauseEndTimestamp INTEGER NOT NULL DEFAULT 0")
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN isPaused INTEGER NOT NULL DEFAULT 0")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN pauseEndTimestamp INTEGER NOT NULL DEFAULT 0")
+                } catch (_: Exception) {}
+            }
+        }
+
+        private val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Fixing possible inconsistent state from failed migrations
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN lastGoalReminderTimestamp INTEGER NOT NULL DEFAULT 0")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN lastSessionEndTimestamp INTEGER NOT NULL DEFAULT 0")
+                } catch (_: Exception) {}
             }
         }
 
@@ -145,7 +162,7 @@ abstract class ZenithDatabase : RoomDatabase() {
                         MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, 
                         MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, 
                         MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
-                        MIGRATION_15_16
+                        MIGRATION_15_16, MIGRATION_16_17
                     )
                     .setJournalMode(RoomDatabase.JournalMode.TRUNCATE) // Mengurangi file jurnal untuk hemat RAM/Storage
                     .fallbackToDestructiveMigrationOnDowngrade()
@@ -154,6 +171,7 @@ abstract class ZenithDatabase : RoomDatabase() {
                 instance
             }
         }
+
 
         fun closeDatabase() {
             INSTANCE?.close()
