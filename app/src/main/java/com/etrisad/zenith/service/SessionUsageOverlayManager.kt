@@ -55,10 +55,11 @@ class SessionUsageOverlayManager(private val context: Context) {
         val isGoal: Boolean,
         val onSessionEnd: () -> Unit,
         initialX: Int,
-        initialY: Int
+        initialY: Int,
+        initialSeconds: Int = 0
     ) {
-        val secondsElapsedState = mutableIntStateOf(0)
-        val secondsLeftState = mutableIntStateOf(totalSeconds)
+        val secondsElapsedState = mutableIntStateOf(initialSeconds)
+        val secondsLeftState = mutableIntStateOf(if (isGoal) (totalSeconds - initialSeconds).coerceAtLeast(0) else totalSeconds)
         val isVisibleState = mutableStateOf(true)
         var hudInstance: HUDInstance? = null
         var timerJob: Job? = null
@@ -76,6 +77,7 @@ class SessionUsageOverlayManager(private val context: Context) {
         size: Int,
         opacity: Int,
         isGoal: Boolean = false,
+        initialSeconds: Int = 0,
         onSessionEnd: () -> Unit = {}
     ) {
         if (activeSessions.any { it.packageName == packageName }) return
@@ -87,7 +89,8 @@ class SessionUsageOverlayManager(private val context: Context) {
         val totalSeconds = durationMinutes * 60
         val session = Session(
             packageName, totalSeconds, size, opacity, isGoal, onSessionEnd,
-            104, 204 + (activeSessions.size * 50)
+            104, 204 + (activeSessions.size * 50),
+            initialSeconds = initialSeconds
         )
         activeSessions.add(session)
 
@@ -136,9 +139,7 @@ class SessionUsageOverlayManager(private val context: Context) {
                 val elapsedMillis = now - lastUpdateMillis
                 if (elapsedMillis >= 1000) {
                     val secondsToProcess = (elapsedMillis / 1000).toInt()
-                    if (isGoal) {
-                        session.secondsElapsedState.intValue = (session.secondsElapsedState.intValue + secondsToProcess).coerceAtMost(session.totalSeconds)
-                    } else {
+                    if (!isGoal) {
                         session.secondsLeftState.intValue = (session.secondsLeftState.intValue - secondsToProcess).coerceAtLeast(0)
                     }
                     // Keep the remaining fraction of a second for the next update cycle

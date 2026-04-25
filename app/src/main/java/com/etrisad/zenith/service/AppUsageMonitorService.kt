@@ -368,6 +368,7 @@ class AppUsageMonitorService : Service() {
                                 // Lanjutkan monitoring tanpa menampilkan HUD
                             } else {
                                 val duration = if (isGoal) shield?.timeLimitMinutes ?: 0 else remainingMinutes
+                                val currentUsageSeconds = (cachedTotalUsage / 1000).toInt()
                                 serviceScope.launch(Dispatchers.Main) {
                                     sessionUsageOverlayManager.showHUD(
                                         currentApp,
@@ -375,6 +376,7 @@ class AppUsageMonitorService : Service() {
                                         prefs.sessionUsageOverlaySize,
                                         prefs.sessionUsageOverlayOpacity,
                                         isGoal = isGoal,
+                                        initialSeconds = if (isGoal) currentUsageSeconds else 0,
                                         onSessionEnd = {
                                             allowedApps[currentApp] = 0L
                                             serviceScope.launch {
@@ -655,24 +657,26 @@ class AppUsageMonitorService : Service() {
                                     allowedApps[targetPackageName] = currentTime + (minutes * 60 * 1000L)
                             
                             val currentPrefs = currentPreferences ?: return@launch
-                            if (currentPrefs.sessionUsageOverlayEnabled) {
-                                val isGoal = updatedShield.type == FocusType.GOAL
-                                val limitMillis = updatedShield.timeLimitMinutes * 60 * 1000L
-                                val currentUsage = getTotalUsageToday(targetPackageName)
+                                    if (currentPrefs.sessionUsageOverlayEnabled) {
+                                        val isGoal = updatedShield.type == FocusType.GOAL
+                                        val limitMillis = updatedShield.timeLimitMinutes * 60 * 1000L
+                                        val currentUsage = getTotalUsageToday(targetPackageName)
 
-                                if (isGoal && currentUsage >= limitMillis && limitMillis > 0) {
-                                    // Goal sudah tercapai, tidak perlu tampilkan HUD
-                                } else {
-                                    val duration = if (isGoal) updatedShield.timeLimitMinutes else minutes
+                                        if (isGoal && currentUsage >= limitMillis && limitMillis > 0) {
+                                            // Goal sudah tercapai, tidak perlu tampilkan HUD
+                                        } else {
+                                            val duration = if (isGoal) updatedShield.timeLimitMinutes else minutes
+                                            val currentUsageSeconds = (currentUsage / 1000).toInt()
 
-                                    serviceScope.launch(Dispatchers.Main) {
-                                        sessionUsageOverlayManager.showHUD(
-                                            targetPackageName,
-                                            duration,
-                                            currentPrefs.sessionUsageOverlaySize,
-                                            currentPrefs.sessionUsageOverlayOpacity,
-                                            isGoal = isGoal,
-                                            onSessionEnd = {
+                                            serviceScope.launch(Dispatchers.Main) {
+                                                sessionUsageOverlayManager.showHUD(
+                                                    targetPackageName,
+                                                    duration,
+                                                    currentPrefs.sessionUsageOverlaySize,
+                                                    currentPrefs.sessionUsageOverlayOpacity,
+                                                    isGoal = isGoal,
+                                                    initialSeconds = if (isGoal) currentUsageSeconds else 0,
+                                                    onSessionEnd = {
                                                 allowedApps[targetPackageName] = 0L
                                                 serviceScope.launch {
                                                     val shield = currentShieldCache ?: shieldRepository.getShieldByPackageName(targetPackageName)

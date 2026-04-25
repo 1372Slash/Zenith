@@ -197,7 +197,8 @@ class ZenithAccessibilityService : AccessibilityService() {
                                 shield.timeLimitMinutes,
                                 prefs.sessionUsageOverlaySize,
                                 prefs.sessionUsageOverlayOpacity,
-                                isGoal = true
+                                isGoal = true,
+                                initialSeconds = (cachedTotalUsage / 1000).toInt()
                             )
                         }
                     }
@@ -381,6 +382,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                                         minutes,
                                         prefs.sessionUsageOverlaySize,
                                         prefs.sessionUsageOverlayOpacity,
+                                        initialSeconds = 0,
                                         onSessionEnd = {
                                             allowedApps[packageName] = 0L
                                             serviceScope.launch {
@@ -524,6 +526,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                                         minutes,
                                         prefs.sessionUsageOverlaySize,
                                         prefs.sessionUsageOverlayOpacity,
+                                        initialSeconds = 0,
                                         onSessionEnd = {
                                             allowedApps[packageName] = 0L
                                             serviceScope.launch {
