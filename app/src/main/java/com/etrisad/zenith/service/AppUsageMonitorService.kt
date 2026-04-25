@@ -458,7 +458,7 @@ class AppUsageMonitorService : Service() {
                             }
                         }
                     }
-                    else -> 12000L // Polling saat di launcher/aplikasi tak terproteksi
+                    else -> 1200L // Polling saat di launcher/aplikasi tak terproteksi
                 }
                 delay(delayTime)
             }
@@ -804,60 +804,39 @@ class AppUsageMonitorService : Service() {
 
     private fun getUsageStatsList(): List<android.app.usage.UsageStats>? {
         val currentTime = System.currentTimeMillis()
-        // Cache usage stats list for 3 seconds to avoid redundant system calls
+        // Cache usage stats list selama 3 detik untuk efisiensi
         if (usageStatsCache != null && currentTime - lastUsageCacheTime < 3000) {
             return usageStatsCache
         }
 
         val startTime = getStartOfDay()
 
-        // Menggunakan queryEvents untuk menghitung penggunaan secara manual lebih akurat daripada queryUsageStats(INTERVAL_DAILY)
-        // Hal ini karena INTERVAL_DAILY seringkali mengalami bug reset lebih awal di sekitar jam 23:00-00:00 (tergantung sistem Android)
         try {
-            val events = usageStatsManager.queryEvents(startTime, currentTime)
-            val event = android.app.usage.UsageEvents.Event()
-            val tempUsageMap = mutableMapOf<String, Long>()
-            val lastAppOpenTime = mutableMapOf<String, Long>()
-
-            while (events.hasNextEvent()) {
-                events.getNextEvent(event)
-                val pkg = event.packageName ?: continue
-
-                when (event.eventType) {
-                    android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED,
-                    android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND -> {
-                        lastAppOpenTime[pkg] = event.timeStamp
-                    }
-                    android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED,
-                    android.app.usage.UsageEvents.Event.MOVE_TO_BACKGROUND -> {
-                        val openTime = lastAppOpenTime[pkg]
-                        if (openTime != null) {
-                            val duration = event.timeStamp - openTime
-                            if (duration > 0) {
-                                tempUsageMap[pkg] = (tempUsageMap[pkg] ?: 0L) + duration
-                            }
-                            lastAppOpenTime.remove(pkg)
-                        }
-                    }
-                }
-            }
-
-            // Tambahkan durasi untuk aplikasi yang masih di foreground saat ini
-            lastAppOpenTime.forEach { (pkg, openTime) ->
-                val duration = currentTime - openTime
-                if (duration > 0) {
-                    tempUsageMap[pkg] = (tempUsageMap[pkg] ?: 0L) + duration
-                }
-            }
-
-            // Update dailyUsageCache dengan data hasil perhitungan manual yang lebih stabil
-            tempUsageMap.forEach { (pkg, usage) ->
-                dailyUsageCache[pkg] = usage
-            }
+            // Menggunakan queryUsageStats INTERVAL_DAILY agar sinkron dengan HomeViewModel
+            val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, currentTime)
             
-            // Tetap panggil queryUsageStats hanya untuk memenuhi return type jika diperlukan fungsi lain,
-            // namun dailyUsageCache sudah diisi oleh data yang lebih akurat di atas.
-            usageStatsCache = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, currentTime)
+            if (stats != null) {
+                val tempUsageMap = mutableMapOf<String, Long>()
+                
+                stats.forEach { stat ->
+                    val pkg = stat.packageName
+                    // Gunakan logika yang sama dengan HomeViewModel: ambil yang terbesar antara visible dan foreground
+                    val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+                    
+                    // Karena queryUsageStats bisa mengembalikan beberapa entri untuk paket yang sama 
+                    // (tergantung versi Android), kita ambil nilai maksimalnya
+                    if (time > (tempUsageMap[pkg] ?: 0L)) {
+                        tempUsageMap[pkg] = time
+                    }
+                }
+
+                // Update cache harian agar sinkron
+                tempUsageMap.forEach { (pkg, usage) ->
+                    dailyUsageCache[pkg] = usage
+                }
+                
+                usageStatsCache = stats
+            }
         } catch (e: Exception) {
             usageStatsCache = null
         }
