@@ -4,6 +4,8 @@ import androidx.compose.animation.*
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -105,8 +107,8 @@ fun MainScreen(
 
                 AnimatedVisibility(
                     visible = showBottomBar,
-                    enter = slideInVertically(initialOffsetY = { it }),
-                    exit = slideOutVertically(targetOffsetY = { it })
+                    enter = slideInVertically(initialOffsetY = { it }) + expandVertically(expandFrom = Alignment.Top),
+                    exit = slideOutVertically(targetOffsetY = { it }) + shrinkVertically(shrinkTowards = Alignment.Top)
                 ) {
                     NavigationBar {
                         val currentDestination = navBackStackEntry?.destination
@@ -144,11 +146,22 @@ fun MainScreen(
         val isDeepScreen =
             currentRoute == Screen.UsageStats.route || currentRoute?.startsWith("app_detail") == true
 
+        // Animasi padding atas agar transisi ke layar full-screen (deep) lebih mulus
+        val topPadding by animateDpAsState(
+            targetValue = if (isDeepScreen) 0.dp else innerPadding.calculateTopPadding(),
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessLow
+            ),
+            label = "topPadding"
+        )
+
         Row(
             modifier = Modifier
                 .padding(
-                    bottom = if (isDeepScreen || useNavigationRail) 0.dp else innerPadding.calculateBottomPadding(),
-                    top = if (isDeepScreen) 0.dp else innerPadding.calculateTopPadding()
+                    // bottomPadding mengikuti tinggi AnimatedVisibility secara otomatis
+                    bottom = if (useNavigationRail) 0.dp else innerPadding.calculateBottomPadding(),
+                    top = topPadding
                 )
         ) {
             if (useNavigationRail) {
@@ -157,8 +170,8 @@ fun MainScreen(
 
                 AnimatedVisibility(
                     visible = showNavRail,
-                    enter = slideInHorizontally(initialOffsetX = { -it }),
-                    exit = slideOutHorizontally(targetOffsetX = { -it })
+                    enter = slideInHorizontally(initialOffsetX = { -it }) + expandHorizontally(expandFrom = Alignment.Start),
+                    exit = slideOutHorizontally(targetOffsetX = { -it }) + shrinkHorizontally(shrinkTowards = Alignment.Start)
                 ) {
                     NavigationRail(
                         modifier = Modifier.fillMaxHeight(),
