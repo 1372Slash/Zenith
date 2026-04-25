@@ -969,7 +969,7 @@ fun ThemeSelector(
 }
 
 @Composable
-private fun RowScope.ThemeOptionButton(
+internal fun RowScope.ThemeOptionButton(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
@@ -1242,19 +1242,21 @@ fun AutoBackupSettings(
 
             // Interval Selector
             Text("Backup Interval", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             
             val intervals = listOf(3, 6, 12, 24)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                intervals.forEach { hours ->
-                    FilterChip(
+                intervals.forEachIndexed { index, hours ->
+                    ThemeOptionButton(
+                        label = "${hours}h",
                         selected = intervalHours == hours,
                         onClick = { onSetInterval(hours) },
-                        label = { Text("${hours}h") },
-                        modifier = Modifier.weight(1f)
+                        isFirst = index == 0,
+                        isLast = index == intervals.size - 1
                     )
                 }
             }
