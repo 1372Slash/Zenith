@@ -191,7 +191,18 @@ class SessionUsageOverlayManager(private val context: Context) {
                             } catch (_: Exception) { }
                         },
                         onFinish = {
-                            hideHUD(session.packageName)
+                            val isTimeUp = if (session.isGoal) 
+                                session.secondsElapsedState.intValue >= session.totalSeconds 
+                                else session.secondsLeftState.intValue <= 0
+                                
+                            if (isTimeUp) {
+                                // Jika waktu habis, hapus sesi secara total
+                                hideHUD(session.packageName)
+                            } else if (!session.isVisibleState.value) {
+                                // Jika menutup karena pindah background, hanya hancurkan view-nya
+                                session.hudInstance?.let { destroyHUDInstance(it) }
+                                session.hudInstance = null
+                            }
                         }
                     )
                 }
@@ -260,7 +271,10 @@ class SessionUsageOverlayManager(private val context: Context) {
         foregroundUpdateJob?.cancel()
         foregroundUpdateJob = scope.launch {
             activeSessions.forEach { session ->
-                val isForeground = packageName.contains(session.packageName) || session.packageName.contains(packageName)
+                // Gunakan pembandingan paket yang lebih akurat untuk menghindari bug string kosong
+                val isForeground = packageName.isNotEmpty() && 
+                                 (packageName == session.packageName || packageName.startsWith("${session.packageName}."))
+                
                 if (isForeground) {
                     session.backgroundTimestamp = 0L
                     session.isVisibleState.value = true
@@ -273,13 +287,8 @@ class SessionUsageOverlayManager(private val context: Context) {
                         if (session.backgroundTimestamp == 0L) {
                             session.backgroundTimestamp = System.currentTimeMillis()
                         }
-                        launch {
-                            delay(500)
-                            if (!session.isVisibleState.value && session.hudInstance != null) {
-                                destroyHUDInstance(session.hudInstance!!)
-                                session.hudInstance = null
-                            }
-                        }
+                        // Penghancuran instance HUD dipindahkan ke callback onFinish di createHUDInstance
+                        // agar animasi menutup bisa berjalan dulu.
                     }
                 }
             }
@@ -338,7 +347,10 @@ fun SessionUsageHUD(
             targetValue = if (showHUDState.value) scaleFactor else 0f,
             animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow),
             label = "HUDScale",
-            finishedListener = { if (animatingOutState.value) onFinish() }
+            finishedListener = { 
+                // Panggil onFinish setiap kali HUD selesai mengecil (scale = 0)
+                if (!showHUDState.value) onFinish() 
+            }
         )
 
         // Cache theme colors once to avoid lookups in dynamic parts

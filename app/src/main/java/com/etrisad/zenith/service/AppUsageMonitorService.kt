@@ -428,13 +428,15 @@ class AppUsageMonitorService : Service() {
                             }
                         }
                     }
-                } else if (currentApp == null || currentApp == packageName) {
+                } else if (currentApp == null || currentApp == packageName || launcherPackages.contains(currentApp)) {
+                    // SEGERA Update HUD manager agar HUD menghilang saat di Launcher/Zenith
+                    sessionUsageOverlayManager.updateForegroundApp(currentApp ?: "")
                     currentShieldCache = null
                 }
                 
                 lastForegroundApp = currentApp
                 
-                // Adaptive Polling Logic: Mengatur kecepatan polling berdasarkan sisa waktu (Sesuai SessionUsageOverlayManager)
+                // Adaptive Polling Logic: Dioptimalkan agar responsif saat keluar aplikasi
                 val delayTime = when {
                     isPowerSaveMode -> 2000L
                     currentShieldCache != null -> {
@@ -444,21 +446,21 @@ class AppUsageMonitorService : Service() {
 
                         if (shield.type == FocusType.GOAL) {
                             when {
-                                remaining < 60000 -> 1000L   // < 1 mnt: 1s
-                                remaining < 300000 -> 2500L  // < 5 mnt: 2.5s
-                                else -> 5000L                // > 5 mnt: 5s
+                                remaining < 60000 -> 600L    // < 1 mnt: 600ms (Sangat responsif)
+                                remaining < 300000 -> 1000L  // < 5 mnt: 1s
+                                else -> 1500L                // > 5 mnt: 1.5s
                             }
                         } else {
+                            // Untuk Shield, kita batasi max 1.5s agar HUD cepat menutup saat exit
                             when {
-                                remaining > 3600000 -> 80000L  // > 1 jam: 8s
-                                remaining > 600000 -> 50000L   // > 10 mnt: 5s
-                                remaining > 300000 -> 30000L   // > 5 mnt: 3s
-                                remaining > 60000 -> 15000L    // > 1 mnt: 1.5s
-                                else -> 600L                  // < 1 mnt: 600ms (Tetap responsif untuk pemblokiran)
+                                remaining > 3600000 -> 1500L  // > 1 jam: 1.5s (Tadinya 80s!)
+                                remaining > 600000 -> 1200L   // > 10 mnt: 1.2s (Tadinya 50s!)
+                                remaining > 300000 -> 1000L   // > 5 mnt: 1s
+                                else -> 600L                  // < 5 mnt: 600ms
                             }
                         }
                     }
-                    else -> 1200L // Polling saat di launcher/aplikasi tak terproteksi
+                    else -> 1500L // Polling saat di launcher/aplikasi tak terproteksi
                 }
                 delay(delayTime)
             }
