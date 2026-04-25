@@ -1601,6 +1601,13 @@ fun FocusSettingsBottomSheet(
     var isDropdownExpanded by remember { mutableStateOf(false) }
     var isGoalDropdownExpanded by remember { mutableStateOf(false) }
 
+    val isPreventEdit = remember(existingShield, usageToday) {
+        if (focusType == FocusType.SHIELD && existingShield != null) {
+            val limitMillis = existingShield.timeLimitMinutes * 60 * 1000L
+            limitMillis > 0 && usageToday >= (limitMillis * 0.5)
+        } else false
+    }
+
     val refreshOptions = listOf(
         "Every 30 Minutes" to 30,
         "Every 1 Hour" to 60,
@@ -1846,6 +1853,37 @@ fun FocusSettingsBottomSheet(
 
             Spacer(modifier = Modifier.height(32.dp))
 
+            if (isPreventEdit) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Shield settings are locked because you have used more than 50% of your daily limit. This prevents bypassing the shield.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
             Button(
                 onClick = {
                     onSave(
@@ -1861,7 +1899,8 @@ fun FocusSettingsBottomSheet(
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.large
+                shape = MaterialTheme.shapes.large,
+                enabled = !isPreventEdit
             ) {
                 Text(
                     text = if (focusType == FocusType.GOAL) "Set Goal" else "Save Shield",
