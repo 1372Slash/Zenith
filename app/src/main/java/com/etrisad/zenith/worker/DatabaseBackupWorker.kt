@@ -9,10 +9,9 @@ import androidx.core.app.NotificationCompat
 import androidx.documentfile.provider.DocumentFile
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.etrisad.zenith.data.local.database.ZenithDatabase
+import com.etrisad.zenith.util.BackupUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -27,27 +26,25 @@ class DatabaseBackupWorker(
         val directoryUri = Uri.parse(directoryUriString)
         
         try {
-            val dbName = "zenith_database"
-            val dbFile = applicationContext.getDatabasePath(dbName)
-            val dbShm = File(dbFile.path + "-shm")
-            val dbWal = File(dbFile.path + "-wal")
-
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
             val backupFolder = DocumentFile.fromTreeUri(applicationContext, directoryUri) ?: return@withContext Result.failure()
             
-            // Nama folder menggunakan prefix "AutoBackup_" untuk diferensiasi dengan manual backup
-            val targetDir = backupFolder.createDirectory("AutoBackup_$timestamp") ?: return@withContext Result.failure()
+            // Nama file ZIP yang sama polanya dengan manual backup
+            val fileName = "AutoBackup_$timestamp.zip"
+            val targetFile = backupFolder.createFile("application/zip", fileName) ?: return@withContext Result.failure()
 
-            copyFileToDocument(dbFile, targetDir, dbName)
-            if (dbShm.exists()) copyFileToDocument(dbShm, targetDir, "$dbName-shm")
-            if (dbWal.exists()) copyFileToDocument(dbWal, targetDir, "$dbName-wal")
+            // Gunakan fungsi yang sama dengan manual backup agar isinya identik (ZIP)
+            val result = BackupUtils.backupDatabase(applicationContext, targetFile.uri)
 
-            // OPTIMASI MEMORI: Hapus backup lama jika sudah lebih dari 10 (Hanya untuk folder AutoBackup)
-            cleanupOldBackups(backupFolder)
-
-            sendNotification("Backup Successful", "Your data has been automatically backed up to $timestamp")
-
-            Result.success()
+            if (result.isSuccess) {
+                // Hapus backup lama jika sudah lebih dari 10 (Hanya untuk file ZIP AutoBackup)
+                cleanupOldBackups(backupFolder)
+                sendNotification("Backup Successful", "Your data has been automatically backed up as $fileName")
+                Result.success()
+            } else {
+                targetFile.delete()
+                Result.failure()
+            }
         } catch (e: Exception) {
             e.printStackTrace()
             sendNotification("Backup Failed", "An error occurred during automatic backup.")
@@ -75,7 +72,7 @@ class DatabaseBackupWorker(
         val notification = NotificationCompat.Builder(applicationContext, channelId)
             .setContentTitle(title)
             .setContentText(message)
-            .setSmallIcon(android.R.drawable.stat_sys_download_done) // Icon standard Android
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setAutoCancel(true)
             .build()
@@ -85,22 +82,12 @@ class DatabaseBackupWorker(
 
     private fun cleanupOldBackups(rootFolder: DocumentFile) {
         val backups = rootFolder.listFiles()
-            .filter { it.isDirectory && it.name?.startsWith("AutoBackup_") == true }
-            .sortedByDescending { it.name } // Urutkan dari yang terbaru (Lexicographical order works for yyyyMMdd)
+            .filter { it.isFile && it.name?.startsWith("AutoBackup_") == true && it.name?.endsWith(".zip") == true }
+            .sortedByDescending { it.name }
 
         if (backups.size > 10) {
-            // Hapus folder yang ke-11 dan seterusnya
             for (i in 10 until backups.size) {
                 backups[i].delete()
-            }
-        }
-    }
-
-    private fun copyFileToDocument(sourceFile: File, targetDir: DocumentFile, displayName: String) {
-        val targetFile = targetDir.createFile("application/octet-stream", displayName) ?: return
-        applicationContext.contentResolver.openOutputStream(targetFile.uri)?.use { outputStream ->
-            sourceFile.inputStream().use { inputStream ->
-                inputStream.copyTo(outputStream)
             }
         }
     }

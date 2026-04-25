@@ -112,7 +112,7 @@ object BackupUtils {
                             val entryName = entry.name.lowercase()
                             if (entryName.contains(DATABASE_NAME.lowercase())) hasDb = true
                             if (entryName.contains(PREFS_FILE_NAME.lowercase())) hasPrefs = true
-                            
+
                             zipIn.closeEntry()
                             entry = zipIn.nextEntry
                         }
@@ -155,7 +155,7 @@ object BackupUtils {
                                     entry = zipIn.nextEntry
                                 }
                             }
-                            
+
                             // Jika ZIP gagal menemukan (mungkin file mentah), coba copy langsung
                             if (!tempDbFile.exists() || tempDbFile.length() == 0L) {
                                 context.contentResolver.openInputStream(uri)?.use { rawInput ->
