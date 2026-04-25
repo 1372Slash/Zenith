@@ -393,22 +393,27 @@ class HomeViewModel(
     // --- Sisa fungsi tidak berubah ---
 
     fun onShieldSortTypeChange(sortType: ShieldSortType) {
-        _uiState.value = _uiState.value.copy(shieldSortType = sortType)
-        updateShieldedLists()
+        _uiState.update { currentState ->
+            currentState.copy(
+                shieldSortType = sortType,
+                activeShields = sortShields(currentState.activeShields, sortType)
+            )
+        }
     }
 
     fun onGoalSortTypeChange(sortType: ShieldSortType) {
-        _uiState.value = _uiState.value.copy(goalSortType = sortType)
-        updateShieldedLists()
+        _uiState.update { currentState ->
+            currentState.copy(
+                goalSortType = sortType,
+                activeGoals = sortShields(currentState.activeGoals, sortType)
+            )
+        }
     }
 
     private fun updateShieldedLists() {
-        val shields = allShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.SHIELD }
-        val goals   = allShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL }
-        _uiState.value = _uiState.value.copy(
-            activeShields = sortShields(shields, _uiState.value.shieldSortType),
-            activeGoals   = sortShields(goals,   _uiState.value.goalSortType)
-        )
+        // Gunakan refreshUsageStats agar perhitungan sisa waktu (live usage) selalu sinkron
+        // dan diurutkan sesuai sortType terbaru yang ada di UI state.
+        refreshUsageStats()
     }
 
     private fun sortShields(shields: List<ShieldEntity>, sortType: ShieldSortType): List<ShieldEntity> {
