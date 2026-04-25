@@ -67,6 +67,14 @@ class ShieldRepository(
 
     suspend fun updateShield(shield: ShieldEntity) {
         shieldDao.updateShield(shield)
+        // Update cache segera agar perubahan (seperti delay timestamp) bisa langsung dibaca 
+        // oleh AppUsageMonitorService tanpa menunggu emisi Flow dari Room (async).
+        val currentList = _allShieldsCache.value.toMutableList()
+        val index = currentList.indexOfFirst { it.packageName == shield.packageName }
+        if (index != -1) {
+            currentList[index] = shield
+            _allShieldsCache.value = currentList
+        }
     }
 
     suspend fun resetAllRemainingTimes() {

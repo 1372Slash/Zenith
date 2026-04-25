@@ -609,7 +609,9 @@ class AppUsageMonitorService : Service() {
             val shieldWithTimestamp = if (shield.isDelayAppEnabled) {
                 if (isGracePeriodActive) {
                     // Beri izin langsung tanpa delay untuk pembukaan pertama setelah 30 menit
-                    shield.copy(lastDelayStartTimestamp = currentTime - (delayDurationSeconds * 1000L) - 1000)
+                    val updated = shield.copy(lastDelayStartTimestamp = currentTime - (delayDurationSeconds * 1000L) - 1000)
+                    serviceScope.launch { shieldRepository.updateShield(updated) }
+                    updated
                 } else if (lastAction == 0L) {
                     // Jika baru pertama kali butuh delay, set timestamp SEKARANG
                     val updated = shield.copy(lastDelayStartTimestamp = currentTime)
@@ -623,6 +625,9 @@ class AppUsageMonitorService : Service() {
             } else {
                 shield
             }
+
+            // Update cache segera agar tidak tertimpa oleh updateUsageTime dengan nilai 0 di loop berikutnya
+            currentShieldCache = shieldWithTimestamp
 
             serviceScope.launch(Dispatchers.Main) {
                 overlayManager.showOverlay(
