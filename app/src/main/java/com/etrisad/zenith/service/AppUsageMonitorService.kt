@@ -434,11 +434,31 @@ class AppUsageMonitorService : Service() {
                 
                 lastForegroundApp = currentApp
                 
-                // Adaptive Delay: Tetap responsif jika tanpa Accessibility
+                // Adaptive Polling Logic: Mengatur kecepatan polling berdasarkan sisa waktu (Sesuai SessionUsageOverlayManager)
                 val delayTime = when {
-                    isPowerSaveMode -> 1500L
-                    currentShieldCache != null -> 600L  // lebih agresif hanya saat ada shield aktif
-                    else -> 1200L                        // lebih lambat saat idle
+                    isPowerSaveMode -> 2000L
+                    currentShieldCache != null -> {
+                        val shield = currentShieldCache!!
+                        val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+                        val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
+
+                        if (shield.type == FocusType.GOAL) {
+                            when {
+                                remaining < 60000 -> 1000L   // < 1 mnt: 1s
+                                remaining < 300000 -> 2500L  // < 5 mnt: 2.5s
+                                else -> 5000L                // > 5 mnt: 5s
+                            }
+                        } else {
+                            when {
+                                remaining > 3600000 -> 80000L  // > 1 jam: 8s
+                                remaining > 600000 -> 50000L   // > 10 mnt: 5s
+                                remaining > 300000 -> 30000L   // > 5 mnt: 3s
+                                remaining > 60000 -> 15000L    // > 1 mnt: 1.5s
+                                else -> 600L                  // < 1 mnt: 600ms (Tetap responsif untuk pemblokiran)
+                            }
+                        }
+                    }
+                    else -> 12000L // Polling saat di launcher/aplikasi tak terproteksi
                 }
                 delay(delayTime)
             }
@@ -453,11 +473,16 @@ class AppUsageMonitorService : Service() {
         val currentTotalUsage = baseUsageAtSessionStart + sessionElapsed
         cachedTotalUsage = currentTotalUsage
 
-        // Sync with HUD for Goal-type apps every 2 seconds (or 1s if near limit)
+        // Adaptive HUD Sync: Sinkronisasi dengan HUD menggunakan interval adaptif (Sesuai SessionUsageOverlayManager)
         if (shield.type == FocusType.GOAL) {
             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
             val remaining = (limitMillis - currentTotalUsage).coerceAtLeast(0L)
-            val uiUpdateInterval = if (remaining < 60000) 1000L else 2000L
+            
+            val uiUpdateInterval = when {
+                remaining < 60000 -> 1000L   // < 1 mnt: 1s
+                remaining < 300000 -> 2500L  // < 5 mnt: 2.5s
+                else -> 5000L                // > 5 mnt: 5s
+            }
 
             if (currentTime - lastHUDUpdateTime > uiUpdateInterval) {
                 lastHUDUpdateTime = currentTime
