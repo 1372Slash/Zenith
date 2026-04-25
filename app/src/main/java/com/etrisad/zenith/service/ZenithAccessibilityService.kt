@@ -389,8 +389,15 @@ class ZenithAccessibilityService : AccessibilityService() {
                                                     val updated = shield.copy(lastSessionEndTimestamp = System.currentTimeMillis())
                                                     shieldRepository.updateShield(updated)
                                                     currentShieldCache = updated
+                                                    
+                                                    if (updated.isAutoQuitEnabled) {
+                                                        goToHomeScreen()
+                                                    } else {
+                                                        checkIfAppIsShielded(packageName)
+                                                    }
+                                                } else {
+                                                    checkIfAppIsShielded(packageName)
                                                 }
-                                                checkIfAppIsShielded(packageName)
                                             }
                                         }
                                     )
@@ -525,8 +532,15 @@ class ZenithAccessibilityService : AccessibilityService() {
                                                     val updated = shield.copy(lastSessionEndTimestamp = System.currentTimeMillis())
                                                     shieldRepository.updateShield(updated)
                                                     currentShieldCache = updated
+
+                                                    if (updated.isAutoQuitEnabled) {
+                                                        goToHomeScreen()
+                                                    } else {
+                                                        checkIfAppIsShielded(packageName)
+                                                    }
+                                                } else {
+                                                    checkIfAppIsShielded(packageName)
                                                 }
-                                                checkIfAppIsShielded(packageName)
                                             }
                                         }
                                     )

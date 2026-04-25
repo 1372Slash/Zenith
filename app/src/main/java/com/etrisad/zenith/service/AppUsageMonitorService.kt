@@ -383,8 +383,15 @@ class AppUsageMonitorService : Service() {
                                                     val updated = s.copy(lastSessionEndTimestamp = System.currentTimeMillis())
                                                     shieldRepository.updateShield(updated)
                                                     currentShieldCache = updated
+
+                                                    if (updated.isAutoQuitEnabled) {
+                                                        goToHomeScreen()
+                                                    } else {
+                                                        checkIfAppIsShielded(currentApp)
+                                                    }
+                                                } else {
+                                                    checkIfAppIsShielded(currentApp)
                                                 }
-                                                checkIfAppIsShielded(currentApp)
                                             }
                                         }
                                     )
@@ -640,7 +647,12 @@ class AppUsageMonitorService : Service() {
                                             onSessionEnd = {
                                                 allowedApps[targetPackageName] = 0L
                                                 serviceScope.launch {
-                                                    checkIfAppIsShielded(targetPackageName)
+                                                    val shield = currentShieldCache ?: shieldRepository.getShieldByPackageName(targetPackageName)
+                                                    if (shield?.isAutoQuitEnabled == true) {
+                                                        goToHomeScreen()
+                                                    } else {
+                                                        checkIfAppIsShielded(targetPackageName)
+                                                    }
                                                 }
                                             }
                                         )
