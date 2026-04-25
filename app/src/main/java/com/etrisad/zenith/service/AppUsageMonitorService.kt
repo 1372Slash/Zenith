@@ -451,12 +451,13 @@ class AppUsageMonitorService : Service() {
                                 else -> 1500L                // > 5 mnt: 1.5s
                             }
                         } else {
-                            // Untuk Shield, kita batasi max 1.5s agar HUD cepat menutup saat exit
+                            // Untuk Shield, kita gunakan max 5s agar sangat hemat CPU
+                            // Namun tetap sigap (600ms) saat sisa waktu sudah menipis
                             when {
-                                remaining > 3600000 -> 1500L  // > 1 jam: 1.5s (Tadinya 80s!)
-                                remaining > 600000 -> 1200L   // > 10 mnt: 1.2s (Tadinya 50s!)
-                                remaining > 300000 -> 1000L   // > 5 mnt: 1s
-                                else -> 600L                  // < 5 mnt: 600ms
+                                remaining > 3600000 -> 5000L  // > 1 jam: 5s (Sangat hemat baterai)
+                                remaining > 600000 -> 3000L   // > 10 mnt: 3s
+                                remaining > 60000 -> 1500L    // > 1 mnt: 1.5s
+                                else -> 600L                  // < 1 mnt: 600ms (Akurat untuk pemblokiran)
                             }
                         }
                     }
