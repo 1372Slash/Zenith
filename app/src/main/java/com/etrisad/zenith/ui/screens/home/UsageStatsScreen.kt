@@ -60,7 +60,7 @@ fun UsageStatsScreen(
                 .padding(horizontal = 16.dp),
             contentPadding = PaddingValues(
                 top = innerPadding.calculateTopPadding(),
-                bottom = 24.dp
+                bottom = innerPadding.calculateBottomPadding() + 24.dp
             )
         ) {
             itemsIndexed(regularApps) { index, app ->

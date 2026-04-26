@@ -38,6 +38,7 @@ class UserPreferencesRepository(private val context: Context) {
         val AUTO_BACKUP_ENABLED = booleanPreferencesKey("auto_backup_enabled")
         val BACKUP_DIRECTORY_URI = stringPreferencesKey("backup_directory_uri")
         val BACKUP_INTERVAL_HOURS = intPreferencesKey("backup_interval_hours")
+        val FLOATING_TAB_BAR_ENABLED = booleanPreferencesKey("floating_tab_bar_enabled")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -66,6 +67,7 @@ class UserPreferencesRepository(private val context: Context) {
             val autoBackupEnabled = preferences[PreferencesKeys.AUTO_BACKUP_ENABLED] ?: false
             val backupDirectoryUri = preferences[PreferencesKeys.BACKUP_DIRECTORY_URI] ?: ""
             val backupIntervalHours = preferences[PreferencesKeys.BACKUP_INTERVAL_HOURS] ?: 3
+            val floatingTabBarEnabled = preferences[PreferencesKeys.FLOATING_TAB_BAR_ENABLED] ?: false
             UserPreferences(
                 themeConfig = themeConfig,
                 dynamicColor = dynamicColor,
@@ -81,7 +83,8 @@ class UserPreferencesRepository(private val context: Context) {
                 lastStreakCheckDate = lastStreakCheckDate,
                 autoBackupEnabled = autoBackupEnabled,
                 backupDirectoryUri = backupDirectoryUri,
-                backupIntervalHours = backupIntervalHours
+                backupIntervalHours = backupIntervalHours,
+                floatingTabBarEnabled = floatingTabBarEnabled
             )
         }
 
@@ -174,6 +177,12 @@ class UserPreferencesRepository(private val context: Context) {
             preferences[PreferencesKeys.BACKUP_INTERVAL_HOURS] = hours
         }
     }
+
+    suspend fun setFloatingTabBarEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.FLOATING_TAB_BAR_ENABLED] = enabled
+        }
+    }
 }
 
 data class UserPreferences(
@@ -191,5 +200,6 @@ data class UserPreferences(
     val lastStreakCheckDate: String = "",
     val autoBackupEnabled: Boolean = false,
     val backupDirectoryUri: String = "",
-    val backupIntervalHours: Int = 3
+    val backupIntervalHours: Int = 3,
+    val floatingTabBarEnabled: Boolean = false
 )

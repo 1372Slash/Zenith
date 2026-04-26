@@ -84,8 +84,7 @@ fun FocusScreen(
         floatingActionButton = {
             FloatingActionButtonMenu(
                 expanded = isFabMenuExpanded,
-                // Menurunkan FAB lebih jauh agar lebih rapat ke NavigationBar
-                modifier = Modifier.offset(x = 16.dp, y = 40.dp),
+                modifier = Modifier.padding(bottom = 110.dp),
                 button = {
                     ToggleFloatingActionButton(
                         checked = isFabMenuExpanded,
@@ -155,10 +154,10 @@ fun FocusScreen(
                 )
             }
         }
-    ) { innerPadding ->
+    ) { _ ->
         FocusScreenContent(
             uiState = uiState,
-            innerPadding = innerPadding,
+            innerPadding = PaddingValues(0.dp),
             onEditShield = { viewModel.editShield(it) },
             onEditSchedule = { viewModel.editSchedule(it) },
             onDeleteSchedule = { viewModel.deleteSchedule(it) },
@@ -238,8 +237,8 @@ fun FocusScreenContent(
             .fillMaxSize()
             .padding(horizontal = 16.dp),
         contentPadding = PaddingValues(
-            top = innerPadding.calculateTopPadding(),
-            bottom = 100.dp
+            top = 0.dp,
+            bottom = 150.dp
         )
     ) {
         item {
@@ -682,7 +681,7 @@ fun FocusHeader() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 90.dp, bottom = 24.dp)
+            .padding(top = 24.dp, bottom = 24.dp)
     ) {
         Text(
             text = "Manage your focus barriers",

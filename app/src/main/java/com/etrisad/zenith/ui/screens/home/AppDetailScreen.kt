@@ -86,7 +86,7 @@ fun AppDetailScreen(
                 .padding(horizontal = 16.dp),
             contentPadding = PaddingValues(
                 top = innerPadding.calculateTopPadding(),
-                bottom = 32.dp
+                bottom = innerPadding.calculateBottomPadding() + 32.dp
             )
         ) {
             item {

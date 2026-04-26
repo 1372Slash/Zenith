@@ -6,12 +6,17 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.ui.Alignment
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -35,9 +40,8 @@ import com.etrisad.zenith.ui.viewmodel.HomeViewModel
 import com.etrisad.zenith.data.preferences.UserPreferences
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MainScreen(
     homeViewModel: HomeViewModel,
@@ -97,50 +101,7 @@ fun MainScreen(
         )
     }
 
-    Scaffold(
-        bottomBar = {
-            if (!useNavigationRail) {
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentRoute = navBackStackEntry?.destination?.route
-                val showBottomBar =
-                    currentRoute != Screen.UsageStats.route && currentRoute?.startsWith("app_detail") == false
-
-                AnimatedVisibility(
-                    visible = showBottomBar,
-                    enter = slideInVertically(initialOffsetY = { it }) + expandVertically(expandFrom = Alignment.Top),
-                    exit = slideOutVertically(targetOffsetY = { it }) + shrinkVertically(shrinkTowards = Alignment.Top)
-                ) {
-                    NavigationBar {
-                        val currentDestination = navBackStackEntry?.destination
-                        navItems.forEach { screen ->
-                            val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
-                            NavigationBarItem(
-                                icon = {
-                                    Icon(
-                                        imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
-                                        contentDescription = null
-                                    )
-                                },
-                                label = { Text(screen.title) },
-                                selected = selected,
-                                onClick = {
-                                    if (currentDestination?.route != screen.route) {
-                                        navController.navigate(screen.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) {
-                                                saveState = true
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    ) { innerPadding ->
+    Scaffold { innerPadding ->
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = navBackStackEntry?.destination?.route
         val isDeepScreen =
@@ -156,193 +117,345 @@ fun MainScreen(
             label = "topPadding"
         )
 
-        Row(
-            modifier = Modifier
-                .padding(
-                    // bottomPadding mengikuti tinggi AnimatedVisibility secara otomatis
-                    bottom = if (useNavigationRail) 0.dp else innerPadding.calculateBottomPadding(),
-                    top = topPadding
-                )
-        ) {
-            if (useNavigationRail) {
-                val showNavRail =
-                    currentRoute != Screen.UsageStats.route && currentRoute?.startsWith("app_detail") == false
+        Box(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .padding(
+                        bottom = 0.dp,
+                        top = topPadding
+                    )
+            ) {
+                if (useNavigationRail) {
+                    val showNavRail =
+                        currentRoute != Screen.UsageStats.route && currentRoute?.startsWith("app_detail") == false
 
-                AnimatedVisibility(
-                    visible = showNavRail,
-                    enter = slideInHorizontally(initialOffsetX = { -it }) + expandHorizontally(expandFrom = Alignment.Start),
-                    exit = slideOutHorizontally(targetOffsetX = { -it }) + shrinkHorizontally(shrinkTowards = Alignment.Start)
-                ) {
-                    NavigationRail(
-                        modifier = Modifier.fillMaxHeight(),
-                        header = {
-                            // You can add a logo or menu button here
-                        }
+                    AnimatedVisibility(
+                        visible = showNavRail,
+                        enter = slideInHorizontally(initialOffsetX = { -it }) + expandHorizontally(expandFrom = Alignment.Start),
+                        exit = slideOutHorizontally(targetOffsetX = { -it }) + shrinkHorizontally(shrinkTowards = Alignment.Start)
                     ) {
-                        val currentDestination = navBackStackEntry?.destination
-                        navItems.forEach { screen ->
-                            val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
-                            NavigationRailItem(
-                                icon = {
-                                    Icon(
-                                        imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
-                                        contentDescription = null
-                                    )
-                                },
-                                label = { Text(screen.title) },
-                                selected = selected,
-                                onClick = {
-                                    if (currentDestination?.route != screen.route) {
-                                        navController.navigate(screen.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) {
-                                                saveState = true
+                        NavigationRail(
+                            modifier = Modifier.fillMaxHeight(),
+                            header = {
+                                // You can add a logo or menu button here
+                            }
+                        ) {
+                            val currentDestination = navBackStackEntry?.destination
+                            navItems.forEach { screen ->
+                                val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                                NavigationRailItem(
+                                    icon = {
+                                        Icon(
+                                            imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    label = { Text(screen.title) },
+                                    selected = selected,
+                                    onClick = {
+                                        if (currentDestination?.route != screen.route) {
+                                            navController.navigate(screen.route) {
+                                                popUpTo(navController.graph.findStartDestination().id) {
+                                                    saveState = true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
                                             }
-                                            launchSingleTop = true
-                                            restoreState = true
                                         }
                                     }
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            NavHost(
-                navController = navController,
-                startDestination = Screen.Home.route,
-                modifier = Modifier.weight(1f),
-                enterTransition = {
-                    val initialRoute = initialState.destination.route
-                    val targetRoute = targetState.destination.route
+                NavHost(
+                    navController = navController,
+                    startDestination = Screen.Home.route,
+                    modifier = Modifier.weight(1f),
+                    enterTransition = {
+                        val initialRoute = initialState.destination.route
+                        val targetRoute = targetState.destination.route
 
-                    val isTargetDeep =
-                        targetRoute == Screen.UsageStats.route || targetRoute?.startsWith("app_detail") == true
-                    val isInitialDeep =
-                        initialRoute == Screen.UsageStats.route || initialRoute?.startsWith("app_detail") == true
+                        val isTargetDeep =
+                            targetRoute == Screen.UsageStats.route || targetRoute?.startsWith("app_detail") == true
+                        val isInitialDeep =
+                            initialRoute == Screen.UsageStats.route || initialRoute?.startsWith("app_detail") == true
 
-                    val animationSpec = spring<IntOffset>(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )
+                        val animationSpec = spring<IntOffset>(
+                            dampingRatio = Spring.DampingRatioLowBouncy,
+                            stiffness = Spring.StiffnessLow
+                        )
 
-                    if (isTargetDeep && !isInitialDeep) {
-                        slideInHorizontally(
-                            initialOffsetX = { it },
-                            animationSpec = animationSpec
-                        ) + fadeIn()
-                    } else {
-                        val initialIndex = navItems.indexOfFirst { it.route == initialRoute }
-                        val targetIndex = navItems.indexOfFirst { it.route == targetRoute }
-
-                        if (targetIndex > initialIndex) {
+                        if (isTargetDeep && !isInitialDeep) {
                             slideInHorizontally(
                                 initialOffsetX = { it },
                                 animationSpec = animationSpec
                             ) + fadeIn()
                         } else {
-                            slideInHorizontally(
-                                initialOffsetX = { -it },
-                                animationSpec = animationSpec
-                            ) + fadeIn()
+                            val initialIndex = navItems.indexOfFirst { it.route == initialRoute }
+                            val targetIndex = navItems.indexOfFirst { it.route == targetRoute }
+
+                            if (targetIndex > initialIndex) {
+                                slideInHorizontally(
+                                    initialOffsetX = { it },
+                                    animationSpec = animationSpec
+                                ) + fadeIn()
+                            } else {
+                                slideInHorizontally(
+                                    initialOffsetX = { -it },
+                                    animationSpec = animationSpec
+                                ) + fadeIn()
+                            }
                         }
-                    }
-                },
-                exitTransition = {
-                    val initialRoute = initialState.destination.route
-                    val targetRoute = targetState.destination.route
+                    },
+                    exitTransition = {
+                        val initialRoute = initialState.destination.route
+                        val targetRoute = targetState.destination.route
 
-                    val isTargetDeep =
-                        targetRoute == Screen.UsageStats.route || targetRoute?.startsWith("app_detail") == true
+                        val isTargetDeep =
+                            targetRoute == Screen.UsageStats.route || targetRoute?.startsWith("app_detail") == true
 
-                    val animationSpec = spring<IntOffset>(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )
+                        val animationSpec = spring<IntOffset>(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessLow
+                        )
 
-                    if (isTargetDeep) {
-                        slideOutHorizontally(
-                            targetOffsetX = { -it / 3 },
-                            animationSpec = animationSpec
-                        ) + fadeOut()
-                    } else {
-                        val initialIndex = navItems.indexOfFirst { it.route == initialRoute }
-                        val targetIndex = navItems.indexOfFirst { it.route == targetRoute }
-
-                        if (targetIndex > initialIndex) {
+                        if (isTargetDeep) {
                             slideOutHorizontally(
                                 targetOffsetX = { -it / 3 },
                                 animationSpec = animationSpec
                             ) + fadeOut()
                         } else {
-                            slideOutHorizontally(
-                                targetOffsetX = { it / 3 },
-                                animationSpec = animationSpec
-                            ) + fadeOut()
+                            val initialIndex = navItems.indexOfFirst { it.route == initialRoute }
+                            val targetIndex = navItems.indexOfFirst { it.route == targetRoute }
+
+                            if (targetIndex > initialIndex) {
+                                slideOutHorizontally(
+                                    targetOffsetX = { -it / 3 },
+                                    animationSpec = animationSpec
+                                ) + fadeOut()
+                            } else {
+                                slideOutHorizontally(
+                                    targetOffsetX = { it / 3 },
+                                    animationSpec = animationSpec
+                                ) + fadeOut()
+                            }
+                        }
+                    },
+                    popEnterTransition = {
+                        slideInHorizontally(
+                            initialOffsetX = { -it / 3 },
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioLowBouncy,
+                                stiffness = Spring.StiffnessLow
+                            )
+                        ) + fadeIn()
+                    },
+                    popExitTransition = {
+                        slideOutHorizontally(
+                            targetOffsetX = { it },
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioLowBouncy,
+                                stiffness = Spring.StiffnessLow
+                            )
+                        ) + fadeOut()
+                    }
+                ) {
+                    composable(Screen.Home.route) {
+                        HomeScreen(
+                            homeViewModel,
+                            userPreferencesRepository,
+                            onSeeFullList = { navController.navigate(Screen.UsageStats.route) },
+                            onAppClick = { packageName ->
+                                navController.navigate(Screen.AppDetail.createRoute(packageName))
+                            }
+                        )
+                    }
+                    composable(Screen.Focus.route) {
+                        FocusScreen(
+                            focusViewModel,
+                            onAppClick = { packageName ->
+                                navController.navigate(Screen.AppDetail.createRoute(packageName))
+                            }
+                        )
+                    }
+                    composable(Screen.Settings.route) {
+                        SettingsScreen(userPreferencesRepository)
+                    }
+                    composable(Screen.UsageStats.route) {
+                        UsageStatsScreen(
+                            viewModel = homeViewModel,
+                            onBack = { navController.popBackStack() },
+                            onAppClick = { packageName ->
+                                navController.navigate(Screen.AppDetail.createRoute(packageName))
+                            }
+                        )
+                    }
+                    composable(
+                        route = Screen.AppDetail.route,
+                        arguments = listOf(androidx.navigation.navArgument("packageName") {
+                            type = androidx.navigation.NavType.StringType
+                        })
+                    ) { backStackEntry ->
+                        val packageName = backStackEntry.arguments?.getString("packageName") ?: ""
+                        com.etrisad.zenith.ui.screens.home.AppDetailScreen(
+                            packageName = packageName,
+                            viewModel = homeViewModel,
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
+                }
+            }
+
+            // Overlay Navigation Bar
+            if (!useNavigationRail) {
+                val showBottomBar =
+                    currentRoute != Screen.UsageStats.route && currentRoute?.startsWith("app_detail") == false
+
+                AnimatedVisibility(
+                    visible = showBottomBar,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    enter = slideInVertically(initialOffsetY = { it }) + expandVertically(expandFrom = Alignment.Top),
+                    exit = slideOutVertically(targetOffsetY = { it }) + shrinkVertically(shrinkTowards = Alignment.Top)
+                ) {
+                    AnimatedContent(
+                        targetState = preferences.floatingTabBarEnabled,
+                        transitionSpec = {
+                            (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                    scaleIn(initialScale = 0.92f, animationSpec = spring(stiffness = Spring.StiffnessLow)))
+                                .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                        scaleOut(targetScale = 0.92f, animationSpec = spring(stiffness = Spring.StiffnessLow)))
+                        },
+                        label = "TabBarTransition"
+                    ) { isFloating ->
+                        if (isFloating) {
+                            val currentDestination = navBackStackEntry?.destination
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 36.dp),
+                                contentAlignment = Alignment.BottomCenter
+                            ) {
+                                HorizontalFloatingToolbar(
+                                    expanded = true,
+                                    modifier = Modifier
+                                        .animateContentSize()
+                                        .height(68.dp),
+                                    shape = RoundedCornerShape(100),
+                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                                    colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
+                                        toolbarContainerColor = MaterialTheme.colorScheme.primaryContainer
+                                    )
+                                ) {
+                                    navItems.forEach { screen ->
+                                        val selected =
+                                            currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                                        ShortNavigationBarItem(
+                                            selected = selected,
+                                            onClick = {
+                                                if (currentDestination?.route != screen.route) {
+                                                    navController.navigate(screen.route) {
+                                                        popUpTo(navController.graph.findStartDestination().id) {
+                                                            saveState = true
+                                                        }
+                                                        launchSingleTop = true
+                                                        restoreState = true
+                                                    }
+                                                }
+                                            },
+                                            icon = {
+                                                val extraHeight by animateDpAsState(
+                                                    targetValue = if (selected) 16.dp else 0.dp,
+                                                    animationSpec = spring(
+                                                        dampingRatio = Spring.DampingRatioLowBouncy,
+                                                        stiffness = Spring.StiffnessLow
+                                                    ),
+                                                    label = "indicatorHeight"
+                                                )
+                                                Box(
+                                                    modifier = Modifier.height(26.dp + extraHeight),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
+                                                        contentDescription = screen.title,
+                                                        modifier = Modifier.size(26.dp)
+                                                    )
+                                                }
+                                            },
+                                            label = {
+                                                AnimatedVisibility(
+                                                    visible = selected,
+                                                    enter = fadeIn() + slideInHorizontally(
+                                                        initialOffsetX = { -15 },
+                                                        animationSpec = spring(
+                                                            dampingRatio = Spring.DampingRatioLowBouncy,
+                                                            stiffness = Spring.StiffnessLow
+                                                        )
+                                                    ) + expandHorizontally(expandFrom = Alignment.Start),
+                                                    exit = fadeOut() + slideOutHorizontally(
+                                                        targetOffsetX = { -15 }) + shrinkHorizontally(
+                                                        shrinkTowards = Alignment.Start
+                                                    )
+                                                ) {
+                                                    Text(
+                                                        text = screen.title,
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.ExtraBold,
+                                                        maxLines = 1,
+                                                        modifier = Modifier.padding(start = 2.dp, end = 4.dp)
+                                                    )
+                                                }
+                                            },
+                                            iconPosition = NavigationItemIconPosition.Start,
+                                            colors = ShortNavigationBarItemDefaults.colors(
+                                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                                selectedTextColor = MaterialTheme.colorScheme.onPrimary,
+                                                selectedIndicatorColor = MaterialTheme.colorScheme.primary,
+                                                unselectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                unselectedTextColor = Color.Transparent
+                                            ),
+                                            modifier = Modifier
+                                                .padding(horizontal = 4.dp)
+                                                .fillMaxHeight()
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            NavigationBar(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ) {
+                                val currentDestination = navBackStackEntry?.destination
+                                navItems.forEach { screen ->
+                                    val selected =
+                                        currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                                    NavigationBarItem(
+                                        icon = {
+                                            Icon(
+                                                imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        label = { Text(screen.title) },
+                                        selected = selected,
+                                        onClick = {
+                                            if (currentDestination?.route != screen.route) {
+                                                navController.navigate(screen.route) {
+                                                    popUpTo(navController.graph.findStartDestination().id) {
+                                                        saveState = true
+                                                    }
+                                                    launchSingleTop = true
+                                                    restoreState = true
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
-                },
-                popEnterTransition = {
-                    slideInHorizontally(
-                        initialOffsetX = { -it / 3 },
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessLow
-                        )
-                    ) + fadeIn()
-                },
-                popExitTransition = {
-                    slideOutHorizontally(
-                        targetOffsetX = { it },
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessLow
-                        )
-                    ) + fadeOut()
-                }
-            ) {
-                composable(Screen.Home.route) {
-                    HomeScreen(
-                        homeViewModel,
-                        userPreferencesRepository,
-                        onSeeFullList = { navController.navigate(Screen.UsageStats.route) },
-                        onAppClick = { packageName ->
-                            navController.navigate(Screen.AppDetail.createRoute(packageName))
-                        }
-                    )
-                }
-                composable(Screen.Focus.route) {
-                    FocusScreen(
-                        focusViewModel,
-                        onAppClick = { packageName ->
-                            navController.navigate(Screen.AppDetail.createRoute(packageName))
-                        }
-                    )
-                }
-                composable(Screen.Settings.route) {
-                    SettingsScreen(userPreferencesRepository)
-                }
-                composable(Screen.UsageStats.route) {
-                    UsageStatsScreen(
-                        viewModel = homeViewModel,
-                        onBack = { navController.popBackStack() },
-                        onAppClick = { packageName ->
-                            navController.navigate(Screen.AppDetail.createRoute(packageName))
-                        }
-                    )
-                }
-                composable(
-                    route = Screen.AppDetail.route,
-                    arguments = listOf(androidx.navigation.navArgument("packageName") {
-                        type = androidx.navigation.NavType.StringType
-                    })
-                ) { backStackEntry ->
-                    val packageName = backStackEntry.arguments?.getString("packageName") ?: ""
-                    com.etrisad.zenith.ui.screens.home.AppDetailScreen(
-                        packageName = packageName,
-                        viewModel = homeViewModel,
-                        onBack = { navController.popBackStack() }
-                    )
                 }
             }
         }

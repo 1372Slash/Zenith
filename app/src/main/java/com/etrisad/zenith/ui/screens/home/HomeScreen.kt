@@ -102,15 +102,15 @@ fun HomeScreenContent(
     onSeeFullList: () -> Unit,
     onAppClick: (String) -> Unit
 ) {
-    Scaffold { innerPadding ->
+    Scaffold { _ ->
         val targetMillis = preferences.screenTimeTargetMinutes * 60 * 1000L
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
             contentPadding = PaddingValues(
-                top = innerPadding.calculateTopPadding(),
-                bottom = 100.dp
+                top = 0.dp,
+                bottom = 150.dp
             )
         ) {
             item {
@@ -215,7 +215,7 @@ fun WelcomeHeader() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 90.dp, bottom = 24.dp)
+            .padding(top = 24.dp, bottom = 24.dp)
     ) {
         Text(
             text = "Welcome Back,",

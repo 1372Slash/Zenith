@@ -195,6 +195,11 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
                     backupManager.scheduleBackup(hours, preferences.backupDirectoryUri)
                 }
             }
+        },
+        onFloatingTabBarEnabledChange = { enabled ->
+            coroutineScope.launch {
+                preferencesRepository.setFloatingTabBarEnabled(enabled)
+            }
         }
     )
 
@@ -239,20 +244,21 @@ fun SettingsScreenContent(
     onRestore: () -> Unit,
     onAutoBackupEnabledChange: (Boolean) -> Unit,
     onPickBackupDirectory: () -> Unit,
-    onSetBackupInterval: (Int) -> Unit
+    onSetBackupInterval: (Int) -> Unit,
+    onFloatingTabBarEnabledChange: (Boolean) -> Unit
 ) {
     var showTargetSheet by remember { mutableStateOf(false) }
     var showEmergencyRechargeSheet by remember { mutableStateOf(false) }
     var showDelayAppSheet by remember { mutableStateOf(false) }
 
-    Scaffold { innerPadding ->
+    Scaffold { _ ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
             contentPadding = PaddingValues(
-                top = innerPadding.calculateTopPadding(),
-                bottom = 100.dp
+                top = 0.dp,
+                bottom = 150.dp
             )
         ) {
             item {
@@ -438,6 +444,18 @@ fun SettingsScreenContent(
                     checked = preferences.dynamicColor,
                     onCheckedChange = onDynamicColorChange,
                     icon = Icons.Outlined.Palette,
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                SettingsToggle(
+                    title = "Floating Tab Bar",
+                    description = "Use the new Material 3 Expressive floating navigation",
+                    checked = preferences.floatingTabBarEnabled,
+                    onCheckedChange = onFloatingTabBarEnabledChange,
+                    icon = Icons.Outlined.Flaky, // Closest icon for "floating" or experimental
                     shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                 )
             }
@@ -872,7 +890,7 @@ fun SettingsHeader() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 90.dp, bottom = 24.dp)
+            .padding(top = 24.dp, bottom = 24.dp)
     ) {
         Text(
             text = "Personalize your Zenith experience",
