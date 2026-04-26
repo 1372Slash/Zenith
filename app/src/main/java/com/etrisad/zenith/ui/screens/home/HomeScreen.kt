@@ -33,10 +33,12 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.graphics.shapes.toPath
@@ -94,6 +96,7 @@ fun HomeScreen(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreenContent(
     uiState: HomeUiState,
@@ -105,20 +108,24 @@ fun HomeScreenContent(
     onSeeFullList: () -> Unit,
     onAppClick: (String) -> Unit
 ) {
-    Scaffold { _ ->
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+
+    Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = { WelcomeHeader(scrollBehavior) },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+    ) { innerPadding ->
         val targetMillis = preferences.screenTimeTargetMinutes * 60 * 1000L
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(innerPadding)
                 .padding(horizontal = 16.dp),
             contentPadding = PaddingValues(
                 top = 0.dp,
                 bottom = 150.dp
             )
         ) {
-            item {
-                WelcomeHeader()
-            }
             item {
                 UsageDashboard(
                     uiState = uiState,
@@ -218,25 +225,50 @@ fun HomeScreenContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WelcomeHeader() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 24.dp, bottom = 24.dp)
-    ) {
-        Text(
-            text = "Welcome Back,",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = "Zenith User",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
+fun WelcomeHeader(scrollBehavior: TopAppBarScrollBehavior) {
+    var showAppName by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(2500) // Delay before switching to App Name
+        showAppName = true
     }
+
+    CenterAlignedTopAppBar(
+        scrollBehavior = scrollBehavior,
+        title = {
+            AnimatedContent(
+                targetState = showAppName,
+                transitionSpec = {
+                    val springSpec = spring<Float>(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                    val offsetSpec = spring<IntOffset>(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                    (fadeIn(animationSpec = springSpec) + slideInVertically(animationSpec = offsetSpec) { it / 2 })
+                        .togetherWith(fadeOut(animationSpec = springSpec) + slideOutVertically(animationSpec = offsetSpec) { -it / 2 })
+                },
+                label = "HeaderAnimation"
+            ) { isAppName ->
+                Text(
+                    text = if (isAppName) "Zenith" else "Welcome Back, Zenith User",
+                    style = if (isAppName) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineSmall,
+                    fontWeight = if (isAppName) FontWeight.ExtraBold else FontWeight.Bold,
+                    color = if (isAppName) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        },
+        windowInsets = WindowInsets(0, 0, 0, 0),
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.Transparent,
+            scrolledContainerColor = Color.Transparent
+        )
+    )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
@@ -1244,7 +1276,7 @@ fun ShieldItem(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Outlined.Android, 
+                                    imageVector = Icons.Outlined.Android,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = iconAlpha)
                                 )

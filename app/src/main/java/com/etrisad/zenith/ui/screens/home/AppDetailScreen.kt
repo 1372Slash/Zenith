@@ -283,8 +283,8 @@ fun AppHeader(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.Android, 
-                        contentDescription = null, 
+                        imageVector = Icons.Outlined.Android,
+                        contentDescription = null,
                         modifier = Modifier.size(48.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = iconAlpha)
                     )

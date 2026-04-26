@@ -120,6 +120,7 @@ fun MainScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier
+                    .fillMaxSize()
                     .padding(
                         bottom = 0.dp,
                         top = topPadding

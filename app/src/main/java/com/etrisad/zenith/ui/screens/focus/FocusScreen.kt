@@ -37,12 +37,15 @@ import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
@@ -59,7 +62,7 @@ import com.etrisad.zenith.ui.viewmodel.FocusUiState
 import com.etrisad.zenith.ui.viewmodel.FocusViewModel
 import com.etrisad.zenith.ui.viewmodel.ShieldSortType
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun FocusScreen(
     viewModel: FocusViewModel,
@@ -68,6 +71,8 @@ fun FocusScreen(
     val uiState by viewModel.uiState.collectAsState()
     val isAppPickerOpen = remember { mutableStateOf(false) }
     var isFabMenuExpanded by remember { mutableStateOf(false) }
+
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
     // Enhanced Spring Motion animations
     val fabProgress by animateFloatAsState(
@@ -81,6 +86,9 @@ fun FocusScreen(
     val iconSize = (44 - (fabProgress * 8)).dp // Interpolates between 44.dp and 36.dp
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = { FocusHeader(scrollBehavior) },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         floatingActionButton = {
             FloatingActionButtonMenu(
                 expanded = isFabMenuExpanded,
@@ -154,10 +162,10 @@ fun FocusScreen(
                 )
             }
         }
-    ) { _ ->
+    ) { innerPadding ->
         FocusScreenContent(
             uiState = uiState,
-            innerPadding = PaddingValues(0.dp),
+            innerPadding = innerPadding,
             onEditShield = { viewModel.editShield(it) },
             onEditSchedule = { viewModel.editSchedule(it) },
             onDeleteSchedule = { viewModel.deleteSchedule(it) },
@@ -235,16 +243,13 @@ fun FocusScreenContent(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
+            .padding(innerPadding)
             .padding(horizontal = 16.dp),
         contentPadding = PaddingValues(
             top = 0.dp,
             bottom = 150.dp
         )
     ) {
-        item {
-            FocusHeader()
-        }
-
         // Active Goals Section
         item {
             ShieldSortHeader(
@@ -676,25 +681,26 @@ fun EmptyFocusMessage(message: String) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FocusHeader() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 24.dp, bottom = 24.dp)
-    ) {
-        Text(
-            text = "Manage your focus barriers",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+fun FocusHeader(scrollBehavior: TopAppBarScrollBehavior) {
+    CenterAlignedTopAppBar(
+        scrollBehavior = scrollBehavior,
+        title = {
+            Text(
+                text = "Focus",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        },
+        windowInsets = WindowInsets(0, 0, 0, 0),
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.Transparent,
+            scrolledContainerColor = Color.Transparent
         )
-        Text(
-            text = "Zenith Shields",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-    }
+    )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -774,7 +780,7 @@ fun ShieldConfigItem(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.Android, 
+                                imageVector = Icons.Outlined.Android,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = iconAlpha)
                             )
