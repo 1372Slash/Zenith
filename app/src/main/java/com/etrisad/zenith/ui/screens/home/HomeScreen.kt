@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,6 +28,7 @@ import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
@@ -153,6 +156,11 @@ fun HomeScreenContent(
                     onSeeFullList = onSeeFullList,
                     onAppClick = { packageName -> onAppClick(packageName) }
                 )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            item {
+                QuickActionsSection()
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
@@ -1031,6 +1039,90 @@ fun TopAppsSection(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun QuickActionsSection() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        QuickActionCard(
+            icon = Icons.Outlined.Alarm,
+            label = "Alarm"
+        )
+        QuickActionCard(
+            icon = Icons.Outlined.Timer,
+            label = "Pomodoro"
+        )
+        QuickActionCard(
+            icon = Icons.Outlined.Insights,
+            label = "Stats"
+        )
+        QuickActionCard(
+            icon = Icons.Outlined.Bedtime,
+            label = "Bedtime"
+        )
+    }
+}
+
+@Composable
+fun QuickActionCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "QuickActionScale"
+    )
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Surface(
+            modifier = Modifier
+                .width(82.dp)
+                .height(60.dp)
+                .graphicsLayer(scaleX = scale, scaleY = scale)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = ripple(),
+                    onClick = { /* No function for now */ }
+                ),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            tonalElevation = 1.dp,
+            shadowElevation = 1.dp
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
