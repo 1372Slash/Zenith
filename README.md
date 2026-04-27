@@ -19,6 +19,12 @@
   <strong>Zenith</strong> is a smart digital wellbeing assistant for Android, built with <strong>Material Design 3 Expressive</strong>. It uses proactive interventions and real-time monitoring to help you break addictive scrolling habits through a fluid, motion-rich experience.
 </p>
 
+<p align="center">
+  <a href="https://github.com/1372Slash/Zenith/releases">
+    <img src="https://img.shields.io/github/v/release/1372Slash/Zenith?label=Download%20Zenith&style=for-the-badge&color=6750A4&logo=android&logoColor=white">
+  </a>
+</p>
+
 ## Screenshots
 
 <div align="center">
