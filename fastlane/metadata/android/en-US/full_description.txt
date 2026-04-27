@@ -1,0 +1,17 @@
+<i>Zenith</i> is a smart focus assistant for Android designed to help you reduce digital distractions through proactive intervention based on Material Design 3 Expressive.
+
+Zenith is fully free and open-source. You can find the source code and report bugs or suggest features at https://github.com/etrisad/Zenith
+
+<b>Features:</b>
+- Simple, minimalist UI based on the latest Material 3 Expressive guidelines
+- Smart Intervention System:
+    - Shield Mode: Mindful pauses to prevent addictive scrolling
+    - Delay App: Intentional time delays before opening protected apps
+    - Goal Pursuit: Targets for your productive applications
+- Comprehensive Tracking:
+    - Session HUD: Floating overlay with real-time session countdown
+    - Detailed Usage Stats: Visualize your daily and weekly digital habits
+    - Smart Schedules: Automate your focus periods
+- Built-in Mindfulness:
+    - Emergency Use: Restricted access quota for critical moments
+    - Privacy First: Operates locally with required permissions for core functionality
