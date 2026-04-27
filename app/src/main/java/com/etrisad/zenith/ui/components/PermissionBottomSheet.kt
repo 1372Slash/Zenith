@@ -3,8 +3,13 @@ package com.etrisad.zenith.ui.components
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -13,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
@@ -170,13 +176,19 @@ fun PermissionBottomSheet(
                     })
                 },
                 icon = Icons.Outlined.Layers,
-                shape = if (preferences.accessibilityDisabled) 
-                    RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                else RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
             )
 
             if (!preferences.accessibilityDisabled) {
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Text(
+                    text = "Optional",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    textAlign = TextAlign.Start
+                )
 
                 PermissionItemRow(
                     title = "Accessibility Service",
@@ -188,7 +200,7 @@ fun PermissionBottomSheet(
                         })
                     },
                     icon = Icons.Outlined.AccessibilityNew,
-                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                    shape = RoundedCornerShape(24.dp)
                 )
             }
             
@@ -215,29 +227,73 @@ private fun PermissionItemRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     shape: Shape = RoundedCornerShape(16.dp)
 ) {
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isGranted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                      else MaterialTheme.colorScheme.surfaceContainer,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "bgColor"
+    )
+
+    val contentColor by animateColorAsState(
+        targetValue = if (isGranted) MaterialTheme.colorScheme.primary 
+                      else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "contentColor"
+    )
+
     Surface(
         onClick = if (!isGranted) onClick else ({}),
         modifier = Modifier
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .clip(shape),
         shape = shape,
-        color = if (isGranted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        color = backgroundColor
     ) {
         ListItem(
-            headlineContent = { Text(title, fontWeight = FontWeight.SemiBold) },
-            supportingContent = { Text(description, style = MaterialTheme.typography.bodySmall) },
-            leadingContent = { 
-                Icon(
-                    icon, 
-                    contentDescription = null,
-                    tint = if (isGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            headlineContent = { 
+                Text(
+                    text = title, 
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isGranted) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                 ) 
+            },
+            supportingContent = { 
+                Text(
+                    text = description, 
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isGranted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f) 
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                ) 
+            },
+            leadingContent = {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            if (isGranted) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                            else MaterialTheme.colorScheme.primaryContainer,
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = if (isGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
             },
             trailingContent = {
                 if (isGranted) {
                     Icon(Icons.Outlined.CheckCircle, "Granted", tint = MaterialTheme.colorScheme.primary)
                 } else {
-                    Text("Grant", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Grant", 
+                        color = MaterialTheme.colorScheme.primary, 
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelLarge
+                    )
                 }
             },
             colors = ListItemDefaults.colors(containerColor = Color.Transparent)
