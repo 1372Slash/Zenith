@@ -354,7 +354,7 @@ fun SettingsScreenContent(
                     checked = preferences.sessionUsageOverlayEnabled,
                     onCheckedChange = onSessionUsageOverlayEnabledChange,
                     icon = Icons.Outlined.Timer,
-                    shape = if (preferences.sessionUsageOverlayEnabled) 
+                    shape = if (preferences.sessionUsageOverlayEnabled)
                         RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
                     else RoundedCornerShape(8.dp)
                 )
@@ -1118,8 +1118,8 @@ internal fun RowScope.ThemeOptionButton(
     )
 
     val backgroundColor by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.secondaryContainer 
-                      else MaterialTheme.colorScheme.surfaceContainerHigh,
+        targetValue = if (selected) MaterialTheme.colorScheme.secondaryContainer
+                      else MaterialTheme.colorScheme.surface,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "BgColor"
     )

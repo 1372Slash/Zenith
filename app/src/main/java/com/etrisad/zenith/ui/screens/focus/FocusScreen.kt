@@ -1109,7 +1109,8 @@ fun ScheduleSettingsBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface
     ) {
         Column(
             modifier = Modifier
@@ -1319,7 +1320,8 @@ fun AppPickerBottomSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface
     ) {
         Column(
             modifier = Modifier
@@ -1606,7 +1608,8 @@ fun FocusSettingsBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface
     ) {
         Column(
             modifier = Modifier
@@ -1747,42 +1750,48 @@ fun FocusSettingsBottomSheet(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                PreferenceCategory(title = "Settings")
+
                 SettingsToggle(
                     title = "Show Reminders",
                     description = "Get notified before limit is reached",
                     checked = remindersEnabled,
                     onCheckedChange = { remindersEnabled = it },
-                    icon = Icons.Outlined.NotificationsActive
+                    icon = Icons.Outlined.NotificationsActive,
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 2.dp, bottomEnd = 2.dp)
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
                 SettingsToggle(
                     title = "Strict Mode",
                     description = "No extensions allowed after limit",
                     checked = strictModeEnabled,
                     onCheckedChange = { strictModeEnabled = it },
-                    icon = Icons.Outlined.GppGood
+                    icon = Icons.Outlined.GppGood,
+                    shape = RoundedCornerShape(2.dp)
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
                 SettingsToggle(
                     title = "Auto Quit",
                     description = "Exit app automatically when session ends",
                     checked = autoQuitEnabled,
                     onCheckedChange = { autoQuitEnabled = it },
-                    icon = Icons.AutoMirrored.Outlined.ExitToApp
+                    icon = Icons.AutoMirrored.Outlined.ExitToApp,
+                    shape = RoundedCornerShape(2.dp)
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
                 SettingsToggle(
                     title = "Delay App",
                     description = "Wait before reopening after being kicked out",
                     checked = isDelayAppEnabled,
                     onCheckedChange = { isDelayAppEnabled = it },
-                    icon = Icons.Outlined.History
+                    icon = Icons.Outlined.History,
+                    shape = RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                 )
             } else {
                 // GOAL specific settings
@@ -1821,12 +1830,15 @@ fun FocusSettingsBottomSheet(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                PreferenceCategory(title = "Settings")
+
                 SettingsToggle(
                     title = "Goal Reminders",
                     description = "Receive notifications to reach your daily target",
                     checked = remindersEnabled,
                     onCheckedChange = { remindersEnabled = it },
-                    icon = Icons.Outlined.NotificationsActive
+                    icon = Icons.Outlined.NotificationsActive,
+                    shape = RoundedCornerShape(24.dp)
                 )
             }
 
@@ -1997,27 +2009,81 @@ fun RowScope.ScheduleModeOptionButton(
 }
 
 @Composable
+fun PreferenceCategory(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+    )
+}
+
+@Composable
 fun SettingsToggle(
     title: String,
     description: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    icon: androidx.compose.ui.graphics.vector.ImageVector
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(24.dp)
 ) {
-    Row(
+    Card(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        shape = shape,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
-        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(text = title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                Text(text = description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(
+                        MaterialTheme.colorScheme.primaryContainer,
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(20.dp)
+                )
             }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Switch(
+                checked = checked, 
+                onCheckedChange = onCheckedChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.primary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            )
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

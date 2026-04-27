@@ -1082,8 +1082,7 @@ fun QuickActionCard(
                 ),
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 1.dp,
-            shadowElevation = 1.dp
+            tonalElevation = 1.dp
         ) {
             Box(
                 modifier = Modifier.fillMaxSize(),

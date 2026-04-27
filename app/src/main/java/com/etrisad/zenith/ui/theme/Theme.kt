@@ -73,14 +73,18 @@ fun ZenithTheme(
                         surface = base.surface,
                         surfaceContainer = base.surfaceContainerLowest, // Blackish container from Material You
                         surfaceContainerLow = base.surfaceContainerLowest,
+                        surfaceContainerHigh = base.surfaceContainerLowest,
+                        surfaceContainerHighest = base.surfaceContainerLowest,
                         surfaceContainerLowest = base.surfaceContainerLowest
                     )
                 } else {
                     base.copy(
-                        background = Color(0xFFFBF8FF), // Tone base
-                        surface = Color(0xFFFBF8FF),
+                        background = base.surface, // Tone base
+                        surface = base.surface,
                         surfaceContainer = Color.White,
                         surfaceContainerLow = Color.White,
+                        surfaceContainerHigh = Color.White,
+                        surfaceContainerHighest = Color.White,
                         surfaceContainerLowest = Color.White
                     )
                 }
@@ -94,6 +98,8 @@ fun ZenithTheme(
                     surface = SurfaceDark,
                     surfaceContainer = BackgroundDark, // Blackish container (Deep Charcoal)
                     surfaceContainerLow = BackgroundDark,
+                    surfaceContainerHigh = BackgroundDark,
+                    surfaceContainerHighest = BackgroundDark,
                     surfaceContainerLowest = BackgroundDark
                 )
             } else DarkColorScheme
@@ -106,6 +112,8 @@ fun ZenithTheme(
                     surface = SurfaceLight,
                     surfaceContainer = Color.White,
                     surfaceContainerLow = Color.White,
+                    surfaceContainerHigh = Color.White,
+                    surfaceContainerHighest = Color.White,
                     surfaceContainerLowest = Color.White
                 )
             } else LightColorScheme
