@@ -5,6 +5,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+import com.etrisad.zenith.data.preferences.FontOption
 
 private val DarkColorScheme = darkColorScheme(
     primary = PrimaryDark,
@@ -56,6 +57,7 @@ private val LightColorScheme = lightColorScheme(
 fun ZenithTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
+    fontOption: FontOption = FontOption.SYSTEM,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -68,9 +70,15 @@ fun ZenithTheme(
         else -> LightColorScheme
     }
 
+    val typography = when (fontOption) {
+        FontOption.SYSTEM -> SystemTypography
+        FontOption.GOOGLE_SANS_FLEX -> GoogleSansFlexTypography
+        FontOption.NUNITO -> NunitoTypography
+    }
+
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = typography,
         content = content
     )
 }

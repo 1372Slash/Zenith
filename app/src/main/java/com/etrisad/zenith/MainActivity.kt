@@ -84,7 +84,8 @@ class MainActivity : ComponentActivity() {
 
             ZenithTheme(
                 darkTheme = darkTheme,
-                dynamicColor = userPreferences.dynamicColor
+                dynamicColor = userPreferences.dynamicColor,
+                fontOption = userPreferences.fontOption
             ) {
                 val windowSizeClass = calculateWindowSizeClass(this)
                 MainScreen(

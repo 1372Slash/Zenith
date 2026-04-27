@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.etrisad.zenith.data.preferences.FontOption
 import com.etrisad.zenith.data.preferences.ThemeConfig
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
@@ -129,6 +130,11 @@ fun SettingsScreen(
         onThemeChange = { theme ->
             coroutineScope.launch {
                 preferencesRepository.setThemeConfig(theme)
+            }
+        },
+        onFontChange = { font ->
+            coroutineScope.launch {
+                preferencesRepository.setFontOption(font)
             }
         },
         onDynamicColorChange = { enabled ->
@@ -236,6 +242,7 @@ fun SettingsScreenContent(
     preferences: UserPreferences,
     innerPadding: PaddingValues,
     onThemeChange: (ThemeConfig) -> Unit,
+    onFontChange: (FontOption) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onAccessibilityDisabledChange: (Boolean) -> Unit,
     onSetTarget: (Int) -> Unit,
@@ -432,6 +439,15 @@ fun SettingsScreenContent(
                     selectedTheme = preferences.themeConfig,
                     onThemeChange = onThemeChange,
                     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                FontSelector(
+                    selectedFont = preferences.fontOption,
+                    onFontChange = onFontChange,
+                    shape = RoundedCornerShape(8.dp)
                 )
             }
 
@@ -917,6 +933,76 @@ fun PreferenceCategory(title: String) {
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
     )
+}
+
+@Composable
+fun FontSelector(
+    selectedFont: FontOption,
+    onFontChange: (FontOption) -> Unit,
+    shape: Shape = RoundedCornerShape(24.dp)
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = shape,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.FontDownload,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(
+                    text = "Font Style",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            val fontOptions = listOf(
+                FontOption.SYSTEM to "System",
+                FontOption.GOOGLE_SANS_FLEX to "GS Flex",
+                FontOption.NUNITO to "Nunito"
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                fontOptions.forEachIndexed { index, (option, label) ->
+                    ThemeOptionButton(
+                        label = label,
+                        selected = selectedFont == option,
+                        onClick = { onFontChange(option) },
+                        isFirst = index == 0,
+                        isLast = index == fontOptions.size - 1
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

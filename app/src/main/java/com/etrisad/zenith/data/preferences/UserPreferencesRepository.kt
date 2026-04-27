@@ -20,10 +20,15 @@ enum class ThemeConfig {
     FOLLOW_SYSTEM, LIGHT, DARK
 }
 
+enum class FontOption {
+    SYSTEM, GOOGLE_SANS_FLEX, NUNITO
+}
+
 class UserPreferencesRepository(private val context: Context) {
 
     private object PreferencesKeys {
         val THEME_CONFIG = stringPreferencesKey("theme_config")
+        val FONT_OPTION = stringPreferencesKey("font_option")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val ACCESSIBILITY_DISABLED = booleanPreferencesKey("accessibility_disabled")
         val SCREEN_TIME_TARGET = intPreferencesKey("screen_time_target")
@@ -53,6 +58,9 @@ class UserPreferencesRepository(private val context: Context) {
             val themeConfig = ThemeConfig.valueOf(
                 preferences[PreferencesKeys.THEME_CONFIG] ?: ThemeConfig.FOLLOW_SYSTEM.name
             )
+            val fontOption = FontOption.valueOf(
+                preferences[PreferencesKeys.FONT_OPTION] ?: FontOption.NUNITO.name
+            )
             val dynamicColor = preferences[PreferencesKeys.DYNAMIC_COLOR] ?: true
             val accessibilityDisabled = preferences[PreferencesKeys.ACCESSIBILITY_DISABLED] ?: false
             val screenTimeTarget = preferences[PreferencesKeys.SCREEN_TIME_TARGET] ?: 0
@@ -70,6 +78,7 @@ class UserPreferencesRepository(private val context: Context) {
             val floatingTabBarEnabled = preferences[PreferencesKeys.FLOATING_TAB_BAR_ENABLED] ?: false
             UserPreferences(
                 themeConfig = themeConfig,
+                fontOption = fontOption,
                 dynamicColor = dynamicColor,
                 accessibilityDisabled = accessibilityDisabled,
                 screenTimeTargetMinutes = screenTimeTarget,
@@ -91,6 +100,12 @@ class UserPreferencesRepository(private val context: Context) {
     suspend fun setThemeConfig(themeConfig: ThemeConfig) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.THEME_CONFIG] = themeConfig.name
+        }
+    }
+
+    suspend fun setFontOption(fontOption: FontOption) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.FONT_OPTION] = fontOption.name
         }
     }
 
@@ -187,6 +202,7 @@ class UserPreferencesRepository(private val context: Context) {
 
 data class UserPreferences(
     val themeConfig: ThemeConfig = ThemeConfig.FOLLOW_SYSTEM,
+    val fontOption: FontOption = FontOption.NUNITO,
     val dynamicColor: Boolean = true,
     val accessibilityDisabled: Boolean = false,
     val screenTimeTargetMinutes: Int = 0,

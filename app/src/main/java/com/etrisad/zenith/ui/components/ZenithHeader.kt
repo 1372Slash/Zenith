@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -68,7 +69,13 @@ fun ZenithHeader(
                     modifier = Modifier.width(sideSlotWidth),
                     contentAlignment = Alignment.CenterStart
                 ) {
-                    if (isDeepScreen) {
+                    AnimatedVisibility(
+                        visible = isDeepScreen,
+                        enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) + 
+                                scaleIn(initialScale = 0.8f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)),
+                        exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) + 
+                               scaleOut(targetScale = 0.8f)
+                    ) {
                         Box(
                             modifier = Modifier
                                 .padding(start = 16.dp)
@@ -146,7 +153,7 @@ fun ZenithHeader(
                                     text = if (isAppName) "Zenith" else "Welcome Back, User",
                                     style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = if (isAppName) FontWeight.ExtraBold else FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     textAlign = TextAlign.Center,
                                     maxLines = 1
                                 )
@@ -156,7 +163,7 @@ fun ZenithHeader(
                                 text = state,
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 textAlign = if (isDeepScreen) TextAlign.Start else TextAlign.Center,
                                 maxLines = 1
                             )
