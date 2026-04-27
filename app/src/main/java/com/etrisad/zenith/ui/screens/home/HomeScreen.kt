@@ -1,5 +1,6 @@
 package com.etrisad.zenith.ui.screens.home
 
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
@@ -842,6 +843,7 @@ fun TopAppsSection(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(shape)
             .clickable { expanded = !expanded },
         shape = shape,
         colors = CardDefaults.cardColors(
@@ -929,6 +931,7 @@ fun TopAppsSection(
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .clip(itemShape)
                                 .clickable { onAppClick(app.packageName) },
                             shape = itemShape,
                             colors = CardDefaults.cardColors(
@@ -985,12 +988,13 @@ fun TopAppsSection(
                         Spacer(modifier = Modifier.height(2.dp))
                     }
 
-                    // See Full List Card at the bottom of the group
+                    val seeFullListShape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(seeFullListShape)
                             .clickable { onSeeFullList() },
-                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
+                        shape = seeFullListShape,
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                         )
@@ -1056,6 +1060,8 @@ fun QuickActionCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String
 ) {
+    val context = LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -1075,10 +1081,14 @@ fun QuickActionCard(
                 .width(82.dp)
                 .height(60.dp)
                 .graphicsLayer(scaleX = scale, scaleY = scale)
+                .clip(CircleShape)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = ripple(),
-                    onClick = { /* No function for now */ }
+                    onClick = { 
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        Toast.makeText(context, "Coming Soon", Toast.LENGTH_SHORT).show()
+                    }
                 ),
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -1173,6 +1183,7 @@ fun ShieldItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(shape)
             .clickable { onAppClick(shield.packageName) },
         shape = shape,
         colors = CardDefaults.cardColors(
