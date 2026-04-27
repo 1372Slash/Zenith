@@ -4,6 +4,7 @@ import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.etrisad.zenith.data.preferences.FontOption
 
@@ -58,16 +59,57 @@ fun ZenithTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
     fontOption: FontOption = FontOption.SYSTEM,
+    expressiveColors: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            val base = if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            if (expressiveColors) {
+                if (darkTheme) {
+                    base.copy(
+                        background = base.surface, // Toned background from Material You
+                        surface = base.surface,
+                        surfaceContainer = base.surfaceContainerLowest, // Blackish container from Material You
+                        surfaceContainerLow = base.surfaceContainerLowest,
+                        surfaceContainerLowest = base.surfaceContainerLowest
+                    )
+                } else {
+                    base.copy(
+                        background = Color(0xFFFBF8FF), // Tone base
+                        surface = Color(0xFFFBF8FF),
+                        surfaceContainer = Color.White,
+                        surfaceContainerLow = Color.White,
+                        surfaceContainerLowest = Color.White
+                    )
+                }
+            } else base
         }
 
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+        darkTheme -> {
+            if (expressiveColors) {
+                DarkColorScheme.copy(
+                    background = SurfaceDark, // Toned background (Indigo Slate)
+                    surface = SurfaceDark,
+                    surfaceContainer = BackgroundDark, // Blackish container (Deep Charcoal)
+                    surfaceContainerLow = BackgroundDark,
+                    surfaceContainerLowest = BackgroundDark
+                )
+            } else DarkColorScheme
+        }
+
+        else -> {
+            if (expressiveColors) {
+                LightColorScheme.copy(
+                    background = BackgroundLight, // Tone base
+                    surface = SurfaceLight,
+                    surfaceContainer = Color.White,
+                    surfaceContainerLow = Color.White,
+                    surfaceContainerLowest = Color.White
+                )
+            } else LightColorScheme
+        }
     }
 
     val typography = when (fontOption) {

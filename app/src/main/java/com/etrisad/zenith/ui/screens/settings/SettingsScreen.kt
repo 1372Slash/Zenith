@@ -211,6 +211,11 @@ fun SettingsScreen(
             coroutineScope.launch {
                 preferencesRepository.setFloatingTabBarEnabled(enabled)
             }
+        },
+        onExpressiveColorsChange = { enabled ->
+            coroutineScope.launch {
+                preferencesRepository.setExpressiveColors(enabled)
+            }
         }
     )
 
@@ -259,7 +264,8 @@ fun SettingsScreenContent(
     onAutoBackupEnabledChange: (Boolean) -> Unit,
     onPickBackupDirectory: () -> Unit,
     onSetBackupInterval: (Int) -> Unit,
-    onFloatingTabBarEnabledChange: (Boolean) -> Unit
+    onFloatingTabBarEnabledChange: (Boolean) -> Unit,
+    onExpressiveColorsChange: (Boolean) -> Unit
 ) {
     var showTargetSheet by remember { mutableStateOf(false) }
     var showEmergencyRechargeSheet by remember { mutableStateOf(false) }
@@ -462,6 +468,18 @@ fun SettingsScreenContent(
                     checked = preferences.dynamicColor,
                     onCheckedChange = onDynamicColorChange,
                     icon = Icons.Outlined.Palette,
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                SettingsToggle(
+                    title = "Expressive Color Set",
+                    description = "Tone down backgrounds and make containers standout",
+                    checked = preferences.expressiveColors,
+                    onCheckedChange = onExpressiveColorsChange,
+                    icon = Icons.Outlined.Layers,
                     shape = RoundedCornerShape(8.dp)
                 )
             }
