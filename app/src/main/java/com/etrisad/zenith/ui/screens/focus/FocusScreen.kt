@@ -66,13 +66,12 @@ import com.etrisad.zenith.ui.viewmodel.ShieldSortType
 @Composable
 fun FocusScreen(
     viewModel: FocusViewModel,
+    innerPadding: PaddingValues,
     onAppClick: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val isAppPickerOpen = remember { mutableStateOf(false) }
     var isFabMenuExpanded by remember { mutableStateOf(false) }
-
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
     // Enhanced Spring Motion animations
     val fabProgress by animateFloatAsState(
@@ -85,84 +84,7 @@ fun FocusScreen(
     val fabOffset = (fabProgress * 12).dp
     val iconSize = (44 - (fabProgress * 8)).dp // Interpolates between 44.dp and 36.dp
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = { FocusHeader(scrollBehavior) },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        floatingActionButton = {
-            FloatingActionButtonMenu(
-                expanded = isFabMenuExpanded,
-                modifier = Modifier.padding(bottom = 110.dp),
-                button = {
-                    ToggleFloatingActionButton(
-                        checked = isFabMenuExpanded,
-                        onCheckedChange = { isFabMenuExpanded = it },
-                        modifier = Modifier
-                            .size(80.dp)
-                            .offset(x = fabOffset, y = -fabOffset),
-                        containerColor = ToggleFloatingActionButtonDefaults.containerColor(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.primary
-                        ),
-                        containerCornerRadius = ToggleFloatingActionButtonDefaults.containerCornerRadius(
-                            28.dp,
-                            50.dp
-                        ),
-                        containerSize = ToggleFloatingActionButtonDefaults.containerSize(
-                            80.dp,
-                            56.dp
-                        )
-                    ) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Add,
-                                contentDescription = if (isFabMenuExpanded) "Close Menu" else "Add Shield",
-                                modifier = Modifier
-                                    .size(iconSize)
-                                    .rotate(rotation),
-                                tint = if (isFabMenuExpanded) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                    }
-                }
-            ) {
-                // Item 1: Add Shield
-                ExpressiveFabMenuItem(
-                    onClick = {
-                        isFabMenuExpanded = false
-                        viewModel.selectAppForFocus(null, FocusType.SHIELD)
-                        isAppPickerOpen.value = true
-                    },
-                    icon = { Icon(Icons.Outlined.Shield, contentDescription = null) },
-                    text = { Text("Add Shield") }
-                )
-
-                // Item 2: Add Goal
-                ExpressiveFabMenuItem(
-                    onClick = {
-                        isFabMenuExpanded = false
-                        viewModel.selectAppForFocus(null, FocusType.GOAL)
-                        isAppPickerOpen.value = true
-                    },
-                    icon = { Icon(Icons.Outlined.Flag, contentDescription = null) },
-                    text = { Text("Add Goal") }
-                )
-
-                // Item 3: Add Schedule
-                ExpressiveFabMenuItem(
-                    onClick = {
-                        isFabMenuExpanded = false
-                        viewModel.openSchedulePicker()
-                    },
-                    icon = { Icon(Icons.Outlined.Schedule, contentDescription = null) },
-                    text = { Text("Add Schedule") }
-                )
-            }
-        }
-    ) { innerPadding ->
+    Box(modifier = Modifier.fillMaxSize()) {
         FocusScreenContent(
             uiState = uiState,
             innerPadding = innerPadding,
@@ -173,6 +95,80 @@ fun FocusScreen(
             onGoalSortTypeChange = { viewModel.onGoalSortTypeChange(it) },
             onAppClick = onAppClick
         )
+
+        FloatingActionButtonMenu(
+            expanded = isFabMenuExpanded,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 110.dp),
+            button = {
+                ToggleFloatingActionButton(
+                    checked = isFabMenuExpanded,
+                    onCheckedChange = { isFabMenuExpanded = it },
+                    modifier = Modifier
+                        .size(80.dp)
+                        .offset(x = fabOffset, y = -fabOffset),
+                    containerColor = ToggleFloatingActionButtonDefaults.containerColor(
+                        MaterialTheme.colorScheme.primaryContainer,
+                        MaterialTheme.colorScheme.primary
+                    ),
+                    containerCornerRadius = ToggleFloatingActionButtonDefaults.containerCornerRadius(
+                        28.dp,
+                        50.dp
+                    ),
+                    containerSize = ToggleFloatingActionButtonDefaults.containerSize(
+                        80.dp,
+                        56.dp
+                    )
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Add,
+                            contentDescription = if (isFabMenuExpanded) "Close Menu" else "Add Shield",
+                            modifier = Modifier
+                                .size(iconSize)
+                                .rotate(rotation),
+                            tint = if (isFabMenuExpanded) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
+        ) {
+            // Item 1: Add Shield
+            ExpressiveFabMenuItem(
+                onClick = {
+                    isFabMenuExpanded = false
+                    viewModel.selectAppForFocus(null, FocusType.SHIELD)
+                    isAppPickerOpen.value = true
+                },
+                icon = { Icon(Icons.Outlined.Shield, contentDescription = null) },
+                text = { Text("Add Shield") }
+            )
+
+            // Item 2: Add Goal
+            ExpressiveFabMenuItem(
+                onClick = {
+                    isFabMenuExpanded = false
+                    viewModel.selectAppForFocus(null, FocusType.GOAL)
+                    isAppPickerOpen.value = true
+                },
+                icon = { Icon(Icons.Outlined.Flag, contentDescription = null) },
+                text = { Text("Add Goal") }
+            )
+
+            // Item 3: Add Schedule
+            ExpressiveFabMenuItem(
+                onClick = {
+                    isFabMenuExpanded = false
+                    viewModel.openSchedulePicker()
+                },
+                icon = { Icon(Icons.Outlined.Schedule, contentDescription = null) },
+                text = { Text("Add Schedule") }
+            )
+        }
 
         if (isAppPickerOpen.value) {
             AppPickerBottomSheet(
@@ -228,6 +224,7 @@ fun FocusScreen(
     }
 }
 
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun FocusScreenContent(
@@ -243,10 +240,9 @@ fun FocusScreenContent(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(innerPadding)
             .padding(horizontal = 16.dp),
         contentPadding = PaddingValues(
-            top = 0.dp,
+            top = innerPadding.calculateTopPadding() + 16.dp,
             bottom = 150.dp
         )
     ) {
@@ -679,28 +675,6 @@ fun EmptyFocusMessage(message: String) {
             }
         }
     }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun FocusHeader(scrollBehavior: TopAppBarScrollBehavior) {
-    CenterAlignedTopAppBar(
-        scrollBehavior = scrollBehavior,
-        title = {
-            Text(
-                text = "Focus",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        },
-        windowInsets = WindowInsets(0, 0, 0, 0),
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Color.Transparent,
-            scrolledContainerColor = Color.Transparent
-        )
-    )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

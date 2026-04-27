@@ -70,6 +70,7 @@ import kotlinx.coroutines.launch
 fun HomeScreen(
     viewModel: HomeViewModel,
     userPreferencesRepository: UserPreferencesRepository,
+    innerPadding: PaddingValues,
     onSeeFullList: () -> Unit,
     onAppClick: (String) -> Unit
 ) {
@@ -83,6 +84,7 @@ fun HomeScreen(
     HomeScreenContent(
         uiState = uiState,
         preferences = preferences,
+        innerPadding = innerPadding,
         onSetTarget = { minutes ->
             coroutineScope.launch {
                 userPreferencesRepository.setScreenTimeTarget(minutes)
@@ -96,11 +98,11 @@ fun HomeScreen(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreenContent(
     uiState: HomeUiState,
     preferences: com.etrisad.zenith.data.preferences.UserPreferences,
+    innerPadding: PaddingValues,
     onSetTarget: (Int) -> Unit,
     formatDuration: (Long) -> String,
     onShieldSortTypeChange: (ShieldSortType) -> Unit,
@@ -108,168 +110,115 @@ fun HomeScreenContent(
     onSeeFullList: () -> Unit,
     onAppClick: (String) -> Unit
 ) {
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
-
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = { WelcomeHeader(scrollBehavior) },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
-    ) { innerPadding ->
-        val targetMillis = preferences.screenTimeTargetMinutes * 60 * 1000L
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(
-                top = 0.dp,
-                bottom = 150.dp
+    val targetMillis = preferences.screenTimeTargetMinutes * 60 * 1000L
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(
+            top = innerPadding.calculateTopPadding() + 16.dp,
+            bottom = 150.dp
+        )
+    ) {
+        item {
+            UsageDashboard(
+                uiState = uiState,
+                preferences = preferences,
+                onSetTarget = onSetTarget,
+                formatDuration = formatDuration,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
             )
-        ) {
-            item {
-                UsageDashboard(
-                    uiState = uiState,
-                    preferences = preferences,
-                    onSetTarget = onSetTarget,
-                    formatDuration = formatDuration,
-                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-            }
+            Spacer(modifier = Modifier.height(4.dp))
+        }
 
-            item {
-                UsageTrendsRow(
-                    uiState = uiState,
-                    formatDuration = formatDuration
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-            }
+        item {
+            UsageTrendsRow(
+                uiState = uiState,
+                formatDuration = formatDuration
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+        }
 
-            item {
-                UsageHistoryCard(
-                    history = uiState.dailyUsageHistory,
-                    targetMillis = targetMillis,
-                    formatDuration = formatDuration,
-                    shape = RoundedCornerShape(8.dp)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-            }
+        item {
+            UsageHistoryCard(
+                history = uiState.dailyUsageHistory,
+                targetMillis = targetMillis,
+                formatDuration = formatDuration,
+                shape = RoundedCornerShape(8.dp)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+        }
 
-            item {
-                TopAppsSection(
-                    topApps = uiState.topApps,
-                    formatDuration = formatDuration,
-                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
-                    onSeeFullList = onSeeFullList,
-                    onAppClick = { packageName -> onAppClick(packageName) }
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-            }
+        item {
+            TopAppsSection(
+                topApps = uiState.topApps,
+                formatDuration = formatDuration,
+                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
+                onSeeFullList = onSeeFullList,
+                onAppClick = { packageName -> onAppClick(packageName) }
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
-            item {
-                QuickActionsSection()
-                Spacer(modifier = Modifier.height(16.dp))
-            }
+        item {
+            QuickActionsSection()
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
-            item {
-                ShieldSortHeader(
-                    title = "Active Goals",
-                    currentSortType = uiState.goalSortType,
-                    onSortTypeChange = onGoalSortTypeChange
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-            }
+        item {
+            ShieldSortHeader(
+                title = "Active Goals",
+                currentSortType = uiState.goalSortType,
+                onSortTypeChange = onGoalSortTypeChange
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
-            if (uiState.activeGoals.isEmpty()) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                        )
-                    ) {
-                        EmptyShieldsMessage(message = "No active goals. Go to Focus to add one!")
-                    }
+        if (uiState.activeGoals.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                ) {
+                    EmptyShieldsMessage(message = "No active goals. Go to Focus to add one!")
                 }
-            } else {
-                shieldList(shields = uiState.activeGoals, formatDuration = formatDuration, onAppClick = onAppClick)
             }
+        } else {
+            shieldList(shields = uiState.activeGoals, formatDuration = formatDuration, onAppClick = onAppClick)
+        }
 
+        item {
+            Spacer(modifier = Modifier.height(24.dp))
+            ShieldSortHeader(
+                title = "Active Shields",
+                currentSortType = uiState.shieldSortType,
+                onSortTypeChange = onShieldSortTypeChange
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        if (uiState.activeShields.isEmpty()) {
             item {
-                Spacer(modifier = Modifier.height(24.dp))
-                ShieldSortHeader(
-                    title = "Active Shields",
-                    currentSortType = uiState.shieldSortType,
-                    onSortTypeChange = onShieldSortTypeChange
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            if (uiState.activeShields.isEmpty()) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                        )
-                    ) {
-                        EmptyShieldsMessage(message = "No active shields. Go to Focus to add one!")
-                    }
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                ) {
+                    EmptyShieldsMessage(message = "No active shields. Go to Focus to add one!")
                 }
-            } else {
-                shieldList(shields = uiState.activeShields, formatDuration = formatDuration, onAppClick = onAppClick)
             }
+        } else {
+            shieldList(shields = uiState.activeShields, formatDuration = formatDuration, onAppClick = onAppClick)
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun WelcomeHeader(scrollBehavior: TopAppBarScrollBehavior) {
-    var showAppName by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        delay(2500) // Delay before switching to App Name
-        showAppName = true
-    }
-
-    CenterAlignedTopAppBar(
-        scrollBehavior = scrollBehavior,
-        title = {
-            AnimatedContent(
-                targetState = showAppName,
-                transitionSpec = {
-                    val springSpec = spring<Float>(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )
-                    val offsetSpec = spring<IntOffset>(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )
-                    (fadeIn(animationSpec = springSpec) + slideInVertically(animationSpec = offsetSpec) { it / 2 })
-                        .togetherWith(fadeOut(animationSpec = springSpec) + slideOutVertically(animationSpec = offsetSpec) { -it / 2 })
-                },
-                label = "HeaderAnimation"
-            ) { isAppName ->
-                Text(
-                    text = if (isAppName) "Zenith" else "Welcome Back, Zenith User",
-                    style = if (isAppName) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineSmall,
-                    fontWeight = if (isAppName) FontWeight.ExtraBold else FontWeight.Bold,
-                    color = if (isAppName) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-            }
-        },
-        windowInsets = WindowInsets(0, 0, 0, 0),
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Color.Transparent,
-            scrolledContainerColor = Color.Transparent
-        )
-    )
-}
+// WelcomeHeader has been moved to ZenithHeader.kt
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -1496,7 +1445,8 @@ fun HomeScreenPreview() {
             onShieldSortTypeChange = {},
             onGoalSortTypeChange = {},
             onSeeFullList = {},
-            onAppClick = {}
+            onAppClick = {},
+            innerPadding = PaddingValues()
         )
     }
 }

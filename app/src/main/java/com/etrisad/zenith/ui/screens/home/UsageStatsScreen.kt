@@ -9,7 +9,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,11 +25,10 @@ import androidx.core.graphics.drawable.toBitmap
 import com.etrisad.zenith.ui.viewmodel.AppUsageInfo
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UsageStatsScreen(
     viewModel: HomeViewModel,
-    onBack: () -> Unit,
+    innerPadding: PaddingValues,
     onAppClick: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -42,103 +40,90 @@ fun UsageStatsScreen(
     
     val totalLowUsageTime = lowUsageApps.sumOf { it.totalTimeVisible }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("App Usage", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
-        }
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(
-                top = innerPadding.calculateTopPadding(),
-                bottom = innerPadding.calculateBottomPadding() + 24.dp
-            )
-        ) {
-            itemsIndexed(regularApps) { index, app ->
-                val shape = when {
-                    regularApps.size == 1 && totalLowUsageTime == 0L -> RoundedCornerShape(24.dp)
-                    index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-                    index == regularApps.size - 1 && totalLowUsageTime == 0L -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                    else -> RoundedCornerShape(8.dp)
-                }
-
-                UsageItem(
-                    app = app,
-                    formatDuration = viewModel::formatDuration,
-                    shape = shape,
-                    onClick = { onAppClick(app.packageName) }
-                )
-                Spacer(modifier = Modifier.height(4.dp))
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(
+            top = innerPadding.calculateTopPadding() + 16.dp,
+            bottom = innerPadding.calculateBottomPadding() + 24.dp
+        )
+    ) {
+        itemsIndexed(regularApps) { index, app ->
+            val shape = when {
+                regularApps.size == 1 && totalLowUsageTime == 0L -> RoundedCornerShape(24.dp)
+                index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                index == regularApps.size - 1 && totalLowUsageTime == 0L -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                else -> RoundedCornerShape(8.dp)
             }
 
-            if (totalLowUsageTime > 0) {
-                item {
-                    val shape = if (regularApps.isEmpty()) {
-                        RoundedCornerShape(24.dp)
-                    } else {
-                        RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                    }
-                    
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = shape,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                        )
-                    ) {
-                        ListItem(
-                            headlineContent = {
-                                Text(
-                                    text = "Other Apps",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            },
-                            supportingContent = {
-                                Text(
-                                    text = "${lowUsageApps.size} apps with minimal usage",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            },
-                            trailingContent = {
-                                Text(
-                                    text = viewModel.formatDuration(totalLowUsageTime),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.secondary
-                                )
-                            },
-                            leadingContent = {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Android,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(24.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            },
-                            colors = ListItemDefaults.colors(
-                                containerColor = Color.Transparent
+            UsageItem(
+                app = app,
+                formatDuration = viewModel::formatDuration,
+                shape = shape,
+                onClick = { onAppClick(app.packageName) }
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+
+        if (totalLowUsageTime > 0) {
+            item {
+                val shape = if (regularApps.isEmpty()) {
+                    RoundedCornerShape(24.dp)
+                } else {
+                    RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                }
+                
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = shape,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                ) {
+                    ListItem(
+                        headlineContent = {
+                            Text(
+                                text = "Other Apps",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
                             )
+                        },
+                        supportingContent = {
+                            Text(
+                                text = "${lowUsageApps.size} apps with minimal usage",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        trailingContent = {
+                            Text(
+                                text = viewModel.formatDuration(totalLowUsageTime),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        },
+                        leadingContent = {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Android,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        },
+                        colors = ListItemDefaults.colors(
+                            containerColor = Color.Transparent
                         )
-                    }
+                    )
                 }
             }
         }

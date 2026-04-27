@@ -41,7 +41,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
+fun SettingsScreen(
+    preferencesRepository: UserPreferencesRepository,
+    innerPadding: PaddingValues
+) {
     val preferences by preferencesRepository.userPreferencesFlow.collectAsState(
         initial = UserPreferences(
             themeConfig = ThemeConfig.FOLLOW_SYSTEM,
@@ -122,6 +125,7 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
 
     SettingsScreenContent(
         preferences = preferences,
+        innerPadding = innerPadding,
         onThemeChange = { theme ->
             coroutineScope.launch {
                 preferencesRepository.setThemeConfig(theme)
@@ -204,6 +208,7 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
         }
     )
 
+
     if (showRestoreConfirmSheet && restoreMetadata != null && pendingRestoreUri != null) {
         RestoreConfirmationBottomSheet(
             metadata = restoreMetadata!!,
@@ -226,10 +231,10 @@ fun SettingsScreen(preferencesRepository: UserPreferencesRepository) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreenContent(
     preferences: UserPreferences,
+    innerPadding: PaddingValues,
     onThemeChange: (ThemeConfig) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onAccessibilityDisabledChange: (Boolean) -> Unit,
@@ -253,23 +258,15 @@ fun SettingsScreenContent(
     var showEmergencyRechargeSheet by remember { mutableStateOf(false) }
     var showDelayAppSheet by remember { mutableStateOf(false) }
 
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
-
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = { SettingsHeader(scrollBehavior) },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(
-                top = 0.dp,
-                bottom = 150.dp
-            )
-        ) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(
+            top = innerPadding.calculateTopPadding() + 16.dp,
+            bottom = 150.dp
+        )
+    ) {
             item {
                 PreferenceCategory(title = "General")
             }
@@ -474,52 +471,52 @@ fun SettingsScreenContent(
                 AboutCard()
             }
         }
+
+        if (showTargetSheet) {
+            com.etrisad.zenith.ui.screens.home.ScreenTimeTargetBottomSheet(
+                initialMinutes = preferences.screenTimeTargetMinutes,
+                onDismiss = { showTargetSheet = false },
+                onSave = { minutes ->
+                    onSetTarget(minutes)
+                    showTargetSheet = false
+                }
+            )
+        }
+
+        if (showEmergencyRechargeSheet) {
+            EmergencyRechargeBottomSheet(
+                initialMinutes = preferences.emergencyRechargeDurationMinutes,
+                onDismiss = { showEmergencyRechargeSheet = false },
+                onSave = { minutes ->
+                    onSetEmergencyRecharge(minutes)
+                    showEmergencyRechargeSheet = false
+                }
+            )
+        }
+
+        if (showDelayAppSheet) {
+            DelayAppBottomSheet(
+                initialSeconds = preferences.delayAppDurationSeconds,
+                onDismiss = { showDelayAppSheet = false },
+                onSave = { seconds ->
+                    onSetDelayAppDuration(seconds)
+                    showDelayAppSheet = false
+                }
+            )
+        }
+
+        if (showWhitelistSheet) {
+            WhitelistBottomSheet(
+                initialWhitelisted = preferences.whitelistedPackages,
+                onDismiss = { onShowWhitelistSheetChange(false) },
+                onSave = { packages ->
+                    onSetWhitelistedPackages(packages)
+                    onShowWhitelistSheetChange(false)
+                }
+            )
+        }
     }
 
-    if (showTargetSheet) {
-        com.etrisad.zenith.ui.screens.home.ScreenTimeTargetBottomSheet(
-            initialMinutes = preferences.screenTimeTargetMinutes,
-            onDismiss = { showTargetSheet = false },
-            onSave = { minutes ->
-                onSetTarget(minutes)
-                showTargetSheet = false
-            }
-        )
-    }
-
-    if (showEmergencyRechargeSheet) {
-        EmergencyRechargeBottomSheet(
-            initialMinutes = preferences.emergencyRechargeDurationMinutes,
-            onDismiss = { showEmergencyRechargeSheet = false },
-            onSave = { minutes ->
-                onSetEmergencyRecharge(minutes)
-                showEmergencyRechargeSheet = false
-            }
-        )
-    }
-
-    if (showDelayAppSheet) {
-        DelayAppBottomSheet(
-            initialSeconds = preferences.delayAppDurationSeconds,
-            onDismiss = { showDelayAppSheet = false },
-            onSave = { seconds ->
-                onSetDelayAppDuration(seconds)
-                showDelayAppSheet = false
-            }
-        )
-    }
-
-    if (showWhitelistSheet) {
-        WhitelistBottomSheet(
-            initialWhitelisted = preferences.whitelistedPackages,
-            onDismiss = { onShowWhitelistSheetChange(false) },
-            onSave = { packages ->
-                onSetWhitelistedPackages(packages)
-                onShowWhitelistSheetChange(false)
-            }
-        )
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -904,7 +901,7 @@ fun SettingsHeader(scrollBehavior: TopAppBarScrollBehavior) {
                 textAlign = TextAlign.Center
             )
         },
-        windowInsets = WindowInsets(0, 0, 0, 0),
+        windowInsets = TopAppBarDefaults.windowInsets,
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = Color.Transparent,
             scrolledContainerColor = Color.Transparent

@@ -12,11 +12,11 @@ import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.Dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -28,6 +28,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.etrisad.zenith.ui.components.PermissionBottomSheet
+import com.etrisad.zenith.ui.components.ZenithHeader
 import com.etrisad.zenith.ui.navigation.Screen
 import com.etrisad.zenith.ui.navigation.navItems
 import com.etrisad.zenith.ui.screens.focus.FocusScreen
@@ -41,7 +42,7 @@ import com.etrisad.zenith.data.preferences.UserPreferences
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     homeViewModel: HomeViewModel,
@@ -51,6 +52,17 @@ fun MainScreen(
 ) {
     val navController = rememberNavController()
     val context = LocalContext.current
+
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+    val isDeepScreen =
+        currentRoute == Screen.UsageStats.route || currentRoute?.startsWith("app_detail") == true
+
+    // Persistent scroll behaviors to avoid re-initialization and ensure synchronization
+    val enterAlwaysScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+    val pinnedScrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+
+    val scrollBehavior = if (isDeepScreen) pinnedScrollBehavior else enterAlwaysScrollBehavior
 
     val preferences by userPreferencesRepository.userPreferencesFlow.collectAsState(
         initial = UserPreferences()
@@ -101,79 +113,71 @@ fun MainScreen(
         )
     }
 
-    Scaffold { innerPadding ->
-        val navBackStackEntry by navController.currentBackStackEntryAsState()
-        val currentRoute = navBackStackEntry?.destination?.route
-        val isDeepScreen =
-            currentRoute == Screen.UsageStats.route || currentRoute?.startsWith("app_detail") == true
+    Row(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        if (useNavigationRail) {
+            val showNavRail =
+                currentRoute != Screen.UsageStats.route && currentRoute?.startsWith("app_detail") == false
 
-        // Animasi padding atas agar transisi ke layar full-screen (deep) lebih mulus
-        val topPadding by animateDpAsState(
-            targetValue = if (isDeepScreen) 0.dp else innerPadding.calculateTopPadding(),
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessLow
-            ),
-            label = "topPadding"
-        )
-
-        Box(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(
-                        bottom = 0.dp,
-                        top = topPadding
-                    )
+            AnimatedVisibility(
+                visible = showNavRail,
+                enter = slideInHorizontally(initialOffsetX = { -it }) + expandHorizontally(expandFrom = Alignment.Start),
+                exit = slideOutHorizontally(targetOffsetX = { -it }) + shrinkHorizontally(shrinkTowards = Alignment.Start)
             ) {
-                if (useNavigationRail) {
-                    val showNavRail =
-                        currentRoute != Screen.UsageStats.route && currentRoute?.startsWith("app_detail") == false
-
-                    AnimatedVisibility(
-                        visible = showNavRail,
-                        enter = slideInHorizontally(initialOffsetX = { -it }) + expandHorizontally(expandFrom = Alignment.Start),
-                        exit = slideOutHorizontally(targetOffsetX = { -it }) + shrinkHorizontally(shrinkTowards = Alignment.Start)
-                    ) {
-                        NavigationRail(
-                            modifier = Modifier.fillMaxHeight(),
-                            header = {
-                                // You can add a logo or menu button here
-                            }
-                        ) {
-                            val currentDestination = navBackStackEntry?.destination
-                            navItems.forEach { screen ->
-                                val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
-                                NavigationRailItem(
-                                    icon = {
-                                        Icon(
-                                            imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    label = { Text(screen.title) },
-                                    selected = selected,
-                                    onClick = {
-                                        if (currentDestination?.route != screen.route) {
-                                            navController.navigate(screen.route) {
-                                                popUpTo(navController.graph.findStartDestination().id) {
-                                                    saveState = true
-                                                }
-                                                launchSingleTop = true
-                                                restoreState = true
-                                            }
-                                        }
-                                    }
+                NavigationRail(
+                    modifier = Modifier.fillMaxHeight(),
+                    header = {
+                        // You can add a logo or menu button here
+                    }
+                ) {
+                    val currentDestination = navBackStackEntry?.destination
+                    navItems.forEach { screen ->
+                        val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                        NavigationRailItem(
+                            icon = {
+                                Icon(
+                                    imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
+                                    contentDescription = null
                                 )
+                            },
+                            label = { Text(screen.title) },
+                            selected = selected,
+                            onClick = {
+                                if (currentDestination?.route != screen.route) {
+                                    navController.navigate(screen.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
                             }
-                        }
+                        )
                     }
                 }
+            }
+        }
 
+        Scaffold(
+            modifier = Modifier
+                .weight(1f)
+                .nestedScroll(scrollBehavior.nestedScrollConnection),
+            topBar = {
+                ZenithHeader(
+                    currentRoute = currentRoute,
+                    scrollBehavior = scrollBehavior,
+                    isNavRailVisible = useNavigationRail && !isDeepScreen,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+        ) { innerPadding ->
+            Box(modifier = Modifier.fillMaxSize()) {
                 NavHost(
                     navController = navController,
                     startDestination = Screen.Home.route,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxSize(),
                     enterTransition = {
                         val initialRoute = initialState.destination.route
                         val targetRoute = targetState.destination.route
@@ -267,6 +271,7 @@ fun MainScreen(
                         HomeScreen(
                             homeViewModel,
                             userPreferencesRepository,
+                            innerPadding,
                             onSeeFullList = { navController.navigate(Screen.UsageStats.route) },
                             onAppClick = { packageName ->
                                 navController.navigate(Screen.AppDetail.createRoute(packageName))
@@ -276,18 +281,19 @@ fun MainScreen(
                     composable(Screen.Focus.route) {
                         FocusScreen(
                             focusViewModel,
+                            innerPadding,
                             onAppClick = { packageName ->
                                 navController.navigate(Screen.AppDetail.createRoute(packageName))
                             }
                         )
                     }
                     composable(Screen.Settings.route) {
-                        SettingsScreen(userPreferencesRepository)
+                        SettingsScreen(userPreferencesRepository, innerPadding)
                     }
                     composable(Screen.UsageStats.route) {
                         UsageStatsScreen(
                             viewModel = homeViewModel,
-                            onBack = { navController.popBackStack() },
+                            innerPadding = innerPadding,
                             onAppClick = { packageName ->
                                 navController.navigate(Screen.AppDetail.createRoute(packageName))
                             }
@@ -303,56 +309,142 @@ fun MainScreen(
                         com.etrisad.zenith.ui.screens.home.AppDetailScreen(
                             packageName = packageName,
                             viewModel = homeViewModel,
-                            onBack = { navController.popBackStack() }
+                            innerPadding = innerPadding
                         )
                     }
                 }
-            }
 
-            // Overlay Navigation Bar
-            if (!useNavigationRail) {
-                val showBottomBar =
-                    currentRoute != Screen.UsageStats.route && currentRoute?.startsWith("app_detail") == false
+                // Overlay Navigation Bar
+                if (!useNavigationRail) {
+                    val showBottomBar =
+                        currentRoute != Screen.UsageStats.route && currentRoute?.startsWith("app_detail") == false
 
-                AnimatedVisibility(
-                    visible = showBottomBar,
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                    enter = slideInVertically(initialOffsetY = { it }) + expandVertically(expandFrom = Alignment.Top),
-                    exit = slideOutVertically(targetOffsetY = { it }) + shrinkVertically(shrinkTowards = Alignment.Top)
-                ) {
-                    AnimatedContent(
-                        targetState = preferences.floatingTabBarEnabled,
-                        transitionSpec = {
-                            (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
-                                    scaleIn(initialScale = 0.92f, animationSpec = spring(stiffness = Spring.StiffnessLow)))
-                                .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
-                                        scaleOut(targetScale = 0.92f, animationSpec = spring(stiffness = Spring.StiffnessLow)))
-                        },
-                        label = "TabBarTransition"
-                    ) { isFloating ->
-                        if (isFloating) {
-                            val currentDestination = navBackStackEntry?.destination
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 36.dp),
-                                contentAlignment = Alignment.BottomCenter
-                            ) {
-                                HorizontalFloatingToolbar(
-                                    expanded = true,
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showBottomBar,
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                        enter = slideInVertically(initialOffsetY = { it }) + expandVertically(expandFrom = Alignment.Top),
+                        exit = slideOutVertically(targetOffsetY = { it }) + shrinkVertically(shrinkTowards = Alignment.Top)
+                    ) {
+                        AnimatedContent(
+                            targetState = preferences.floatingTabBarEnabled,
+                            transitionSpec = {
+                                (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                        scaleIn(initialScale = 0.92f, animationSpec = spring(stiffness = Spring.StiffnessLow)))
+                                    .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                            scaleOut(targetScale = 0.92f, animationSpec = spring(stiffness = Spring.StiffnessLow)))
+                            },
+                            label = "TabBarTransition"
+                        ) { isFloating ->
+                            if (isFloating) {
+                                val currentDestination = navBackStackEntry?.destination
+                                Box(
                                     modifier = Modifier
-                                        .animateContentSize()
-                                        .height(68.dp),
-                                    shape = RoundedCornerShape(100),
-                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-                                    colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
-                                        toolbarContainerColor = MaterialTheme.colorScheme.primaryContainer
-                                    )
+                                        .fillMaxWidth()
+                                        .padding(bottom = 36.dp),
+                                    contentAlignment = Alignment.BottomCenter
                                 ) {
+                                    HorizontalFloatingToolbar(
+                                        expanded = true,
+                                        modifier = Modifier
+                                            .animateContentSize()
+                                            .height(68.dp),
+                                        shape = RoundedCornerShape(100),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                                        colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
+                                            toolbarContainerColor = MaterialTheme.colorScheme.primaryContainer
+                                        )
+                                    ) {
+                                        navItems.forEach { screen ->
+                                            val selected =
+                                                currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                                            ShortNavigationBarItem(
+                                                selected = selected,
+                                                onClick = {
+                                                    if (currentDestination?.route != screen.route) {
+                                                        navController.navigate(screen.route) {
+                                                            popUpTo(navController.graph.findStartDestination().id) {
+                                                                saveState = true
+                                                            }
+                                                            launchSingleTop = true
+                                                            restoreState = true
+                                                        }
+                                                    }
+                                                },
+                                                icon = {
+                                                    val extraHeight by animateDpAsState(
+                                                        targetValue = if (selected) 16.dp else 0.dp,
+                                                        animationSpec = spring(
+                                                            dampingRatio = Spring.DampingRatioLowBouncy,
+                                                            stiffness = Spring.StiffnessLow
+                                                        ),
+                                                        label = "indicatorHeight"
+                                                    )
+                                                    Box(
+                                                        modifier = Modifier.height(26.dp + extraHeight),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
+                                                            contentDescription = screen.title,
+                                                            modifier = Modifier.size(26.dp)
+                                                        )
+                                                    }
+                                                },
+                                                label = {
+                                                    androidx.compose.animation.AnimatedVisibility(
+                                                        visible = selected,
+                                                        enter = fadeIn() + slideInHorizontally(
+                                                            initialOffsetX = { -15 },
+                                                            animationSpec = spring(
+                                                                dampingRatio = Spring.DampingRatioLowBouncy,
+                                                                stiffness = Spring.StiffnessLow
+                                                            )
+                                                        ) + expandHorizontally(expandFrom = Alignment.Start),
+                                                        exit = fadeOut() + slideOutHorizontally(
+                                                            targetOffsetX = { -15 }) + shrinkHorizontally(
+                                                            shrinkTowards = Alignment.Start
+                                                        )
+                                                    ) {
+                                                        Text(
+                                                            text = screen.title,
+                                                            style = MaterialTheme.typography.titleMedium,
+                                                            fontWeight = FontWeight.ExtraBold,
+                                                            maxLines = 1,
+                                                            modifier = Modifier.padding(start = 2.dp, end = 4.dp)
+                                                        )
+                                                    }
+                                                },
+                                                iconPosition = NavigationItemIconPosition.Start,
+                                                colors = ShortNavigationBarItemDefaults.colors(
+                                                    selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                                    selectedTextColor = MaterialTheme.colorScheme.onPrimary,
+                                                    selectedIndicatorColor = MaterialTheme.colorScheme.primary,
+                                                    unselectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    unselectedTextColor = Color.Transparent
+                                                ),
+                                                modifier = Modifier
+                                                    .padding(horizontal = 4.dp)
+                                                    .fillMaxHeight()
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                NavigationBar(
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                ) {
+                                    val currentDestination = navBackStackEntry?.destination
                                     navItems.forEach { screen ->
                                         val selected =
                                             currentDestination?.hierarchy?.any { it.route == screen.route } == true
-                                        ShortNavigationBarItem(
+                                        NavigationBarItem(
+                                            icon = {
+                                                Icon(
+                                                    imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
+                                                    contentDescription = null
+                                                )
+                                            },
+                                            label = { Text(screen.title) },
                                             selected = selected,
                                             onClick = {
                                                 if (currentDestination?.route != screen.route) {
@@ -364,95 +456,9 @@ fun MainScreen(
                                                         restoreState = true
                                                     }
                                                 }
-                                            },
-                                            icon = {
-                                                val extraHeight by animateDpAsState(
-                                                    targetValue = if (selected) 16.dp else 0.dp,
-                                                    animationSpec = spring(
-                                                        dampingRatio = Spring.DampingRatioLowBouncy,
-                                                        stiffness = Spring.StiffnessLow
-                                                    ),
-                                                    label = "indicatorHeight"
-                                                )
-                                                Box(
-                                                    modifier = Modifier.height(26.dp + extraHeight),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(
-                                                        imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
-                                                        contentDescription = screen.title,
-                                                        modifier = Modifier.size(26.dp)
-                                                    )
-                                                }
-                                            },
-                                            label = {
-                                                AnimatedVisibility(
-                                                    visible = selected,
-                                                    enter = fadeIn() + slideInHorizontally(
-                                                        initialOffsetX = { -15 },
-                                                        animationSpec = spring(
-                                                            dampingRatio = Spring.DampingRatioLowBouncy,
-                                                            stiffness = Spring.StiffnessLow
-                                                        )
-                                                    ) + expandHorizontally(expandFrom = Alignment.Start),
-                                                    exit = fadeOut() + slideOutHorizontally(
-                                                        targetOffsetX = { -15 }) + shrinkHorizontally(
-                                                        shrinkTowards = Alignment.Start
-                                                    )
-                                                ) {
-                                                    Text(
-                                                        text = screen.title,
-                                                        style = MaterialTheme.typography.titleMedium,
-                                                        fontWeight = FontWeight.ExtraBold,
-                                                        maxLines = 1,
-                                                        modifier = Modifier.padding(start = 2.dp, end = 4.dp)
-                                                    )
-                                                }
-                                            },
-                                            iconPosition = NavigationItemIconPosition.Start,
-                                            colors = ShortNavigationBarItemDefaults.colors(
-                                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
-                                                selectedTextColor = MaterialTheme.colorScheme.onPrimary,
-                                                selectedIndicatorColor = MaterialTheme.colorScheme.primary,
-                                                unselectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                unselectedTextColor = Color.Transparent
-                                            ),
-                                            modifier = Modifier
-                                                .padding(horizontal = 4.dp)
-                                                .fillMaxHeight()
+                                            }
                                         )
                                     }
-                                }
-                            }
-                        } else {
-                            NavigationBar(
-                                containerColor = MaterialTheme.colorScheme.surface
-                            ) {
-                                val currentDestination = navBackStackEntry?.destination
-                                navItems.forEach { screen ->
-                                    val selected =
-                                        currentDestination?.hierarchy?.any { it.route == screen.route } == true
-                                    NavigationBarItem(
-                                        icon = {
-                                            Icon(
-                                                imageVector = if (selected) screen.selectedIcon else screen.unselectedIcon,
-                                                contentDescription = null
-                                            )
-                                        },
-                                        label = { Text(screen.title) },
-                                        selected = selected,
-                                        onClick = {
-                                            if (currentDestination?.route != screen.route) {
-                                                navController.navigate(screen.route) {
-                                                    popUpTo(navController.graph.findStartDestination().id) {
-                                                        saveState = true
-                                                    }
-                                                    launchSingleTop = true
-                                                    restoreState = true
-                                                }
-                                            }
-                                        }
-                                    )
                                 }
                             }
                         }
