@@ -16,7 +16,6 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-// --- Data classes tetap sama ---
 data class AppUsageInfo(
     val packageName: String,
     val appName: String,
@@ -73,7 +72,6 @@ class HomeViewModel(
 
     private var appDetailJob: Job? = null
 
-    // History from database
     private var globalHistory: List<DailyUsageEntity> = emptyList()
     private var currentAppHistory: List<DailyUsageEntity> = emptyList()
 
@@ -83,7 +81,6 @@ class HomeViewModel(
                 allShields = shields
                 updateShieldedLists()
 
-                // Update detail if open to reflect changes immediately (e.g. pause/resume)
                 val currentPkg = _appDetailUiState.value.packageName
                 if (currentPkg.isNotEmpty()) {
                     val shield = shields.find { it.packageName == currentPkg }
@@ -99,7 +96,6 @@ class HomeViewModel(
             }
         }
 
-        // Observe global history
         viewModelScope.launch {
             shieldRepository.getLastNDaysGlobalUsage(21).collect { history ->
                 globalHistory = history
@@ -111,7 +107,6 @@ class HomeViewModel(
         startRealTimeUpdates()
     }
 
-    // --- Helper: hitung midnight dari offset hari ---
     private fun getMidnight(offsetDaysFromToday: Int = 0): Long {
         val cal = Calendar.getInstance()
         cal.set(Calendar.HOUR_OF_DAY, 0)
@@ -122,11 +117,6 @@ class HomeViewModel(
         return cal.timeInMillis
     }
 
-    /**
-     * Ambil total usage untuk SATU package pada rentang waktu [startMs, endMs).
-     * Menggunakan INTERVAL_BEST dan menjumlahkan manual setiap event
-     * yang benar-benar jatuh di dalam window — menghindari "bocor" dari queryAndAggregateUsageStats.
-     */
     private fun getUsageForPackageInRange(
         usm: UsageStatsManager,
         packageName: String,
@@ -143,32 +133,50 @@ class HomeViewModel(
         return best
     }
 
-    /**
-     * Ambil total semua launcher apps untuk rentang waktu [startMs, endMs).
-     * Filter secara ketat: hanya stat yang firstTimeStamp-nya ada di dalam window.
-     */
-    private fun getTotalUsageInRange(
+    private fun getGlobalFallbackMap(
         usm: UsageStatsManager,
         launcherApps: Set<String>,
         excludePackages: Set<String>,
         startMs: Long,
         endMs: Long
-    ): Long {
-        // Query dengan INTERVAL_DAILY, percayakan boundary ke Android
-        // Jangan filter pakai firstTimeStamp/lastTimeUsed karena field itu tidak reliable untuk windowing
+    ): Map<String, Long> {
         val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startMs, endMs)
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val dailyData = mutableMapOf<String, MutableMap<String, Long>>()
 
-        val aggregated = mutableMapOf<String, Long>()
         stats.forEach { stat ->
             val pkg = stat.packageName
             if (pkg in excludePackages || pkg !in launcherApps) return@forEach
-
             val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
-            if (time > 0) {
-                aggregated[pkg] = maxOf(aggregated[pkg] ?: 0L, time)
-            }
+            if (time <= 0) return@forEach
+
+            val dateStr = dateFormat.format(Date(stat.firstTimeStamp))
+            val pkgMap = dailyData.getOrPut(dateStr) { mutableMapOf() }
+            pkgMap[pkg] = maxOf(pkgMap[pkg] ?: 0L, time)
         }
-        return aggregated.values.sumOf { it }
+
+        return dailyData.mapValues { it.value.values.sumOf { time -> time } }
+    }
+
+    private fun getPackageFallbackMap(
+        usm: UsageStatsManager,
+        packageName: String,
+        startMs: Long,
+        endMs: Long
+    ): Map<String, Long> {
+        val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startMs, endMs)
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val result = mutableMapOf<String, Long>()
+
+        stats.forEach { stat ->
+            if (stat.packageName != packageName) return@forEach
+            val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+            if (time <= 0) return@forEach
+
+            val dateStr = dateFormat.format(Date(stat.firstTimeStamp))
+            result[dateStr] = maxOf(result[dateStr] ?: 0L, time)
+        }
+        return result
     }
 
     private fun refreshUsageStats() {
@@ -189,7 +197,6 @@ class HomeViewModel(
         val todayStart = getMidnight(0)
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
-        // ── TODAY ──────────────────────────────────────────────────────────────
         val todayRawStats = usm.queryAndAggregateUsageStats(todayStart, now)
         var totalToday = 0L
         val appList = mutableListOf<AppUsageInfo>()
@@ -206,14 +213,16 @@ class HomeViewModel(
             }
         }
 
-        // ── YESTERDAY & HISTORY (From DB) ──────────────────────────────────────
-        val totalYesterday = globalHistory.find { 
-            val cal = Calendar.getInstance()
-            cal.add(Calendar.DAY_OF_YEAR, -1)
-            it.date == dateFormat.format(cal.time)
-        }?.usageTimeMillis ?: 0L
+        val fallbackStart = getMidnight(20)
+        val fallbackMap = getGlobalFallbackMap(usm, launcherApps, excludePackages, fallbackStart, now)
 
-        // Assemble 21-day list
+        val yesterdayCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+        val yesterdayDateStr = dateFormat.format(yesterdayCal.time)
+
+        val totalYesterday = globalHistory.find { it.date == yesterdayDateStr }?.usageTimeMillis
+            ?: fallbackMap[yesterdayDateStr]
+            ?: 0L
+
         val history = (0 until 21).map { i ->
             val dStart = getMidnight(i)
             val dateStr = dateFormat.format(Date(dStart))
@@ -221,7 +230,9 @@ class HomeViewModel(
             val dayTotal = if (i == 0) {
                 totalToday
             } else {
-                globalHistory.find { it.date == dateStr }?.usageTimeMillis ?: 0L
+                globalHistory.find { it.date == dateStr }?.usageTimeMillis 
+                    ?: fallbackMap[dateStr] 
+                    ?: 0L
             }
             DailyUsage(dStart, dayTotal)
         }
@@ -242,7 +253,6 @@ class HomeViewModel(
             catch (_: PackageManager.NameNotFoundException) { app }
         }
 
-        // Live calculation for shields/goals
         val liveShields = allShields.map { shield ->
             val usage = todayRawStats.getUsageTime(shield.packageName)
             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
@@ -253,7 +263,7 @@ class HomeViewModel(
             totalScreenTime      = totalToday,
             yesterdayScreenTime  = totalYesterday,
             percentageChange     = percentageChange,
-            dailyUsageHistory    = history.reversed(), // oldest → newest
+            dailyUsageHistory    = history.reversed(),
             topApps              = topApps,
             allAppsUsage         = allAppsUsage,
             activeShields = sortShields(liveShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.SHIELD }, it.shieldSortType),
@@ -277,7 +287,6 @@ class HomeViewModel(
             val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             val todayStart = getMidnight(0)
 
-            // Load app info immediately
             var appName = packageName
             var icon: android.graphics.drawable.Drawable? = null
             try {
@@ -288,17 +297,20 @@ class HomeViewModel(
 
             _appDetailUiState.update { it.copy(appName = appName, icon = icon) }
 
-            // ── HISTORY (From DB) ──────────────────────────────────────────────
             shieldRepository.getLastNDaysUsageForPackage(packageName, 21).collect { historyFromDb ->
                 val currentNow = System.currentTimeMillis()
                 val currentTodayUsage = usm.queryAndAggregateUsageStats(todayStart, currentNow)
                     .getUsageTime(packageName)
 
-                val yesterdayUsage = historyFromDb.find { 
-                    val cal = Calendar.getInstance()
-                    cal.add(Calendar.DAY_OF_YEAR, -1)
-                    it.date == dateFormat.format(cal.time)
-                }?.usageTimeMillis ?: 0L
+                val fallbackStart = getMidnight(20)
+                val fallbackMap = getPackageFallbackMap(usm, packageName, fallbackStart, currentNow)
+
+                val yesterdayCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+                val yesterdayDateStr = dateFormat.format(yesterdayCal.time)
+
+                val yesterdayUsage = historyFromDb.find { it.date == yesterdayDateStr }?.usageTimeMillis
+                    ?: fallbackMap[yesterdayDateStr]
+                    ?: 0L
 
                 val history = (0 until 21).map { i ->
                     val dStart = getMidnight(i)
@@ -307,7 +319,9 @@ class HomeViewModel(
                     val dayTotal = if (i == 0) {
                         currentTodayUsage
                     } else {
-                        historyFromDb.find { it.date == dateStr }?.usageTimeMillis ?: 0L
+                        historyFromDb.find { it.date == dateStr }?.usageTimeMillis 
+                            ?: fallbackMap[dateStr] 
+                            ?: 0L
                     }
                     DailyUsage(dStart, dayTotal)
                 }
@@ -344,7 +358,7 @@ class HomeViewModel(
         val pauseEndTimestamp = if (durationHours != null) {
             System.currentTimeMillis() + (durationHours * 60 * 60 * 1000L)
         } else {
-            0L // Indefinite
+            0L
         }
 
         val updatedShield = shield.copy(
@@ -352,7 +366,6 @@ class HomeViewModel(
             pauseEndTimestamp = pauseEndTimestamp
         )
 
-        // Segera update UI state untuk feedback instan
         _appDetailUiState.update { it.copy(
             shieldEntity = updatedShield,
             isPaused = true,
@@ -371,7 +384,6 @@ class HomeViewModel(
             pauseEndTimestamp = 0L
         )
 
-        // Segera update UI state untuk feedback instan
         _appDetailUiState.update { it.copy(
             shieldEntity = updatedShield,
             isPaused = false,
@@ -383,14 +395,11 @@ class HomeViewModel(
         }
     }
 
-    // Extension helper biar lebih clean
     private fun Map<String, android.app.usage.UsageStats>.getUsageTime(packageName: String): Long {
         return this[packageName]?.let {
             it.totalTimeVisible.coerceAtLeast(it.totalTimeInForeground)
         } ?: 0L
     }
-
-    // --- Sisa fungsi tidak berubah ---
 
     fun onShieldSortTypeChange(sortType: ShieldSortType) {
         _uiState.update { currentState ->
@@ -411,8 +420,6 @@ class HomeViewModel(
     }
 
     private fun updateShieldedLists() {
-        // Gunakan refreshUsageStats agar perhitungan sisa waktu (live usage) selalu sinkron
-        // dan diurutkan sesuai sortType terbaru yang ada di UI state.
         refreshUsageStats()
     }
 
