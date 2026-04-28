@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -73,7 +74,6 @@ fun FocusScreen(
     val isAppPickerOpen = remember { mutableStateOf(false) }
     var isFabMenuExpanded by remember { mutableStateOf(false) }
 
-    // Enhanced Spring Motion animations
     val fabProgress by animateFloatAsState(
         targetValue = if (isFabMenuExpanded) 1f else 0f,
         animationSpec = spring(dampingRatio = 0.45f, stiffness = 150f),
@@ -82,13 +82,14 @@ fun FocusScreen(
 
     val rotation = fabProgress * 45f
     val fabOffset = (fabProgress * 12).dp
-    val iconSize = (44 - (fabProgress * 8)).dp // Interpolates between 44.dp and 36.dp
+    val iconSize = (44 - (fabProgress * 8)).dp
 
     Box(modifier = Modifier.fillMaxSize()) {
         FocusScreenContent(
             uiState = uiState,
             innerPadding = innerPadding,
             onEditShield = { viewModel.editShield(it) },
+            onDeleteShield = { viewModel.deleteShield(it) },
             onEditSchedule = { viewModel.editSchedule(it) },
             onDeleteSchedule = { viewModel.deleteSchedule(it) },
             onShieldSortTypeChange = { viewModel.onShieldSortTypeChange(it) },
@@ -137,7 +138,6 @@ fun FocusScreen(
                 }
             }
         ) {
-            // Item 1: Add Shield
             ExpressiveFabMenuItem(
                 onClick = {
                     isFabMenuExpanded = false
@@ -148,7 +148,6 @@ fun FocusScreen(
                 text = { Text("Add Shield") }
             )
 
-            // Item 2: Add Goal
             ExpressiveFabMenuItem(
                 onClick = {
                     isFabMenuExpanded = false
@@ -159,7 +158,6 @@ fun FocusScreen(
                 text = { Text("Add Goal") }
             )
 
-            // Item 3: Add Schedule
             ExpressiveFabMenuItem(
                 onClick = {
                     isFabMenuExpanded = false
@@ -201,9 +199,7 @@ fun FocusScreen(
                     viewModel.saveSchedule(name, start, end, mode, maxEmergency)
                 },
                 onEditApps = {
-                    // Jangan reset selectedAppsForSchedule
                     viewModel.closeScheduleSettings()
-                    // Buka picker tanpa reset state selectedAppsForSchedule
                     viewModel.openSchedulePicker(resetSelection = false)
                 }
             )
@@ -225,12 +221,13 @@ fun FocusScreen(
 }
 
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun FocusScreenContent(
     uiState: FocusUiState,
     innerPadding: PaddingValues,
     onEditShield: (ShieldEntity) -> Unit,
+    onDeleteShield: (ShieldEntity) -> Unit,
     onEditSchedule: (ScheduleEntity) -> Unit,
     onDeleteSchedule: (ScheduleEntity) -> Unit,
     onShieldSortTypeChange: (ShieldSortType) -> Unit,
@@ -246,7 +243,6 @@ fun FocusScreenContent(
             bottom = 150.dp
         )
     ) {
-        // Active Goals Section
         item {
             ShieldSortHeader(
                 title = "Active Goals",
@@ -280,13 +276,25 @@ fun FocusScreenContent(
                     else -> RoundedCornerShape(8.dp)
                 }
 
-                Column(modifier = Modifier.animateItem()) {
-                    ShieldConfigItem(
-                        shield = shield,
-                        shape = shape,
-                        onEdit = { onEditShield(shield) },
-                        onClick = { onAppClick(shield.packageName) }
+                Column(
+                    modifier = Modifier.animateItem(
+                        fadeInSpec = spring(stiffness = Spring.StiffnessLow),
+                        fadeOutSpec = spring(stiffness = Spring.StiffnessLow),
+                        placementSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow)
                     )
+                ) {
+                    SwipeableItemContainer(
+                        onEdit = { onEditShield(shield) },
+                        onDelete = { onDeleteShield(shield) },
+                        shape = shape
+                    ) {
+                        ShieldConfigItem(
+                            shield = shield,
+                            shape = shape,
+                            onEdit = { onEditShield(shield) },
+                            onClick = { onAppClick(shield.packageName) }
+                        )
+                    }
                     if (index < uiState.activeGoals.size - 1) {
                         Spacer(modifier = Modifier.height(2.dp))
                     }
@@ -296,7 +304,6 @@ fun FocusScreenContent(
 
         item { Spacer(modifier = Modifier.height(24.dp)) }
 
-        // Active Shields Section
         item {
             ShieldSortHeader(
                 title = "Active Shields",
@@ -330,13 +337,25 @@ fun FocusScreenContent(
                     else -> RoundedCornerShape(8.dp)
                 }
 
-                Column(modifier = Modifier.animateItem()) {
-                    ShieldConfigItem(
-                        shield = shield,
-                        shape = shape,
-                        onEdit = { onEditShield(shield) },
-                        onClick = { onAppClick(shield.packageName) }
+                Column(
+                    modifier = Modifier.animateItem(
+                        fadeInSpec = spring(stiffness = Spring.StiffnessLow),
+                        fadeOutSpec = spring(stiffness = Spring.StiffnessLow),
+                        placementSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow)
                     )
+                ) {
+                    SwipeableItemContainer(
+                        onEdit = { onEditShield(shield) },
+                        onDelete = { onDeleteShield(shield) },
+                        shape = shape
+                    ) {
+                        ShieldConfigItem(
+                            shield = shield,
+                            shape = shape,
+                            onEdit = { onEditShield(shield) },
+                            onClick = { onAppClick(shield.packageName) }
+                        )
+                    }
                     if (index < uiState.activeShields.size - 1) {
                         Spacer(modifier = Modifier.height(2.dp))
                     }
@@ -346,7 +365,6 @@ fun FocusScreenContent(
 
         item { Spacer(modifier = Modifier.height(24.dp)) }
 
-        // Active Schedules Section
         item {
             Text(
                 text = "Active Schedules",
@@ -381,13 +399,25 @@ fun FocusScreenContent(
                     else -> RoundedCornerShape(8.dp)
                 }
 
-                Column(modifier = Modifier.animateItem()) {
-                    ScheduleItem(
-                        schedule = schedule,
-                        shape = shape,
-                        onEdit = { onEditSchedule(schedule) },
-                        onDelete = { onDeleteSchedule(schedule) }
+                Column(
+                    modifier = Modifier.animateItem(
+                        fadeInSpec = spring(stiffness = Spring.StiffnessLow),
+                        fadeOutSpec = spring(stiffness = Spring.StiffnessLow),
+                        placementSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow)
                     )
+                ) {
+                    SwipeableItemContainer(
+                        onEdit = { onEditSchedule(schedule) },
+                        onDelete = { onDeleteSchedule(schedule) },
+                        shape = shape
+                    ) {
+                        ScheduleItem(
+                            schedule = schedule,
+                            shape = shape,
+                            onEdit = { onEditSchedule(schedule) },
+                            onDelete = { onDeleteSchedule(schedule) }
+                        )
+                    }
                     if (index < uiState.activeSchedules.size - 1) {
                         Spacer(modifier = Modifier.height(2.dp))
                     }
@@ -395,6 +425,91 @@ fun FocusScreenContent(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SwipeableItemContainer(
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(24.dp),
+    content: @Composable () -> Unit
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = {
+            when (it) {
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    onDelete()
+                    true
+                }
+                SwipeToDismissBoxValue.EndToStart -> {
+                    onEdit()
+                    false
+                }
+                else -> false
+            }
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        modifier = Modifier.clip(shape),
+        enableDismissFromStartToEnd = true,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
+            val direction = dismissState.dismissDirection
+            
+            val color by animateColorAsState(
+                when (direction) {
+                    SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.colorScheme.errorContainer
+                    SwipeToDismissBoxValue.EndToStart -> MaterialTheme.colorScheme.primaryContainer
+                    else -> Color.Transparent
+                }, label = "SwipeBackground"
+            )
+            
+            val alignment = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
+                SwipeToDismissBoxValue.EndToStart -> Alignment.CenterEnd
+                else -> Alignment.Center
+            }
+            
+            val icon = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> Icons.Outlined.Delete
+                SwipeToDismissBoxValue.EndToStart -> Icons.Outlined.Edit
+                else -> null
+            }
+            
+            val tint = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.colorScheme.error
+                SwipeToDismissBoxValue.EndToStart -> MaterialTheme.colorScheme.primary
+                else -> Color.Transparent
+            }
+
+            val isSwiping = direction != SwipeToDismissBoxValue.Settled
+            val scale by animateFloatAsState(if (isSwiping) 1.2f else 1f, label = "IconScale")
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(shape)
+                    .background(color)
+                    .padding(horizontal = 24.dp),
+                contentAlignment = alignment
+            ) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = tint,
+                        modifier = Modifier
+                            .size(28.dp)
+                            .graphicsLayer(scaleX = scale, scaleY = scale)
+                    )
+                }
+            }
+        },
+        content = { content() }
+    )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -418,7 +533,7 @@ fun ScheduleItem(
 
     val nowMillis by produceState(initialValue = System.currentTimeMillis()) {
         while (true) {
-            delay(60000) // Update every minute
+            delay(60000)
             value = System.currentTimeMillis()
         }
     }
@@ -464,9 +579,9 @@ fun ScheduleItem(
     }
 
     Card(
+        onClick = { onEdit() },
         modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onEdit() },
+            .fillMaxWidth(),
         shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -694,7 +809,6 @@ fun ShieldConfigItem(
         }
     }
 
-    // Animasi saturasi: 1f (normal) ke 0f (grayscale)
     val saturation by animateFloatAsState(
         targetValue = if (shield.isPaused) 0f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
@@ -717,9 +831,9 @@ fun ShieldConfigItem(
     val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
 
     Card(
+        onClick = { onClick() },
         modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
+            .fillMaxWidth(),
         shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -730,7 +844,6 @@ fun ShieldConfigItem(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Leading Icon
                 Box(
                     modifier = Modifier.size(46.dp),
                     contentAlignment = Alignment.Center
@@ -769,9 +882,9 @@ fun ShieldConfigItem(
                         val initialPauseDuration = remember(shield.pauseEndTimestamp) {
                             val diff = shield.pauseEndTimestamp - currentTime
                             when {
-                                diff <= 3600000L -> 3600000L // 1h
-                                diff <= 21600000L -> 21600000L // 6h
-                                else -> 86400000L // 24h
+                                diff <= 3600000L -> 3600000L
+                                diff <= 21600000L -> 21600000L
+                                else -> 86400000L
                             }
                         }
 
@@ -810,7 +923,6 @@ fun ShieldConfigItem(
 
                 Spacer(modifier = Modifier.width(16.dp))
 
-                // Content
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = shield.appName,
@@ -850,11 +962,10 @@ fun ShieldConfigItem(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
-                // Percentage Text
                 val percentage = if (shield.type == FocusType.GOAL) {
-                    ((1f - progress) * 100).toInt() // Show progress towards goal
+                    ((1f - progress) * 100).toInt()
                 } else {
-                    (progress * 100).toInt() // Show remaining limit
+                    (progress * 100).toInt()
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -894,7 +1005,6 @@ fun ShieldConfigItem(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Trailing Actions
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onEdit) {
                         Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.primary)
@@ -1007,9 +1117,9 @@ fun MultiAppPickerBottomSheet(
                         }
 
                         Card(
+                            onClick = { onAppToggled(app.packageName) },
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onAppToggled(app.packageName) },
+                                .fillMaxWidth(),
                             shape = shape,
                             colors = CardDefaults.cardColors(
                                 containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
@@ -1038,7 +1148,6 @@ fun MultiAppPickerBottomSheet(
                 }
             }
 
-            // FAB
             FloatingActionButton(
                 onClick = onConfirm,
                 modifier = Modifier
@@ -1119,20 +1228,21 @@ fun ScheduleSettingsBottomSheet(
                 .navigationBarsPadding()
                 .verticalScroll(rememberScrollState())
         ) {
-            // Header similar to Shield Settings
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Multi-App Icon Group
                 val packageNames = editingSchedule?.packageNames ?: uiState.selectedAppsForSchedule.toList()
                 MultiAppIconGroup(
                     appIcons = appIcons,
                     totalCount = packageNames.size,
                     size = 56.dp,
-                    modifier = Modifier.clickable { onEditApps() }
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable { onEditApps() }
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(
                     modifier = Modifier
                         .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable { isEditingName = !isEditingName }
                 ) {
                     if (isEditingName) {
@@ -1162,12 +1272,10 @@ fun ScheduleSettingsBottomSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Time Selection Row (Start & End)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(0.dp)
             ) {
-                // Start Time Card
                 Surface(
                     onClick = { showStartTimePicker.value = true },
                     modifier = Modifier.weight(1f),
@@ -1195,7 +1303,6 @@ fun ScheduleSettingsBottomSheet(
 
                 Spacer(modifier = Modifier.width(4.dp))
 
-                // End Time Card
                 Surface(
                     onClick = { showEndTimePicker.value = true },
                     modifier = Modifier.weight(1f),
@@ -1341,7 +1448,7 @@ fun AppPickerBottomSheet(
                     SearchBarDefaults.InputField(
                         query = uiState.searchQuery,
                         onQueryChange = onSearchQueryChange,
-                        onSearch = { /* Handle search if needed */ },
+                        onSearch = { },
                         expanded = false,
                         onExpandedChange = {},
                         placeholder = { Text("Search apps...") },
@@ -1374,9 +1481,8 @@ fun AppPickerBottomSheet(
                 }
             } else {
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(0.dp) // Spacing handled by individual items
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
-                    // Top Used Apps Section
                     if (uiState.topApps.isNotEmpty() && uiState.searchQuery.isEmpty()) {
                         item {
                             PickerSectionHeader(title = "Top Used Apps")
@@ -1411,7 +1517,6 @@ fun AppPickerBottomSheet(
                         }
                     }
 
-                    // All Apps Section
                     item {
                         PickerSectionHeader(
                             title = if (uiState.searchQuery.isEmpty()) "All Apps" else "Search Results"
@@ -1493,9 +1598,9 @@ fun AppPickerItem(
     isTopApp: Boolean = false
 ) {
     Card(
+        onClick = { onClick() },
         modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
+            .fillMaxWidth(),
         shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -1794,7 +1899,6 @@ fun FocusSettingsBottomSheet(
                     shape = RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                 )
             } else {
-                // GOAL specific settings
                 ExposedDropdownMenuBox(
                     expanded = isGoalDropdownExpanded,
                     onExpandedChange = { isGoalDropdownExpanded = it },
@@ -2114,6 +2218,7 @@ fun FocusScreenPreview() {
             ),
             innerPadding = PaddingValues(0.dp),
             onEditShield = {},
+            onDeleteShield = {},
             onEditSchedule = {},
             onDeleteSchedule = {},
             onShieldSortTypeChange = {},
