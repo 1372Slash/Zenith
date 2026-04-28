@@ -532,7 +532,7 @@ class AppUsageMonitorService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
         
         val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Goal Achieved! 🎯")
+            .setContentTitle("Goal Achieved!")
             .setContentText("You've reached your target usage for $appName. Keep it up!")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

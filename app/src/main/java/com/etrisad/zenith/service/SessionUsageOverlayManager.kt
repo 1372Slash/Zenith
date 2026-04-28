@@ -5,7 +5,10 @@ import android.graphics.PixelFormat
 import android.os.Bundle
 import android.view.Gravity
 import android.view.WindowManager
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -148,7 +151,10 @@ class SessionUsageOverlayManager(private val context: Context) {
                     session.secondsElapsedState.intValue = session.lastReportedUsageSeconds
                 }
             }
-            if (session.hudInstance == null || (!isGoal && session.secondsLeftState.intValue <= 0) || (isGoal && session.secondsElapsedState.intValue >= session.totalSeconds)) {
+            
+            if (session.hudInstance == null) {
+                hideHUD(session.packageName)
+            } else if (!isGoal) {
                 hideHUD(session.packageName)
             }
         }
@@ -304,7 +310,9 @@ class SessionUsageOverlayManager(private val context: Context) {
 private data class HUDColors(
     val surface: Color,
     val primary: Color,
+    val tertiary: Color,
     val onSurface: Color,
+    val onTertiary: Color,
     val track: Color
 )
 
@@ -324,10 +332,40 @@ fun SessionUsageHUD(
         val entranceAnimationStarted = remember { mutableStateOf(false) }
         LaunchedEffect(Unit) { entranceAnimationStarted.value = true }
 
+        val isCompleted = remember {
+            derivedStateOf {
+                val seconds = secondsLeftProvider()
+                if (isGoal) seconds >= totalSeconds else seconds <= 0
+            }
+        }
+
+        var celebrationFinished by remember { mutableStateOf(false) }
+
         val animatingOutState = remember {
             derivedStateOf {
-                val secondsLeft = secondsLeftProvider()
-                if (isGoal) secondsLeft >= totalSeconds else secondsLeft <= 0
+                if (isGoal) isCompleted.value && celebrationFinished else isCompleted.value
+            }
+        }
+
+        val celebrationScale = remember { Animatable(1f) }
+        LaunchedEffect(isCompleted.value) {
+            if (isCompleted.value && isGoal) {
+                celebrationScale.animateTo(
+                    targetValue = 1.12f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                )
+                celebrationScale.animateTo(
+                    targetValue = 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                )
+                delay(1500)
+                celebrationFinished = true
             }
         }
 
@@ -352,7 +390,9 @@ fun SessionUsageHUD(
             HUDColors(
                 surface = colorScheme.surface,
                 primary = colorScheme.primary,
+                tertiary = colorScheme.tertiary,
                 onSurface = colorScheme.onSurface,
+                onTertiary = colorScheme.onTertiary,
                 track = colorScheme.surfaceVariant.copy(alpha = 0.5f)
             )
         }
@@ -375,7 +415,7 @@ fun SessionUsageHUD(
                 modifier = Modifier
                     .requiredSize(baseSize + animationBuffer)
                     .graphicsLayer {
-                        val scale = scaleState.value
+                        val scale = scaleState.value * celebrationScale.value
                         scaleX = scale
                         scaleY = scale
                         alpha = if (scaleFactor > 0f) (scale / scaleFactor).coerceIn(0f, 1f) * (opacity / 100f) else 0f
@@ -394,10 +434,17 @@ fun SessionUsageHUD(
                         secondsLeftProvider = secondsLeftProvider,
                         totalSeconds = totalSeconds,
                         color = hudColors.primary,
-                        trackColor = hudColors.track
+                        tertiaryColor = hudColors.tertiary,
+                        trackColor = hudColors.track,
+                        isCompleted = isCompleted.value && isGoal
                     )
 
-                    HUDTimerText(secondsLeftProvider, hudColors.onSurface)
+                    HUDTimerText(
+                        secondsProvider = secondsLeftProvider,
+                        isCompleted = isCompleted.value && isGoal,
+                        color = if (isCompleted.value && isGoal) hudColors.tertiary else hudColors.onSurface,
+                        iconColor = if (isCompleted.value && isGoal) hudColors.tertiary else hudColors.onSurface
+                    )
                 }
             }
         }
@@ -410,8 +457,18 @@ private fun HUDProgress(
     secondsLeftProvider: () -> Int,
     totalSeconds: Int,
     color: Color,
-    trackColor: Color
+    tertiaryColor: Color,
+    trackColor: Color,
+    isCompleted: Boolean
 ) {
+    val finalColor by animateColorAsState(
+        targetValue = if (isCompleted) tertiaryColor else color,
+        animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessLow),
+        label = "ProgressColor"
+    )
+    val amplitude by animateFloatAsState(if (isCompleted) 4f else 1f, label = "WaveAmplitude")
+    val waveSpeed by animateDpAsState(if (isCompleted) 15.dp else 0.dp, label = "WaveSpeed")
+
     val snappedProgress by remember(totalSeconds) {
         derivedStateOf {
             val seconds = secondsLeftProvider()
@@ -437,16 +494,21 @@ private fun HUDProgress(
                 clip = true
                 shape = CircleShape
             },
-        color = color,
+        color = finalColor,
         trackColor = trackColor,
-        amplitude = { 1f },
+        amplitude = { amplitude },
         wavelength = 20.dp,
-        waveSpeed = 0.dp
+        waveSpeed = waveSpeed
     )
 }
 
 @Composable
-private fun HUDTimerText(secondsProvider: () -> Int, color: Color) {
+private fun HUDTimerText(
+    secondsProvider: () -> Int,
+    isCompleted: Boolean,
+    color: Color,
+    iconColor: Color
+) {
     val text by remember {
         derivedStateOf {
             val snappedSeconds = secondsProvider()
@@ -459,9 +521,9 @@ private fun HUDTimerText(secondsProvider: () -> Int, color: Color) {
     }
 
     val textScale = remember { Animatable(1f) }
-    LaunchedEffect(text) {
+    LaunchedEffect(text, isCompleted) {
         textScale.animateTo(
-            targetValue = 1.15f,
+            targetValue = 1.2f,
             animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)
         )
         textScale.animateTo(
@@ -470,15 +532,29 @@ private fun HUDTimerText(secondsProvider: () -> Int, color: Color) {
         )
     }
 
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Black,
-        color = color,
-        lineHeight = 16.sp,
-        modifier = Modifier.graphicsLayer {
-            scaleX = textScale.value
-            scaleY = textScale.value
-        }
-    )
+    if (isCompleted) {
+        Icon(
+            imageVector = Icons.Rounded.Check,
+            contentDescription = null,
+            tint = iconColor,
+            modifier = Modifier
+                .size(32.dp)
+                .graphicsLayer {
+                    scaleX = textScale.value
+                    scaleY = textScale.value
+                }
+        )
+    } else {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Black,
+            color = color,
+            lineHeight = 16.sp,
+            modifier = Modifier.graphicsLayer {
+                scaleX = textScale.value
+                scaleY = textScale.value
+            }
+        )
+    }
 }
