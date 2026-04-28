@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.entity.DailyUsageEntity
 import com.etrisad.zenith.data.repository.ShieldRepository
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -59,7 +60,8 @@ data class HomeUiState(
 
 class HomeViewModel(
     private val context: Context,
-    private val shieldRepository: ShieldRepository
+    private val shieldRepository: ShieldRepository,
+    private val userPreferencesRepository: UserPreferencesRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -259,6 +261,10 @@ class HomeViewModel(
             activeShields = sortShields(liveShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.SHIELD }, it.shieldSortType),
             activeGoals   = sortShields(liveShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL }, it.goalSortType)
         ) }
+
+        viewModelScope.launch {
+            userPreferencesRepository.setLastKnownDailyUsage(totalToday, dateFormat.format(Date(now)))
+        }
     }
 
     fun loadAppDetail(packageName: String) {

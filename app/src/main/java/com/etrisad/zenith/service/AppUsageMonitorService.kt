@@ -27,6 +27,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 class AppUsageMonitorService : Service() {
 
@@ -417,6 +421,17 @@ class AppUsageMonitorService : Service() {
                 }
                 
                 lastForegroundApp = currentApp
+
+                // Background Sync: Update last known daily usage without user opening the app
+                val currentHour = reusableCalendar.get(Calendar.HOUR_OF_DAY)
+                val currentMinute = reusableCalendar.get(Calendar.MINUTE)
+                if (currentHour == 23 && currentMinute >= 45) {
+                    val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(currentTime))
+                    val globalUsage = getTotalGlobalUsageToday()
+                    serviceScope.launch {
+                        preferencesRepository.setLastKnownDailyUsage(globalUsage, todayStr)
+                    }
+                }
 
                 val delayTime = when {
                     isPowerSaveMode -> 2000L

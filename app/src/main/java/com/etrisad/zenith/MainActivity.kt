@@ -55,7 +55,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         
-        val homeViewModelFactory = HomeViewModelFactory(applicationContext, shieldRepository)
+        val homeViewModelFactory = HomeViewModelFactory(applicationContext, shieldRepository, userPreferencesRepository)
         val homeViewModel = ViewModelProvider(this, homeViewModelFactory)[HomeViewModel::class.java]
 
         val focusViewModelFactory = FocusViewModelFactory(applicationContext, shieldRepository)

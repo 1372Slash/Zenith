@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -45,6 +46,8 @@ class UserPreferencesRepository(private val context: Context) {
         val BACKUP_INTERVAL_HOURS = intPreferencesKey("backup_interval_hours")
         val FLOATING_TAB_BAR_ENABLED = booleanPreferencesKey("floating_tab_bar_enabled")
         val EXPRESSIVE_COLORS = booleanPreferencesKey("expressive_colors")
+        val LAST_KNOWN_DAILY_USAGE = longPreferencesKey("last_known_daily_usage")
+        val LAST_KNOWN_DAILY_USAGE_DATE = stringPreferencesKey("last_known_daily_usage_date")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -78,6 +81,8 @@ class UserPreferencesRepository(private val context: Context) {
             val backupIntervalHours = preferences[PreferencesKeys.BACKUP_INTERVAL_HOURS] ?: 3
             val floatingTabBarEnabled = preferences[PreferencesKeys.FLOATING_TAB_BAR_ENABLED] ?: false
             val expressiveColors = preferences[PreferencesKeys.EXPRESSIVE_COLORS] ?: false
+            val lastKnownDailyUsage = preferences[PreferencesKeys.LAST_KNOWN_DAILY_USAGE] ?: 0L
+            val lastKnownDailyUsageDate = preferences[PreferencesKeys.LAST_KNOWN_DAILY_USAGE_DATE] ?: ""
             UserPreferences(
                 themeConfig = themeConfig,
                 fontOption = fontOption,
@@ -96,7 +101,9 @@ class UserPreferencesRepository(private val context: Context) {
                 backupDirectoryUri = backupDirectoryUri,
                 backupIntervalHours = backupIntervalHours,
                 floatingTabBarEnabled = floatingTabBarEnabled,
-                expressiveColors = expressiveColors
+                expressiveColors = expressiveColors,
+                lastKnownDailyUsage = lastKnownDailyUsage,
+                lastKnownDailyUsageDate = lastKnownDailyUsageDate
             )
         }
 
@@ -207,6 +214,13 @@ class UserPreferencesRepository(private val context: Context) {
             preferences[PreferencesKeys.EXPRESSIVE_COLORS] = enabled
         }
     }
+
+    suspend fun setLastKnownDailyUsage(usage: Long, date: String) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.LAST_KNOWN_DAILY_USAGE] = usage
+            preferences[PreferencesKeys.LAST_KNOWN_DAILY_USAGE_DATE] = date
+        }
+    }
 }
 
 data class UserPreferences(
@@ -227,5 +241,7 @@ data class UserPreferences(
     val backupDirectoryUri: String = "",
     val backupIntervalHours: Int = 3,
     val floatingTabBarEnabled: Boolean = false,
-    val expressiveColors: Boolean = false
+    val expressiveColors: Boolean = false,
+    val lastKnownDailyUsage: Long = 0L,
+    val lastKnownDailyUsageDate: String = ""
 )

@@ -11,6 +11,9 @@ import androidx.core.app.NotificationCompat
 import androidx.work.*
 import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.local.entity.DailyUsageEntity
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -22,7 +25,6 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val calendar = Calendar.getInstance()
         val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
 
-        // Jika ini adalah tugas backup, hanya jalankan di jendela jam 23:00 - 23:59
         if (isBackup && currentHour != 23) {
             return Result.success()
         }
@@ -34,17 +36,12 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
 
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
-        // LOGIKA PENYELAMAT DATA:
-        // Jika ini bukan backup, dan dijalankan antara jam 00:00 - 09:00 pagi,
-        // kemungkinan besar ini adalah tugas semalam yang tertunda karena HP mati.
-        // Maka kita harus menyimpan data untuk "KEMARIN".
         if (!isBackup && currentHour < 9) {
             calendar.add(Calendar.DAY_OF_YEAR, -1)
         }
 
         val dateString = dateFormat.format(calendar.time)
 
-        // Set range untuk hari target [00:00:00, 23:59:59]
         calendar.set(Calendar.HOUR_OF_DAY, 0)
         calendar.set(Calendar.MINUTE, 0)
         calendar.set(Calendar.SECOND, 0)
@@ -57,7 +54,6 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         calendar.set(Calendar.MILLISECOND, 999)
         val endTime = calendar.timeInMillis
 
-        // Get launcher apps to filter
         val launcherApps = pm.queryIntentActivities(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
         ).map { it.activityInfo.packageName }.toSet()
@@ -67,17 +63,14 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
             ?.activityInfo?.packageName
         val excludePackages = setOfNotNull(applicationContext.packageName, launcherPackage)
 
-        // Query usage stats - gunakan queryAndAggregateUsageStats untuk konsistensi dengan UI aplikasi
         val stats = usm.queryAndAggregateUsageStats(startTime, System.currentTimeMillis().coerceAtMost(endTime))
         
         val usages = mutableListOf<DailyUsageEntity>()
         var totalUsage = 0L
 
-        // Ambil data yang sudah diagregasi oleh sistem
         stats.forEach { (pkg, stat) ->
             if (pkg in excludePackages || pkg !in launcherApps) return@forEach
-            
-            // Gunakan logika penentuan waktu yang sama dengan HomeViewModel
+
             val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
             if (time > 0) {
                 usages.add(DailyUsageEntity(date = dateString, packageName = pkg, usageTimeMillis = time))
@@ -85,14 +78,24 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
             }
         }
 
-        // Save total global usage
-        usages.add(DailyUsageEntity(date = dateString, packageName = "TOTAL", usageTimeMillis = totalUsage))
+        val userPrefsRepo = UserPreferencesRepository(applicationContext)
+        var finalTotalUsage = totalUsage
+
+        for (i in 1..5) {
+            val lastKnown = userPrefsRepo.userPreferencesFlow.first()
+            if (lastKnown.lastKnownDailyUsageDate == dateString && lastKnown.lastKnownDailyUsage > finalTotalUsage) {
+                finalTotalUsage = lastKnown.lastKnownDailyUsage
+                break 
+            }
+            if (i < 5) delay(2000)
+        }
+
+        usages.add(DailyUsageEntity(date = dateString, packageName = "TOTAL", usageTimeMillis = finalTotalUsage))
 
         dailyUsageDao.insertAll(usages)
         
         if (!isBackup) {
             sendDataSavedNotification()
-            // Simpan data selama 21 hari sesuai kebutuhan
             val cleanupCal = Calendar.getInstance()
             cleanupCal.add(Calendar.DAY_OF_YEAR, -21)
             dailyUsageDao.deleteOldUsage(dateFormat.format(cleanupCal.time))
@@ -141,8 +144,7 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
 
             val calendar = Calendar.getInstance()
             val now = calendar.timeInMillis
-            
-            // Set ke 23:50 untuk menyimpan data sebelum hari berganti
+
             calendar.set(Calendar.HOUR_OF_DAY, 23)
             calendar.set(Calendar.MINUTE, 50)
             calendar.set(Calendar.SECOND, 0)
@@ -170,7 +172,6 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
                 .setRequiresBatteryNotLow(true)
                 .build()
 
-            // Jalankan setiap 20 menit. Worker hanya akan mengeksekusi logika jika jam berada di antara 23:00-23:59
             val backupWorkRequest = PeriodicWorkRequestBuilder<DailyUsageWorker>(20, TimeUnit.MINUTES)
                 .setConstraints(constraints)
                 .setInputData(workDataOf("is_backup" to true))
