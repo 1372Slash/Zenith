@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.foundation.layout.Box
@@ -16,24 +18,30 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.etrisad.zenith.ui.theme.ZenithTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class InterceptOverlayManager(private val context: Context) {
 
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     companion object {
+        @Volatile
         var isShowing = false
             private set
         private var overlayView: ComposeView? = null
         private var lifecycleOwner: MyLifecycleOwner? = null
         private var viewModelStore: ViewModelStore? = null
+        @Volatile
         private var currentPackage: String? = null
 
         private val SYSTEM_UI_PACKAGES = setOf(
             "com.android.systemui",
             "android",
             "com.android.settings",
-            "com.google.android.permissioncontroller"
+            "com.google.android.permissioncontroller",
+            "com.google.android.packageinstaller"
         )
     }
 
@@ -47,7 +55,11 @@ class InterceptOverlayManager(private val context: Context) {
         onCloseApp: () -> Unit,
         onGoalDismiss: () -> Unit
     ) {
-        if (isShowing) return
+        if (isShowing && currentPackage == packageName) return
+        if (isShowing) {
+            hideOverlay()
+        }
+
         isShowing = true
         currentPackage = packageName
 
@@ -70,16 +82,16 @@ class InterceptOverlayManager(private val context: Context) {
                             totalUsageToday = totalUsageToday,
                             delayDurationSeconds = delayDurationSeconds,
                             onAllowUse = { minutes, isEmergency ->
-                                hideOverlay()
                                 onAllowUse(minutes, isEmergency)
+                                hideOverlay()
                             },
                             onCloseApp = {
-                                hideOverlay()
                                 onCloseApp()
+                                hideOverlay()
                             },
                             onGoalDismiss = {
-                                hideOverlay()
                                 onGoalDismiss()
+                                hideOverlay()
                             }
                         )
                     }
@@ -117,12 +129,12 @@ class InterceptOverlayManager(private val context: Context) {
                             appName = appName,
                             schedule = schedule,
                             onAllowUse = { minutes, isEmergency ->
-                                hideOverlay()
                                 onAllowUse(minutes, isEmergency)
+                                hideOverlay()
                             },
                             onCloseApp = {
-                                hideOverlay()
                                 onCloseApp()
+                                hideOverlay()
                             }
                         )
                     }
@@ -133,7 +145,6 @@ class InterceptOverlayManager(private val context: Context) {
     }
 
     private fun setupAndAddView(composeView: ComposeView, lOwner: MyLifecycleOwner, vStore: ViewModelStore) {
-        // Force layout to go behind system bars so we can color them ourselves
         @Suppress("DEPRECATION")
         composeView.systemUiVisibility = (android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                 or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
@@ -175,30 +186,30 @@ class InterceptOverlayManager(private val context: Context) {
         }
     }
 
-    /**
-     * Memvalidasi apakah overlay masih relevan dengan aplikasi yang sedang aktif.
-     * Jika user berpindah ke aplikasi lain yang bukan bagian dari system UI atau Zenith,
-     * overlay akan disembunyikan.
-     */
-    fun checkAndHide(newPackage: String) {
+    suspend fun checkAndHide(newPackage: String) {
         if (!isShowing) return
         
         val target = currentPackage ?: return
-        
-        // Jangan hide jika user membuka System UI (notif/settings) atau kembali ke Zenith
-        if (newPackage == target || 
+
+        if (newPackage == target ||
             newPackage == context.packageName || 
             newPackage in SYSTEM_UI_PACKAGES ||
             newPackage.contains("launcher", ignoreCase = true) ||
             newPackage.contains("home", ignoreCase = true)) {
             return
         }
-        
-        // Sembunyikan jika berpindah ke aplikasi lain
-        hideOverlay()
+
+        withContext(Dispatchers.Main) {
+            hideOverlay()
+        }
     }
 
     fun hideOverlay() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { hideOverlay() }
+            return
+        }
+
         val view = overlayView
         if (view != null) {
             try {
@@ -218,10 +229,8 @@ class InterceptOverlayManager(private val context: Context) {
                 viewModelStore = null
                 currentPackage = null
                 isShowing = false
-                System.gc()
             }
         } else {
-            // Clean up state even if view is already null
             isShowing = false
             currentPackage = null
         }

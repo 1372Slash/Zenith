@@ -41,6 +41,7 @@ class SessionUsageOverlayManager(private val context: Context) {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
+    @Volatile
     private var currentForegroundPackage: String = ""
     private var foregroundUpdateJob: Job? = null
 
@@ -64,15 +65,20 @@ class SessionUsageOverlayManager(private val context: Context) {
         val secondsElapsedState = mutableIntStateOf(initialSeconds)
         val secondsLeftState = mutableIntStateOf(if (isGoal) (totalSeconds - initialSeconds).coerceAtLeast(0) else totalSeconds)
         val isVisibleState = mutableStateOf(true)
+        @Volatile
         var hudInstance: HUDInstance? = null
         var timerJob: Job? = null
+        @Volatile
         var x: Int = initialX
+        @Volatile
         var y: Int = initialY
+        @Volatile
         var backgroundTimestamp: Long = 0L
+        @Volatile
         var lastReportedUsageSeconds: Int = initialSeconds
     }
 
-    private val activeSessions = mutableListOf<Session>()
+    private val activeSessions = java.util.Collections.synchronizedList(mutableListOf<Session>())
     private val MaxHuds = 4
 
     fun showHUD(
@@ -87,7 +93,7 @@ class SessionUsageOverlayManager(private val context: Context) {
         if (activeSessions.any { it.packageName == packageName }) return
 
         if (activeSessions.size >= MaxHuds) {
-            hideHUD(activeSessions.first().packageName)
+            hideHUD(activeSessions.firstOrNull()?.packageName)
         }
 
         val totalSeconds = durationMinutes * 60
@@ -247,23 +253,27 @@ class SessionUsageOverlayManager(private val context: Context) {
     }
 
     fun hideHUD(packageName: String? = null) {
-        val iterator = activeSessions.iterator()
-        while (iterator.hasNext()) {
-            val session = iterator.next()
-            if (packageName == null || session.packageName == packageName) {
-                session.timerJob?.cancel()
-                session.hudInstance?.let { destroyHUDInstance(it) }
-                session.onSessionEnd()
-                iterator.remove()
-                if (packageName != null) break
+        synchronized(activeSessions) {
+            val iterator = activeSessions.iterator()
+            while (iterator.hasNext()) {
+                val session = iterator.next()
+                if (packageName == null || session.packageName == packageName) {
+                    session.timerJob?.cancel()
+                    session.hudInstance?.let { destroyHUDInstance(it) }
+                    session.onSessionEnd()
+                    iterator.remove()
+                    if (packageName != null) break
+                }
             }
         }
     }
 
     fun updateHUDUsage(packageName: String, usageMillis: Long) {
-        activeSessions.find { it.packageName == packageName }?.let { session ->
-            if (session.isGoal) {
-                session.lastReportedUsageSeconds = (usageMillis / 1000).toInt()
+        synchronized(activeSessions) {
+            activeSessions.find { it.packageName == packageName }?.let { session ->
+                if (session.isGoal) {
+                    session.lastReportedUsageSeconds = (usageMillis / 1000).toInt()
+                }
             }
         }
     }
@@ -274,7 +284,8 @@ class SessionUsageOverlayManager(private val context: Context) {
         
         foregroundUpdateJob?.cancel()
         foregroundUpdateJob = scope.launch {
-            activeSessions.forEach { session ->
+            val sessionsToProcess = synchronized(activeSessions) { activeSessions.toList() }
+            sessionsToProcess.forEach { session ->
                 val isForeground = packageName.isNotEmpty() &&
                                  (packageName == session.packageName || packageName.startsWith("${session.packageName}."))
                 
