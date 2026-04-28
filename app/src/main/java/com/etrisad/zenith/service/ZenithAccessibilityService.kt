@@ -111,7 +111,6 @@ class ZenithAccessibilityService : AccessibilityService() {
             }
         }
 
-        // Debounce package changes to avoid redundant processing
         serviceScope.launch {
             packageChangeFlow.collectLatest { packageName ->
                 handlePackageChange(packageName)
@@ -141,17 +140,13 @@ class ZenithAccessibilityService : AccessibilityService() {
             lastForegroundApp = currentApp
         }
 
-        // Monitoring loop for this specific package
-        // This will be cancelled by collectLatest if packageChangeFlow emits a NEW package
         while (lastForegroundApp == currentApp) {
             val currentTime = System.currentTimeMillis()
 
-            // 1. Day change check efficiently
             if (currentTime - lastCheckedDayTimestamp > 60000) {
                 reusableCalendar.timeInMillis = currentTime
                 val currentDay = reusableCalendar.get(Calendar.DAY_OF_YEAR)
                 if (lastCheckedDay != -1 && currentDay != lastCheckedDay) {
-                    // Reset usage caches on day change
                     usageStatsCache = null
                     lastUsageCacheTime = 0L
                     lastUsageFetchTime = 0L
@@ -159,7 +154,6 @@ class ZenithAccessibilityService : AccessibilityService() {
                     currentShieldCache = null
                     notifiedGoals.clear()
 
-                    // Reset session for the current app if it crosses midnight
                     baseUsageAtSessionStart = 0L
                     sessionStartTime = currentTime
                     
@@ -173,19 +167,16 @@ class ZenithAccessibilityService : AccessibilityService() {
                 lastCheckedDayTimestamp = currentTime
             }
 
-            // 2. Bypass check
             if (shouldBypassBlocking(currentApp)) {
                 delay(2000)
                 continue
             }
 
-            // 3. Update usage and sync HUD
             updateUsageTime(currentApp)
 
             val shield = currentShieldCache
             val isAppPaused = shield != null && isPaused(shield)
 
-            // 4. Goal HUD logic: Show if it's a goal and not yet reached
             if (shield != null && shield.type == FocusType.GOAL && !isAppPaused) {
                 val limitMillis = shield.timeLimitMinutes * 60 * 1000L
                 if (cachedTotalUsage < limitMillis) {
@@ -205,12 +196,10 @@ class ZenithAccessibilityService : AccessibilityService() {
                 }
             }
 
-            // 5. Blocking logic
             if (!isAppPaused) {
                 val allowedUntil = allowedApps[currentApp] ?: 0L
                 if (currentTime > allowedUntil && !InterceptOverlayManager.isShowing) {
                     if (checkSchedules(currentApp)) {
-                        // scheduled block - loop continues
                     } else if (shield != null) {
                         if (shield.isAutoQuitEnabled && allowedUntil > 0) {
                             goToHomeScreen()
@@ -222,7 +211,28 @@ class ZenithAccessibilityService : AccessibilityService() {
                 }
             }
 
-            delay(1000)
+            val delayTime = if (shield != null) {
+                val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+                val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
+
+                if (shield.type == FocusType.GOAL) {
+                    when {
+                        remaining < 60000 -> 600L
+                        remaining < 300000 -> 1000L
+                        else -> 1500L
+                    }
+                } else {
+                    when {
+                        remaining > 3600000 -> 8000L
+                        remaining > 600000 -> 5000L
+                        remaining > 300000 -> 3000L
+                        remaining > 60000 -> 1500L
+                        else -> 1000L
+                    }
+                }
+            } else 1500L
+
+            delay(delayTime)
         }
     }
 
@@ -237,11 +247,12 @@ class ZenithAccessibilityService : AccessibilityService() {
         if (shield.type == FocusType.GOAL) {
             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
             val remaining = (limitMillis - currentTotalUsage).coerceAtLeast(0L)
-            
-            // Update HUD every 2 seconds for live goals, or more frequently if near limit
+
             val uiUpdateInterval = when {
-                remaining < 60000 -> 1000L // Every second when near limit
-                else -> 2000L
+                remaining < 60000 -> 1000L
+                remaining < 300000 -> 2500L
+                remaining < 900000 -> 8000L
+                else -> 15000L
             }
 
             if (currentTime - lastUsageFetchTime >= uiUpdateInterval) {
@@ -251,7 +262,6 @@ class ZenithAccessibilityService : AccessibilityService() {
                 lastUsageFetchTime = currentTime
             }
         } else {
-            // Fetch dari sistem setiap 5 detik untuk Shield (seimbang antara akurasi & CPU)
             if (currentTime - lastUsageFetchTime > 5000) {
                 cachedTotalUsage = getTotalUsageToday(packageName)
                 lastUsageFetchTime = currentTime
@@ -260,9 +270,7 @@ class ZenithAccessibilityService : AccessibilityService() {
 
         val limitMillis = shield.timeLimitMinutes * 60 * 1000L
         val remainingMillis = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
-        
-        // Strategi Adaptive Write:
-        // Update DB setiap 10 detik, ATAU jika sisa waktu < 1 menit (agar blokir sigap)
+
         val timeSinceLastUsed = currentTime - shield.lastUsedTimestamp
         val isNearLimit = remainingMillis < 60000 
         val shouldUpdateDB = timeSinceLastUsed > 10000 || (isNearLimit && timeSinceLastUsed > 2000)
@@ -299,7 +307,7 @@ class ZenithAccessibilityService : AccessibilityService() {
         }
 
         val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Goal Achieved! 🎯")
+            .setContentTitle("Goal Achieved!")
             .setContentText("You've reached your target usage for $appName. Keep it up!")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -310,7 +318,6 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun checkIfAppIsShielded(targetPackageName: String) {
-        // Double check foreground app to prevent overlay appearing over wrong app
         if (targetPackageName != lastForegroundApp) return
 
         val shield = currentShieldCache ?: allShieldsCache.find { it.packageName == targetPackageName }
@@ -322,24 +329,18 @@ class ZenithAccessibilityService : AccessibilityService() {
             val currentTime = System.currentTimeMillis()
             val lastAction = shield.lastDelayStartTimestamp
 
-            // Cek Grace Period: Jika user sudah tidak memakai aplikasi lebih dari 30 menit,
-            // maka untuk pembukaan pertama kali ini delay tidak akan muncul.
             val lastSessionEnd = shield.lastSessionEndTimestamp
             val isGracePeriodActive = lastSessionEnd != 0L && (currentTime - lastSessionEnd > 30 * 60 * 1000L)
 
             val shieldWithTimestamp = if (shield.isDelayAppEnabled) {
                 if (isGracePeriodActive) {
-                    // Beri izin langsung tanpa delay untuk pembukaan pertama setelah 30 menit
                     val updated = shield.copy(lastDelayStartTimestamp = currentTime - (delayDurationSeconds * 1000L) - 1000)
                     updated
                 } else if (lastAction == 0L) {
-                    // Jika baru pertama kali butuh delay, set timestamp SEKARANG
                     val updated = shield.copy(lastDelayStartTimestamp = currentTime)
                     serviceScope.launch { shieldRepository.updateShield(updated) }
                     updated
                 } else {
-                    // Jika delay masih aktif atau sudah selesai, biarkan timestamp yang lama.
-                    // Jangan update ke currentTime agar hitungan waktu tetap berjalan maju dari titik awal.
                     shield
                 }
             } else {
@@ -418,8 +419,7 @@ class ZenithAccessibilityService : AccessibilityService() {
 
     private fun getTotalUsageToday(packageName: String): Long {
         val currentTime = System.currentTimeMillis()
-        
-        // Cache usage stats list for 3 seconds to avoid redundant system calls
+
         var stats = usageStatsCache
         if (stats == null || currentTime - lastUsageCacheTime > 3000) {
             synchronized(reusableCalendar) {
@@ -491,8 +491,8 @@ class ZenithAccessibilityService : AccessibilityService() {
 
     private fun isPaused(shield: ShieldEntity): Boolean {
         if (!shield.isPaused) return false
-        if (shield.pauseEndTimestamp == 0L) return true // Pause selamanya
-        return System.currentTimeMillis() < shield.pauseEndTimestamp // Belum melewati batas waktu pause
+        if (shield.pauseEndTimestamp == 0L) return true
+        return System.currentTimeMillis() < shield.pauseEndTimestamp
     }
 
     private fun shouldBypassBlocking(packageName: String): Boolean {
@@ -570,7 +570,6 @@ class ZenithAccessibilityService : AccessibilityService() {
             parsedSchedulesCache = emptyList<ParsedSchedule>()
             usageStatsCache = null
             lastUsageCacheTime = 0L
-            // Paksa SQLite melepaskan cache memorinya
             try {
                 ZenithDatabase.getDatabase(this).openHelper.writableDatabase.execSQL("PRAGMA shrink_memory")
             } catch (_: Exception) {}

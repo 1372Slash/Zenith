@@ -64,7 +64,6 @@ class AppUsageMonitorService : Service() {
     private var cachedStartOfDay = 0L
     private var lastStartOfDayDate = -1
 
-    // Global usage cache to prevent multiple system calls in one cycle
     private var usageStatsCache: List<android.app.usage.UsageStats>? = null
     private var lastUsageCacheTime = 0L
 
@@ -84,7 +83,6 @@ class AppUsageMonitorService : Service() {
         }
     }
     
-    // Cache untuk jadwal agar tidak perlu parsing string setiap detik
     private class ParsedSchedule(
         val id: Long,
         val startMinutes: Int,
@@ -121,7 +119,6 @@ class AppUsageMonitorService : Service() {
         serviceScope.launch {
             shieldRepository.allSchedules.collect { schedules ->
                 activeSchedules = schedules.filter { it.isActive }
-                // Pre-parse jadwal ke menit
                 parsedSchedulesCache = activeSchedules.map { s ->
                     val startParts = s.startTime.split(":")
                     val endParts = s.endTime.split(":")
@@ -166,18 +163,14 @@ class AppUsageMonitorService : Service() {
         serviceScope.launch {
             while (true) {
                 val currentTime = System.currentTimeMillis()
-                // Gunakan cache terbaru dari database
                 val goals = goalShieldsCache
 
                 if (goals.isNotEmpty()) {
                     goals.forEach { goal ->
-                        // Jangan ingatkan jika aplikasi sedang dibuka (lastForegroundApp adalah aplikasi ini)
                         if (goal.packageName == lastForegroundApp) return@forEach
-                        
-                        // Jangan ingatkan jika sedang di-pause
+
                         if (isPaused(goal)) return@forEach
-                        
-                        // Jangan ingatkan jika goal hari ini sudah tercapai
+
                         val usageToday = dailyUsageCache[goal.packageName] ?: getTotalUsageToday(goal.packageName)
                         val limitMillis = goal.timeLimitMinutes * 60 * 1000L
                         if (usageToday >= limitMillis) return@forEach
@@ -185,13 +178,11 @@ class AppUsageMonitorService : Service() {
                         val periodMillis = goal.goalReminderPeriodMinutes * 60 * 1000L
                         if (periodMillis > 0 && currentTime - goal.lastGoalReminderTimestamp >= periodMillis) {
                             sendGoalSuggestionNotification(goal)
-                            // Update timestamp agar tidak muncul berulang kali sebelum interval berikutnya
                             shieldRepository.updateShield(goal.copy(lastGoalReminderTimestamp = currentTime))
                         }
                     }
                 }
-                
-                // Cek setiap 60 detik untuk akurasi yang lebih baik
+
                 delay(60000)
             }
         }
@@ -257,27 +248,21 @@ class AppUsageMonitorService : Service() {
     }
 
     private var lastCheckedDay = -1
-    private val notifiedGoals = mutableSetOf<String>() // Simpan package goal yang sudah dikirim notif hari ini
+    private val notifiedGoals = mutableSetOf<String>()
 
     private fun startMonitoring() {
         serviceScope.launch {
-            // Initial streak and reset check upon startup
             checkDayChangeOnStartup()
 
             while (true) {
-                // 1. Matikan monitoring jika layar mati untuk menghemat CPU & baterai
                 if (!isScreenOn) {
                     delay(5000)
                     continue
                 }
 
                 val isAccessibilityActive = ZenithAccessibilityService.isServiceRunning
-                
-                // Adaptive Polling Logic
+
                 if (isAccessibilityActive) {
-                    // Jika Accessibility aktif, polling ini melambat drastis (3 detik)
-                    // karena Accessibility sudah menghandle deteksi instan via event.
-                    // Ini menghemat baterai secara signifikan tanpa mengurangi performa.
                     currentShieldCache = null
                     usageStatsCache = null
                     lastUsageFetchTime = 0L
@@ -292,7 +277,6 @@ class AppUsageMonitorService : Service() {
                     overlayManager.checkAndHide(currentApp)
                 }
 
-                // Refresh launcher packages every 60s
                 if (launcherPackages.isEmpty() || currentTime - lastLauncherRefreshTime > 60000) {
                     try {
                         val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
@@ -302,7 +286,6 @@ class AppUsageMonitorService : Service() {
                     } catch (_: Exception) {}
                 }
 
-                // Check for day change efficiently
                 if (currentTime - lastCheckedDayTimestamp > 60000) {
                     reusableCalendar.timeInMillis = currentTime
                     val currentDay = reusableCalendar.get(java.util.Calendar.DAY_OF_YEAR)
@@ -311,7 +294,6 @@ class AppUsageMonitorService : Service() {
                         shieldRepository.resetAllRemainingTimes()
                         notifiedGoals.clear()
                         dailyUsageCache.clear()
-                        // Reset usage caches and force refresh on day change
                         usageStatsCache = null
                         lastUsageCacheTime = 0L
                         lastUsageFetchTime = 0L
@@ -328,6 +310,7 @@ class AppUsageMonitorService : Service() {
                     if (currentApp != lastForegroundApp || currentShieldCache == null) {
                         currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
                         lastUsageFetchTime = 0L 
+                        lastHUDUpdateTime = 0L
                         sessionStartTime = currentTime
                         
                         val systemUsage = getTotalUsageToday(currentApp)
@@ -350,8 +333,7 @@ class AppUsageMonitorService : Service() {
 
                     val allowedUntil = allowedApps[currentApp] ?: 0L
                     updateUsageTime(currentApp)
-                    
-                    // Jika aplikasi di-pause, jangan tampilkan HUD atau Intercept Overlay
+
                     val shieldForPauseCheck = currentShieldCache
                     val isAppPaused = shieldForPauseCheck != null && isPaused(shieldForPauseCheck)
 
@@ -362,10 +344,8 @@ class AppUsageMonitorService : Service() {
                             val shield = currentShieldCache
                             val isGoal = shield?.type == FocusType.GOAL
 
-                            // Jika goal sudah tercapai hari ini, jangan tampilkan HUD
                             val limitMillis = (shield?.timeLimitMinutes ?: 0) * 60 * 1000L
                             if (isGoal && cachedTotalUsage >= limitMillis && limitMillis > 0) {
-                                // Lanjutkan monitoring tanpa menampilkan HUD
                             } else {
                                 val duration = if (isGoal) shield?.timeLimitMinutes ?: 0 else remainingMinutes
                                 val currentUsageSeconds = (cachedTotalUsage / 1000).toInt()
@@ -431,14 +411,12 @@ class AppUsageMonitorService : Service() {
                         }
                     }
                 } else if (currentApp == null || currentApp == packageName || launcherPackages.contains(currentApp)) {
-                    // SEGERA Update HUD manager agar HUD menghilang saat di Launcher/Zenith
                     sessionUsageOverlayManager.updateForegroundApp(currentApp ?: "")
                     currentShieldCache = null
                 }
                 
                 lastForegroundApp = currentApp
-                
-                // Adaptive Polling Logic: Dioptimalkan agar responsif saat keluar aplikasi
+
                 val delayTime = when {
                     isPowerSaveMode -> 2000L
                     currentShieldCache != null -> {
@@ -448,22 +426,20 @@ class AppUsageMonitorService : Service() {
 
                         if (shield.type == FocusType.GOAL) {
                             when {
-                                remaining < 60000 -> 600L    // < 1 mnt: 600ms (Sangat responsif)
-                                remaining < 300000 -> 1000L  // < 5 mnt: 1s
-                                else -> 1500L                // > 5 mnt: 1.5s
+                                remaining < 60000 -> 600L
+                                remaining < 300000 -> 1000L
+                                else -> 1500L
                             }
                         } else {
-                            // Untuk Shield, kita gunakan max 5s agar sangat hemat CPU
-                            // Namun tetap sigap (600ms) saat sisa waktu sudah menipis
                             when {
-                                remaining > 3600000 -> 5000L  // > 1 jam: 5s (Sangat hemat baterai)
-                                remaining > 600000 -> 3000L   // > 10 mnt: 3s
-                                remaining > 60000 -> 1500L    // > 1 mnt: 1.5s
-                                else -> 600L                  // < 1 mnt: 600ms (Akurat untuk pemblokiran)
+                                remaining > 3600000 -> 5000L
+                                remaining > 600000 -> 3000L
+                                remaining > 60000 -> 1500L
+                                else -> 600L
                             }
                         }
                     }
-                    else -> 1500L // Polling saat di launcher/aplikasi tak terproteksi
+                    else -> 1200L
                 }
                 delay(delayTime)
             }
@@ -478,15 +454,15 @@ class AppUsageMonitorService : Service() {
         val currentTotalUsage = baseUsageAtSessionStart + sessionElapsed
         cachedTotalUsage = currentTotalUsage
 
-        // Adaptive HUD Sync: Sinkronisasi dengan HUD menggunakan interval adaptif (Sesuai SessionUsageOverlayManager)
         if (shield.type == FocusType.GOAL) {
             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
             val remaining = (limitMillis - currentTotalUsage).coerceAtLeast(0L)
             
             val uiUpdateInterval = when {
-                remaining < 60000 -> 1000L   // < 1 mnt: 1s
-                remaining < 300000 -> 2500L  // < 5 mnt: 2.5s
-                else -> 5000L                // > 5 mnt: 5s
+                remaining < 60000 -> 1000L
+                remaining < 300000 -> 2500L
+                remaining < 900000 -> 8000L
+                else -> 5000L
             }
 
             if (currentTime - lastHUDUpdateTime > uiUpdateInterval) {
@@ -497,7 +473,6 @@ class AppUsageMonitorService : Service() {
             }
         }
 
-        // Periodic system sync every 30 seconds to keep base usage anchored
         if (currentTime - lastUsageFetchTime > 30000) {
             val systemUsage = getTotalUsageToday(packageName)
             val startOfDay = getStartOfDay()
@@ -529,9 +504,7 @@ class AppUsageMonitorService : Service() {
 
         val limitMillis = shield.timeLimitMinutes * 60 * 1000L
         val remainingMillis = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
-        
-        // Strategi Adaptive Write:
-        // Update DB setiap 10 detik, ATAU jika sisa waktu < 1 menit (agar blokir sigap)
+
         val timeSinceLastUsed = currentTime - shield.lastUsedTimestamp
         val isNearLimit = remainingMillis < 60000 
         val shouldUpdateDB = timeSinceLastUsed > 10000 || (isNearLimit && timeSinceLastUsed > 2000) || updatedShield != shield
@@ -540,14 +513,11 @@ class AppUsageMonitorService : Service() {
             val finalShield = updatedShield.copy(
                 remainingTimeMillis = remainingMillis,
                 lastUsedTimestamp = currentTime,
-                // PENTING: Update lastGoalReminderTimestamp saat aplikasi digunakan
-                // agar interval pengingat dihitung sejak aplikasi terakhir ditutup.
                 lastGoalReminderTimestamp = if (shield.type == FocusType.GOAL) currentTime else shield.lastGoalReminderTimestamp
             )
             shieldRepository.updateShield(finalShield)
             currentShieldCache = finalShield
-            
-            // CEK GOAL REMINDER
+
             if (shield.type == FocusType.GOAL && !isPaused(shield)) {
                 if (cachedTotalUsage >= limitMillis && !notifiedGoals.contains(packageName)) {
                     sendGoalReachedNotification(shield.appName, packageName)
@@ -588,7 +558,6 @@ class AppUsageMonitorService : Service() {
     }
 
     private suspend fun checkIfAppIsShielded(targetPackageName: String) {
-        // Pastikan aplikasi yang akan diblokir benar-benar sedang di foreground
         val currentForeground = getForegroundApp()
         if (targetPackageName != currentForeground) return
 
@@ -600,33 +569,26 @@ class AppUsageMonitorService : Service() {
             
             val currentTime = System.currentTimeMillis()
             val lastAction = shield.lastDelayStartTimestamp
-            
-            // Cek Grace Period: Jika user sudah tidak memakai aplikasi lebih dari 30 menit,
-            // maka untuk pembukaan pertama kali ini delay tidak akan muncul.
+
             val lastSessionEnd = shield.lastSessionEndTimestamp
             val isGracePeriodActive = lastSessionEnd != 0L && (currentTime - lastSessionEnd > 30 * 60 * 1000L)
 
             val shieldWithTimestamp = if (shield.isDelayAppEnabled) {
                 if (isGracePeriodActive) {
-                    // Beri izin langsung tanpa delay untuk pembukaan pertama setelah 30 menit
                     val updated = shield.copy(lastDelayStartTimestamp = currentTime - (delayDurationSeconds * 1000L) - 1000)
                     serviceScope.launch { shieldRepository.updateShield(updated) }
                     updated
                 } else if (lastAction == 0L) {
-                    // Jika baru pertama kali butuh delay, set timestamp SEKARANG
                     val updated = shield.copy(lastDelayStartTimestamp = currentTime)
                     serviceScope.launch { shieldRepository.updateShield(updated) }
                     updated
                 } else {
-                    // Jika delay sudah ada (baik masih jalan atau sudah selesai), 
-                    // JANGAN update ke currentTime agar hitungan waktu tetap berjalan maju dari titik awal.
                     shield
                 }
             } else {
                 shield
             }
 
-            // Update cache segera agar tidak tertimpa oleh updateUsageTime dengan nilai 0 di loop berikutnya
             currentShieldCache = shieldWithTimestamp
 
             serviceScope.launch(Dispatchers.Main) {
@@ -668,7 +630,6 @@ class AppUsageMonitorService : Service() {
                                         val currentUsage = getTotalUsageToday(targetPackageName)
 
                                         if (isGoal && currentUsage >= limitMillis && limitMillis > 0) {
-                                            // Goal sudah tercapai, tidak perlu tampilkan HUD
                                         } else {
                                             val duration = if (isGoal) updatedShield.timeLimitMinutes else minutes
                                             val currentUsageSeconds = (currentUsage / 1000).toInt()
@@ -719,7 +680,6 @@ class AppUsageMonitorService : Service() {
         val todayStr = dateFormat.format(java.util.Date())
 
         if (lastCheckStr.isNotEmpty() && lastCheckStr != todayStr) {
-            // Day has changed since last time service was running
             updateStreaks()
             shieldRepository.resetAllRemainingTimes()
             notifiedGoals.clear()
@@ -740,8 +700,7 @@ class AppUsageMonitorService : Service() {
 
         val currentTime = System.currentTimeMillis()
         val todayCal = java.util.Calendar.getInstance().apply { timeInMillis = currentTime }
-        
-        // Evaluasi penggunaan kemarin untuk menentukan streak
+
         val cal = java.util.Calendar.getInstance()
         cal.timeInMillis = currentTime
         cal.add(java.util.Calendar.DAY_OF_YEAR, -1)
@@ -760,7 +719,6 @@ class AppUsageMonitorService : Service() {
         val usageMap = usageStatsManager.queryAndAggregateUsageStats(startTime, endTime)
 
         shields.forEach { shield ->
-            // SAFETY: Jangan update jika sudah diupdate pada hari kalender yang sama
             val lastUpdateCal = java.util.Calendar.getInstance().apply { 
                 timeInMillis = shield.lastStreakUpdateTimestamp 
             }
@@ -803,20 +761,18 @@ class AppUsageMonitorService : Service() {
                 ))
             }
         }
-        
-        // Update preference date after successful update
+
         val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
         preferencesRepository.setLastStreakCheckDate(dateFormat.format(java.util.Date(currentTime)))
     }
 
     private fun getTotalUsageToday(packageName: String): Long {
-        getUsageStatsList() // Ensures dailyUsageCache is fresh
+        getUsageStatsList()
         return dailyUsageCache[packageName] ?: 0L
     }
 
     private fun getUsageStatsList(): List<android.app.usage.UsageStats>? {
         val currentTime = System.currentTimeMillis()
-        // Cache usage stats list selama 3 detik untuk efisiensi
         if (usageStatsCache != null && currentTime - lastUsageCacheTime < 3000) {
             return usageStatsCache
         }
@@ -824,7 +780,6 @@ class AppUsageMonitorService : Service() {
         val startTime = getStartOfDay()
 
         try {
-            // Menggunakan queryUsageStats INTERVAL_DAILY agar sinkron dengan HomeViewModel
             val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, currentTime)
             
             if (stats != null) {
@@ -832,17 +787,13 @@ class AppUsageMonitorService : Service() {
                 
                 stats.forEach { stat ->
                     val pkg = stat.packageName
-                    // Gunakan logika yang sama dengan HomeViewModel: ambil yang terbesar antara visible dan foreground
                     val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
-                    
-                    // Karena queryUsageStats bisa mengembalikan beberapa entri untuk paket yang sama 
-                    // (tergantung versi Android), kita ambil nilai maksimalnya
+
                     if (time > (tempUsageMap[pkg] ?: 0L)) {
                         tempUsageMap[pkg] = time
                     }
                 }
 
-                // Update cache harian agar sinkron
                 tempUsageMap.forEach { (pkg, usage) ->
                     dailyUsageCache[pkg] = usage
                 }
@@ -921,8 +872,8 @@ class AppUsageMonitorService : Service() {
 
     private fun isPaused(shield: ShieldEntity): Boolean {
         if (!shield.isPaused) return false
-        if (shield.pauseEndTimestamp == 0L) return true // Pause selamanya
-        return System.currentTimeMillis() < shield.pauseEndTimestamp // Belum melewati batas waktu pause
+        if (shield.pauseEndTimestamp == 0L) return true
+        return System.currentTimeMillis() < shield.pauseEndTimestamp
     }
 
     private fun shouldBypassBlocking(packageName: String): Boolean {
@@ -930,10 +881,8 @@ class AppUsageMonitorService : Service() {
         if (packageName in whitelistedPackages) return true
         if (packageName in CRITICAL_SYSTEM_PACKAGES) return true
 
-        // Cek launcher cache dulu (murah)
         if (launcherPackages.contains(packageName)) return true
 
-        // Satu kali getApplicationInfo untuk semua cek system app
         val isSystem = systemAppCache.getOrPut(packageName) {
             try {
                 val appInfo = packageManager.getApplicationInfo(packageName, 0)
@@ -1000,7 +949,6 @@ class AppUsageMonitorService : Service() {
 
     private fun getForegroundApp(): String? {
         val time = System.currentTimeMillis()
-        // Kurangi lookback window ke 3 detik untuk efisiensi
         val usageEvents = try {
             usageStatsManager.queryEvents(time - 3000, time)
         } catch (_: Exception) { null } ?: return lastForegroundApp

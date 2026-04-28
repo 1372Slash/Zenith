@@ -62,8 +62,6 @@ fun InterceptOverlayContent(
     val appIcon = remember(packageName) {
         try {
             val drawable = context.packageManager.getApplicationIcon(packageName)
-            // Downsample bitmap secara drastis ke 120px untuk menghemat RAM.
-            // Dari ~1MB menjadi ~60KB per ikon.
             drawable.toBitmap(width = 120, height = 120).asImageBitmap()
         } catch (_: Exception) {
             null
@@ -72,8 +70,7 @@ fun InterceptOverlayContent(
 
     var showContent by remember { mutableStateOf(false) }
     var isEmergencyUnlocked by remember { mutableStateOf(false) }
-    
-    // Delay App State
+
     val isDelayEnabled = shield?.isDelayAppEnabled == true && shield.type == FocusType.SHIELD
     
     val initialProgress = remember(shield, delayDurationSeconds) {
@@ -119,7 +116,6 @@ fun InterceptOverlayContent(
         showContent = true
     }
 
-    // Delay Timer Effect
     LaunchedEffect(isDelaying) {
         if (isDelaying && delayDurationSeconds > 0) {
             val remainingProgress = 1f - delayProgressAnimatable.value
@@ -174,7 +170,6 @@ fun InterceptOverlayContent(
             .background(Color.Transparent),
         contentAlignment = Alignment.BottomCenter
     ) {
-        // 1. Scrim background (Semi-transparan agar aplikasi di bawah terlihat)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -321,9 +316,7 @@ fun PortraitInterceptLayout(
     onGoalDismiss: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxWidth()) {
-        // Uses & Emergency Indicators (Top of Bottom Sheet) - Only for SHIELD
         if (shield != null && shield.type == FocusType.SHIELD) {
-            // Left: Uses
             Row(
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -344,7 +337,6 @@ fun PortraitInterceptLayout(
                 )
             }
 
-            // Right: Emergency
             Row(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -373,7 +365,6 @@ fun PortraitInterceptLayout(
                 .navigationBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Drag handle simulation
             Box(
                 modifier = Modifier
                     .width(40.dp)
@@ -384,7 +375,6 @@ fun PortraitInterceptLayout(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // App Icon
             Box(
                 modifier = Modifier
                     .size(80.dp)
@@ -436,10 +426,8 @@ fun PortraitInterceptLayout(
             )
 
             if (shield != null && shield.type == FocusType.GOAL) {
-                // GOAL UI
                 GoalSection(shield, totalUsageToday, onGoalDismiss)
             } else {
-                // SHIELD UI
                 ShieldSection(
                     shield = shield,
                     remainingMinutes = remainingMinutes,
@@ -489,7 +477,6 @@ fun LandscapeInterceptLayout(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(12.dp))
-        // Drag handle simulation
         Box(
             modifier = Modifier
                 .width(40.dp)
@@ -506,14 +493,12 @@ fun LandscapeInterceptLayout(
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left Column: App Info & Progress
             Column(
                 modifier = Modifier
                     .weight(1f),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                // Indicators
                 if (shield != null && shield.type == FocusType.SHIELD) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -590,7 +575,6 @@ fun LandscapeInterceptLayout(
                 }
             }
 
-            // Right Column: Controls (Time buttons, Delay progress, Quit)
             Column(
                 modifier = Modifier
                     .weight(1.2f),
@@ -760,13 +744,21 @@ fun ShieldSection(
     onAllowUse: (Int) -> Unit,
     onCloseApp: () -> Unit
 ) {
-    // Usage Progress
-    var remainingMinutes: Int? = null
+    val currentRemainingMinutes = remember(shield, totalUsageToday, remainingMinutes) {
+        shield?.let {
+            val totalLimitMillis = it.timeLimitMinutes * 60 * 1000L
+            val remainingMillis = (totalLimitMillis - totalUsageToday).coerceAtLeast(0L)
+            (remainingMillis / 60000).toInt()
+        } ?: remainingMinutes
+    }
+
+    val effectivelyTimeReached = isTimeLimitReached || (currentRemainingMinutes != null && currentRemainingMinutes <= 0)
+    val isBlocked = (isUsesExceeded || effectivelyTimeReached) && !isEmergencyUnlocked
+
     if (shield != null) {
         Spacer(modifier = Modifier.height(24.dp))
         val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
         val remainingMillis = (totalLimitMillis - totalUsageToday).coerceAtLeast(0L)
-        remainingMinutes = (remainingMillis / 60000).toInt()
         val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
 
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -788,7 +780,7 @@ fun ShieldSection(
             Spacer(modifier = Modifier.height(4.dp))
             val animatedProgressState = animateFloatAsState(
                 targetValue = progress.coerceIn(0f, 1f),
-                animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
+                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
                 label = "progress"
             )
             LinearWavyProgressIndicator(
@@ -803,29 +795,31 @@ fun ShieldSection(
         }
     }
 
-    if ((isUsesExceeded || isTimeLimitReached) && !isEmergencyUnlocked) {
+    if (isBlocked) {
         LimitReachedSection(
             isUsesExceeded = isUsesExceeded,
-            isTimeLimitReached = isTimeLimitReached,
+            isTimeLimitReached = effectivelyTimeReached,
             refreshTimeLeftMillis = refreshTimeLeftMillis,
             shield = shield,
             onEmergencyClick = onEmergencyClick
         )
     } else {
+        val minutesToDisplay = if (isEmergencyUnlocked) null else currentRemainingMinutes
         Spacer(modifier = Modifier.height(32.dp))
 
         AnimatedContent(
             targetState = isDelaying,
             transitionSpec = {
-                fadeIn(animationSpec = tween(500)) togetherWith
-                        fadeOut(animationSpec = tween(500))
+                (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                 scaleIn(initialScale = 0.92f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)))
+                    .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)))
             },
             label = "delayContent"
         ) { delaying ->
             if (delaying) {
                 DelayInProgressSection(randomMessage, delayProgressAnimatable, delayDurationSeconds)
             } else {
-                DurationSelectionSection(remainingMinutes, isEmergencyUnlocked, onAllowUse)
+                DurationSelectionSection(minutesToDisplay, isEmergencyUnlocked, onAllowUse)
             }
         }
     }
@@ -1293,7 +1287,6 @@ fun PortraitScheduleLayout(
     onCloseApp: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxWidth()) {
-        // Emergency Indicator
         Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -1459,7 +1452,6 @@ fun LandscapeScheduleLayout(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(12.dp))
-        // Drag handle simulation
         Box(
             modifier = Modifier
                 .width(40.dp)
@@ -1476,14 +1468,12 @@ fun LandscapeScheduleLayout(
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left Column: App Info & Schedule Details
             Column(
                 modifier = Modifier
                     .weight(1f),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                // Emergency Indicator
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.End,
@@ -1574,7 +1564,6 @@ fun LandscapeScheduleLayout(
                 }
             }
 
-            // Right Column: Controls
             Column(
                 modifier = Modifier
                     .weight(1.2f),
@@ -1683,7 +1672,6 @@ fun EmergencyButton(onEmergencyUse: () -> Unit) {
             },
         contentAlignment = Alignment.Center
     ) {
-        // Optimized progress background fill
         val progressColor = MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
         Box(
             modifier = Modifier
@@ -1714,7 +1702,6 @@ fun DurationButtonsGrid(remainingMinutes: Int?, onAllowUse: (Int) -> Unit) {
     val b20 = if (remainingMinutes != null && remainingMinutes < 20) remainingMinutes else 20
     val b10 = if (remainingMinutes != null && remainingMinutes < 10) (remainingMinutes * 0.5).toInt().coerceAtLeast(1) else 10
     val b5 = if (remainingMinutes != null && remainingMinutes < 5) {
-        // Use 75% as per user example (4m -> 3m)
         (remainingMinutes * 0.75).toInt().coerceAtLeast(1)
     } else 5
     val b2 = if (remainingMinutes != null && remainingMinutes < 2) remainingMinutes else 2
@@ -1742,7 +1729,6 @@ fun DurationButton(
     var startAnimation by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { startAnimation = true }
 
-    // Smooth progress animation
     val progressState = animateFloatAsState(
         targetValue = if (startAnimation) 1f else 0f,
         animationSpec = if (delaySeconds > 0) {
@@ -1755,7 +1741,6 @@ fun DurationButton(
 
     val isEnabled = progressState.value >= 1f
 
-    // Spring bounce scale animation when becoming enabled
     val scaleState = animateFloatAsState(
         targetValue = if (isEnabled) 1f else 0.95f,
         animationSpec = if (isEnabled) {
@@ -1804,7 +1789,6 @@ fun DurationButton(
                         trackStroke = Stroke(width = 6.dp.value),
                         wavelength = 12.dp
                     )
-                    // Calculate countdown from progress for smooth transition
                     val secondsLeft = if (delaySeconds > 0) {
                         kotlin.math.ceil(delaySeconds * (1f - progressState.value)).toInt().coerceAtLeast(1)
                     } else 0

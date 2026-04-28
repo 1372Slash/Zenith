@@ -66,6 +66,7 @@ class SessionUsageOverlayManager(private val context: Context) {
         var x: Int = initialX
         var y: Int = initialY
         var backgroundTimestamp: Long = 0L
+        var lastReportedUsageSeconds: Int = initialSeconds
     }
 
     private val activeSessions = mutableListOf<Session>()
@@ -106,24 +107,22 @@ class SessionUsageOverlayManager(private val context: Context) {
                 if (!isGoal && session.secondsLeftState.intValue <= 0) break
                 if (isGoal && session.secondsElapsedState.intValue >= session.totalSeconds) break
 
-                // Adaptive Delay Logic based on remaining time to save CPU
                 val updateInterval = if (isGoal) {
-                    // Goal Adaptive Delay: Smooth when near limit, light otherwise
-                    val remainingSeconds = (session.totalSeconds - session.secondsElapsedState.intValue).coerceAtLeast(0)
+                    val remainingSeconds = (session.totalSeconds - session.lastReportedUsageSeconds).coerceAtLeast(0)
                     when {
-                        remainingSeconds < 60 -> 1000L  // < 1 min: 1s update
-                        remainingSeconds < 300 -> 2500L // < 5 min: 2.5s update
-                        else -> 5000L                   // > 5 min: 5s update
+                        remainingSeconds < 60 -> 10000L
+                        remainingSeconds < 300 -> 15000L
+                        remainingSeconds < 900 -> 30000L
+                        else -> 50000L
                     }
                 } else {
-                    // Shield Adaptive Delay: Matching service polling logic
                     val remainingMillis = session.secondsLeftState.intValue * 1000L
                     when {
-                        remainingMillis > 3600000 -> 80000L  // > 1 hour: 8s delay
-                        remainingMillis > 600000 -> 50000L   // > 10 min: 5s delay
-                        remainingMillis > 300000 -> 30000L   // > 5 min: 3s delay
-                        remainingMillis > 60000 -> 15000L    // > 1 min: 1.5s delay
-                        else -> 10000L                       // < 1 min: 1s delay
+                        remainingMillis > 3600000 -> 80000L
+                        remainingMillis > 600000 -> 50000L
+                        remainingMillis > 300000 -> 30000L
+                        remainingMillis > 60000 -> 15000L
+                        else -> 10000L
                     }
                 }
 
@@ -142,8 +141,11 @@ class SessionUsageOverlayManager(private val context: Context) {
                     if (!isGoal) {
                         session.secondsLeftState.intValue = (session.secondsLeftState.intValue - secondsToProcess).coerceAtLeast(0)
                     }
-                    // Keep the remaining fraction of a second for the next update cycle
                     lastUpdateMillis = now - (elapsedMillis % 1000)
+                }
+
+                if (isGoal) {
+                    session.secondsElapsedState.intValue = session.lastReportedUsageSeconds
                 }
             }
             if (session.hudInstance == null || (!isGoal && session.secondsLeftState.intValue <= 0) || (isGoal && session.secondsElapsedState.intValue >= session.totalSeconds)) {
@@ -197,10 +199,8 @@ class SessionUsageOverlayManager(private val context: Context) {
                                 else session.secondsLeftState.intValue <= 0
                                 
                             if (isTimeUp) {
-                                // Jika waktu habis, hapus sesi secara total
                                 hideHUD(session.packageName)
                             } else if (!session.isVisibleState.value) {
-                                // Jika menutup karena pindah background, hanya hancurkan view-nya
                                 session.hudInstance?.let { destroyHUDInstance(it) }
                                 session.hudInstance = null
                             }
@@ -257,10 +257,7 @@ class SessionUsageOverlayManager(private val context: Context) {
     fun updateHUDUsage(packageName: String, usageMillis: Long) {
         activeSessions.find { it.packageName == packageName }?.let { session ->
             if (session.isGoal) {
-                val newSeconds = (usageMillis / 1000).toInt()
-                // Atur nilai secara langsung agar sinkron dengan data sistem, 
-                // termasuk saat reset waktu di jam 00.00
-                session.secondsElapsedState.intValue = newSeconds
+                session.lastReportedUsageSeconds = (usageMillis / 1000).toInt()
             }
         }
     }
@@ -272,8 +269,7 @@ class SessionUsageOverlayManager(private val context: Context) {
         foregroundUpdateJob?.cancel()
         foregroundUpdateJob = scope.launch {
             activeSessions.forEach { session ->
-                // Gunakan pembandingan paket yang lebih akurat untuk menghindari bug string kosong
-                val isForeground = packageName.isNotEmpty() && 
+                val isForeground = packageName.isNotEmpty() &&
                                  (packageName == session.packageName || packageName.startsWith("${session.packageName}."))
                 
                 if (isForeground) {
@@ -288,8 +284,6 @@ class SessionUsageOverlayManager(private val context: Context) {
                         if (session.backgroundTimestamp == 0L) {
                             session.backgroundTimestamp = System.currentTimeMillis()
                         }
-                        // Penghancuran instance HUD dipindahkan ke callback onFinish di createHUDInstance
-                        // agar animasi menutup bisa berjalan dulu.
                     }
                 }
             }
@@ -349,12 +343,10 @@ fun SessionUsageHUD(
             animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow),
             label = "HUDScale",
             finishedListener = { 
-                // Panggil onFinish setiap kali HUD selesai mengecil (scale = 0)
-                if (!showHUDState.value) onFinish() 
+                if (!showHUDState.value) onFinish()
             }
         )
 
-        // Cache theme colors once to avoid lookups in dynamic parts
         val colorScheme = MaterialTheme.colorScheme
         val hudColors = remember(colorScheme) {
             HUDColors(
@@ -391,7 +383,6 @@ fun SessionUsageHUD(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                // Static background (doesn't recompose on timer ticks)
                 Box(
                     modifier = Modifier
                         .requiredSize(baseSize)
@@ -399,7 +390,6 @@ fun SessionUsageHUD(
                         .clip(CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Optimized Progress: Recomposes only every 10s
                     HUDProgress(
                         secondsLeftProvider = secondsLeftProvider,
                         totalSeconds = totalSeconds,
@@ -407,7 +397,6 @@ fun SessionUsageHUD(
                         trackColor = hudColors.track
                     )
 
-                    // Optimized Text: Recomposes only every 10s
                     HUDTimerText(secondsLeftProvider, hudColors.onSurface)
                 }
             }
@@ -423,7 +412,6 @@ private fun HUDProgress(
     color: Color,
     trackColor: Color
 ) {
-    // Live progress: updates every second
     val snappedProgress by remember(totalSeconds) {
         derivedStateOf {
             val seconds = secondsLeftProvider()
@@ -434,7 +422,6 @@ private fun HUDProgress(
     val progressAnimatable = remember { Animatable(snappedProgress) }
 
     LaunchedEffect(snappedProgress) {
-        // Only animate the progress value itself
         progressAnimatable.animateTo(
             targetValue = snappedProgress,
             animationSpec = tween(durationMillis = 2000, easing = FastOutSlowInEasing)
@@ -447,13 +434,11 @@ private fun HUDProgress(
             .fillMaxSize()
             .padding(4.dp)
             .graphicsLayer {
-                // Isolate rendering for performance
                 clip = true
                 shape = CircleShape
             },
         color = color,
         trackColor = trackColor,
-        // Keep it wavy but static for maximum CPU efficiency and stability
         amplitude = { 1f },
         wavelength = 20.dp,
         waveSpeed = 0.dp
@@ -473,7 +458,6 @@ private fun HUDTimerText(secondsProvider: () -> Int, color: Color) {
         }
     }
 
-    // Motion: Subtle pop animation when the text changes
     val textScale = remember { Animatable(1f) }
     LaunchedEffect(text) {
         textScale.animateTo(
