@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -1066,7 +1067,7 @@ fun DelayInProgressSection(
             CircularWavyProgressIndicator(
                 progress = { delayProgressAnimatable.value },
                 modifier = Modifier.size(100.dp),
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.tertiary,
                 amplitude = { 1f },
                 wavelength = 30.dp,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -1076,7 +1077,7 @@ fun DelayInProgressSection(
                 text = "${secondsLeft}s",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.tertiary
             )
         }
     }
@@ -1706,14 +1707,41 @@ fun DurationButtonsGrid(remainingMinutes: Int?, onAllowUse: (Int) -> Unit) {
     } else 5
     val b2 = if (remainingMinutes != null && remainingMinutes < 2) remainingMinutes else 2
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            DurationButton(minutes = b2, delaySeconds = 0, onAllowUse = onAllowUse, modifier = Modifier.weight(1f))
-            DurationButton(minutes = b5, delaySeconds = 3, onAllowUse = onAllowUse, modifier = Modifier.weight(1f))
+    val outerRadius = 24.dp
+    val innerRadius = 4.dp
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            DurationButton(
+                minutes = b2,
+                delaySeconds = 0,
+                onAllowUse = onAllowUse,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(topStart = outerRadius, topEnd = innerRadius, bottomStart = innerRadius, bottomEnd = innerRadius)
+            )
+            DurationButton(
+                minutes = b5,
+                delaySeconds = 3,
+                onAllowUse = onAllowUse,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(topStart = innerRadius, topEnd = outerRadius, bottomStart = innerRadius, bottomEnd = innerRadius)
+            )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            DurationButton(minutes = b10, delaySeconds = 6, onAllowUse = onAllowUse, modifier = Modifier.weight(1f))
-            DurationButton(minutes = b20, delaySeconds = 10, onAllowUse = onAllowUse, modifier = Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            DurationButton(
+                minutes = b10,
+                delaySeconds = 6,
+                onAllowUse = onAllowUse,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(topStart = innerRadius, topEnd = innerRadius, bottomStart = outerRadius, bottomEnd = innerRadius)
+            )
+            DurationButton(
+                minutes = b20,
+                delaySeconds = 10,
+                onAllowUse = onAllowUse,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(topStart = innerRadius, topEnd = innerRadius, bottomStart = innerRadius, bottomEnd = outerRadius)
+            )
         }
     }
 }
@@ -1724,7 +1752,8 @@ fun DurationButton(
     minutes: Int,
     delaySeconds: Int,
     onAllowUse: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    shape: Shape = MaterialTheme.shapes.large
 ) {
     var startAnimation by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { startAnimation = true }
@@ -1741,18 +1770,20 @@ fun DurationButton(
 
     val isEnabled = progressState.value >= 1f
 
-    val scaleState = animateFloatAsState(
-        targetValue = if (isEnabled) 1f else 0.95f,
-        animationSpec = if (isEnabled) {
-            spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessLow
+    val buttonScale = remember { Animatable(1f) }
+
+    LaunchedEffect(isEnabled) {
+        if (isEnabled) {
+            buttonScale.animateTo(
+                targetValue = 1f,
+                initialVelocity = 1.5f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessLow
+                )
             )
-        } else {
-            tween(300)
-        },
-        label = "buttonScale"
-    )
+        }
+    }
 
     FilledTonalButton(
         onClick = { if (isEnabled) onAllowUse(minutes) },
@@ -1760,11 +1791,11 @@ fun DurationButton(
         modifier = modifier
             .height(64.dp)
             .graphicsLayer {
-                scaleX = scaleState.value
-                scaleY = scaleState.value
+                scaleX = buttonScale.value
+                scaleY = buttonScale.value
                 alpha = if (isEnabled) 1f else 0.8f
             },
-        shape = MaterialTheme.shapes.large,
+        shape = shape,
         colors = ButtonDefaults.filledTonalButtonColors(
             containerColor = if (isEnabled) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant
         )
@@ -1772,8 +1803,7 @@ fun DurationButton(
         AnimatedContent(
             targetState = isEnabled,
             transitionSpec = {
-                (fadeIn(animationSpec = tween(400)) +
-                 scaleIn(initialScale = 0.8f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)))
+                fadeIn(animationSpec = tween(400))
                     .togetherWith(fadeOut(animationSpec = tween(200)))
             },
             label = "buttonContent"
@@ -1783,7 +1813,7 @@ fun DurationButton(
                     CircularWavyProgressIndicator(
                         progress = { progressState.value },
                         modifier = Modifier.size(36.dp),
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.tertiary,
                         trackColor = MaterialTheme.colorScheme.surfaceVariant,
                         stroke = Stroke(width = 6.dp.value),
                         trackStroke = Stroke(width = 6.dp.value),
@@ -1797,7 +1827,8 @@ fun DurationButton(
                         Text(
                             text = secondsLeft.toString(),
                             style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.tertiary
                         )
                     }
                 }
