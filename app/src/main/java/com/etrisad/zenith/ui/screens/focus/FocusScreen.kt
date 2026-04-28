@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.font.FontWeight
@@ -1055,12 +1056,19 @@ fun MultiAppPickerBottomSheet(
     onConfirm: () -> Unit,
     onSearchQueryChange: (String) -> Unit
 ) {
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         dragHandle = null
     ) {
-        Box(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.85f)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = screenHeight * 0.85f)
+                .navigationBarsPadding()
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1102,7 +1110,7 @@ fun MultiAppPickerBottomSheet(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 LazyColumn(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f, fill = false),
                     contentPadding = PaddingValues(bottom = 80.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
@@ -1152,8 +1160,7 @@ fun MultiAppPickerBottomSheet(
                 onClick = onConfirm,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(32.dp)
-                    .navigationBarsPadding(),
+                    .padding(32.dp),
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = "Next")
@@ -1171,6 +1178,8 @@ fun ScheduleSettingsBottomSheet(
     onSave: (String, String, String, ScheduleMode, Int) -> Unit,
     onEditApps: () -> Unit
 ) {
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
     val context = LocalContext.current
     val appIcons = remember(editingSchedule, uiState.selectedAppsForSchedule) {
         val packages = editingSchedule?.packageNames ?: uiState.selectedAppsForSchedule.toList()
@@ -1224,179 +1233,221 @@ fun ScheduleSettingsBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
-                .navigationBarsPadding()
-                .verticalScroll(rememberScrollState())
+                .heightIn(max = screenHeight * 0.9f)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val packageNames = editingSchedule?.packageNames ?: uiState.selectedAppsForSchedule.toList()
-                MultiAppIconGroup(
-                    appIcons = appIcons,
-                    totalCount = packageNames.size,
-                    size = 56.dp,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .clickable { onEditApps() }
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { isEditingName = !isEditingName }
-                ) {
-                    if (isEditingName) {
-                        BasicTextField(
-                            value = name,
-                            onValueChange = { name = it },
-                            textStyle = MaterialTheme.typography.headlineSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
-                        Text(
-                            text = name,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Text(
-                        text = "Schedule Settings",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val packageNames =
+                        editingSchedule?.packageNames ?: uiState.selectedAppsForSchedule.toList()
+                    MultiAppIconGroup(
+                        appIcons = appIcons,
+                        totalCount = packageNames.size,
+                        size = 56.dp,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable { onEditApps() }
                     )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(0.dp)
-            ) {
-                Surface(
-                    onClick = { showStartTimePicker.value = true },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp, topEnd = 8.dp, bottomEnd = 8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                ) {
+                    Spacer(modifier = Modifier.width(16.dp))
                     Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { isEditingName = !isEditingName }
                     ) {
+                        if (isEditingName) {
+                            BasicTextField(
+                                value = name,
+                                onValueChange = { name = it },
+                                textStyle = MaterialTheme.typography.headlineSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else {
+                            Text(
+                                text = name,
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                         Text(
-                            text = "Start Time",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = String.format(currentLocale, "%02d:%02d", startTimeState.hour, startTimeState.minute),
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold
+                            text = "Schedule Settings",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-                Surface(
-                    onClick = { showEndTimePicker.value = true },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp, topStart = 8.dp, bottomStart = 8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    Surface(
+                        onClick = { showStartTimePicker.value = true },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(
+                            topStart = 24.dp,
+                            bottomStart = 24.dp,
+                            topEnd = 8.dp,
+                            bottomEnd = 8.dp
+                        ),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                     ) {
-                        Text(
-                            text = "End Time",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = String.format(currentLocale, "%02d:%02d", endTimeState.hour, endTimeState.minute),
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "Start Time",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = String.format(
+                                    currentLocale,
+                                    "%02d:%02d",
+                                    startTimeState.hour,
+                                    startTimeState.minute
+                                ),
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    Surface(
+                        onClick = { showEndTimePicker.value = true },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(
+                            topEnd = 24.dp,
+                            bottomEnd = 24.dp,
+                            topStart = 8.dp,
+                            bottomStart = 8.dp
+                        ),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "End Time",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = String.format(
+                                    currentLocale,
+                                    "%02d:%02d",
+                                    endTimeState.hour,
+                                    endTimeState.minute
+                                ),
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-            Text(
-                text = "Schedule Mode",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ScheduleModeOptionButton(
-                    label = "Block",
-                    icon = Icons.Outlined.Block,
-                    selected = mode == ScheduleMode.BLOCK,
-                    onClick = { mode = ScheduleMode.BLOCK },
-                    isFirst = true,
-                    isLast = false
-                )
-                ScheduleModeOptionButton(
-                    label = "Allow",
-                    icon = Icons.Outlined.CheckCircleOutline,
-                    selected = mode == ScheduleMode.ALLOW,
-                    onClick = { mode = ScheduleMode.ALLOW },
-                    isFirst = false,
-                    isLast = true
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-            OutlinedTextField(
-                value = maxEmergencyUses,
-                onValueChange = { if (it.all { char -> char.isDigit() }) maxEmergencyUses = it },
-                label = { Text("Max Emergency Uses") },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                ),
-                leadingIcon = { Icon(Icons.Outlined.Bolt, contentDescription = null) },
-                supportingText = {
-                    Text(
-                        if (mode == ScheduleMode.ALLOW)
-                            "Apps not in the list will be limited to this many uses"
-                        else "Selected apps can be used this many times in emergency"
-                    )
-                }
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Button(
-                onClick = {
-                    val startStr = String.format(currentLocale, "%02d:%02d", startTimeState.hour, startTimeState.minute)
-                    val endStr = String.format(currentLocale, "%02d:%02d", endTimeState.hour, endTimeState.minute)
-                    onSave(name, startStr, endStr, mode, maxEmergencyUses.toIntOrNull() ?: 3)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.large
-            ) {
                 Text(
-                    text = if (editingSchedule != null) "Update Schedule" else "Save Schedule",
-                    modifier = Modifier.padding(8.dp)
+                    text = "Schedule Mode",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ScheduleModeOptionButton(
+                        label = "Block",
+                        icon = Icons.Outlined.Block,
+                        selected = mode == ScheduleMode.BLOCK,
+                        onClick = { mode = ScheduleMode.BLOCK },
+                        isFirst = true,
+                        isLast = false
+                    )
+                    ScheduleModeOptionButton(
+                        label = "Allow",
+                        icon = Icons.Outlined.CheckCircleOutline,
+                        selected = mode == ScheduleMode.ALLOW,
+                        onClick = { mode = ScheduleMode.ALLOW },
+                        isFirst = false,
+                        isLast = true
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+                OutlinedTextField(
+                    value = maxEmergencyUses,
+                    onValueChange = { if (it.all { char -> char.isDigit() }) maxEmergencyUses = it },
+                    label = { Text("Max Emergency Uses") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                    ),
+                    leadingIcon = { Icon(Icons.Outlined.Bolt, contentDescription = null) },
+                    supportingText = {
+                        Text(
+                            if (mode == ScheduleMode.ALLOW)
+                                "Apps not in the list will be limited to this many uses"
+                            else "Selected apps can be used this many times in emergency"
+                        )
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(32.dp))
             }
-            Spacer(modifier = Modifier.height(16.dp))
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .navigationBarsPadding()
+            ) {
+                Button(
+                    onClick = {
+                        val startStr = String.format(
+                            currentLocale,
+                            "%02d:%02d",
+                            startTimeState.hour,
+                            startTimeState.minute
+                        )
+                        val endStr = String.format(
+                            currentLocale,
+                            "%02d:%02d",
+                            endTimeState.hour,
+                            endTimeState.minute
+                        )
+                        onSave(name, startStr, endStr, mode, maxEmergencyUses.toIntOrNull() ?: 3)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large
+                ) {
+                    Text(
+                        text = if (editingSchedule != null) "Update Schedule" else "Save Schedule",
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -1425,6 +1476,8 @@ fun AppPickerBottomSheet(
     onAppSelected: (AppInfo) -> Unit,
     onSearchQueryChange: (String) -> Unit
 ) {
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -1433,8 +1486,9 @@ fun AppPickerBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.8f)
+                .heightIn(max = screenHeight * 0.8f)
                 .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
         ) {
             Text(
                 text = if (uiState.selectedFocusType == FocusType.GOAL) "Select Productive App" else "Select App to Shield",
@@ -1481,6 +1535,7 @@ fun AppPickerBottomSheet(
                 }
             } else {
                 LazyColumn(
+                    modifier = Modifier.weight(1f, fill = false),
                     verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
                     if (uiState.topApps.isNotEmpty() && uiState.searchQuery.isEmpty()) {
@@ -1671,6 +1726,8 @@ fun FocusSettingsBottomSheet(
     onDismiss: () -> Unit,
     onSave: (Int, Int, Boolean, Boolean, Boolean, Int, Int, Int, Boolean) -> Unit
 ) {
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
     val timePickerState = rememberTimePickerState(
         initialHour = (existingShield?.timeLimitMinutes ?: (if (focusType == FocusType.GOAL) 60 else 30)) / 60,
         initialMinute = (existingShield?.timeLimitMinutes ?: (if (focusType == FocusType.GOAL) 60 else 30)) % 60,
@@ -1719,214 +1776,47 @@ fun FocusSettingsBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
-                .navigationBarsPadding()
-                .verticalScroll(rememberScrollState())
+                .heightIn(max = screenHeight * 0.9f)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (appInfo.icon != null) {
-                    Image(
-                        painter = BitmapPainter(appInfo.icon.toBitmap().asImageBitmap()),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(MaterialTheme.shapes.medium)
-                    )
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                Column {
-                    Text(text = appInfo.appName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = if (focusType == FocusType.GOAL) "Goal Settings" else "Shield Settings",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = " • ",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "Today: ${formatRemainingTime(usageToday)}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.Medium
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (appInfo.icon != null) {
+                        Image(
+                            painter = BitmapPainter(appInfo.icon.toBitmap().asImageBitmap()),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(MaterialTheme.shapes.medium)
                         )
                     }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = if (focusType == FocusType.GOAL) "Daily Goal Target (HH:MM)" else "Daily Time Limit (HH:MM)",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                TimeInput(
-                    state = timePickerState,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-            ) {
-                val presets = if (focusType == FocusType.GOAL) listOf(30, 60, 120, 240) else listOf(15, 30, 60, 120)
-                presets.forEach { preset ->
-                    FilterChip(
-                        selected = (timePickerState.hour * 60 + timePickerState.minute) == preset,
-                        onClick = {
-                            timePickerState.hour = preset / 60
-                            timePickerState.minute = preset % 60
-                        },
-                        label = { Text(if (preset >= 60) "${preset / 60}h" else "${preset}m") },
-                        shape = CircleShape
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (focusType == FocusType.SHIELD) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
-                        value = maxUses,
-                        onValueChange = { if (it.all { char -> char.isDigit() }) maxUses = it },
-                        label = { Text("Times of Uses") },
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                        ),
-                        leadingIcon = { Icon(Icons.Outlined.Timer, contentDescription = null) }
-                    )
-
-                    ExposedDropdownMenuBox(
-                        expanded = isDropdownExpanded,
-                        onExpandedChange = { isDropdownExpanded = it },
-                        modifier = Modifier.weight(1.2f)
-                    ) {
-                        OutlinedTextField(
-                            value = refreshOptions.find { it.second == refreshPeriodMinutes }?.first ?: "Custom",
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Refresh Period") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDropdownExpanded) },
-                            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = appInfo.appName,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
                         )
-                        ExposedDropdownMenu(
-                            expanded = isDropdownExpanded,
-                            onDismissRequest = { isDropdownExpanded = false }
-                        ) {
-                            refreshOptions.forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option.first) },
-                                    onClick = {
-                                        refreshPeriodMinutes = option.second
-                                        isDropdownExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                OutlinedTextField(
-                    value = maxEmergencyUses,
-                    onValueChange = { if (it.all { char -> char.isDigit() }) maxEmergencyUses = it },
-                    label = { Text("Max Emergency Uses") },
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                    ),
-                    leadingIcon = { Icon(Icons.Outlined.Bolt, contentDescription = null) }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                PreferenceCategory(title = "Settings")
-
-                SettingsToggle(
-                    title = "Show Reminders",
-                    description = "Get notified before limit is reached",
-                    checked = remindersEnabled,
-                    onCheckedChange = { remindersEnabled = it },
-                    icon = Icons.Outlined.NotificationsActive,
-                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 2.dp, bottomEnd = 2.dp)
-                )
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                SettingsToggle(
-                    title = "Strict Mode",
-                    description = "No extensions allowed after limit",
-                    checked = strictModeEnabled,
-                    onCheckedChange = { strictModeEnabled = it },
-                    icon = Icons.Outlined.GppGood,
-                    shape = RoundedCornerShape(2.dp)
-                )
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                SettingsToggle(
-                    title = "Auto Quit",
-                    description = "Exit app automatically when session ends",
-                    checked = autoQuitEnabled,
-                    onCheckedChange = { autoQuitEnabled = it },
-                    icon = Icons.AutoMirrored.Outlined.ExitToApp,
-                    shape = RoundedCornerShape(2.dp)
-                )
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                SettingsToggle(
-                    title = "Delay App",
-                    description = "Wait before reopening after being kicked out",
-                    checked = isDelayAppEnabled,
-                    onCheckedChange = { isDelayAppEnabled = it },
-                    icon = Icons.Outlined.History,
-                    shape = RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                )
-            } else {
-                ExposedDropdownMenuBox(
-                    expanded = isGoalDropdownExpanded,
-                    onExpandedChange = { isGoalDropdownExpanded = it },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    OutlinedTextField(
-                        value = goalReminderOptions.find { it.second == goalReminderPeriodMinutes }?.first ?: "Custom",
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Remind of Goal") },
-                        supportingText = { Text("Zenith will nudge you to open this app") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isGoalDropdownExpanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
-                        leadingIcon = { Icon(Icons.Outlined.Alarm, contentDescription = null) }
-                    )
-                    ExposedDropdownMenu(
-                        expanded = isGoalDropdownExpanded,
-                        onDismissRequest = { isGoalDropdownExpanded = false }
-                    ) {
-                        goalReminderOptions.forEach { option ->
-                            DropdownMenuItem(
-                                text = { Text(option.first) },
-                                onClick = {
-                                    goalReminderPeriodMinutes = option.second
-                                    isGoalDropdownExpanded = false
-                                }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (focusType == FocusType.GOAL) "Goal Settings" else "Shield Settings",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = " • ",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "Today: ${formatRemainingTime(usageToday)}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
@@ -1934,76 +1824,276 @@ fun FocusSettingsBottomSheet(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                PreferenceCategory(title = "Settings")
-
-                SettingsToggle(
-                    title = "Goal Reminders",
-                    description = "Receive notifications to reach your daily target",
-                    checked = remindersEnabled,
-                    onCheckedChange = { remindersEnabled = it },
-                    icon = Icons.Outlined.NotificationsActive,
-                    shape = RoundedCornerShape(24.dp)
+                Text(
+                    text = if (focusType == FocusType.GOAL) "Daily Goal Target (HH:MM)" else "Daily Time Limit (HH:MM)",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
-            }
 
-            Spacer(modifier = Modifier.height(32.dp))
-
-            if (isPreventEdit) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp),
-                    shape = RoundedCornerShape(16.dp)
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
                 ) {
+                    TimeInput(
+                        state = timePickerState,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+                ) {
+                    val presets =
+                        if (focusType == FocusType.GOAL) listOf(30, 60, 120, 240) else listOf(15, 30, 60, 120)
+                    presets.forEach { preset ->
+                        FilterChip(
+                            selected = (timePickerState.hour * 60 + timePickerState.minute) == preset,
+                            onClick = {
+                                timePickerState.hour = preset / 60
+                                timePickerState.minute = preset % 60
+                            },
+                            label = { Text(if (preset >= 60) "${preset / 60}h" else "${preset}m") },
+                            shape = CircleShape
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (focusType == FocusType.SHIELD) {
                     Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Lock,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
+                        OutlinedTextField(
+                            value = maxUses,
+                            onValueChange = { if (it.all { char -> char.isDigit() }) maxUses = it },
+                            label = { Text("Times of Uses") },
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                            ),
+                            leadingIcon = { Icon(Icons.Outlined.Timer, contentDescription = null) }
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "Shield settings are locked because you have used more than 50% of your daily limit. This prevents bypassing the shield.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            fontWeight = FontWeight.Medium
+
+                        ExposedDropdownMenuBox(
+                            expanded = isDropdownExpanded,
+                            onExpandedChange = { isDropdownExpanded = it },
+                            modifier = Modifier.weight(1.2f)
+                        ) {
+                            OutlinedTextField(
+                                value = refreshOptions.find { it.second == refreshPeriodMinutes }?.first
+                                    ?: "Custom",
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Refresh Period") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDropdownExpanded) },
+                                modifier = Modifier.menuAnchor(
+                                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                                    true
+                                )
+                            )
+                            ExposedDropdownMenu(
+                                expanded = isDropdownExpanded,
+                                onDismissRequest = { isDropdownExpanded = false }
+                            ) {
+                                refreshOptions.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(option.first) },
+                                        onClick = {
+                                            refreshPeriodMinutes = option.second
+                                            isDropdownExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedTextField(
+                        value = maxEmergencyUses,
+                        onValueChange = { if (it.all { char -> char.isDigit() }) maxEmergencyUses = it },
+                        label = { Text("Max Emergency Uses") },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        ),
+                        leadingIcon = { Icon(Icons.Outlined.Bolt, contentDescription = null) }
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    PreferenceCategory(title = "Settings")
+
+                    SettingsToggle(
+                        title = "Show Reminders",
+                        description = "Get notified before limit is reached",
+                        checked = remindersEnabled,
+                        onCheckedChange = { remindersEnabled = it },
+                        icon = Icons.Outlined.NotificationsActive,
+                        shape = RoundedCornerShape(
+                            topStart = 24.dp,
+                            topEnd = 24.dp,
+                            bottomStart = 2.dp,
+                            bottomEnd = 2.dp
                         )
+                    )
+
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    SettingsToggle(
+                        title = "Strict Mode",
+                        description = "No extensions allowed after limit",
+                        checked = strictModeEnabled,
+                        onCheckedChange = { strictModeEnabled = it },
+                        icon = Icons.Outlined.GppGood,
+                        shape = RoundedCornerShape(2.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    SettingsToggle(
+                        title = "Auto Quit",
+                        description = "Exit app automatically when session ends",
+                        checked = autoQuitEnabled,
+                        onCheckedChange = { autoQuitEnabled = it },
+                        icon = Icons.AutoMirrored.Outlined.ExitToApp,
+                        shape = RoundedCornerShape(2.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    SettingsToggle(
+                        title = "Delay App",
+                        description = "Wait before reopening after being kicked out",
+                        checked = isDelayAppEnabled,
+                        onCheckedChange = { isDelayAppEnabled = it },
+                        icon = Icons.Outlined.History,
+                        shape = RoundedCornerShape(
+                            topStart = 2.dp,
+                            topEnd = 2.dp,
+                            bottomStart = 24.dp,
+                            bottomEnd = 24.dp
+                        )
+                    )
+                } else {
+                    ExposedDropdownMenuBox(
+                        expanded = isGoalDropdownExpanded,
+                        onExpandedChange = { isGoalDropdownExpanded = it },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedTextField(
+                            value = goalReminderOptions.find { it.second == goalReminderPeriodMinutes }?.first
+                                ?: "Custom",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Remind of Goal") },
+                            supportingText = { Text("Zenith will nudge you to open this app") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isGoalDropdownExpanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
+                            leadingIcon = { Icon(Icons.Outlined.Alarm, contentDescription = null) }
+                        )
+                        ExposedDropdownMenu(
+                            expanded = isGoalDropdownExpanded,
+                            onDismissRequest = { isGoalDropdownExpanded = false }
+                        ) {
+                            goalReminderOptions.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option.first) },
+                                    onClick = {
+                                        goalReminderPeriodMinutes = option.second
+                                        isGoalDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    PreferenceCategory(title = "Settings")
+
+                    SettingsToggle(
+                        title = "Goal Reminders",
+                        description = "Receive notifications to reach your daily target",
+                        checked = remindersEnabled,
+                        onCheckedChange = { remindersEnabled = it },
+                        icon = Icons.Outlined.NotificationsActive,
+                        shape = RoundedCornerShape(24.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                if (isPreventEdit) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Lock,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "Shield settings are locked because you have used more than 50% of your daily limit. This prevents bypassing the shield.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }
 
-            Button(
-                onClick = {
-                    onSave(
-                        timePickerState.hour * 60 + timePickerState.minute,
-                        maxEmergencyUses.toIntOrNull() ?: 3,
-                        remindersEnabled,
-                        strictModeEnabled,
-                        autoQuitEnabled,
-                        maxUses.toIntOrNull() ?: 5,
-                        refreshPeriodMinutes,
-                        goalReminderPeriodMinutes,
-                        isDelayAppEnabled
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.large,
-                enabled = !isPreventEdit
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .navigationBarsPadding()
             ) {
-                Text(
-                    text = if (focusType == FocusType.GOAL) "Set Goal" else "Save Shield",
-                    modifier = Modifier.padding(8.dp)
-                )
+                Button(
+                    onClick = {
+                        onSave(
+                            timePickerState.hour * 60 + timePickerState.minute,
+                            maxEmergencyUses.toIntOrNull() ?: 3,
+                            remindersEnabled,
+                            strictModeEnabled,
+                            autoQuitEnabled,
+                            maxUses.toIntOrNull() ?: 5,
+                            refreshPeriodMinutes,
+                            goalReminderPeriodMinutes,
+                            isDelayAppEnabled
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    enabled = !isPreventEdit
+                ) {
+                    Text(
+                        text = if (focusType == FocusType.GOAL) "Set Goal" else "Save Shield",
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
@@ -2183,8 +2273,8 @@ fun SettingsToggle(
                 checked = checked, 
                 onCheckedChange = onCheckedChange,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.primary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary
                 )
             )
         }
