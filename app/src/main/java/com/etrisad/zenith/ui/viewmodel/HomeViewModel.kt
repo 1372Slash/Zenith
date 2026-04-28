@@ -73,7 +73,8 @@ class HomeViewModel(
     private var appDetailJob: Job? = null
 
     private var globalHistory: List<DailyUsageEntity> = emptyList()
-    private var currentAppHistory: List<DailyUsageEntity> = emptyList()
+    private var globalFallbackMap: Map<String, Long> = emptyMap()
+    private var detailFallbackMap: Map<String, Long> = emptyMap()
 
     init {
         viewModelScope.launch {
@@ -99,6 +100,7 @@ class HomeViewModel(
         viewModelScope.launch {
             shieldRepository.getLastNDaysGlobalUsage(21).collect { history ->
                 globalHistory = history
+                updateGlobalFallback()
                 refreshUsageStats()
             }
         }
@@ -117,30 +119,22 @@ class HomeViewModel(
         return cal.timeInMillis
     }
 
-    private fun getUsageForPackageInRange(
-        usm: UsageStatsManager,
-        packageName: String,
-        startMs: Long,
-        endMs: Long
-    ): Long {
-        val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startMs, endMs)
-        var best = 0L
-        stats.forEach { stat ->
-            if (stat.packageName != packageName) return@forEach
-            val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
-            if (time > best) best = time
-        }
-        return best
-    }
+    private fun updateGlobalFallback() {
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val pm = context.packageManager
+        val launcherApps = pm.queryIntentActivities(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
+        ).map { it.activityInfo.packageName }.toSet()
+        
+        val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val launcherPackage = pm.resolveActivity(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY)
+            ?.activityInfo?.packageName
+        val excludePackages = setOfNotNull(context.packageName, launcherPackage)
 
-    private fun getGlobalFallbackMap(
-        usm: UsageStatsManager,
-        launcherApps: Set<String>,
-        excludePackages: Set<String>,
-        startMs: Long,
-        endMs: Long
-    ): Map<String, Long> {
-        val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startMs, endMs)
+        val fallbackStart = getMidnight(20)
+        val now = System.currentTimeMillis()
+        
+        val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, fallbackStart, now)
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val dailyData = mutableMapOf<String, MutableMap<String, Long>>()
 
@@ -155,16 +149,15 @@ class HomeViewModel(
             pkgMap[pkg] = maxOf(pkgMap[pkg] ?: 0L, time)
         }
 
-        return dailyData.mapValues { it.value.values.sumOf { time -> time } }
+        globalFallbackMap = dailyData.mapValues { it.value.values.sumOf { time -> time } }
     }
 
-    private fun getPackageFallbackMap(
-        usm: UsageStatsManager,
-        packageName: String,
-        startMs: Long,
-        endMs: Long
-    ): Map<String, Long> {
-        val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startMs, endMs)
+    private fun updatePackageFallback(packageName: String) {
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val fallbackStart = getMidnight(20)
+        val now = System.currentTimeMillis()
+        
+        val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, fallbackStart, now)
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val result = mutableMapOf<String, Long>()
 
@@ -176,7 +169,7 @@ class HomeViewModel(
             val dateStr = dateFormat.format(Date(stat.firstTimeStamp))
             result[dateStr] = maxOf(result[dateStr] ?: 0L, time)
         }
-        return result
+        detailFallbackMap = result
     }
 
     private fun refreshUsageStats() {
@@ -213,14 +206,11 @@ class HomeViewModel(
             }
         }
 
-        val fallbackStart = getMidnight(20)
-        val fallbackMap = getGlobalFallbackMap(usm, launcherApps, excludePackages, fallbackStart, now)
-
         val yesterdayCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
         val yesterdayDateStr = dateFormat.format(yesterdayCal.time)
 
         val totalYesterday = globalHistory.find { it.date == yesterdayDateStr }?.usageTimeMillis
-            ?: fallbackMap[yesterdayDateStr]
+            ?: globalFallbackMap[yesterdayDateStr]
             ?: 0L
 
         val history = (0 until 21).map { i ->
@@ -231,7 +221,7 @@ class HomeViewModel(
                 totalToday
             } else {
                 globalHistory.find { it.date == dateStr }?.usageTimeMillis 
-                    ?: fallbackMap[dateStr] 
+                    ?: globalFallbackMap[dateStr] 
                     ?: 0L
             }
             DailyUsage(dStart, dayTotal)
@@ -296,20 +286,18 @@ class HomeViewModel(
             } catch (_: Exception) {}
 
             _appDetailUiState.update { it.copy(appName = appName, icon = icon) }
+            updatePackageFallback(packageName)
 
             shieldRepository.getLastNDaysUsageForPackage(packageName, 21).collect { historyFromDb ->
                 val currentNow = System.currentTimeMillis()
                 val currentTodayUsage = usm.queryAndAggregateUsageStats(todayStart, currentNow)
                     .getUsageTime(packageName)
 
-                val fallbackStart = getMidnight(20)
-                val fallbackMap = getPackageFallbackMap(usm, packageName, fallbackStart, currentNow)
-
                 val yesterdayCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
                 val yesterdayDateStr = dateFormat.format(yesterdayCal.time)
 
                 val yesterdayUsage = historyFromDb.find { it.date == yesterdayDateStr }?.usageTimeMillis
-                    ?: fallbackMap[yesterdayDateStr]
+                    ?: detailFallbackMap[yesterdayDateStr]
                     ?: 0L
 
                 val history = (0 until 21).map { i ->
@@ -320,7 +308,7 @@ class HomeViewModel(
                         currentTodayUsage
                     } else {
                         historyFromDb.find { it.date == dateStr }?.usageTimeMillis 
-                            ?: fallbackMap[dateStr] 
+                            ?: detailFallbackMap[dateStr]
                             ?: 0L
                     }
                     DailyUsage(dStart, dayTotal)
