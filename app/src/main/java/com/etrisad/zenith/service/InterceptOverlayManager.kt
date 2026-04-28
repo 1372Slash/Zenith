@@ -50,6 +50,7 @@ class InterceptOverlayManager(private val context: Context) {
         appName: String,
         shield: com.etrisad.zenith.data.local.entity.ShieldEntity?,
         totalUsageToday: Long,
+        totalGlobalUsageToday: Long,
         delayDurationSeconds: Int = 0,
         onAllowUse: (Int, Boolean) -> Unit,
         onCloseApp: () -> Unit,
@@ -80,6 +81,7 @@ class InterceptOverlayManager(private val context: Context) {
                             appName = appName,
                             shield = shield,
                             totalUsageToday = totalUsageToday,
+                            totalGlobalUsageToday = totalGlobalUsageToday,
                             delayDurationSeconds = delayDurationSeconds,
                             onAllowUse = { minutes, isEmergency ->
                                 onAllowUse(minutes, isEmergency)
@@ -105,6 +107,7 @@ class InterceptOverlayManager(private val context: Context) {
         packageName: String,
         appName: String,
         schedule: com.etrisad.zenith.data.local.entity.ScheduleEntity,
+        totalGlobalUsageToday: Long,
         onAllowUse: (Int, Boolean) -> Unit,
         onCloseApp: () -> Unit
     ) {
@@ -128,6 +131,7 @@ class InterceptOverlayManager(private val context: Context) {
                             packageName = packageName,
                             appName = appName,
                             schedule = schedule,
+                            totalGlobalUsageToday = totalGlobalUsageToday,
                             onAllowUse = { minutes, isEmergency ->
                                 onAllowUse(minutes, isEmergency)
                                 hideOverlay()

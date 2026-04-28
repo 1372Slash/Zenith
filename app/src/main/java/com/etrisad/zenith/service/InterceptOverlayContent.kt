@@ -36,6 +36,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.geometry.Size
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.data.preferences.UserPreferences
 import androidx.core.graphics.drawable.toBitmap
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
@@ -46,6 +50,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.material.icons.outlined.Public
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -54,6 +59,7 @@ fun InterceptOverlayContent(
     appName: String,
     shield: ShieldEntity?,
     totalUsageToday: Long,
+    totalGlobalUsageToday: Long,
     delayDurationSeconds: Int = 0,
     onAllowUse: (Int, Boolean) -> Unit,
     onCloseApp: () -> Unit,
@@ -213,6 +219,7 @@ fun InterceptOverlayContent(
                         appIcon = appIcon,
                         shield = shield,
                         totalUsageToday = totalUsageToday,
+                        totalGlobalUsageToday = totalGlobalUsageToday,
                         remainingMinutes = remainingMinutes,
                         isEmergencyUnlocked = isEmergencyUnlocked,
                         isDelaying = isDelaying,
@@ -253,6 +260,7 @@ fun InterceptOverlayContent(
                         appIcon = appIcon,
                         shield = shield,
                         totalUsageToday = totalUsageToday,
+                        totalGlobalUsageToday = totalGlobalUsageToday,
                         remainingMinutes = remainingMinutes,
                         isEmergencyUnlocked = isEmergencyUnlocked,
                         isDelaying = isDelaying,
@@ -300,6 +308,7 @@ fun PortraitInterceptLayout(
     appIcon: androidx.compose.ui.graphics.ImageBitmap?,
     shield: ShieldEntity?,
     totalUsageToday: Long,
+    totalGlobalUsageToday: Long,
     remainingMinutes: Int?,
     isEmergencyUnlocked: Boolean,
     isDelaying: Boolean,
@@ -427,12 +436,13 @@ fun PortraitInterceptLayout(
             )
 
             if (shield != null && shield.type == FocusType.GOAL) {
-                GoalSection(shield, totalUsageToday, onGoalDismiss)
+                GoalSection(shield, totalUsageToday, totalGlobalUsageToday, onGoalDismiss)
             } else {
                 ShieldSection(
                     shield = shield,
                     remainingMinutes = remainingMinutes,
                     totalUsageToday = totalUsageToday,
+                    totalGlobalUsageToday = totalGlobalUsageToday,
                     isEmergencyUnlocked = isEmergencyUnlocked,
                     isDelaying = isDelaying,
                     randomMessage = randomMessage,
@@ -457,6 +467,7 @@ fun LandscapeInterceptLayout(
     appIcon: androidx.compose.ui.graphics.ImageBitmap?,
     shield: ShieldEntity?,
     totalUsageToday: Long,
+    totalGlobalUsageToday: Long,
     remainingMinutes: Int?,
     isEmergencyUnlocked: Boolean,
     isDelaying: Boolean,
@@ -569,9 +580,9 @@ fun LandscapeInterceptLayout(
                 if (shield != null) {
                     Spacer(modifier = Modifier.height(16.dp))
                     if (shield.type == FocusType.GOAL) {
-                        GoalProgressMini(shield, totalUsageToday)
+                        GoalProgressMini(shield, totalUsageToday, totalGlobalUsageToday)
                     } else {
-                        ShieldProgressMini(shield, totalUsageToday)
+                        ShieldProgressMini(shield, totalUsageToday, totalGlobalUsageToday)
                     }
                 }
             }
@@ -609,7 +620,7 @@ fun LandscapeInterceptLayout(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, onGoalDismiss: () -> Unit) {
+fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageToday: Long, onGoalDismiss: () -> Unit) {
     val targetLimitMillis = shield.timeLimitMinutes * 60 * 1000L
     val progress = if (targetLimitMillis > 0) totalUsageToday.toFloat() / targetLimitMillis else 0f
     val remainingMillis = (targetLimitMillis - totalUsageToday).coerceAtLeast(0L)
@@ -631,20 +642,23 @@ fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, onGoalDismiss: () -
     Spacer(modifier = Modifier.height(24.dp))
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
+        Box(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "${(progress * 100).toInt()}% Done",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.align(Alignment.CenterStart)
             )
+            GlobalUsagePill(totalGlobalUsageToday)
             Text(
                 text = "Target: ${shield.timeLimitMinutes}m",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.CenterEnd)
             )
         }
 
@@ -733,6 +747,7 @@ fun ShieldSection(
     shield: ShieldEntity?,
     remainingMinutes: Int?,
     totalUsageToday: Long,
+    totalGlobalUsageToday: Long,
     isEmergencyUnlocked: Boolean,
     isDelaying: Boolean,
     randomMessage: String,
@@ -763,19 +778,22 @@ fun ShieldSection(
         val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
 
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
+            Box(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = formatMillis(totalUsageToday),
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.CenterStart)
                 )
+                GlobalUsagePill(totalGlobalUsageToday)
                 Text(
                     text = "${formatMillis(remainingMillis)} left today",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.CenterEnd)
                 )
             }
             Spacer(modifier = Modifier.height(4.dp))
@@ -840,25 +858,28 @@ fun ShieldSection(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun GoalProgressMini(shield: ShieldEntity, totalUsageToday: Long) {
+fun GoalProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageToday: Long) {
     val targetLimitMillis = shield.timeLimitMinutes * 60 * 1000L
     val progress = if (targetLimitMillis > 0) totalUsageToday.toFloat() / targetLimitMillis else 0f
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
+        Box(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "${(progress * 100).toInt()}%",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.align(Alignment.CenterStart)
             )
+            GlobalUsagePill(totalGlobalUsageToday)
             Text(
                 text = "${shield.timeLimitMinutes}m",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.CenterEnd)
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
@@ -874,25 +895,28 @@ fun GoalProgressMini(shield: ShieldEntity, totalUsageToday: Long) {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ShieldProgressMini(shield: ShieldEntity, totalUsageToday: Long) {
+fun ShieldProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageToday: Long) {
     val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
     val remainingMillis = (totalLimitMillis - totalUsageToday).coerceAtLeast(0L)
     val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
+        Box(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            contentAlignment = Alignment.Center
         ) {
             Text(
                 text = formatMillis(totalUsageToday),
                 style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.CenterStart)
             )
+            GlobalUsagePill(totalGlobalUsageToday)
             Text(
                 text = "${formatMillis(remainingMillis)} left",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.CenterEnd)
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
@@ -1114,12 +1138,84 @@ fun CloseAppTextButton(onCloseApp: () -> Unit) {
     }
 }
 
+@Composable
+fun GlobalUsagePill(totalGlobalUsageToday: Long, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val userPrefsRepo = remember { UserPreferencesRepository(context) }
+    val userPrefs by userPrefsRepo.userPreferencesFlow.collectAsState(initial = UserPreferences())
+    val screenTimeTargetMinutes = userPrefs.screenTimeTargetMinutes
+
+    val baseColor = MaterialTheme.colorScheme.primary
+    val fillColor = MaterialTheme.colorScheme.tertiary
+    val contentColor = MaterialTheme.colorScheme.onPrimary
+    val cornerRadiusLarge = 24.dp
+    val cornerRadiusSmall = 4.dp
+
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Surface(
+            color = baseColor,
+            shape = RoundedCornerShape(
+                topStart = cornerRadiusLarge,
+                bottomStart = cornerRadiusLarge,
+                topEnd = cornerRadiusSmall,
+                bottomEnd = cornerRadiusSmall
+            )
+        ) {
+            Text(
+                text = "Total",
+                style = MaterialTheme.typography.labelSmall,
+                color = contentColor,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+            )
+        }
+
+        val totalUsageMinutes = totalGlobalUsageToday / 60000
+        val remainingMinutes = (screenTimeTargetMinutes - totalUsageMinutes).coerceAtLeast(0)
+        val fillRatio = if (screenTimeTargetMinutes > 0) {
+            remainingMinutes.toFloat() / screenTimeTargetMinutes
+        } else 0f
+
+        Surface(
+            color = baseColor,
+            shape = RoundedCornerShape(
+                topStart = cornerRadiusSmall,
+                bottomStart = cornerRadiusSmall,
+                topEnd = cornerRadiusLarge,
+                bottomEnd = cornerRadiusLarge
+            )
+        ) {
+            Box(
+                modifier = Modifier.drawBehind {
+                    drawRect(
+                        color = fillColor,
+                        size = Size(width = size.width * fillRatio.coerceIn(0f, 1f), height = size.height)
+                    )
+                }
+            ) {
+                Text(
+                    text = formatMillis(totalGlobalUsageToday),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = contentColor,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ScheduleOverlayContent(
     packageName: String,
     appName: String,
     schedule: ScheduleEntity,
+    totalGlobalUsageToday: Long,
     onAllowUse: (Int, Boolean) -> Unit,
     onCloseApp: () -> Unit
 ) {
@@ -1229,6 +1325,7 @@ fun ScheduleOverlayContent(
                         appIcon = appIcon,
                         schedule = schedule,
                         progress = progress,
+                        totalGlobalUsageToday = totalGlobalUsageToday,
                         isEmergencyUnlocked = isEmergencyUnlocked,
                         onEmergencyClick = { isEmergencyUnlocked = true },
                         onAllowUse = { minutes ->
@@ -1252,6 +1349,7 @@ fun ScheduleOverlayContent(
                         appIcon = appIcon,
                         schedule = schedule,
                         progress = progress,
+                        totalGlobalUsageToday = totalGlobalUsageToday,
                         isEmergencyUnlocked = isEmergencyUnlocked,
                         onEmergencyClick = { isEmergencyUnlocked = true },
                         onAllowUse = { minutes ->
@@ -1282,6 +1380,7 @@ fun PortraitScheduleLayout(
     appIcon: androidx.compose.ui.graphics.ImageBitmap?,
     schedule: ScheduleEntity,
     progress: Float,
+    totalGlobalUsageToday: Long,
     isEmergencyUnlocked: Boolean,
     onEmergencyClick: () -> Unit,
     onAllowUse: (Int) -> Unit,
@@ -1391,6 +1490,9 @@ fun PortraitScheduleLayout(
             Spacer(modifier = Modifier.height(32.dp))
 
             if (schedule.mode == ScheduleMode.ALLOW) {
+                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp), contentAlignment = Alignment.Center) {
+                    GlobalUsagePill(totalGlobalUsageToday)
+                }
                 CircularWavyProgressIndicator(
                     progress = { progress },
                     modifier = Modifier.size(120.dp),
@@ -1443,6 +1545,7 @@ fun LandscapeScheduleLayout(
     appIcon: androidx.compose.ui.graphics.ImageBitmap?,
     schedule: ScheduleEntity,
     progress: Float,
+    totalGlobalUsageToday: Long,
     isEmergencyUnlocked: Boolean,
     onEmergencyClick: () -> Unit,
     onAllowUse: (Int) -> Unit,

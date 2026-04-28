@@ -8,6 +8,7 @@ import android.app.Service
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
@@ -565,6 +566,7 @@ class AppUsageMonitorService : Service() {
         val prefs = currentPreferences ?: return
         if (shield != null && !InterceptOverlayManager.isShowing) {
             val totalUsageToday = getTotalUsageToday(targetPackageName)
+            val totalGlobalUsageToday = getTotalGlobalUsageToday()
             val delayDurationSeconds = prefs.delayAppDurationSeconds
             
             val currentTime = System.currentTimeMillis()
@@ -597,8 +599,9 @@ class AppUsageMonitorService : Service() {
                     appName = shield.appName,
                     shield = shieldWithTimestamp,
                     totalUsageToday = totalUsageToday,
+                    totalGlobalUsageToday = totalGlobalUsageToday,
                     delayDurationSeconds = delayDurationSeconds,
-                            onAllowUse = { minutes, isEmergency ->
+                    onAllowUse = { minutes, isEmergency ->
                                 val currentTime = System.currentTimeMillis()
                                 serviceScope.launch {
                                     val currentShield = shieldRepository.getShieldByPackageName(targetPackageName) ?: return@launch
@@ -766,6 +769,43 @@ class AppUsageMonitorService : Service() {
         preferencesRepository.setLastStreakCheckDate(dateFormat.format(java.util.Date(currentTime)))
     }
 
+    private fun getTotalGlobalUsageToday(): Long {
+        val currentTime = System.currentTimeMillis()
+        val startTime = getStartOfDay()
+
+        val stats = try {
+            usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, currentTime)
+        } catch (_: Exception) {
+            null
+        }
+
+        val pm = packageManager
+        if (System.currentTimeMillis() - lastLauncherRefreshTime > 3600000 || launcherPackages.isEmpty()) {
+            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            launcherPackages = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+                .map { it.activityInfo.packageName }.toSet()
+            lastLauncherRefreshTime = System.currentTimeMillis()
+        }
+
+        val launcherApps = pm.queryIntentActivities(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
+        ).map { it.activityInfo.packageName }.toSet()
+
+        val excludePackages = launcherPackages + packageName
+
+        var totalToday = 0L
+        stats?.forEach { stat ->
+            val pkg = stat.packageName
+            if (pkg !in excludePackages && pkg in launcherApps) {
+                val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+                if (time > 0) {
+                    totalToday += time
+                }
+            }
+        }
+        return totalToday
+    }
+
     private fun getTotalUsageToday(packageName: String): Long {
         getUsageStatsList()
         return dailyUsageCache[packageName] ?: 0L
@@ -903,6 +943,7 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun showScheduleOverlay(packageName: String, schedule: com.etrisad.zenith.data.local.entity.ScheduleEntity) {
+        val totalGlobalUsageToday = getTotalGlobalUsageToday()
         serviceScope.launch(Dispatchers.Main) {
             val appName = try {
                 packageManager.getApplicationLabel(packageManager.getApplicationInfo(packageName, 0)).toString()
@@ -912,6 +953,7 @@ class AppUsageMonitorService : Service() {
                 packageName = packageName,
                 appName = appName,
                 schedule = schedule,
+                totalGlobalUsageToday = totalGlobalUsageToday,
                 onAllowUse = { minutes, isEmergency ->
                     serviceScope.launch {
                         if (isEmergency) {

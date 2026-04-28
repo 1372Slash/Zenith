@@ -339,6 +339,7 @@ class ZenithAccessibilityService : AccessibilityService() {
         val shield = currentShieldCache ?: allShieldsCache.find { it.packageName == targetPackageName }
         if (shield != null && !InterceptOverlayManager.isShowing) {
             val totalUsageToday = getTotalUsageToday(targetPackageName)
+            val totalGlobalUsageToday = getTotalGlobalUsageToday()
             val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
             val delayDurationSeconds = prefs.delayAppDurationSeconds
 
@@ -369,6 +370,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                     appName = shield.appName,
                     shield = shieldWithTimestamp,
                     totalUsageToday = totalUsageToday,
+                    totalGlobalUsageToday = totalGlobalUsageToday,
                     delayDurationSeconds = delayDurationSeconds,
                     onAllowUse = { minutes, isEmergency ->
                         val currentTimeOnUnlock = System.currentTimeMillis()
@@ -434,6 +436,57 @@ class ZenithAccessibilityService : AccessibilityService() {
         }
     }
 
+    private var cachedTotalGlobalUsage: Long = 0L
+    private var lastGlobalUsageCacheTime: Long = 0L
+
+    private fun getTotalGlobalUsageToday(): Long {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastGlobalUsageCacheTime < 3000) {
+            return cachedTotalGlobalUsage
+        }
+
+        val pm = packageManager
+        val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val launcherPackage = pm.resolveActivity(launcherIntent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+            ?.activityInfo?.packageName
+
+        val launcherApps = pm.queryIntentActivities(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
+        ).map { it.activityInfo.packageName }.toSet()
+
+        val excludePackages = setOfNotNull(packageName, launcherPackage)
+
+        synchronized(reusableCalendar) {
+            reusableCalendar.timeInMillis = currentTime
+            reusableCalendar.set(Calendar.HOUR_OF_DAY, 0)
+            reusableCalendar.set(Calendar.MINUTE, 0)
+            reusableCalendar.set(Calendar.SECOND, 0)
+            reusableCalendar.set(Calendar.MILLISECOND, 0)
+            val startTime = reusableCalendar.timeInMillis
+
+            val stats = try {
+                usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, currentTime)
+            } catch (_: Exception) {
+                null
+            }
+
+            var totalToday = 0L
+            stats?.forEach { stat ->
+                val pkg = stat.packageName
+                if (pkg !in excludePackages && pkg in launcherApps) {
+                    val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+                    if (time > 0) {
+                        totalToday += time
+                    }
+                }
+            }
+
+            cachedTotalGlobalUsage = totalToday
+            lastGlobalUsageCacheTime = currentTime
+            return totalToday
+        }
+    }
+
     private fun getTotalUsageToday(packageName: String): Long {
         val currentTime = System.currentTimeMillis()
 
@@ -441,10 +494,10 @@ class ZenithAccessibilityService : AccessibilityService() {
         if (stats == null || currentTime - lastUsageCacheTime > 3000) {
             synchronized(reusableCalendar) {
                 reusableCalendar.timeInMillis = currentTime
-                reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
-                reusableCalendar.set(java.util.Calendar.MINUTE, 0)
-                reusableCalendar.set(java.util.Calendar.SECOND, 0)
-                reusableCalendar.set(java.util.Calendar.MILLISECOND, 0)
+                reusableCalendar.set(Calendar.HOUR_OF_DAY, 0)
+                reusableCalendar.set(Calendar.MINUTE, 0)
+                reusableCalendar.set(Calendar.SECOND, 0)
+                reusableCalendar.set(Calendar.MILLISECOND, 0)
                 val startTime = reusableCalendar.timeInMillis
 
                 stats = try {
@@ -523,11 +576,13 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private fun showScheduleOverlay(packageName: String, schedule: ScheduleEntity) {
+        val totalGlobalUsageToday = getTotalGlobalUsageToday()
         serviceScope.launch(Dispatchers.Main) {
             overlayManager.showScheduleOverlay(
                 packageName = packageName,
                 appName = packageName, 
                 schedule = schedule,
+                totalGlobalUsageToday = totalGlobalUsageToday,
                 onAllowUse = { minutes, isEmergency ->
                     if (isEmergency) {
                         allowedApps[packageName] = System.currentTimeMillis() + (minutes * 60 * 1000L)
