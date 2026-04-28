@@ -219,8 +219,6 @@ fun HomeScreenContent(
     }
 }
 
-// WelcomeHeader has been moved to ZenithHeader.kt
-
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun UsageDashboard(
@@ -248,7 +246,7 @@ fun UsageDashboard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
-                Spacer(modifier = Modifier.width(32.dp)) // Equalizer for the icon
+                Spacer(modifier = Modifier.width(32.dp))
                 Text(
                     text = "Daily Screen Time",
                     style = MaterialTheme.typography.titleMedium,
@@ -297,7 +295,7 @@ fun UsageDashboard(
                 if (isExceeded) 0f
                 else ((targetMillis - uiState.totalScreenTime).toFloat() / targetMillis).coerceIn(0f, 1f)
             } else {
-                0.7f // Default placeholder progress
+                0.7f
             }
 
             val dashboardProgress by animateFloatAsState(
@@ -394,7 +392,7 @@ fun ScreenTimeTargetBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
             ) {
-                val presets = listOf(120, 240, 360, 480) // 2h, 4h, 6h, 8h
+                val presets = listOf(120, 240, 360, 480)
                 presets.forEach { preset ->
                     FilterChip(
                         selected = (hours * 60 + minutes) == preset,
@@ -589,36 +587,17 @@ fun UsageGraph(
         }
     }
 
-    val currentPageData = if (pagerState.currentPage < pages.size) pages[pagerState.currentPage] else emptyList()
-    val maxUsageRaw = (currentPageData.maxOfOrNull { it.totalTime } ?: 0L)
-        .coerceAtLeast(targetMillis)
-        .coerceAtLeast(60 * 1000L)
-
-    val maxUsage = if (maxUsageRaw < 60 * 60 * 1000L) {
-        val maxMinutes = (maxUsageRaw / (60 * 1000L)).coerceAtLeast(1) + 3
-        maxMinutes * 60 * 1000L
-    } else {
-        val maxUsageHours = (maxUsageRaw / (1000 * 60 * 60)).coerceAtLeast(1) + 1
-        maxUsageHours * 1000 * 60 * 60L
-    }
-
-    val maxUsageDisplay = if (maxUsage < 60 * 60 * 1000L) (maxUsage / (60 * 1000L)) else (maxUsage / (3600 * 1000L))
-    val unitLabel = if (maxUsage < 60 * 60 * 1000L) "m" else "h"
-
     val dateFormat = remember { SimpleDateFormat("dd", Locale.getDefault()) }
     val dayFormat = remember { SimpleDateFormat("EEE", Locale.getDefault()) }
     val todayDate = remember { dateFormat.format(System.currentTimeMillis()) }
 
     var selectedDate by remember { mutableStateOf<Long?>(null) }
-
     var animateTrigger by remember { mutableStateOf(false) }
-    
+
     LaunchedEffect(history) {
-        if (history.isNotEmpty()) {
-            if (!animateTrigger) {
-                kotlinx.coroutines.delay(200)
-                animateTrigger = true
-            }
+        if (history.isNotEmpty() && !animateTrigger) {
+            kotlinx.coroutines.delay(200)
+            animateTrigger = true
         }
     }
 
@@ -633,59 +612,67 @@ fun UsageGraph(
                 .fillMaxWidth()
                 .height(180.dp)
         ) {
-            // Background grid lines (Indicators)
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = 24.dp),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                repeat(4) { i ->
-                    val labelValue = (maxUsageDisplay * (3 - i) / 3)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "${labelValue}$unitLabel",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                            modifier = Modifier.width(28.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        HorizontalDivider(
-                            modifier = Modifier.weight(1f),
-                            thickness = 0.5.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                        )
-                    }
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { pageIndex ->
+                val pageData = if (pageIndex < pages.size) pages[pageIndex] else emptyList()
+
+                val pageMaxRaw = (pageData.maxOfOrNull { it.totalTime } ?: 0L)
+                    .coerceAtLeast(targetMillis)
+                    .coerceAtLeast(60 * 1000L)
+
+                val pageMax = if (pageMaxRaw < 3600000L) {
+                    ((pageMaxRaw / 60000L).coerceAtLeast(1) + 3) * 60000L
+                } else {
+                    ((pageMaxRaw / 3600000L).coerceAtLeast(1) + 1) * 3600000L
                 }
-            }
 
-            // Goal line
-            Column(modifier = Modifier.fillMaxSize()) {
-                val goalRatio = (targetMillis.toFloat() / maxUsage).coerceIn(0f, 1f)
-                val animatedGoalRatio by animateFloatAsState(
-                    targetValue = goalRatio,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessLow
-                    ),
-                    label = "GoalLineAnimation"
-                )
+                val maxDisplay = if (pageMax < 3600000L) (pageMax / 60000L) else (pageMax / 3600000L)
+                val unit = if (pageMax < 3600000L) "m" else "h"
 
-                AnimatedVisibility(
-                    visible = targetMillis > 0,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
-                ) {
-                    val goalLineColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.6f)
-                    Box(
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(bottom = 24.dp, start = 32.dp)
+                            .padding(bottom = 24.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
                     ) {
-                        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                        repeat(4) { i ->
+                            val labelValue = (maxDisplay * (3 - i) / 3)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${labelValue}$unit",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.width(28.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                HorizontalDivider(
+                                    modifier = Modifier.weight(1f),
+                                    thickness = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                )
+                            }
+                        }
+                    }
+
+                    val goalRatio = (targetMillis.toFloat() / pageMax).coerceIn(0f, 1f)
+                    val animatedGoalRatio by animateFloatAsState(
+                        targetValue = goalRatio,
+                        animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessLow)
+                    )
+
+                    val goalLineColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.6f)
+                    if (targetMillis > 0) {
+                        androidx.compose.foundation.Canvas(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(bottom = 24.dp, start = 32.dp)
+                        ) {
                             val y = size.height * (1f - animatedGoalRatio)
                             drawLine(
                                 color = goalLineColor,
@@ -695,115 +682,95 @@ fun UsageGraph(
                             )
                         }
                     }
-                }
-            }
 
-            // Pager for Bars
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(start = 32.dp)
-            ) { pageIndex ->
-                val pageData = if (pageIndex < pages.size) pages[pageIndex] else emptyList()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(bottom = 24.dp, start = 32.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        pageData.forEach { usage ->
+                            val isSelected = selectedDate == usage.date
+                            val targetHeight = if (animateTrigger) (usage.totalTime.toFloat() / pageMax).coerceIn(0.01f, 1f) else 0.01f
+                            val animatedHeight by animateFloatAsState(
+                                targetValue = targetHeight,
+                                animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow)
+                            )
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(bottom = 24.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    pageData.forEach { usage ->
-                        val isSelected = selectedDate == usage.date
-                        val targetHeight = if (animateTrigger) (usage.totalTime.toFloat() / maxUsage).coerceIn(0.01f, 1f) else 0.01f
-                        val animatedHeight by animateFloatAsState(
-                            targetValue = targetHeight,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessLow
-                            ),
-                            label = "BarHeight"
-                        )
+                            val isGoalAchieved = if (focusType == FocusType.GOAL) {
+                                targetMillis > 0 && usage.totalTime >= targetMillis
+                            } else {
+                                targetMillis > 0 && usage.totalTime <= targetMillis
+                            }
 
-                        val isGoalAchieved = if (focusType == FocusType.GOAL) {
-                            targetMillis > 0 && usage.totalTime >= targetMillis
-                        } else {
-                            targetMillis > 0 && usage.totalTime <= targetMillis
-                        }
+                            val isToday = dateFormat.format(usage.date) == todayDate
+                            val baseColor = if (isGoalAchieved) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
+                            val barColor = when {
+                                isSelected -> baseColor
+                                isToday -> baseColor.copy(alpha = 0.8f)
+                                else -> baseColor.copy(alpha = 0.4f)
+                            }
 
-                        val isToday = dateFormat.format(usage.date) == todayDate
-                        
-                        val baseColor = if (isGoalAchieved) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
-                        val barColor = when {
-                            isSelected -> baseColor
-                            isToday -> baseColor.copy(alpha = 0.8f)
-                            else -> baseColor.copy(alpha = 0.4f)
-                        }
-
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable(
-                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                    indication = null
-                                ) {
-                                    selectedDate = if (isSelected) null else usage.date
-                                    onDaySelected(if (isSelected) null else usage)
-                                }
-                        ) {
-                            Box(
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier
-                                    .width(40.dp)
-                                    .fillMaxHeight(animatedHeight)
-                                    .clip(CircleShape)
-                                    .background(barColor),
-                                contentAlignment = Alignment.TopCenter
-                            ) {
-                                if (isGoalAchieved && animatedHeight > 0.15f) {
-                                    Box(
-                                        modifier = Modifier
-                                            .padding(top = 8.dp)
-                                            .size(28.dp)
-                                            .clip(sunnyShape)
-                                            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                                        contentAlignment = Alignment.Center
+                                    .weight(1f)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Check,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.tertiary,
-                                            modifier = Modifier.size(18.dp)
-                                        )
+                                        selectedDate = if (isSelected) null else usage.date
+                                        onDaySelected(if (isSelected) null else usage)
+                                    }
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(40.dp)
+                                        .fillMaxHeight(animatedHeight)
+                                        .clip(CircleShape)
+                                        .background(barColor),
+                                    contentAlignment = Alignment.TopCenter
+                                ) {
+                                    if (isGoalAchieved && animatedHeight > 0.15f) {
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(top = 8.dp)
+                                                .size(28.dp)
+                                                .clip(sunnyShape)
+                                                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Filled.Check,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.tertiary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
-            }
 
-            // Fixed Labels (Days) at the bottom, matching the pager
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomStart)
-                    .padding(start = 32.dp)
-                    .height(20.dp),
-                userScrollEnabled = false
-            ) { pageIndex ->
-                val pageData = if (pageIndex < pages.size) pages[pageIndex] else emptyList()
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    pageData.forEach { usage ->
-                                Text(
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.BottomStart)
+                            .padding(start = 32.dp)
+                            .height(20.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        pageData.forEach { usage ->
+                            Text(
                                 text = dayFormat.format(usage.date).first().toString(),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.weight(1f),
                                 textAlign = TextAlign.Center
                             )
+                        }
                     }
                 }
             }
@@ -811,7 +778,6 @@ fun UsageGraph(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Pager Indicators (Dots)
         Row(
             Modifier
                 .height(20.dp)
@@ -865,12 +831,11 @@ fun TopAppsSection(
                     modifier = Modifier.weight(1f)
                 )
 
-                // Stacked app icons
                 AnimatedVisibility(
                     visible = !expanded,
-                    enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) + 
+                    enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
                             scaleIn(initialScale = 0.8f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)),
-                    exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) + 
+                    exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
                            scaleOut(targetScale = 0.8f, animationSpec = spring(stiffness = Spring.StiffnessLow))
                 ) {
                     Row(
@@ -1087,7 +1052,7 @@ fun QuickActionCard(
                 .clickable(
                     interactionSource = interactionSource,
                     indication = ripple(),
-                    onClick = { 
+                    onClick = {
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                         Toast.makeText(context, "Coming Soon", Toast.LENGTH_SHORT).show()
                     }
@@ -1150,7 +1115,6 @@ fun ShieldItem(
     formatDuration: (Long) -> String,
     onAppClick: (String) -> Unit
 ) {
-    // Simulated remaining time for UI
     val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
     val remainingMillis = shield.remainingTimeMillis.coerceIn(0L, totalLimitMillis)
     val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
@@ -1164,7 +1128,6 @@ fun ShieldItem(
         }
     }
 
-    // Animasi saturasi: 1f (normal) ke 0f (grayscale)
     val saturation by animateFloatAsState(
         targetValue = if (shield.isPaused) 0f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
@@ -1252,9 +1215,9 @@ fun ShieldItem(
                             val initialPauseDuration = remember(shield.pauseEndTimestamp) {
                                 val diff = shield.pauseEndTimestamp - currentTime
                                 when {
-                                    diff <= 3600000L -> 3600000L // 1h
-                                    diff <= 21600000L -> 21600000L // 6h
-                                    else -> 86400000L // 24h
+                                    diff <= 3600000L -> 3600000L
+                                    diff <= 21600000L -> 21600000L
+                                    else -> 86400000L
                                 }
                             }
 
@@ -1437,7 +1400,7 @@ fun HomeScreenPreview() {
     ZenithTheme {
         HomeScreenContent(
             uiState = HomeUiState(
-                totalScreenTime = 3600000 * 3 + 1800000, // 3h 30m
+                totalScreenTime = 3600000 * 3 + 1800000,
                 topApps = listOf(
                     AppUsageInfo("com.instagram", "Instagram", 3600000),
                     AppUsageInfo("com.twitter", "X", 1800000),
