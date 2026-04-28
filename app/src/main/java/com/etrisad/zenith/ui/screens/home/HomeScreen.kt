@@ -580,7 +580,6 @@ fun UsageGraph(
     val initialPage = remember(history) { (pageCount - 1).coerceAtLeast(0) }
     val pagerState = rememberPagerState(pageCount = { pageCount }, initialPage = initialPage)
 
-    // Sync pagerState when history first loads to ensure we start at the latest week
     var hasInitializedPager by remember { mutableStateOf(false) }
     LaunchedEffect(history) {
         if (history.isNotEmpty() && !hasInitializedPager) {
@@ -590,15 +589,21 @@ fun UsageGraph(
         }
     }
 
-    // Determine max usage for the current visible page (Adaptive Scale)
     val currentPageData = if (pagerState.currentPage < pages.size) pages[pagerState.currentPage] else emptyList()
     val maxUsageRaw = (currentPageData.maxOfOrNull { it.totalTime } ?: 0L)
         .coerceAtLeast(targetMillis)
-        .coerceAtLeast(1L)
+        .coerceAtLeast(60 * 1000L)
 
-    // Scale to nearest hour for cleaner indicators
-    val maxUsageHours = (maxUsageRaw / (1000 * 60 * 60)).coerceAtLeast(1) + 1
-    val maxUsage = maxUsageHours * 1000 * 60 * 60L
+    val maxUsage = if (maxUsageRaw < 60 * 60 * 1000L) {
+        val maxMinutes = (maxUsageRaw / (60 * 1000L)).coerceAtLeast(1) + 3
+        maxMinutes * 60 * 1000L
+    } else {
+        val maxUsageHours = (maxUsageRaw / (1000 * 60 * 60)).coerceAtLeast(1) + 1
+        maxUsageHours * 1000 * 60 * 60L
+    }
+
+    val maxUsageDisplay = if (maxUsage < 60 * 60 * 1000L) (maxUsage / (60 * 1000L)) else (maxUsage / (3600 * 1000L))
+    val unitLabel = if (maxUsage < 60 * 60 * 1000L) "m" else "h"
 
     val dateFormat = remember { SimpleDateFormat("dd", Locale.getDefault()) }
     val dayFormat = remember { SimpleDateFormat("EEE", Locale.getDefault()) }
@@ -606,20 +611,17 @@ fun UsageGraph(
 
     var selectedDate by remember { mutableStateOf<Long?>(null) }
 
-    // Trigger for opening animation - Reset every time history changes
     var animateTrigger by remember { mutableStateOf(false) }
     
     LaunchedEffect(history) {
         if (history.isNotEmpty()) {
             if (!animateTrigger) {
-                // Small delay to ensure layout and maxUsage are stable
                 kotlinx.coroutines.delay(200)
                 animateTrigger = true
             }
         }
     }
 
-    // Reset selection when paging
     LaunchedEffect(pagerState.currentPage) {
         selectedDate = null
         onDaySelected(null)
@@ -639,16 +641,16 @@ fun UsageGraph(
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 repeat(4) { i ->
-                    val hourLabel = (maxUsageHours * (3 - i) / 3)
+                    val labelValue = (maxUsageDisplay * (3 - i) / 3)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "${hourLabel}h",
+                            text = "${labelValue}$unitLabel",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                            modifier = Modifier.width(24.dp)
+                            modifier = Modifier.width(28.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         HorizontalDivider(
