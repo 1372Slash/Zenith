@@ -51,6 +51,12 @@ fun AppDetailScreen(
     innerPadding: PaddingValues
 ) {
     val uiState by viewModel.appDetailUiState.collectAsState()
+    val nowMillis by produceState(initialValue = System.currentTimeMillis()) {
+        while (true) {
+            delay(1000)
+            value = System.currentTimeMillis()
+        }
+    }
 
     LaunchedEffect(packageName) {
         viewModel.loadAppDetail(packageName)
@@ -62,8 +68,12 @@ fun AppDetailScreen(
         }
     }
 
-    val targetMillis = uiState.shieldEntity?.timeLimitMinutes?.let { it * 60 * 1000L } ?: 0L
-    val isFocusActive = uiState.shieldEntity != null
+    val shield = uiState.shieldEntity
+    val isFocusActive = shield != null
+    val isEffectivelyPaused = shield?.let {
+        it.isPaused && (it.pauseEndTimestamp == 0L || nowMillis < it.pauseEndTimestamp)
+    } ?: false
+    val targetMillis = shield?.timeLimitMinutes?.let { it * 60 * 1000L } ?: 0L
 
     LazyColumn(
         modifier = Modifier
@@ -81,8 +91,9 @@ fun AppDetailScreen(
                     icon = uiState.icon,
                     focusType = uiState.type,
                     isActive = isFocusActive,
-                    isPaused = uiState.shieldEntity?.isPaused ?: false,
-                    pauseEndTimestamp = uiState.shieldEntity?.pauseEndTimestamp ?: 0L
+                    isPaused = isEffectivelyPaused,
+                    pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L,
+                    nowMillis = nowMillis
                 )
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -112,7 +123,7 @@ fun AppDetailScreen(
 
             item {
                 AnimatedVisibility(
-                    visible = uiState.shieldEntity != null,
+                    visible = isFocusActive,
                     enter = fadeIn() + expandVertically(),
                     exit = fadeOut() + shrinkVertically()
                 ) {
@@ -138,15 +149,15 @@ fun AppDetailScreen(
                         shape = RoundedCornerShape(
                             topStart = 8.dp,
                             topEnd = 8.dp,
-                            bottomStart = if (uiState.shieldEntity == null) 24.dp else 8.dp,
-                            bottomEnd = if (uiState.shieldEntity == null) 24.dp else 8.dp
+                            bottomStart = if (!isFocusActive) 24.dp else 8.dp,
+                            bottomEnd = if (!isFocusActive) 24.dp else 8.dp
                         )
                     )
                 } else {
                     // Placeholder during loading to prevent layout jump and ensure animation triggers correctly later
                     Box(modifier = Modifier.fillMaxWidth().height(250.dp))
                 }
-                if (uiState.shieldEntity != null) {
+                if (isFocusActive) {
                     Spacer(modifier = Modifier.height(2.dp))
                 } else {
                     Spacer(modifier = Modifier.height(4.dp))
@@ -155,17 +166,16 @@ fun AppDetailScreen(
 
             item {
                 AnimatedVisibility(
-                    visible = uiState.shieldEntity != null,
+                    visible = isFocusActive,
                     enter = fadeIn() + expandVertically(),
                     exit = fadeOut() + shrinkVertically()
                 ) {
-                    val shield = uiState.shieldEntity
                     if (shield != null) {
                         var showPauseSheet by remember { mutableStateOf(false) }
 
                         Column {
                             AnimatedContent(
-                                targetState = shield.isPaused,
+                                targetState = isEffectivelyPaused,
                                 transitionSpec = {
                                     (fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f))
                                         .togetherWith(fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.95f))
@@ -177,7 +187,8 @@ fun AppDetailScreen(
                                         pauseEndTimestamp = shield.pauseEndTimestamp,
                                         onResume = { viewModel.resumeShield() },
                                         formatDuration = { viewModel.formatDuration(it) },
-                                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+                                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp),
+                                        nowMillis = nowMillis
                                     )
                                 } else {
                                     PauseShieldCard(
@@ -220,7 +231,8 @@ fun AppHeader(
     focusType: FocusType?,
     isActive: Boolean,
     isPaused: Boolean = false,
-    pauseEndTimestamp: Long = 0L
+    pauseEndTimestamp: Long = 0L,
+    nowMillis: Long = System.currentTimeMillis()
 ) {
     // Animasi saturasi: 1f (normal) ke 0f (grayscale)
     val saturation by animateFloatAsState(
@@ -277,21 +289,9 @@ fun AppHeader(
 
             // Pause Indicator Badge
             if (isPaused) {
-                val currentTime = remember { mutableLongStateOf(System.currentTimeMillis()) }
-
-                // Optimasi CPU: Hanya jalankan timer jika ada durasi tertentu
-                if (pauseEndTimestamp > 0L) {
-                    LaunchedEffect(pauseEndTimestamp) {
-                        while (currentTime.longValue < pauseEndTimestamp) {
-                            delay(1000)
-                            currentTime.longValue = System.currentTimeMillis()
-                        }
-                    }
-                }
-
-                val remainingMillis = remember(pauseEndTimestamp, currentTime.longValue) {
+                val remainingMillis = remember(pauseEndTimestamp, nowMillis) {
                     if (pauseEndTimestamp == 0L) -1L
-                    else (pauseEndTimestamp - currentTime.longValue).coerceAtLeast(0L)
+                    else (pauseEndTimestamp - nowMillis).coerceAtLeast(0L)
                 }
 
                 val initialPauseDuration = remember(pauseEndTimestamp) {
@@ -756,20 +756,12 @@ fun ResumeCard(
     pauseEndTimestamp: Long,
     onResume: () -> Unit,
     formatDuration: (Long) -> String,
-    shape: androidx.compose.ui.graphics.Shape
+    shape: androidx.compose.ui.graphics.Shape,
+    nowMillis: Long = System.currentTimeMillis()
 ) {
-    val currentTime = remember { mutableLongStateOf(System.currentTimeMillis()) }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            currentTime.longValue = System.currentTimeMillis()
-            delay(1000)
-        }
-    }
-
-    val remainingMillis = remember(pauseEndTimestamp, currentTime.longValue) {
+    val remainingMillis = remember(pauseEndTimestamp, nowMillis) {
         if (pauseEndTimestamp == 0L) -1L
-        else (pauseEndTimestamp - currentTime.longValue).coerceAtLeast(0L)
+        else (pauseEndTimestamp - nowMillis).coerceAtLeast(0L)
     }
 
     val resumeTimeStr = remember(pauseEndTimestamp) {

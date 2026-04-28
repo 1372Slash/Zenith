@@ -1128,14 +1128,25 @@ fun ShieldItem(
         }
     }
 
+    val nowMillis by produceState(initialValue = System.currentTimeMillis()) {
+        while (true) {
+            delay(1000)
+            value = System.currentTimeMillis()
+        }
+    }
+
+    val isEffectivelyPaused = remember(shield.isPaused, shield.pauseEndTimestamp, nowMillis) {
+        shield.isPaused && (shield.pauseEndTimestamp == 0L || nowMillis < shield.pauseEndTimestamp)
+    }
+
     val saturation by animateFloatAsState(
-        targetValue = if (shield.isPaused) 0f else 1f,
+        targetValue = if (isEffectivelyPaused) 0f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
         label = "IconSaturation"
     )
 
     val iconAlpha by animateFloatAsState(
-        targetValue = if (shield.isPaused) 0.6f else 1f,
+        targetValue = if (isEffectivelyPaused) 0.6f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
         label = "IconAlpha"
     )
@@ -1207,13 +1218,12 @@ fun ShieldItem(
                             }
                         }
 
-                        if (shield.isPaused) {
-                            val currentTime = System.currentTimeMillis()
-                            val remainingMillis = if (shield.pauseEndTimestamp == 0L) -1L
-                            else (shield.pauseEndTimestamp - currentTime).coerceAtLeast(0L)
+                        if (isEffectivelyPaused) {
+                            val remainingPauseMillis = if (shield.pauseEndTimestamp == 0L) -1L
+                            else (shield.pauseEndTimestamp - nowMillis).coerceAtLeast(0L)
 
                             val initialPauseDuration = remember(shield.pauseEndTimestamp) {
-                                val diff = shield.pauseEndTimestamp - currentTime
+                                val diff = shield.pauseEndTimestamp - System.currentTimeMillis()
                                 when {
                                     diff <= 3600000L -> 3600000L
                                     diff <= 21600000L -> 21600000L
@@ -1221,8 +1231,8 @@ fun ShieldItem(
                                 }
                             }
 
-                            val progress = if (shield.pauseEndTimestamp == 0L) 1f
-                            else (remainingMillis.toFloat() / initialPauseDuration).coerceIn(0f, 1f)
+                            val pauseProgress = if (shield.pauseEndTimestamp == 0L) 1f
+                            else (remainingPauseMillis.toFloat() / initialPauseDuration).coerceIn(0f, 1f)
 
                             Surface(
                                 color = MaterialTheme.colorScheme.surface,
@@ -1236,7 +1246,7 @@ fun ShieldItem(
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     CircularProgressIndicator(
-                                        progress = { progress },
+                                        progress = { pauseProgress },
                                         modifier = Modifier.size(14.dp),
                                         color = MaterialTheme.colorScheme.secondary,
                                         strokeWidth = 1.5.dp,
