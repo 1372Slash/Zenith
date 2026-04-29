@@ -56,6 +56,12 @@ class BedtimeViewModel(
         }
     }
 
+    fun setBedtimeNotificationEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setBedtimeNotificationEnabled(enabled)
+        }
+    }
+
     fun setBedtimeWhitelistedPackages(packages: Set<String>) {
         viewModelScope.launch {
             userPreferencesRepository.setBedtimeWhitelistedPackages(packages)

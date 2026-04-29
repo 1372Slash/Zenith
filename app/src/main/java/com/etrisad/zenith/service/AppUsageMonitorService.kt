@@ -162,6 +162,7 @@ class AppUsageMonitorService : Service() {
 
         startForeground(NOTIFICATION_ID, createNotification())
         createGoalNotificationChannel()
+        createBedtimeNotificationChannel()
         
         val filter = android.content.IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
@@ -593,6 +594,40 @@ class AppUsageMonitorService : Service() {
         manager.notify(packageName.hashCode(), notification)
     }
 
+    private fun createBedtimeNotificationChannel() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val manager = getSystemService(NotificationManager::class.java)
+            if (manager.getNotificationChannel(BEDTIME_CHANNEL_ID) == null) {
+                val channel = NotificationChannel(
+                    BEDTIME_CHANNEL_ID, "Bedtime & Wind Down", NotificationManager.IMPORTANCE_DEFAULT
+                ).apply {
+                    description = "Notifications for bedtime and wind down mode"
+                }
+                manager.createNotificationChannel(channel)
+            }
+        }
+    }
+
+    private fun sendWindDownNotification() {
+        val manager = getSystemService(NotificationManager::class.java)
+        
+        val intent = packageManager.getLaunchIntentForPackage(packageName)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, BEDTIME_CHANNEL_ID)
+            .setContentTitle("Time for Wind Down")
+            .setContentText("Bedtime is in 30 minutes. Prepare and get ready for bed.")
+            .setSmallIcon(android.R.drawable.ic_lock_power_off)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        manager.notify(WIND_DOWN_NOTIFICATION_ID, notification)
+    }
+
     fun sendTestNotification() {
         val channelId = "zenith_goal_channel"
         val manager = getSystemService(NotificationManager::class.java)
@@ -960,6 +995,9 @@ class AppUsageMonitorService : Service() {
 
         if (windDownActive && !wasWindDownActive) {
             windDownUsedPackages.clear()
+            if (prefs.bedtimeNotificationEnabled) {
+                sendWindDownNotification()
+            }
         }
 
         isBedtimeActive = active
@@ -1257,6 +1295,8 @@ class AppUsageMonitorService : Service() {
 
     companion object {
         private const val NOTIFICATION_ID = 101
+        private const val BEDTIME_CHANNEL_ID = "zenith_bedtime_channel"
+        private const val WIND_DOWN_NOTIFICATION_ID = 2001
         private val CRITICAL_SYSTEM_PACKAGES = setOf(
             "android", "com.android.systemui", "com.android.settings", "com.android.phone",
             "com.android.server.telecom", "com.google.android.packageinstaller",

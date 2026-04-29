@@ -130,8 +130,10 @@ fun BedtimeScreen(
                 FeaturesCard(
                     dndEnabled = preferences.bedtimeDndEnabled,
                     windDownEnabled = preferences.bedtimeWindDownEnabled,
+                    notificationEnabled = preferences.bedtimeNotificationEnabled,
                     onDndToggle = { viewModel.setBedtimeDndEnabled(it) },
                     onWindDownToggle = { viewModel.setBedtimeWindDownEnabled(it) },
+                    onNotificationToggle = { viewModel.setBedtimeNotificationEnabled(it) },
                     containerColor = containerColor
                 )
             }
@@ -609,8 +611,10 @@ fun AllowedAppsCard(allowedCount: Int, onClick: () -> Unit, containerColor: andr
 fun FeaturesCard(
     dndEnabled: Boolean,
     windDownEnabled: Boolean,
+    notificationEnabled: Boolean,
     onDndToggle: (Boolean) -> Unit,
     onWindDownToggle: (Boolean) -> Unit,
+    onNotificationToggle: (Boolean) -> Unit,
     containerColor: androidx.compose.ui.graphics.Color
 ) {
     Card(
@@ -639,9 +643,22 @@ fun FeaturesCard(
             Spacer(modifier = Modifier.height(16.dp))
 
             FeatureRow(
+                icon = Icons.Outlined.NotificationsActive,
+                title = "Wind Down Notification",
+                subtitle = "Notify 30 minutes before bedtime",
+                enabled = notificationEnabled,
+                onToggle = onNotificationToggle
+            )
+
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 8.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+
+            FeatureRow(
                 icon = Icons.Outlined.DoNotDisturbOn,
                 title = "Do Not Disturb",
-                subtitle = "Silence notifications",
+                subtitle = "Silence notifications during bedtime",
                 enabled = dndEnabled,
                 onToggle = onDndToggle
             )
@@ -653,8 +670,8 @@ fun FeaturesCard(
 
             FeatureRow(
                 icon = Icons.Outlined.Block,
-                title = "Wind Down",
-                subtitle = "30-min period before bedtime with one-time session access per app",
+                title = "Wind Down Restrictions",
+                subtitle = "Restrict app usage 30-min before bedtime",
                 enabled = windDownEnabled,
                 onToggle = onWindDownToggle
             )

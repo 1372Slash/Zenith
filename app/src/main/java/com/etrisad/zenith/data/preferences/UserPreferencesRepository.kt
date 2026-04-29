@@ -56,6 +56,7 @@ class UserPreferencesRepository(private val context: Context) {
         val BEDTIME_DAYS = stringPreferencesKey("bedtime_days")
         val BEDTIME_DND_ENABLED = booleanPreferencesKey("bedtime_dnd_enabled")
         val BEDTIME_WIND_DOWN_ENABLED = booleanPreferencesKey("bedtime_wind_down_enabled")
+        val BEDTIME_NOTIFICATION_ENABLED = booleanPreferencesKey("bedtime_notification_enabled")
         val BEDTIME_WHITELISTED_PACKAGES = stringPreferencesKey("bedtime_whitelisted_packages")
     }
 
@@ -99,6 +100,7 @@ class UserPreferencesRepository(private val context: Context) {
             val bedtimeDays = preferences[PreferencesKeys.BEDTIME_DAYS]?.split(",")?.filter { it.isNotEmpty() }?.map { it.toInt() }?.toSet() ?: setOf(1, 2, 3, 4, 5, 6, 7)
             val bedtimeDndEnabled = preferences[PreferencesKeys.BEDTIME_DND_ENABLED] ?: false
             val bedtimeWindDownEnabled = preferences[PreferencesKeys.BEDTIME_WIND_DOWN_ENABLED] ?: false
+            val bedtimeNotificationEnabled = preferences[PreferencesKeys.BEDTIME_NOTIFICATION_ENABLED] ?: true
             val bedtimeWhitelistedPackages = preferences[PreferencesKeys.BEDTIME_WHITELISTED_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
 
             UserPreferences(
@@ -128,6 +130,7 @@ class UserPreferencesRepository(private val context: Context) {
                 bedtimeDays = bedtimeDays,
                 bedtimeDndEnabled = bedtimeDndEnabled,
                 bedtimeWindDownEnabled = bedtimeWindDownEnabled,
+                bedtimeNotificationEnabled = bedtimeNotificationEnabled,
                 bedtimeWhitelistedPackages = bedtimeWhitelistedPackages
             )
         }
@@ -283,6 +286,12 @@ class UserPreferencesRepository(private val context: Context) {
         }
     }
 
+    suspend fun setBedtimeNotificationEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.BEDTIME_NOTIFICATION_ENABLED] = enabled
+        }
+    }
+
     suspend fun setBedtimeWhitelistedPackages(packages: Set<String>) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.BEDTIME_WHITELISTED_PACKAGES] = packages.joinToString(",")
@@ -317,5 +326,6 @@ data class UserPreferences(
     val bedtimeDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7),
     val bedtimeDndEnabled: Boolean = false,
     val bedtimeWindDownEnabled: Boolean = false,
+    val bedtimeNotificationEnabled: Boolean = true,
     val bedtimeWhitelistedPackages: Set<String> = emptySet()
 )
