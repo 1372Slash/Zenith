@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -1057,7 +1058,7 @@ fun formatRemainingTime(millis: Long): String {
     return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun MultiAppPickerBottomSheet(
     uiState: FocusUiState,
@@ -1071,12 +1072,14 @@ fun MultiAppPickerBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
         dragHandle = null
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = screenHeight * 0.85f)
+                .heightIn(max = screenHeight * 0.9f)
                 .navigationBarsPadding()
         ) {
             Column(
@@ -1121,12 +1124,31 @@ fun MultiAppPickerBottomSheet(
 
                 LazyColumn(
                     modifier = Modifier.weight(1f, fill = false),
-                    contentPadding = PaddingValues(bottom = 80.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                    contentPadding = PaddingValues(bottom = 100.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     val allApps = (uiState.topApps + uiState.installedApps).distinctBy { it.packageName }
-                    itemsIndexed(allApps) { index, app ->
+                    itemsIndexed(
+                        allApps,
+                        key = { _, app -> app.packageName }
+                    ) { index, app ->
                         val isSelected = app.packageName in uiState.selectedAppsForSchedule
+                        val itemScale by animateFloatAsState(
+                            targetValue = if (isSelected) 1f else 0.98f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            ),
+                            label = "itemScale"
+                        )
+
+                        val containerColor by animateColorAsState(
+                            targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceContainerHigh,
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                            label = "containerColor"
+                        )
+
                         val shape = when {
                             allApps.size == 1 -> RoundedCornerShape(24.dp)
                             index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
@@ -1134,32 +1156,21 @@ fun MultiAppPickerBottomSheet(
                             else -> RoundedCornerShape(8.dp)
                         }
 
-                        Card(
-                            onClick = { onAppToggled(app.packageName) },
-                            modifier = Modifier
-                                .fillMaxWidth(),
-                            shape = shape,
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surfaceContainerHigh
+                        Box(
+                            modifier = Modifier.animateItem(
+                                fadeInSpec = spring(stiffness = Spring.StiffnessLow),
+                                fadeOutSpec = spring(stiffness = Spring.StiffnessLow),
+                                placementSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow)
                             )
                         ) {
-                            ListItem(
-                                headlineContent = { Text(app.appName, fontWeight = FontWeight.Bold) },
-                                supportingContent = { Text(app.packageName, style = MaterialTheme.typography.bodySmall) },
-                                leadingContent = {
-                                    if (app.icon != null) {
-                                        Image(
-                                            painter = BitmapPainter(app.icon.toBitmap().asImageBitmap()),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp))
-                                        )
-                                    }
-                                },
-                                trailingContent = {
-                                    Checkbox(checked = isSelected, onCheckedChange = { onAppToggled(app.packageName) })
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                            AppPickerItem(
+                                app = app,
+                                shape = shape,
+                                onClick = { onAppToggled(app.packageName) },
+                                isSelected = isSelected,
+                                itemScale = itemScale,
+                                containerColor = containerColor,
+                                showCheckbox = true
                             )
                         }
                     }
@@ -1170,7 +1181,7 @@ fun MultiAppPickerBottomSheet(
                 onClick = onConfirm,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(32.dp),
+                    .padding(24.dp),
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = "Next")
@@ -1178,6 +1189,7 @@ fun MultiAppPickerBottomSheet(
         }
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1491,152 +1503,160 @@ fun AppPickerBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        dragHandle = null
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = screenHeight * 0.8f)
-                .padding(horizontal = 16.dp)
+                .heightIn(max = screenHeight * 0.9f)
                 .navigationBarsPadding()
         ) {
-            Text(
-                text = if (uiState.selectedFocusType == FocusType.GOAL) "Select Productive App" else "Select App to Shield",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 24.dp)
+            ) {
+                Text(
+                    text = if (uiState.selectedFocusType == FocusType.GOAL) "Select Productive App" else "Select App to Shield",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
 
-            SearchBar(
-                inputField = {
-                    SearchBarDefaults.InputField(
-                        query = uiState.searchQuery,
-                        onQueryChange = onSearchQueryChange,
-                        onSearch = { },
-                        expanded = false,
-                        onExpandedChange = {},
-                        placeholder = { Text("Search apps...") },
-                        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                        trailingIcon = {
-                            if (uiState.searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { onSearchQueryChange("") }) {
-                                    Icon(Icons.Outlined.Close, contentDescription = "Clear")
+                SearchBar(
+                    inputField = {
+                        SearchBarDefaults.InputField(
+                            query = uiState.searchQuery,
+                            onQueryChange = onSearchQueryChange,
+                            onSearch = { },
+                            expanded = false,
+                            onExpandedChange = {},
+                            placeholder = { Text("Search apps...") },
+                            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                            trailingIcon = {
+                                if (uiState.searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { onSearchQueryChange("") }) {
+                                        Icon(Icons.Outlined.Close, contentDescription = "Clear")
+                                    }
                                 }
                             }
+                        )
+                    },
+                    expanded = false,
+                    onExpandedChange = {},
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = SearchBarDefaults.inputFieldShape,
+                    colors = SearchBarDefaults.colors(),
+                    tonalElevation = SearchBarDefaults.TonalElevation,
+                    shadowElevation = 0.dp,
+                    windowInsets = SearchBarDefaults.windowInsets,
+                    content = {}
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (uiState.isLoadingApps) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f, fill = false),
+                        verticalArrangement = Arrangement.spacedBy(0.dp)
+                    ) {
+                        if (uiState.topApps.isNotEmpty() && uiState.searchQuery.isEmpty()) {
+                            item {
+                                PickerSectionHeader(title = "Top Used Apps")
+                                Spacer(modifier = Modifier.height(16.dp))
+                            }
+
+                            itemsIndexed(
+                                items = uiState.topApps,
+                                key = { _, app -> "top_${app.packageName}" }
+                            ) { index, app ->
+                                val shape = when {
+                                    uiState.topApps.size == 1 -> RoundedCornerShape(24.dp)
+                                    index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                                    index == uiState.topApps.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                                    else -> RoundedCornerShape(8.dp)
+                                }
+                                Column(modifier = Modifier.animateItem()) {
+                                    AppPickerItem(
+                                        app = app,
+                                        shape = shape,
+                                        onClick = { onAppSelected(app) },
+                                        isTopApp = true
+                                    )
+                                    if (index < uiState.topApps.size - 1) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                    }
+                                }
+                            }
+
+                            item {
+                                Spacer(modifier = Modifier.height(24.dp))
+                            }
                         }
-                    )
-                },
-                expanded = false,
-                onExpandedChange = {},
-                modifier = Modifier.fillMaxWidth(),
-                shape = SearchBarDefaults.inputFieldShape,
-                colors = SearchBarDefaults.colors(),
-                tonalElevation = SearchBarDefaults.TonalElevation,
-                shadowElevation = 0.dp,
-                windowInsets = SearchBarDefaults.windowInsets,
-                content = {}
-            )
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (uiState.isLoadingApps) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f, fill = false),
-                    verticalArrangement = Arrangement.spacedBy(0.dp)
-                ) {
-                    if (uiState.topApps.isNotEmpty() && uiState.searchQuery.isEmpty()) {
                         item {
-                            PickerSectionHeader(title = "Top Used Apps")
+                            PickerSectionHeader(
+                                title = if (uiState.searchQuery.isEmpty()) "All Apps" else "Search Results"
+                            )
                             Spacer(modifier = Modifier.height(16.dp))
                         }
 
-                        itemsIndexed(
-                            items = uiState.topApps,
-                            key = { _, app -> "top_${app.packageName}" }
-                        ) { index, app ->
-                            val shape = when {
-                                uiState.topApps.size == 1 -> RoundedCornerShape(24.dp)
-                                index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-                                index == uiState.topApps.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                                else -> RoundedCornerShape(8.dp)
-                            }
-                            Column(modifier = Modifier.animateItem()) {
-                                AppPickerItem(
-                                    app = app,
-                                    shape = shape,
-                                    onClick = { onAppSelected(app) },
-                                    isTopApp = true
-                                )
-                                if (index < uiState.topApps.size - 1) {
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                }
-                            }
-                        }
-
-                        item {
-                            Spacer(modifier = Modifier.height(24.dp))
-                        }
-                    }
-
-                    item {
-                        PickerSectionHeader(
-                            title = if (uiState.searchQuery.isEmpty()) "All Apps" else "Search Results"
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
-
-                    if (uiState.installedApps.isEmpty()) {
-                        item {
-                            Card(
-                                modifier = Modifier.fillMaxWidth().animateItem(),
-                                shape = RoundedCornerShape(24.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                                )
-                            ) {
-                                Box(
-                                    modifier = Modifier.padding(32.dp).fillMaxWidth(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "No apps found",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.outline
+                        if (uiState.installedApps.isEmpty()) {
+                            item {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().animateItem(),
+                                    shape = RoundedCornerShape(24.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                                     )
+                                ) {
+                                    Box(
+                                        modifier = Modifier.padding(32.dp).fillMaxWidth(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "No apps found",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            itemsIndexed(
+                                items = uiState.installedApps,
+                                key = { _, app -> "all_${app.packageName}" }
+                            ) { index, app ->
+                                val shape = when {
+                                    uiState.installedApps.size == 1 -> RoundedCornerShape(24.dp)
+                                    index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                                    index == uiState.installedApps.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                                    else -> RoundedCornerShape(8.dp)
+                                }
+                                Column(modifier = Modifier.animateItem()) {
+                                    AppPickerItem(
+                                        app = app,
+                                        shape = shape,
+                                        onClick = { onAppSelected(app) },
+                                        isTopApp = false
+                                    )
+                                    if (index < uiState.installedApps.size - 1) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                    }
                                 }
                             }
                         }
-                    } else {
-                        itemsIndexed(
-                            items = uiState.installedApps,
-                            key = { _, app -> "all_${app.packageName}" }
-                        ) { index, app ->
-                            val shape = when {
-                                uiState.installedApps.size == 1 -> RoundedCornerShape(24.dp)
-                                index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-                                index == uiState.installedApps.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                                else -> RoundedCornerShape(8.dp)
-                            }
-                            Column(modifier = Modifier.animateItem()) {
-                                AppPickerItem(
-                                    app = app,
-                                    shape = shape,
-                                    onClick = { onAppSelected(app) },
-                                    isTopApp = false
-                                )
-                                if (index < uiState.installedApps.size - 1) {
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                }
-                            }
-                        }
-                    }
 
-                    item {
-                        Spacer(modifier = Modifier.height(32.dp))
+                        item {
+                            Spacer(modifier = Modifier.height(32.dp))
+                        }
                     }
                 }
             }
@@ -1660,15 +1680,20 @@ fun AppPickerItem(
     app: AppInfo,
     shape: RoundedCornerShape,
     onClick: () -> Unit,
+    isSelected: Boolean = false,
+    itemScale: Float = 1f,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    showCheckbox: Boolean = false,
     isTopApp: Boolean = false
 ) {
     Card(
         onClick = { onClick() },
         modifier = Modifier
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .scale(itemScale),
         shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            containerColor = containerColor
         )
     ) {
         ListItem(
@@ -1709,8 +1734,17 @@ fun AppPickerItem(
                     }
                 }
             },
-            trailingContent = if (isTopApp) {
-                {
+            trailingContent = {
+                if (showCheckbox) {
+                    Checkbox(
+                        checked = isSelected,
+                        onCheckedChange = { onClick() },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = MaterialTheme.colorScheme.primary,
+                            uncheckedColor = MaterialTheme.colorScheme.outline
+                        )
+                    )
+                } else if (isTopApp) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.TrendingUp,
                         contentDescription = null,
@@ -1718,7 +1752,7 @@ fun AppPickerItem(
                         modifier = Modifier.size(20.dp)
                     )
                 }
-            } else null,
+            },
             colors = ListItemDefaults.colors(
                 containerColor = Color.Transparent
             )
