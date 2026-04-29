@@ -59,6 +59,7 @@ class UserPreferencesRepository(private val context: Context) {
         val BEDTIME_WIND_DOWN_ENABLED = booleanPreferencesKey("bedtime_wind_down_enabled")
         val BEDTIME_NOTIFICATION_ENABLED = booleanPreferencesKey("bedtime_notification_enabled")
         val BEDTIME_WHITELISTED_PACKAGES = stringPreferencesKey("bedtime_whitelisted_packages")
+        val USER_NAME = stringPreferencesKey("user_name")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -104,6 +105,7 @@ class UserPreferencesRepository(private val context: Context) {
             val bedtimeWindDownEnabled = preferences[PreferencesKeys.BEDTIME_WIND_DOWN_ENABLED] ?: false
             val bedtimeNotificationEnabled = preferences[PreferencesKeys.BEDTIME_NOTIFICATION_ENABLED] ?: true
             val bedtimeWhitelistedPackages = preferences[PreferencesKeys.BEDTIME_WHITELISTED_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
+            val userName = preferences[PreferencesKeys.USER_NAME] ?: "User"
 
             UserPreferences(
                 themeConfig = themeConfig,
@@ -134,9 +136,16 @@ class UserPreferencesRepository(private val context: Context) {
                 bedtimeDndEnabled = bedtimeDndEnabled,
                 bedtimeWindDownEnabled = bedtimeWindDownEnabled,
                 bedtimeNotificationEnabled = bedtimeNotificationEnabled,
-                bedtimeWhitelistedPackages = bedtimeWhitelistedPackages
+                bedtimeWhitelistedPackages = bedtimeWhitelistedPackages,
+                userName = userName
             )
         }
+
+    suspend fun setUserName(name: String) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.USER_NAME] = name
+        }
+    }
 
     suspend fun setThemeConfig(themeConfig: ThemeConfig) {
         context.dataStore.edit { preferences ->
@@ -337,5 +346,6 @@ data class UserPreferences(
     val bedtimeDndEnabled: Boolean = false,
     val bedtimeWindDownEnabled: Boolean = false,
     val bedtimeNotificationEnabled: Boolean = true,
-    val bedtimeWhitelistedPackages: Set<String> = emptySet()
+    val bedtimeWhitelistedPackages: Set<String> = emptySet(),
+    val userName: String = "User"
 )

@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
@@ -31,6 +32,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.etrisad.zenith.ui.components.PermissionBottomSheet
+import com.etrisad.zenith.ui.components.UserBottomSheet
 import com.etrisad.zenith.ui.components.ZenithHeader
 import com.etrisad.zenith.ui.navigation.Screen
 import com.etrisad.zenith.ui.navigation.navItems
@@ -81,6 +83,7 @@ fun MainScreen(
     val useNavigationRail = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
 
     var showPermissionSheet by remember { mutableStateOf(false) }
+    var showUserSheet by remember { mutableStateOf(false) }
 
     fun checkPermissions() {
         val hasUsageStats = com.etrisad.zenith.util.hasUsageStatsPermission(context)
@@ -178,8 +181,22 @@ fun MainScreen(
                     currentRoute = currentRoute,
                     scrollBehavior = scrollBehavior,
                     isNavRailVisible = useNavigationRail && !isDeepScreen,
+                    userName = preferences.userName,
                     onBack = { navController.popBackStack() },
                     actions = {
+                        AnimatedVisibility(
+                            visible = !isDeepScreen,
+                            enter = fadeIn() + scaleIn(),
+                            exit = fadeOut() + scaleOut()
+                        ) {
+                            IconButton(onClick = { showUserSheet = true }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.AccountCircle,
+                                    contentDescription = "User Profile"
+                                )
+                            }
+                        }
+                        
                         AnimatedVisibility(
                             visible = currentRoute == Screen.Bedtime.route && preferences.bedtimeEnabled,
                             enter = fadeIn(animationSpec = tween(600)) + scaleIn(initialScale = 0.8f, animationSpec = tween(600)) + expandHorizontally(expandFrom = Alignment.End, animationSpec = spring(stiffness = Spring.StiffnessLow)),
@@ -202,6 +219,13 @@ fun MainScreen(
                 )
             }
         ) { innerPadding ->
+            if (showUserSheet) {
+                UserBottomSheet(
+                    userName = preferences.userName,
+                    repository = userPreferencesRepository,
+                    onDismissRequest = { showUserSheet = false }
+                )
+            }
             Box(modifier = Modifier.fillMaxSize()) {
                 NavHost(
                     navController = navController,

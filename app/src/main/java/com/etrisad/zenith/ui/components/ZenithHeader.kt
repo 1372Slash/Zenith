@@ -29,6 +29,7 @@ fun ZenithHeader(
     currentRoute: String?,
     scrollBehavior: TopAppBarScrollBehavior,
     isNavRailVisible: Boolean = false,
+    userName: String = "User",
     onBack: () -> Unit,
     actions: @Composable RowScope.() -> Unit = {}
 ) {
@@ -149,7 +150,7 @@ fun ZenithHeader(
                                 label = "HomeAppNameAnimation"
                             ) { isAppName ->
                                 Text(
-                                    text = if (isAppName) "Zenith" else "Welcome Back, User",
+                                    text = if (isAppName) "Zenith" else "Welcome Back, $userName",
                                     style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = if (isAppName) FontWeight.ExtraBold else FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface,
