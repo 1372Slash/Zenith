@@ -7,7 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -17,7 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -48,8 +46,7 @@ fun ZenithHeader(
         label = "CenteringOffset"
     )
 
-    // Fixed symmetrical width to ensure perfect centering in all modes
-    val sideSlotWidth = 56.dp
+    val sideSlotWidth = 68.dp
 
     Box(
         modifier = Modifier
@@ -91,7 +88,7 @@ fun ZenithHeader(
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
+                                contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(24.dp)
                             )
@@ -100,14 +97,12 @@ fun ZenithHeader(
                 }
             },
             title = {
-                // Title alignment: 0f for center, -1f for start
                 val titleBias by animateFloatAsState(
                     targetValue = if (isDeepScreen) -1f else 0f,
                     animationSpec = spring(stiffness = Spring.StiffnessLow),
                     label = "TitleAlignment"
                 )
 
-                // Increased padding for deep screens to provide better separation from the back button
                 val titlePadding by animateDpAsState(
                     targetValue = if (isDeepScreen) 32.dp else 0.dp,
                     animationSpec = spring(stiffness = Spring.StiffnessLow),
@@ -176,9 +171,16 @@ fun ZenithHeader(
                 }
             },
             actions = {
-                actions()
-                // Balance the side slots precisely to ensure perfect centering
-                Spacer(modifier = Modifier.width(sideSlotWidth))
+                Box(
+                    modifier = Modifier.width(sideSlotWidth),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        actions()
+                    }
+                }
             },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = Color.Transparent,

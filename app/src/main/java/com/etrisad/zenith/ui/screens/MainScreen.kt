@@ -192,7 +192,7 @@ fun MainScreen(
                             Switch(
                                 checked = preferences.bedtimeEnabled,
                                 onCheckedChange = { bedtimeViewModel.setBedtimeEnabled(it) },
-                                modifier = Modifier.padding(end = 8.dp),
+                                modifier = Modifier.padding(end = 16.dp),
                                 thumbContent = {
                                     Icon(
                                         imageVector = Icons.Default.Bedtime,
