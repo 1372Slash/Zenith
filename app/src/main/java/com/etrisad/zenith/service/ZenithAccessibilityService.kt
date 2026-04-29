@@ -125,8 +125,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                 currentPreferences = preferences
                 whitelistedPackages = preferences.whitelistedPackages
                 bedtimeWhitelistedPackages = preferences.bedtimeWhitelistedPackages
-                
-                // Cache bedtime minutes to avoid repeated parsing
+
                 val startParts = preferences.bedtimeStartTime.split(":")
                 val endParts = preferences.bedtimeEndTime.split(":")
                 cachedBedtimeStartMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 22) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0)
@@ -552,8 +551,7 @@ class ZenithAccessibilityService : AccessibilityService() {
         }
 
         val currentMinutes = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
-        
-        // Use cached minutes instead of parsing strings every time
+
         val startMinutes = cachedBedtimeStartMinutes
         val endMinutes = cachedBedtimeEndMinutes
 
@@ -563,7 +561,6 @@ class ZenithAccessibilityService : AccessibilityService() {
             currentMinutes >= startMinutes || currentMinutes <= endMinutes
         }
 
-        // Wind Down starts 30 minutes before bedtime
         val windDownStartMinutes = (startMinutes - 30 + 1440) % 1440
         
         val wasWindDownActive = isWindDownActive
@@ -573,7 +570,6 @@ class ZenithAccessibilityService : AccessibilityService() {
             currentMinutes >= windDownStartMinutes || currentMinutes < startMinutes
         }
 
-        // Reset wind down sessions when a new wind down period starts
         if (isWindDownActive && !wasWindDownActive) {
             windDownUsedPackages.clear()
         }
@@ -583,8 +579,7 @@ class ZenithAccessibilityService : AccessibilityService() {
         if (shouldBypassBlocking(packageName)) return false
         
         val prefs = currentPreferences ?: return false
-        
-        // 1. Bedtime First (Strict)
+
         if (isBedtimeActive) {
             if (packageName !in bedtimeWhitelistedPackages) {
                 showBedtimeOverlay(packageName)
@@ -592,7 +587,6 @@ class ZenithAccessibilityService : AccessibilityService() {
             }
         }
 
-        // 2. Wind Down (30 mins before Bedtime)
         if (isWindDownActive && prefs.bedtimeWindDownEnabled) {
             if (packageName !in bedtimeWhitelistedPackages) {
                 showWindDownOverlay(packageName)
@@ -681,8 +675,7 @@ class ZenithAccessibilityService : AccessibilityService() {
 
     private fun shouldBypassBlocking(packageName: String): Boolean {
         if (packageName == this.packageName) return true
-        
-        // During bedtime or wind down, we only bypass if it's in the bedtime whitelist
+
         val prefs = currentPreferences
         val isBedtimeOrWindDown = isBedtimeActive || (isWindDownActive && prefs?.bedtimeWindDownEnabled == true)
         

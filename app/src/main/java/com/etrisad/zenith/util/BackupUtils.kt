@@ -35,20 +35,16 @@ object BackupUtils {
 
     suspend fun backupDatabase(context: Context, targetUri: Uri): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            // 1. Siapkan file-file yang akan di-backup
             val dbFile = context.getDatabasePath(DATABASE_NAME)
             val prefsFile = File(context.filesDir, "datastore/$PREFS_FILE_NAME")
 
-            // Tutup DB untuk memastikan data di-flush ke disk
             ZenithDatabase.closeDatabase()
 
             context.contentResolver.openOutputStream(targetUri)?.use { outputStream ->
                 ZipOutputStream(outputStream).use { zipOut ->
-                    // Backup Database
                     if (dbFile.exists()) {
                         addToZip(zipOut, dbFile, DATABASE_NAME)
                     }
-                    // Backup Preferences (DataStore)
                     if (prefsFile.exists()) {
                         addToZip(zipOut, prefsFile, PREFS_FILE_NAME)
                     }
@@ -62,7 +58,6 @@ object BackupUtils {
 
     suspend fun restoreDatabase(context: Context, sourceUri: Uri): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            // Tutup koneksi DB aktif
             ZenithDatabase.closeDatabase()
 
             context.contentResolver.openInputStream(sourceUri)?.use { inputStream ->
@@ -86,7 +81,6 @@ object BackupUtils {
                 }
             }
 
-            // Hapus file sementara Room agar database yang di-restore bersih
             val dbPath = context.getDatabasePath(DATABASE_NAME).path
             File("$dbPath-wal").delete()
             File("$dbPath-shm").delete()
@@ -103,7 +97,6 @@ object BackupUtils {
             var hasPrefs = false
             val fileSize = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: 0L
 
-            // Coba baca sebagai ZIP terlebih dahulu
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
                 ZipInputStream(inputStream).use { zipIn ->
                     try {
@@ -117,12 +110,10 @@ object BackupUtils {
                             entry = zipIn.nextEntry
                         }
                     } catch (e: Exception) {
-                        // Jika bukan ZIP, biarkan hasDb & hasPrefs tetap false
                     }
                 }
             }
 
-            // Jika bukan ZIP, cek apakah ini file DB mentah (Fallback untuk backup lama)
             if (!hasDb && !hasPrefs) {
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     val header = ByteArray(16)
@@ -139,7 +130,6 @@ object BackupUtils {
                 var latestDate: String? = null
                 var latestMillis: Long? = null
 
-                // Jika ada DB, coba intip data screen time terakhir
                 if (hasDb) {
                     try {
                         val tempDbFile = File(context.cacheDir, "temp_restore.db")
@@ -156,7 +146,6 @@ object BackupUtils {
                                 }
                             }
 
-                            // Jika ZIP gagal menemukan (mungkin file mentah), coba copy langsung
                             if (!tempDbFile.exists() || tempDbFile.length() == 0L) {
                                 context.contentResolver.openInputStream(uri)?.use { rawInput ->
                                     FileOutputStream(tempDbFile).use { rawInput.copyTo(it) }

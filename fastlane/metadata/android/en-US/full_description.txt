@@ -1,6 +1,6 @@
 <i>Zenith</i> is a smart focus assistant for Android designed to help you reduce digital distractions through proactive intervention based on Material Design 3 Expressive.
 
-Zenith is fully free and open-source. You can find the source code and report bugs or suggest features at https://github.com/etrisad/Zenith
+Zenith is fully free and open-source. You can find the source code and report bugs or suggest features at https://github.com/1372Slash/Zenith
 
 <b>Features:</b>
 - Simple, minimalist UI based on the latest Material 3 Expressive guidelines

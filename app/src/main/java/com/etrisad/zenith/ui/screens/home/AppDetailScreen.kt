@@ -145,7 +145,7 @@ fun AppDetailScreen(
                         targetMillis = targetMillis,
                         focusType = uiState.type,
                         formatDuration = { viewModel.formatDuration(it) },
-                        onDaySelected = { /* No-op, we stay on Today's Usage in the header */ },
+                        onDaySelected = { },
                         shape = RoundedCornerShape(
                             topStart = 8.dp,
                             topEnd = 8.dp,
@@ -154,7 +154,6 @@ fun AppDetailScreen(
                         )
                     )
                 } else {
-                    // Placeholder during loading to prevent layout jump and ensure animation triggers correctly later
                     Box(modifier = Modifier.fillMaxWidth().height(250.dp))
                 }
                 if (isFocusActive) {
@@ -234,7 +233,6 @@ fun AppHeader(
     pauseEndTimestamp: Long = 0L,
     nowMillis: Long = System.currentTimeMillis()
 ) {
-    // Animasi saturasi: 1f (normal) ke 0f (grayscale)
     val saturation by animateFloatAsState(
         targetValue = if (isPaused) 0f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
@@ -255,11 +253,10 @@ fun AppHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 12.dp), // Beri ruang agar badge tidak terpotong di bagian atas
+            .padding(top = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(contentAlignment = Alignment.Center) {
-            // Main App Icon
             if (icon != null) {
                 Image(
                     painter = BitmapPainter(icon.toBitmap().asImageBitmap()),
@@ -287,7 +284,6 @@ fun AppHeader(
                 }
             }
 
-            // Pause Indicator Badge
             if (isPaused) {
                 val remainingMillis = remember(pauseEndTimestamp, nowMillis) {
                     if (pauseEndTimestamp == 0L) -1L
@@ -295,12 +291,11 @@ fun AppHeader(
                 }
 
                 val initialPauseDuration = remember(pauseEndTimestamp) {
-                    // Logic to estimate initial duration if not stored: 1, 6, 24 hours
                     val diff = pauseEndTimestamp - System.currentTimeMillis()
                     when {
-                        diff <= 3600000L -> 3600000L // 1h
-                        diff <= 21600000L -> 21600000L // 6h
-                        else -> 86400000L // 24h
+                        diff <= 3600000L -> 3600000L
+                        diff <= 21600000L -> 21600000L
+                        else -> 86400000L
                     }
                 }
 
@@ -311,7 +306,7 @@ fun AppHeader(
 
                 Box(
                     modifier = Modifier
-                        .size(90.dp) // Slightly larger than icon to host the badge
+                        .size(90.dp)
                 ) {
                     Surface(
                         modifier = Modifier
@@ -641,7 +636,6 @@ fun StreakCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Left Side: Title and Best Streak
             Column {
                 Text(
                     text = "Streak",
@@ -663,7 +657,6 @@ fun StreakCard(
                 )
             }
 
-            // Right Side: Today's Streak - Sunny shape for the number, text below
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 val sunnyShape = remember {
                     GenericShape { size, _ ->
@@ -675,7 +668,7 @@ fun StreakCard(
                     }
                 }
                 Surface(
-                    color = MaterialTheme.colorScheme.tertiary, // Using tertiary color
+                    color = MaterialTheme.colorScheme.tertiary,
                     shape = sunnyShape,
                     modifier = Modifier.size(56.dp)
                 ) {
@@ -916,7 +909,6 @@ fun PauseBottomSheet(
 fun PhaseOnePuzzle(onComplete: () -> Unit) {
     val targetSequence = remember { List(3) { kotlin.random.Random.nextBoolean() } }
     val currentStates = remember { mutableStateListOf(false, false, false) }
-    // Initialize with random positions, but ensure at least one is wrong to start
     LaunchedEffect(Unit) {
         for (i in 0..2) {
             currentStates[i] = kotlin.random.Random.nextBoolean()
@@ -983,26 +975,23 @@ fun PhaseOnePuzzle(onComplete: () -> Unit) {
 @Composable
 fun Lever(isOn: Boolean, onToggle: (Boolean) -> Unit) {
     val scope = rememberCoroutineScope()
-    // Menggunakan Animatable dengan batas (bounds) agar tidak keluar kontainer
-    val thumbPosition = remember { 
+    val thumbPosition = remember {
         Animatable(if (isOn) 1f else 0f).apply {
             updateBounds(0f, 1f)
         }
     }
 
-    // Animasi perubahan warna agar halus
     val knobColor by animateColorAsState(
         targetValue = if (isOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
         animationSpec = tween(durationMillis = 300),
         label = "LeverColor"
     )
 
-    // Sinkronisasi dengan perubahan state eksternal
     LaunchedEffect(isOn) {
         thumbPosition.animateTo(
             targetValue = if (isOn) 1f else 0f,
             animationSpec = spring(
-                dampingRatio = Spring.DampingRatioLowBouncy, // Mengurangi pantulan berlebih
+                dampingRatio = Spring.DampingRatioLowBouncy,
                 stiffness = Spring.StiffnessLow
             )
         )
@@ -1046,7 +1035,6 @@ fun Lever(isOn: Boolean, onToggle: (Boolean) -> Unit) {
             },
         contentAlignment = Alignment.CenterStart
     ) {
-        // Knob
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.3f)

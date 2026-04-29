@@ -92,7 +92,6 @@ fun SettingsScreen(
         contract = ActivityResultContracts.OpenDocumentTree(),
         onResult = { uri ->
             uri?.let {
-                // Grant persistent permission
                 context.contentResolver.takePersistableUriPermission(
                     it,
                     android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
@@ -100,7 +99,6 @@ fun SettingsScreen(
                 )
                 coroutineScope.launch {
                     preferencesRepository.setBackupDirectoryUri(it.toString())
-                    // Reschedule if enabled
                     if (preferences.autoBackupEnabled) {
                         backupManager.scheduleBackup(preferences.backupIntervalHours, it.toString())
                     }
@@ -503,7 +501,7 @@ fun SettingsScreenContent(
                     description = "Use the new Material 3 Expressive floating navigation",
                     checked = preferences.floatingTabBarEnabled,
                     onCheckedChange = onFloatingTabBarEnabledChange,
-                    icon = Icons.Outlined.Flaky, // Closest icon for "floating" or experimental
+                    icon = Icons.Outlined.Flaky,
                     shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                 )
             }
@@ -514,15 +512,38 @@ fun SettingsScreenContent(
             }
 
             item {
-                AppInfoCard(versionName = versionName ?: "1.3")
+                AppInfoCard(
+                    versionName = versionName ?: "1.3",
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                )
             }
 
             item {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(4.dp))
+                DeveloperCard(
+                    name = "1372Slash",
+                    onGithubClick = {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/1372Slash"))
+                        context.startActivity(intent)
+                    },
+                    onWebsiteClick = {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://1372slash.vercel.app"))
+                        context.startActivity(intent)
+                    },
+                    onWhatsAppClick = {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://whatsapp.com/channel/0029VbAKkhlAojYyegxvV83V"))
+                        context.startActivity(intent)
+                    },
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
                 AboutActionCard(
                     title = "View Repository",
                     icon = Icons.Outlined.Code,
-                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
+                    shape = RoundedCornerShape(8.dp),
                     onClick = {
                         val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/1372Slash/Zenith"))
                         context.startActivity(intent)
@@ -1378,14 +1399,28 @@ fun AutoBackupSettings(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Directory Picker Item
             Surface(
                 onClick = onPickDirectory,
                 color = Color.Transparent,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primaryContainer,
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Folder,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Backup Location", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
@@ -1403,7 +1438,6 @@ fun AutoBackupSettings(
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Interval Selector
             Text("Backup Interval", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(16.dp))
             
@@ -1461,7 +1495,6 @@ fun HUDAppearanceSettings(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Size Slider
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.PhotoSizeSelectSmall, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Slider(
@@ -1481,7 +1514,6 @@ fun HUDAppearanceSettings(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Opacity Slider
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Opacity, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Slider(
@@ -1501,7 +1533,6 @@ fun HUDAppearanceSettings(
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            // Preview
             Text(
                 text = "Preview",
                 style = MaterialTheme.typography.labelSmall,
@@ -1563,7 +1594,10 @@ fun HUDAppearanceSettings(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun AppInfoCard(versionName: String) {
+fun AppInfoCard(
+    versionName: String,
+    shape: Shape = RoundedCornerShape(24.dp)
+) {
     val logoShape = remember {
         GenericShape { size, _ ->
             val materialPath = MaterialShapes.Sunny.toPath()
@@ -1577,7 +1611,7 @@ fun AppInfoCard(versionName: String) {
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
@@ -1591,7 +1625,7 @@ fun AppInfoCard(versionName: String) {
             Surface(
                 modifier = Modifier.size(64.dp),
                 shape = logoShape,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primaryContainer
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
@@ -1626,6 +1660,117 @@ fun AppInfoCard(versionName: String) {
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun DeveloperCard(
+    name: String,
+    onGithubClick: () -> Unit,
+    onWebsiteClick: () -> Unit,
+    onWhatsAppClick: () -> Unit,
+    shape: Shape
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = shape,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(
+                        MaterialTheme.colorScheme.primaryContainer,
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Person,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Text(
+                text = "Created by $name",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                QuickLinkButton(
+                    icon = Icons.Outlined.Code,
+                    shape = RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp, topEnd = 6.dp, bottomEnd = 6.dp),
+                    onClick = onGithubClick
+                )
+                QuickLinkButton(
+                    icon = Icons.Outlined.Language,
+                    shape = RoundedCornerShape(6.dp),
+                    onClick = onWebsiteClick
+                )
+                QuickLinkButton(
+                    icon = Icons.Outlined.Chat,
+                    shape = RoundedCornerShape(topEnd = 20.dp, bottomEnd = 20.dp, topStart = 6.dp, bottomStart = 6.dp),
+                    onClick = onWhatsAppClick
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickLinkButton(
+    icon: ImageVector,
+    shape: Shape,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.9f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "quickLinkScale"
+    )
+
+    Surface(
+        onClick = onClick,
+        shape = shape,
+        color = MaterialTheme.colorScheme.surface,
+        interactionSource = interactionSource,
+        modifier = Modifier
+            .size(width = 44.dp, height = 40.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

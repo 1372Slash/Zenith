@@ -69,7 +69,6 @@ fun MainScreen(
         currentRoute == Screen.Bedtime.route ||
         currentRoute?.startsWith("app_detail") == true
 
-    // Persistent scroll behaviors to avoid re-initialization and ensure synchronization
     val enterAlwaysScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     val pinnedScrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
@@ -83,7 +82,6 @@ fun MainScreen(
 
     var showPermissionSheet by remember { mutableStateOf(false) }
 
-    // Check permissions and update sheet visibility
     fun checkPermissions() {
         val hasUsageStats = com.etrisad.zenith.util.hasUsageStatsPermission(context)
         val hasOverlay = android.provider.Settings.canDrawOverlays(context)
@@ -94,7 +92,6 @@ fun MainScreen(
         showPermissionSheet = !allGranted
     }
 
-    // Re-check permissions when app resumes or preferences change
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner, preferences.accessibilityDisabled) {
         checkPermissions()
@@ -141,7 +138,6 @@ fun MainScreen(
                 NavigationRail(
                     modifier = Modifier.fillMaxHeight(),
                     header = {
-                        // You can add a logo or menu button here
                     }
                 ) {
                     val currentDestination = navBackStackEntry?.destination
@@ -357,7 +353,6 @@ fun MainScreen(
                     }
                 }
 
-                // Overlay Navigation Bar
                 if (!useNavigationRail) {
                     val showBottomBar =
                         currentRoute != Screen.UsageStats.route && 

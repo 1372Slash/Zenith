@@ -9,14 +9,12 @@ import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.text.googlefonts.Font
 import com.etrisad.zenith.R
 
-// Konfigurasi Google Fonts Provider
 val provider = GoogleFont.Provider(
     providerAuthority = "com.google.android.gms.fonts",
     providerPackage = "com.google.android.gms",
     certificates = R.array.com_google_android_gms_fonts_certs
 )
 
-// 1. Google Sans Flex
 val googleSansFlexName = GoogleFont("Google Sans Flex")
 val GoogleSansFlexFontFamily = FontFamily(
     Font(googleFont = googleSansFlexName, fontProvider = provider, weight = FontWeight.Normal),
@@ -25,7 +23,6 @@ val GoogleSansFlexFontFamily = FontFamily(
     Font(googleFont = googleSansFlexName, fontProvider = provider, weight = FontWeight.Bold)
 )
 
-// 2. Nunito (Rounded)
 val nunitoName = GoogleFont("Nunito")
 val NunitoFontFamily = FontFamily(
     Font(googleFont = nunitoName, fontProvider = provider, weight = FontWeight.Normal),
@@ -34,7 +31,6 @@ val NunitoFontFamily = FontFamily(
     Font(googleFont = nunitoName, fontProvider = provider, weight = FontWeight.Bold)
 )
 
-// Fungsi untuk membuat Typography berdasarkan FontFamily
 private fun createTypography(fontFamily: FontFamily): Typography {
     return Typography(
         displayLarge = TextStyle(fontFamily = fontFamily, fontWeight = FontWeight.Normal, fontSize = 57.sp, lineHeight = 64.sp, letterSpacing = (-0.25).sp),
@@ -59,5 +55,4 @@ val GoogleSansFlexTypography = createTypography(GoogleSansFlexFontFamily)
 val NunitoTypography = createTypography(NunitoFontFamily)
 val SystemTypography = createTypography(FontFamily.Default)
 
-// Default export (keep for backward compatibility if needed)
 val Typography = SystemTypography

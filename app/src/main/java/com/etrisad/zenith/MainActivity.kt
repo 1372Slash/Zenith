@@ -39,16 +39,11 @@ class MainActivity : ComponentActivity() {
         val shieldRepository = ShieldRepository(database.shieldDao(), database.scheduleDao(), database.dailyUsageDao())
         val userPreferencesRepository = UserPreferencesRepository(this)
 
-        // Schedule daily usage sync
         DailyUsageWorker.schedule(applicationContext)
 
-        // Secara otomatis aktifkan dynamic color jika perangkat mendukung (Android 12+)
         lifecycleScope.launch {
             val prefs = userPreferencesRepository.userPreferencesFlow.first()
-            // Jika preferensi belum pernah disetel atau perangkat baru didukung
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                // Opsional: Anda bisa memaksa 'true' hanya jika user belum pernah mengubahnya
-                // Namun sesuai permintaan, kita lgsg apply jika support.
                 userPreferencesRepository.setDynamicColor(true)
             } else {
                 userPreferencesRepository.setDynamicColor(false)
@@ -61,13 +56,10 @@ class MainActivity : ComponentActivity() {
         val focusViewModelFactory = FocusViewModelFactory(applicationContext, shieldRepository)
         val focusViewModel = ViewModelProvider(this, focusViewModelFactory)[FocusViewModel::class.java]
 
-        // Start the monitoring service if needed, 
-        // though Accessibility Service will handle the main interception.
         try {
             val serviceIntent = Intent(this, AppUsageMonitorService::class.java)
             startForegroundService(serviceIntent)
         } catch (e: Exception) {
-            // Handle cases where foreground service might fail to start
         }
 
         setContent {

@@ -25,7 +25,7 @@ class BackupManager(private val context: Context) {
 
         workManager.enqueueUniquePeriodicWork(
             BACKUP_WORK_TAG,
-            ExistingPeriodicWorkPolicy.UPDATE, // Update if already exists to reflect new interval/uri
+            ExistingPeriodicWorkPolicy.UPDATE,
             backupRequest
         )
     }

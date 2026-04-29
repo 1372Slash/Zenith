@@ -73,9 +73,8 @@ fun PermissionBottomSheet(
         }
     )
 
-    val allGranted = hasUsageStats && hasOverlay && hasNotifications && (hasAccessibility || preferences.accessibilityDisabled)
+    val allGranted = hasUsageStats && hasOverlay && hasNotifications && hasNotificationPolicy && (hasAccessibility || preferences.accessibilityDisabled)
 
-    // Re-check permissions when returning to the app
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -85,7 +84,7 @@ fun PermissionBottomSheet(
                 hasNotifications = hasNotificationPermission(context)
                 hasNotificationPolicy = (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted
                 
-                if (hasUsageStats && hasOverlay && hasNotifications && (hasAccessibility || preferences.accessibilityDisabled)) {
+                if (hasUsageStats && hasOverlay && hasNotifications && hasNotificationPolicy && (hasAccessibility || preferences.accessibilityDisabled)) {
                     onAllPermissionsGranted()
                 }
             }

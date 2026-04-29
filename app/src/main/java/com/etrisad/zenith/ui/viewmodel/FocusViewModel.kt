@@ -164,7 +164,6 @@ class FocusViewModel(
             }
         }
 
-        // Get top used apps from system usage stats
         val topApps = getTopUsedApps(limit = 6)
 
         _uiState.value = _uiState.value.copy(
@@ -178,7 +177,7 @@ class FocusViewModel(
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
         val pm = context.packageManager
         val now = System.currentTimeMillis()
-        val start = now - 24 * 60 * 60 * 1000L // Last 24 hours
+        val start = now - 24 * 60 * 60 * 1000L
 
         val stats = usm.queryAndAggregateUsageStats(start, now)
         return stats.values

@@ -28,16 +28,13 @@ class DatabaseBackupWorker(
         try {
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
             val backupFolder = DocumentFile.fromTreeUri(applicationContext, directoryUri) ?: return@withContext Result.failure()
-            
-            // Nama file ZIP yang sama polanya dengan manual backup
+
             val fileName = "AutoBackup_$timestamp.zip"
             val targetFile = backupFolder.createFile("application/zip", fileName) ?: return@withContext Result.failure()
 
-            // Gunakan fungsi yang sama dengan manual backup agar isinya identik (ZIP)
             val result = BackupUtils.backupDatabase(applicationContext, targetFile.uri)
 
             if (result.isSuccess) {
-                // Hapus backup lama jika sudah lebih dari 10 (Hanya untuk file ZIP AutoBackup)
                 cleanupOldBackups(backupFolder)
                 sendNotification("Backup Successful", "Your data has been automatically backed up as $fileName")
                 Result.success()

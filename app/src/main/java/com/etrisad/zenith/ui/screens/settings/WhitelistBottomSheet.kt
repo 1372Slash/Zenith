@@ -62,8 +62,7 @@ fun WhitelistBottomSheet(
             }.sortedWith(compareBy({ !it.isSystemApp }, { it.appName.lowercase() }))
             
             apps = mappedApps
-            
-            // Default select all system apps if none are whitelisted yet (first time)
+
             if (initialWhitelisted.isEmpty()) {
                 selectedApps = mappedApps.filter { it.isSystemApp }.map { it.packageName }.toSet()
             }

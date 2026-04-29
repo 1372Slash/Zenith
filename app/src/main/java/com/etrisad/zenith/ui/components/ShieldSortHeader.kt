@@ -85,15 +85,14 @@ private fun SortIconButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    // Expressive Motion Scaling with more bounce
     val widthScale by animateFloatAsState(
         targetValue = when {
-            isPressed -> 1.5f  // More pronounced expansion
-            selected -> 1.25f  // Clearly longer when active
+            isPressed -> 1.5f
+            selected -> 1.25f
             else -> 1.0f
         },
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy, // More expressive bounce
+            dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMediumLow
         ),
         label = "WidthScale"
@@ -144,12 +143,12 @@ private fun SortIconButton(
     Box(
         modifier = Modifier
             .height(40.dp)
-            .width(56.dp * widthScale) // Menggunakan widthScale untuk animasi memanjang
+            .width(56.dp * widthScale)
             .clip(shape)
             .background(backgroundColor)
             .clickable(
                 interactionSource = interactionSource,
-                indication = null, // Feedback visual ditangani oleh animasi scale dan warna
+                indication = null,
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center

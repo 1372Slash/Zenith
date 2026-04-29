@@ -150,8 +150,7 @@ class AppUsageMonitorService : Service() {
                 currentPreferences = preferences
                 whitelistedPackages = preferences.whitelistedPackages
                 bedtimeWhitelistedPackages = preferences.bedtimeWhitelistedPackages
-                
-                // Cache bedtime minutes to avoid repeated parsing
+
                 val startParts = preferences.bedtimeStartTime.split(":")
                 val endParts = preferences.bedtimeEndTime.split(":")
                 cachedBedtimeStartMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 22) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0)
@@ -459,7 +458,6 @@ class AppUsageMonitorService : Service() {
                 
                 lastForegroundApp = currentApp
 
-                // Background Sync: Update last known daily usage without user opening the app
                 val currentHour = reusableCalendar.get(Calendar.HOUR_OF_DAY)
                 val currentMinute = reusableCalendar.get(Calendar.MINUTE)
                 if (currentHour == 23 && currentMinute >= 45) {
@@ -941,8 +939,7 @@ class AppUsageMonitorService : Service() {
         }
 
         val currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-        
-        // Use cached minutes instead of parsing strings every time
+
         val startMinutes = cachedBedtimeStartMinutes
         val endMinutes = cachedBedtimeEndMinutes
 
@@ -952,7 +949,6 @@ class AppUsageMonitorService : Service() {
             currentMinutes >= startMinutes || currentMinutes <= endMinutes
         }
 
-        // Wind Down starts 30 minutes before bedtime
         val windDownStartMinutes = (startMinutes - 30 + 1440) % 1440
         
         val wasWindDownActive = isWindDownActive
@@ -976,7 +972,6 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun updateDndAndWindDown(dnd: Boolean, windDown: Boolean) {
-        // DND Implementation
         val nm = getSystemService(NotificationManager::class.java)
         if (nm.isNotificationPolicyAccessGranted) {
             try {
@@ -991,11 +986,7 @@ class AppUsageMonitorService : Service() {
             }
         }
 
-        // Wind Down implementation logic
         if (windDown) {
-            // When wind down is enabled and bedtime is active, 
-            // the checkSchedules function will handle showing the overlay
-            // for apps that are not in the bedtime whitelist.
         }
     }
 
@@ -1003,8 +994,7 @@ class AppUsageMonitorService : Service() {
         if (shouldBypassBlocking(packageName)) return false
         
         val prefs = currentPreferences
-        
-        // 1. Bedtime First (Strict)
+
         if (isBedtimeActive) {
             if (packageName !in bedtimeWhitelistedPackages) {
                 showBedtimeOverlay(packageName)
@@ -1012,7 +1002,6 @@ class AppUsageMonitorService : Service() {
             }
         }
 
-        // 2. Wind Down (30 mins before Bedtime)
         if (isWindDownActive && prefs?.bedtimeWindDownEnabled == true) {
             if (packageName !in bedtimeWhitelistedPackages) {
                 showWindDownOverlay(packageName)
@@ -1118,8 +1107,7 @@ class AppUsageMonitorService : Service() {
 
     private fun shouldBypassBlocking(packageName: String): Boolean {
         if (packageName == this.packageName) return true
-        
-        // During bedtime or wind down, we only bypass if it's in the bedtime whitelist
+
         val prefs = currentPreferences
         val isBedtimeOrWindDown = isBedtimeActive || (isWindDownActive && prefs?.bedtimeWindDownEnabled == true)
         
