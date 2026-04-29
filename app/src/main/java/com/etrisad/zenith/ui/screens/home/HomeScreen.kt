@@ -73,7 +73,8 @@ fun HomeScreen(
     userPreferencesRepository: UserPreferencesRepository,
     innerPadding: PaddingValues,
     onSeeFullList: () -> Unit,
-    onAppClick: (String) -> Unit
+    onAppClick: (String) -> Unit,
+    onBedtimeClick: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val preferences by userPreferencesRepository.userPreferencesFlow.collectAsState(
@@ -95,7 +96,8 @@ fun HomeScreen(
         onShieldSortTypeChange = viewModel::onShieldSortTypeChange,
         onGoalSortTypeChange = viewModel::onGoalSortTypeChange,
         onSeeFullList = onSeeFullList,
-        onAppClick = onAppClick
+        onAppClick = onAppClick,
+        onBedtimeClick = onBedtimeClick
     )
 }
 
@@ -109,7 +111,8 @@ fun HomeScreenContent(
     onShieldSortTypeChange: (ShieldSortType) -> Unit,
     onGoalSortTypeChange: (ShieldSortType) -> Unit,
     onSeeFullList: () -> Unit,
-    onAppClick: (String) -> Unit
+    onAppClick: (String) -> Unit,
+    onBedtimeClick: () -> Unit
 ) {
     val targetMillis = preferences.screenTimeTargetMinutes * 60 * 1000L
     LazyColumn(
@@ -162,7 +165,7 @@ fun HomeScreenContent(
         }
 
         item {
-            QuickActionsSection()
+            QuickActionsSection(onBedtimeClick = onBedtimeClick)
             Spacer(modifier = Modifier.height(16.dp))
         }
 
@@ -995,7 +998,7 @@ fun TopAppsSection(
 }
 
 @Composable
-fun QuickActionsSection() {
+fun QuickActionsSection(onBedtimeClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1017,7 +1020,8 @@ fun QuickActionsSection() {
         )
         QuickActionCard(
             icon = Icons.Outlined.Bedtime,
-            label = "Bedtime"
+            label = "Bedtime",
+            onClick = onBedtimeClick
         )
     }
 }
@@ -1025,7 +1029,8 @@ fun QuickActionsSection() {
 @Composable
 fun QuickActionCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String
+    label: String,
+    onClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -1054,7 +1059,11 @@ fun QuickActionCard(
                     indication = ripple(),
                     onClick = {
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        Toast.makeText(context, "Coming Soon", Toast.LENGTH_SHORT).show()
+                        if (onClick != null) {
+                            onClick()
+                        } else {
+                            Toast.makeText(context, "Coming Soon", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 ),
             shape = CircleShape,
@@ -1431,6 +1440,7 @@ fun HomeScreenPreview() {
             onGoalSortTypeChange = {},
             onSeeFullList = {},
             onAppClick = {},
+            onBedtimeClick = {},
             innerPadding = PaddingValues()
         )
     }

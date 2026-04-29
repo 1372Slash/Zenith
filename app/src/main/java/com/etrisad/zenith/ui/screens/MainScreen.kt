@@ -34,6 +34,7 @@ import com.etrisad.zenith.ui.navigation.navItems
 import com.etrisad.zenith.ui.screens.focus.FocusScreen
 import com.etrisad.zenith.ui.screens.home.HomeScreen
 import com.etrisad.zenith.ui.screens.home.UsageStatsScreen
+import com.etrisad.zenith.ui.screens.bedtime.BedtimeScreen
 import com.etrisad.zenith.ui.screens.settings.SettingsScreen
 import com.etrisad.zenith.ui.viewmodel.FocusViewModel
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
@@ -56,7 +57,9 @@ fun MainScreen(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val isDeepScreen =
-        currentRoute == Screen.UsageStats.route || currentRoute?.startsWith("app_detail") == true
+        currentRoute == Screen.UsageStats.route || 
+        currentRoute == Screen.Bedtime.route ||
+        currentRoute?.startsWith("app_detail") == true
 
     // Persistent scroll behaviors to avoid re-initialization and ensure synchronization
     val enterAlwaysScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
@@ -118,7 +121,9 @@ fun MainScreen(
     ) {
         if (useNavigationRail) {
             val showNavRail =
-                currentRoute != Screen.UsageStats.route && currentRoute?.startsWith("app_detail") == false
+                currentRoute != Screen.UsageStats.route && 
+                currentRoute != Screen.Bedtime.route &&
+                currentRoute?.startsWith("app_detail") == false
 
             AnimatedVisibility(
                 visible = showNavRail,
@@ -183,9 +188,13 @@ fun MainScreen(
                         val targetRoute = targetState.destination.route
 
                         val isTargetDeep =
-                            targetRoute == Screen.UsageStats.route || targetRoute?.startsWith("app_detail") == true
+                            targetRoute == Screen.UsageStats.route || 
+                            targetRoute == Screen.Bedtime.route ||
+                            targetRoute?.startsWith("app_detail") == true
                         val isInitialDeep =
-                            initialRoute == Screen.UsageStats.route || initialRoute?.startsWith("app_detail") == true
+                            initialRoute == Screen.UsageStats.route || 
+                            initialRoute == Screen.Bedtime.route ||
+                            initialRoute?.startsWith("app_detail") == true
 
                         val animationSpec = spring<IntOffset>(
                             dampingRatio = Spring.DampingRatioLowBouncy,
@@ -219,7 +228,9 @@ fun MainScreen(
                         val targetRoute = targetState.destination.route
 
                         val isTargetDeep =
-                            targetRoute == Screen.UsageStats.route || targetRoute?.startsWith("app_detail") == true
+                            targetRoute == Screen.UsageStats.route || 
+                            targetRoute == Screen.Bedtime.route ||
+                            targetRoute?.startsWith("app_detail") == true
 
                         val animationSpec = spring<IntOffset>(
                             dampingRatio = Spring.DampingRatioNoBouncy,
@@ -275,7 +286,8 @@ fun MainScreen(
                             onSeeFullList = { navController.navigate(Screen.UsageStats.route) },
                             onAppClick = { packageName ->
                                 navController.navigate(Screen.AppDetail.createRoute(packageName))
-                            }
+                            },
+                            onBedtimeClick = { navController.navigate(Screen.Bedtime.route) }
                         )
                     }
                     composable(Screen.Focus.route) {
@@ -289,6 +301,9 @@ fun MainScreen(
                     }
                     composable(Screen.Settings.route) {
                         SettingsScreen(userPreferencesRepository, innerPadding)
+                    }
+                    composable(Screen.Bedtime.route) {
+                        BedtimeScreen(innerPadding)
                     }
                     composable(Screen.UsageStats.route) {
                         UsageStatsScreen(
@@ -317,7 +332,9 @@ fun MainScreen(
                 // Overlay Navigation Bar
                 if (!useNavigationRail) {
                     val showBottomBar =
-                        currentRoute != Screen.UsageStats.route && currentRoute?.startsWith("app_detail") == false
+                        currentRoute != Screen.UsageStats.route && 
+                        currentRoute != Screen.Bedtime.route &&
+                        currentRoute?.startsWith("app_detail") == false
 
                     androidx.compose.animation.AnimatedVisibility(
                         visible = showBottomBar,

@@ -35,7 +35,9 @@ fun ZenithHeader(
 ) {
     val isHome = currentRoute == Screen.Home.route
     val isDeepScreen =
-        currentRoute == Screen.UsageStats.route || currentRoute?.startsWith("app_detail") == true
+        currentRoute == Screen.UsageStats.route || 
+        currentRoute == Screen.Bedtime.route ||
+        currentRoute?.startsWith("app_detail") == true
 
     val railOffset = if (isNavRailVisible) 80.dp else 0.dp
     
@@ -123,6 +125,7 @@ fun ZenithHeader(
                         currentRoute == Screen.Focus.route -> "Focus"
                         currentRoute == Screen.Settings.route -> "Settings"
                         currentRoute == Screen.UsageStats.route -> "Usage Stats"
+                        currentRoute == Screen.Bedtime.route -> "Bedtime"
                         currentRoute?.startsWith("app_detail") == true -> "App Detail"
                         else -> "Zenith"
                     }
