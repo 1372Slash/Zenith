@@ -1162,6 +1162,12 @@ fun GlobalUsagePill(totalGlobalUsageToday: Long, modifier: Modifier = Modifier) 
     val userPrefs by userPrefsRepo.userPreferencesFlow.collectAsState(initial = UserPreferences())
     val screenTimeTargetMinutes = userPrefs.screenTimeTargetMinutes
 
+    val totalUsageMinutes = totalGlobalUsageToday / 60000
+    val isTargetExceeded = screenTimeTargetMinutes > 0 && totalUsageMinutes >= screenTimeTargetMinutes
+
+    val totalPillColor = if (isTargetExceeded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
+    val totalPillContentColor = if (isTargetExceeded) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onTertiary
+
     val baseColor = MaterialTheme.colorScheme.primary
     val fillColor = MaterialTheme.colorScheme.tertiary
     val contentColor = MaterialTheme.colorScheme.onPrimary
@@ -1174,7 +1180,7 @@ fun GlobalUsagePill(totalGlobalUsageToday: Long, modifier: Modifier = Modifier) 
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         Surface(
-            color = baseColor,
+            color = totalPillColor,
             shape = RoundedCornerShape(
                 topStart = cornerRadiusLarge,
                 bottomStart = cornerRadiusLarge,
@@ -1185,13 +1191,12 @@ fun GlobalUsagePill(totalGlobalUsageToday: Long, modifier: Modifier = Modifier) 
             Text(
                 text = "Total",
                 style = MaterialTheme.typography.labelSmall,
-                color = contentColor,
+                color = totalPillContentColor,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
             )
         }
 
-        val totalUsageMinutes = totalGlobalUsageToday / 60000
         val remainingMinutes = (screenTimeTargetMinutes - totalUsageMinutes).coerceAtLeast(0)
         val fillRatio = if (screenTimeTargetMinutes > 0) {
             remainingMinutes.toFloat() / screenTimeTargetMinutes
@@ -1206,12 +1211,22 @@ fun GlobalUsagePill(totalGlobalUsageToday: Long, modifier: Modifier = Modifier) 
                 bottomEnd = cornerRadiusLarge
             )
         ) {
+            val separatorColor = MaterialTheme.colorScheme.surface
             Box(
                 modifier = Modifier.drawBehind {
+                    val progressWidth = size.width * fillRatio.coerceIn(0f, 1f)
                     drawRect(
                         color = fillColor,
-                        size = Size(width = size.width * fillRatio.coerceIn(0f, 1f), height = size.height)
+                        size = Size(width = progressWidth, height = size.height)
                     )
+
+                    if (fillRatio > 0f && fillRatio < 1f) {
+                        drawRect(
+                            color = separatorColor,
+                            topLeft = androidx.compose.ui.geometry.Offset(progressWidth - 1.dp.toPx(), 0f),
+                            size = Size(width = 2.dp.toPx(), height = size.height)
+                        )
+                    }
                 }
             ) {
                 Text(
