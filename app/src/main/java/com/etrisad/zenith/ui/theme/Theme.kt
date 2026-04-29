@@ -69,18 +69,18 @@ fun ZenithTheme(
             if (expressiveColors) {
                 if (darkTheme) {
                     base.copy(
-                        background = base.surface, // Toned background from Material You
-                        surface = base.surface,
-                        surfaceContainer = base.surfaceContainerLowest, // Blackish container from Material You
-                        surfaceContainerLow = base.surfaceContainerLowest,
-                        surfaceContainerHigh = base.surfaceContainerLowest,
-                        surfaceContainerHighest = base.surfaceContainerLowest,
-                        surfaceContainerLowest = base.surfaceContainerLowest
+                        background = base.surfaceContainerLow,
+                        surface = base.surfaceContainerLow,
+                        surfaceContainer = base.surfaceContainerHigh,
+                        surfaceContainerLow = base.surfaceContainerHigh,
+                        surfaceContainerHigh = base.surfaceContainerHigh,
+                        surfaceContainerHighest = base.surfaceContainerHigh,
+                        surfaceContainerLowest = base.surfaceContainerHigh
                     )
                 } else {
                     base.copy(
-                        background = base.surface, // Tone base
-                        surface = base.surface,
+                        background = base.surfaceContainerLow,
+                        surface = base.surfaceContainerLow,
                         surfaceContainer = Color.White,
                         surfaceContainerLow = Color.White,
                         surfaceContainerHigh = Color.White,
@@ -94,13 +94,13 @@ fun ZenithTheme(
         darkTheme -> {
             if (expressiveColors) {
                 DarkColorScheme.copy(
-                    background = SurfaceDark, // Toned background (Indigo Slate)
-                    surface = SurfaceDark,
-                    surfaceContainer = BackgroundDark, // Blackish container (Deep Charcoal)
-                    surfaceContainerLow = BackgroundDark,
-                    surfaceContainerHigh = BackgroundDark,
-                    surfaceContainerHighest = BackgroundDark,
-                    surfaceContainerLowest = BackgroundDark
+                    background = DarkColorScheme.surfaceContainerLow,
+                    surface = DarkColorScheme.surfaceContainerLow,
+                    surfaceContainer = DarkColorScheme.surfaceContainerHigh,
+                    surfaceContainerLow = DarkColorScheme.surfaceContainerHigh,
+                    surfaceContainerHigh = DarkColorScheme.surfaceContainerHigh,
+                    surfaceContainerHighest = DarkColorScheme.surfaceContainerHigh,
+                    surfaceContainerLowest = DarkColorScheme.surfaceContainerHigh
                 )
             } else DarkColorScheme
         }
@@ -108,8 +108,8 @@ fun ZenithTheme(
         else -> {
             if (expressiveColors) {
                 LightColorScheme.copy(
-                    background = BackgroundLight, // Tone base
-                    surface = SurfaceLight,
+                    background = LightColorScheme.surfaceContainerLow,
+                    surface = LightColorScheme.surfaceContainerLow,
                     surfaceContainer = Color.White,
                     surfaceContainerLow = Color.White,
                     surfaceContainerHigh = Color.White,
