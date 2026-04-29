@@ -500,7 +500,7 @@ fun LandscapeInterceptLayout(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .wrapContentHeight()
+                .height(IntrinsicSize.Min)
                 .padding(bottom = 24.dp, start = 24.dp, end = 24.dp, top = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -589,7 +589,8 @@ fun LandscapeInterceptLayout(
 
             Column(
                 modifier = Modifier
-                    .weight(1.2f),
+                    .weight(1.2f)
+                    .fillMaxHeight(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -639,7 +640,7 @@ fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageTod
         }
     }
 
-    Spacer(modifier = Modifier.height(24.dp))
+    Spacer(modifier = Modifier.height(16.dp))
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(
@@ -662,8 +663,6 @@ fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageTod
             )
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
         val animatedProgressState = animateFloatAsState(
             targetValue = progress.coerceIn(0f, 1f),
             animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
@@ -673,6 +672,7 @@ fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageTod
             progress = { animatedProgressState.value },
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(top = 8.dp)
                 .height(10.dp),
             color = MaterialTheme.colorScheme.primary,
             trackColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -700,7 +700,7 @@ fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageTod
         }
     }
 
-    Spacer(modifier = Modifier.height(32.dp))
+    Spacer(modifier = Modifier.height(24.dp))
 
     Surface(
         color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
@@ -726,7 +726,7 @@ fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageTod
         }
     }
 
-    Spacer(modifier = Modifier.height(32.dp))
+    Spacer(modifier = Modifier.height(24.dp))
 
     Button(
         onClick = onGoalDismiss,
@@ -772,7 +772,7 @@ fun ShieldSection(
     val isBlocked = (isUsesExceeded || effectivelyTimeReached) && !isEmergencyUnlocked
 
     if (shield != null) {
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
         val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
         val remainingMillis = (totalLimitMillis - totalUsageToday).coerceAtLeast(0L)
         val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
@@ -796,7 +796,6 @@ fun ShieldSection(
                     modifier = Modifier.align(Alignment.CenterEnd)
                 )
             }
-            Spacer(modifier = Modifier.height(4.dp))
             val animatedProgressState = animateFloatAsState(
                 targetValue = progress.coerceIn(0f, 1f),
                 animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
@@ -806,6 +805,7 @@ fun ShieldSection(
                 progress = { animatedProgressState.value },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(top = 8.dp)
                     .height(10.dp),
                 color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -824,7 +824,7 @@ fun ShieldSection(
         )
     } else {
         val minutesToDisplay = if (isEmergencyUnlocked) null else currentRemainingMinutes
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         AnimatedContent(
             targetState = isDelaying,
@@ -882,10 +882,12 @@ fun GoalProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsa
                 modifier = Modifier.align(Alignment.CenterEnd)
             )
         }
-        Spacer(modifier = Modifier.height(4.dp))
         LinearWavyProgressIndicator(
             progress = { progress.coerceIn(0f, 1f) },
-            modifier = Modifier.fillMaxWidth().height(10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+                .height(10.dp),
             color = MaterialTheme.colorScheme.primary,
             trackColor = MaterialTheme.colorScheme.surfaceVariant,
             wavelength = 40.dp
@@ -919,10 +921,12 @@ fun ShieldProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalU
                 modifier = Modifier.align(Alignment.CenterEnd)
             )
         }
-        Spacer(modifier = Modifier.height(4.dp))
         LinearWavyProgressIndicator(
             progress = { progress.coerceIn(0f, 1f) },
-            modifier = Modifier.fillMaxWidth().height(10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+                .height(10.dp),
             color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
             trackColor = MaterialTheme.colorScheme.surfaceVariant,
             wavelength = 40.dp
@@ -933,10 +937,11 @@ fun ShieldProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalU
 @Composable
 fun GoalLandscapeContent(onGoalDismiss: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().fillMaxHeight(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        Spacer(modifier = Modifier.weight(1f))
         Icon(
             Icons.Outlined.CheckCircle,
             contentDescription = null,
@@ -949,7 +954,7 @@ fun GoalLandscapeContent(onGoalDismiss: () -> Unit) {
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.weight(1f))
         Button(
             onClick = onGoalDismiss,
             modifier = Modifier.fillMaxWidth(0.8f),
@@ -983,24 +988,36 @@ fun ShieldLandscapeContent(
     } else null
 
     if ((isUsesExceeded || isTimeLimitReached) && !isEmergencyUnlocked) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            modifier = Modifier.fillMaxHeight(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.weight(1f))
             LimitReachedContent(isUsesExceeded, isTimeLimitReached, refreshTimeLeftMillis)
             if (shield != null && shield.emergencyUseCount > 0) {
                 Spacer(modifier = Modifier.height(16.dp))
                 EmergencyButton(onEmergencyUse = onEmergencyClick)
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.weight(1f))
             CloseAppTextButton(onCloseApp)
         }
     } else {
         if (isDelaying) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                modifier = Modifier.fillMaxHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.weight(1f))
                 DelayInProgressSection(randomMessage, delayProgressAnimatable, delayDurationSeconds)
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.weight(1f))
                 CloseAppTextButton(onCloseApp)
             }
         } else {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                modifier = Modifier.fillMaxHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.weight(1f))
                 Text(
                     text = if (isEmergencyUnlocked) "Emergency Use: Select Duration" else "How long do you want to use it?",
                     style = MaterialTheme.typography.titleMedium,
@@ -1009,7 +1026,7 @@ fun ShieldLandscapeContent(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 DurationButtonsGrid(if (isEmergencyUnlocked) null else remainingMinutes, onAllowUse)
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.weight(1f))
                 CloseAppTextButton(onCloseApp)
             }
         }
@@ -1024,10 +1041,10 @@ fun LimitReachedSection(
     shield: ShieldEntity?,
     onEmergencyClick: () -> Unit
 ) {
-    Spacer(modifier = Modifier.height(32.dp))
+    Spacer(modifier = Modifier.height(24.dp))
     LimitReachedContent(isUsesExceeded, isTimeLimitReached, refreshTimeLeftMillis)
     if (shield != null && shield.emergencyUseCount > 0) {
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
         EmergencyButton(onEmergencyUse = onEmergencyClick)
     }
 }
@@ -1085,7 +1102,7 @@ fun DelayInProgressSection(
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
         
         Box(contentAlignment = Alignment.Center) {
             CircularWavyProgressIndicator(
@@ -1487,27 +1504,27 @@ fun PortraitScheduleLayout(
                 )
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             if (schedule.mode == ScheduleMode.ALLOW) {
-                Box(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp), contentAlignment = Alignment.Center) {
-                    GlobalUsagePill(totalGlobalUsageToday)
-                }
+                GlobalUsagePill(totalGlobalUsageToday)
                 CircularWavyProgressIndicator(
                     progress = { progress },
-                    modifier = Modifier.size(120.dp),
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .size(120.dp),
                     color = MaterialTheme.colorScheme.primary,
                     amplitude = { 1f },
                     wavelength = 36.dp,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
                 )
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
             }
 
             if (!isEmergencyUnlocked) {
                 if (schedule.emergencyUseCount > 0) {
                     EmergencyButton(onEmergencyUse = onEmergencyClick)
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
                 }
             } else {
                 Column(
@@ -1519,9 +1536,9 @@ fun PortraitScheduleLayout(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     DurationButtonsGrid(null, onAllowUse)
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
                 }
             }
 
@@ -1567,7 +1584,7 @@ fun LandscapeScheduleLayout(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .wrapContentHeight()
+                .height(IntrinsicSize.Min)
                 .padding(bottom = 24.dp, start = 24.dp, end = 24.dp, top = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1621,7 +1638,8 @@ fun LandscapeScheduleLayout(
                 Text(
                     text = appName,
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Text(
@@ -1657,10 +1675,13 @@ fun LandscapeScheduleLayout(
                 }
 
                 if (schedule.mode == ScheduleMode.ALLOW) {
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    GlobalUsagePill(totalGlobalUsageToday)
                     CircularWavyProgressIndicator(
                         progress = { progress },
-                        modifier = Modifier.size(80.dp),
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .size(80.dp),
                         color = MaterialTheme.colorScheme.primary,
                         wavelength = 24.dp,
                         trackColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -1670,10 +1691,12 @@ fun LandscapeScheduleLayout(
 
             Column(
                 modifier = Modifier
-                    .weight(1.2f),
+                    .weight(1.2f)
+                    .fillMaxHeight(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
+                Spacer(modifier = Modifier.weight(1f))
                 if (!isEmergencyUnlocked) {
                     Text(
                         text = if (schedule.mode == ScheduleMode.BLOCK) "Blocked by Schedule" else "Not on Allow-list",
@@ -1681,10 +1704,9 @@ fun LandscapeScheduleLayout(
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
                     if (schedule.emergencyUseCount > 0) {
-                        EmergencyButton(onEmergencyUse = onEmergencyClick)
                         Spacer(modifier = Modifier.height(16.dp))
+                        EmergencyButton(onEmergencyUse = onEmergencyClick)
                     }
                 } else {
                     Text(
@@ -1695,8 +1717,8 @@ fun LandscapeScheduleLayout(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     DurationButtonsGrid(null, onAllowUse)
-                    Spacer(modifier = Modifier.height(12.dp))
                 }
+                Spacer(modifier = Modifier.weight(1f))
 
                 TextButton(
                     onClick = onCloseApp,
