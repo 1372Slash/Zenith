@@ -46,6 +46,7 @@ class UserPreferencesRepository(private val context: Context) {
         val BACKUP_INTERVAL_HOURS = intPreferencesKey("backup_interval_hours")
         val FLOATING_TAB_BAR_ENABLED = booleanPreferencesKey("floating_tab_bar_enabled")
         val EXPRESSIVE_COLORS = booleanPreferencesKey("expressive_colors")
+        val TOTAL_USAGE_PILL_ENABLED = booleanPreferencesKey("total_usage_pill_enabled")
         val LAST_KNOWN_DAILY_USAGE = longPreferencesKey("last_known_daily_usage")
         val LAST_KNOWN_DAILY_USAGE_DATE = stringPreferencesKey("last_known_daily_usage_date")
         
@@ -91,6 +92,7 @@ class UserPreferencesRepository(private val context: Context) {
             val backupIntervalHours = preferences[PreferencesKeys.BACKUP_INTERVAL_HOURS] ?: 3
             val floatingTabBarEnabled = preferences[PreferencesKeys.FLOATING_TAB_BAR_ENABLED] ?: false
             val expressiveColors = preferences[PreferencesKeys.EXPRESSIVE_COLORS] ?: false
+            val totalUsagePillEnabled = preferences[PreferencesKeys.TOTAL_USAGE_PILL_ENABLED] ?: false
             val lastKnownDailyUsage = preferences[PreferencesKeys.LAST_KNOWN_DAILY_USAGE] ?: 0L
             val lastKnownDailyUsageDate = preferences[PreferencesKeys.LAST_KNOWN_DAILY_USAGE_DATE] ?: ""
             
@@ -122,6 +124,7 @@ class UserPreferencesRepository(private val context: Context) {
                 backupIntervalHours = backupIntervalHours,
                 floatingTabBarEnabled = floatingTabBarEnabled,
                 expressiveColors = expressiveColors,
+                totalUsagePillEnabled = totalUsagePillEnabled,
                 lastKnownDailyUsage = lastKnownDailyUsage,
                 lastKnownDailyUsageDate = lastKnownDailyUsageDate,
                 bedtimeEnabled = bedtimeEnabled,
@@ -243,6 +246,12 @@ class UserPreferencesRepository(private val context: Context) {
         }
     }
 
+    suspend fun setTotalUsagePillEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.TOTAL_USAGE_PILL_ENABLED] = enabled
+        }
+    }
+
     suspend fun setLastKnownDailyUsage(usage: Long, date: String) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.LAST_KNOWN_DAILY_USAGE] = usage
@@ -318,6 +327,7 @@ data class UserPreferences(
     val backupIntervalHours: Int = 3,
     val floatingTabBarEnabled: Boolean = false,
     val expressiveColors: Boolean = false,
+    val totalUsagePillEnabled: Boolean = false,
     val lastKnownDailyUsage: Long = 0L,
     val lastKnownDailyUsageDate: String = "",
     val bedtimeEnabled: Boolean = false,

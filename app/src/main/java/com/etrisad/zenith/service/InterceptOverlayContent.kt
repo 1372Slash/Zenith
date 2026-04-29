@@ -654,7 +654,7 @@ fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageTod
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.align(Alignment.CenterStart)
             )
-            GlobalUsagePill(totalGlobalUsageToday)
+            TotalUsagePill(totalGlobalUsageToday)
             Text(
                 text = "Target: ${shield.timeLimitMinutes}m",
                 style = MaterialTheme.typography.labelMedium,
@@ -788,7 +788,7 @@ fun ShieldSection(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.align(Alignment.CenterStart)
                 )
-                GlobalUsagePill(totalGlobalUsageToday)
+                TotalUsagePill(totalGlobalUsageToday)
                 Text(
                     text = "${formatMillis(remainingMillis)} left today",
                     style = MaterialTheme.typography.labelMedium,
@@ -874,7 +874,7 @@ fun GoalProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsa
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.align(Alignment.CenterStart)
             )
-            GlobalUsagePill(totalGlobalUsageToday)
+            TotalUsagePill(totalGlobalUsageToday)
             Text(
                 text = "${shield.timeLimitMinutes}m",
                 style = MaterialTheme.typography.labelSmall,
@@ -913,7 +913,7 @@ fun ShieldProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalU
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.align(Alignment.CenterStart)
             )
-            GlobalUsagePill(totalGlobalUsageToday)
+            TotalUsagePill(totalGlobalUsageToday)
             Text(
                 text = "${formatMillis(remainingMillis)} left",
                 style = MaterialTheme.typography.labelSmall,
@@ -1156,10 +1156,13 @@ fun CloseAppTextButton(onCloseApp: () -> Unit) {
 }
 
 @Composable
-fun GlobalUsagePill(totalGlobalUsageToday: Long, modifier: Modifier = Modifier) {
+fun TotalUsagePill(totalGlobalUsageToday: Long, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val userPrefsRepo = remember { UserPreferencesRepository(context) }
     val userPrefs by userPrefsRepo.userPreferencesFlow.collectAsState(initial = UserPreferences())
+    
+    if (!userPrefs.totalUsagePillEnabled) return
+
     val screenTimeTargetMinutes = userPrefs.screenTimeTargetMinutes
 
     val totalUsageMinutes = totalGlobalUsageToday / 60000
@@ -1522,7 +1525,7 @@ fun PortraitScheduleLayout(
             Spacer(modifier = Modifier.height(20.dp))
 
             if (schedule.mode == ScheduleMode.ALLOW) {
-                GlobalUsagePill(totalGlobalUsageToday)
+                TotalUsagePill(totalGlobalUsageToday)
                 CircularWavyProgressIndicator(
                     progress = { progress },
                     modifier = Modifier
@@ -1691,7 +1694,7 @@ fun LandscapeScheduleLayout(
 
                 if (schedule.mode == ScheduleMode.ALLOW) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    GlobalUsagePill(totalGlobalUsageToday)
+                    TotalUsagePill(totalGlobalUsageToday)
                     CircularWavyProgressIndicator(
                         progress = { progress },
                         modifier = Modifier

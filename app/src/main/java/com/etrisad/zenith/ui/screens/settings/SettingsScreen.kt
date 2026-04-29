@@ -217,6 +217,11 @@ fun SettingsScreen(
             coroutineScope.launch {
                 preferencesRepository.setExpressiveColors(enabled)
             }
+        },
+        onTotalUsagePillEnabledChange = { enabled ->
+            coroutineScope.launch {
+                preferencesRepository.setTotalUsagePillEnabled(enabled)
+            }
         }
     )
 
@@ -266,7 +271,8 @@ fun SettingsScreenContent(
     onPickBackupDirectory: () -> Unit,
     onSetBackupInterval: (Int) -> Unit,
     onFloatingTabBarEnabledChange: (Boolean) -> Unit,
-    onExpressiveColorsChange: (Boolean) -> Unit
+    onExpressiveColorsChange: (Boolean) -> Unit,
+    onTotalUsagePillEnabledChange: (Boolean) -> Unit
 ) {
     var showTargetSheet by remember { mutableStateOf(false) }
     var showEmergencyRechargeSheet by remember { mutableStateOf(false) }
@@ -358,6 +364,33 @@ fun SettingsScreenContent(
 
             item {
                 Spacer(modifier = Modifier.height(4.dp))
+                SettingsActionItem(
+                    title = "Whitelist Apps",
+                    summary = "${preferences.whitelistedPackages.size} apps bypassed",
+                    onClick = { onShowWhitelistSheetChange(true) },
+                    icon = Icons.Outlined.VerifiedUser,
+                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                PreferenceCategory(title = "Features")
+            }
+
+            item {
+                SettingsToggle(
+                    title = "Total Usage Pill",
+                    description = "Show your total screen time in the mindful pause overlay",
+                    checked = preferences.totalUsagePillEnabled,
+                    onCheckedChange = onTotalUsagePillEnabledChange,
+                    icon = Icons.Outlined.Public,
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
                 SettingsToggle(
                     title = "Session Usage Overlay",
                     description = "Show a floating HUD with remaining time when an app is allowed",
@@ -366,7 +399,7 @@ fun SettingsScreenContent(
                     icon = Icons.Outlined.Timer,
                     shape = if (preferences.sessionUsageOverlayEnabled)
                         RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
-                    else RoundedCornerShape(8.dp)
+                    else RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                 )
             }
 
@@ -377,20 +410,10 @@ fun SettingsScreenContent(
                         size = preferences.sessionUsageOverlaySize,
                         opacity = preferences.sessionUsageOverlayOpacity,
                         onSizeChange = onSessionUsageOverlaySizeChange,
-                        onOpacityChange = onSessionUsageOverlayOpacityChange
+                        onOpacityChange = onSessionUsageOverlayOpacityChange,
+                        shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                     )
                 }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(4.dp))
-                SettingsActionItem(
-                    title = "Whitelist Apps",
-                    summary = "${preferences.whitelistedPackages.size} apps bypassed",
-                    onClick = { onShowWhitelistSheetChange(true) },
-                    icon = Icons.Outlined.VerifiedUser,
-                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                )
             }
 
             item {
@@ -1467,7 +1490,8 @@ fun HUDAppearanceSettings(
     size: Int,
     opacity: Int,
     onSizeChange: (Int) -> Unit,
-    onOpacityChange: (Int) -> Unit
+    onOpacityChange: (Int) -> Unit,
+    shape: Shape = RoundedCornerShape(8.dp)
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val wallpaperDrawable = remember {
@@ -1480,7 +1504,7 @@ fun HUDAppearanceSettings(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
+        shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
