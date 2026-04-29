@@ -67,6 +67,8 @@ class ZenithAccessibilityService : AccessibilityService() {
     private var lastCheckedDayTimestamp = 0L
 
     private var isBedtimeActive = false
+    private var isWindDownActive = false
+    private val windDownUsedPackages = ConcurrentHashMap<String, Boolean>()
     private var bedtimeWhitelistedPackages = emptySet<String>()
 
     private class ParsedSchedule(
@@ -527,6 +529,7 @@ class ZenithAccessibilityService : AccessibilityService() {
     private fun updateBedtimeStatus(prefs: UserPreferences) {
         if (!prefs.bedtimeEnabled) {
             isBedtimeActive = false
+            isWindDownActive = false
             return
         }
 
@@ -535,6 +538,7 @@ class ZenithAccessibilityService : AccessibilityService() {
         
         if (currentDay !in prefs.bedtimeDays) {
             isBedtimeActive = false
+            isWindDownActive = false
             return
         }
 
@@ -549,16 +553,40 @@ class ZenithAccessibilityService : AccessibilityService() {
         } else {
             currentMinutes >= startMinutes || currentMinutes <= endMinutes
         }
+
+        // Wind Down starts 30 minutes before bedtime
+        val windDownStartMinutes = (startMinutes - 30 + 1440) % 1440
+        
+        val wasWindDownActive = isWindDownActive
+        isWindDownActive = if (windDownStartMinutes <= startMinutes) {
+            currentMinutes in windDownStartMinutes until startMinutes
+        } else {
+            currentMinutes >= windDownStartMinutes || currentMinutes < startMinutes
+        }
+
+        // Reset wind down sessions when a new wind down period starts
+        if (isWindDownActive && !wasWindDownActive) {
+            windDownUsedPackages.clear()
+        }
     }
 
     private fun checkSchedules(packageName: String): Boolean {
         if (shouldBypassBlocking(packageName)) return false
         
-        // Check Bedtime First
-        val prefs = currentPreferences
-        if (isBedtimeActive && prefs?.bedtimeWindDownEnabled == true) {
+        val prefs = currentPreferences ?: return false
+        
+        // 1. Bedtime First (Strict)
+        if (isBedtimeActive) {
             if (packageName !in bedtimeWhitelistedPackages) {
                 showBedtimeOverlay(packageName)
+                return true
+            }
+        }
+
+        // 2. Wind Down (30 mins before Bedtime)
+        if (isWindDownActive && prefs.bedtimeWindDownEnabled) {
+            if (packageName !in bedtimeWhitelistedPackages) {
+                showWindDownOverlay(packageName)
                 return true
             }
         }
@@ -610,6 +638,26 @@ class ZenithAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun showWindDownOverlay(packageName: String) {
+        val sessionUsed = windDownUsedPackages[packageName] ?: false
+        serviceScope.launch(Dispatchers.Main) {
+            val appName = try {
+                packageManager.getApplicationLabel(packageManager.getApplicationInfo(packageName, 0)).toString()
+            } catch (_: Exception) { packageName }
+            
+            overlayManager.showWindDownOverlay(
+                packageName = packageName,
+                appName = appName,
+                sessionUsed = sessionUsed,
+                onAllowUse = { minutes ->
+                    allowedApps[packageName] = System.currentTimeMillis() + (minutes * 60 * 1000L)
+                    windDownUsedPackages[packageName] = true
+                },
+                onCloseApp = { goToHomeScreen() }
+            )
+        }
+    }
+
 
     private fun showScheduleOverlayFromParsed(packageName: String, ps: ParsedSchedule) {
         val originalSchedule = activeSchedules.find { it.id == ps.id } ?: return
@@ -625,10 +673,12 @@ class ZenithAccessibilityService : AccessibilityService() {
     private fun shouldBypassBlocking(packageName: String): Boolean {
         if (packageName == this.packageName) return true
         
-        // During bedtime, we only bypass if it's in the bedtime whitelist
-        if (isBedtimeActive && (currentPreferences?.bedtimeWindDownEnabled == true)) {
+        // During bedtime or wind down, we only bypass if it's in the bedtime whitelist
+        val prefs = currentPreferences
+        val isBedtimeOrWindDown = isBedtimeActive || (isWindDownActive && prefs?.bedtimeWindDownEnabled == true)
+        
+        if (isBedtimeOrWindDown) {
             if (packageName in bedtimeWhitelistedPackages) return true
-            // If it's not in bedtime whitelist, it might still be a launcher
         } else {
             if (packageName in whitelistedPackages) return true
         }

@@ -61,6 +61,8 @@ class AppUsageMonitorService : Service() {
     private var goalShieldsCache = listOf<ShieldEntity>()
     
     private var isBedtimeActive = false
+    private var isWindDownActive = false
+    private val windDownUsedPackages = mutableMapOf<String, Boolean>()
     private var bedtimeWhitelistedPackages = emptySet<String>()
     private var lastCheckedDayTimestamp = 0L
     private var isScreenOn = true
@@ -914,17 +916,17 @@ class AppUsageMonitorService : Service() {
     private fun updateBedtimeStatus(prefs: UserPreferences) {
         if (!prefs.bedtimeEnabled) {
             isBedtimeActive = false
+            isWindDownActive = false
             updateDndAndWindDown(false, false)
             return
         }
 
         val now = Calendar.getInstance()
         val currentDay = now.get(Calendar.DAY_OF_WEEK)
-        // Preferences store days as 1 (Sun) to 7 (Sat) usually, or custom. 
-        // Let's assume 1=Sun, 2=Mon... which is same as Calendar.DAY_OF_WEEK
         
         if (currentDay !in prefs.bedtimeDays) {
             isBedtimeActive = false
+            isWindDownActive = false
             updateDndAndWindDown(false, false)
             return
         }
@@ -941,19 +943,27 @@ class AppUsageMonitorService : Service() {
             currentMinutes >= startMinutes || currentMinutes <= endMinutes
         }
 
-        if (active != isBedtimeActive) {
-            isBedtimeActive = active
-            updateDndAndWindDown(
-                active && prefs.bedtimeDndEnabled,
-                active && prefs.bedtimeWindDownEnabled
-            )
-        } else if (active) {
-            // Even if active status didn't change, we might need to update DND or Wind Down if they were toggled in settings
-            updateDndAndWindDown(
-                prefs.bedtimeDndEnabled,
-                prefs.bedtimeWindDownEnabled
-            )
+        // Wind Down starts 30 minutes before bedtime
+        val windDownStartMinutes = (startMinutes - 30 + 1440) % 1440
+        
+        val wasWindDownActive = isWindDownActive
+        val windDownActive = if (windDownStartMinutes <= startMinutes) {
+            currentMinutes in windDownStartMinutes until startMinutes
+        } else {
+            currentMinutes >= windDownStartMinutes || currentMinutes < startMinutes
         }
+
+        if (windDownActive && !wasWindDownActive) {
+            windDownUsedPackages.clear()
+        }
+
+        isBedtimeActive = active
+        isWindDownActive = windDownActive
+
+        updateDndAndWindDown(
+            active && prefs.bedtimeDndEnabled,
+            (active || windDownActive) && prefs.bedtimeWindDownEnabled
+        )
     }
 
     private fun updateDndAndWindDown(dnd: Boolean, windDown: Boolean) {
@@ -983,11 +993,20 @@ class AppUsageMonitorService : Service() {
     private fun checkSchedules(packageName: String): Boolean {
         if (shouldBypassBlocking(packageName)) return false
         
-        // Check Bedtime First
         val prefs = currentPreferences
-        if (isBedtimeActive && prefs?.bedtimeWindDownEnabled == true) {
+        
+        // 1. Bedtime First (Strict)
+        if (isBedtimeActive) {
             if (packageName !in bedtimeWhitelistedPackages) {
                 showBedtimeOverlay(packageName)
+                return true
+            }
+        }
+
+        // 2. Wind Down (30 mins before Bedtime)
+        if (isWindDownActive && prefs?.bedtimeWindDownEnabled == true) {
+            if (packageName !in bedtimeWhitelistedPackages) {
+                showWindDownOverlay(packageName)
                 return true
             }
         }
@@ -1038,6 +1057,45 @@ class AppUsageMonitorService : Service() {
         }
     }
 
+    private fun showWindDownOverlay(packageName: String) {
+        val sessionUsed = windDownUsedPackages[packageName] ?: false
+        serviceScope.launch(Dispatchers.Main) {
+            val appName = try {
+                packageManager.getApplicationLabel(packageManager.getApplicationInfo(packageName, 0)).toString()
+            } catch (_: Exception) { packageName }
+            
+            overlayManager.showWindDownOverlay(
+                packageName = packageName,
+                appName = appName,
+                sessionUsed = sessionUsed,
+                onAllowUse = { minutes ->
+                    val currentTime = System.currentTimeMillis()
+                    allowedApps[packageName] = currentTime + (minutes * 60 * 1000L)
+                    windDownUsedPackages[packageName] = true
+                    
+                    val currentPrefs = currentPreferences ?: return@showWindDownOverlay
+                    if (currentPrefs.sessionUsageOverlayEnabled) {
+                        serviceScope.launch(Dispatchers.Main) {
+                            sessionUsageOverlayManager.showHUD(
+                                packageName,
+                                minutes,
+                                currentPrefs.sessionUsageOverlaySize,
+                                currentPrefs.sessionUsageOverlayOpacity,
+                                onSessionEnd = {
+                                    allowedApps[packageName] = 0L
+                                    serviceScope.launch {
+                                        checkSchedules(packageName)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                },
+                onCloseApp = { goToHomeScreen() }
+            )
+        }
+    }
+
     private fun showScheduleOverlayFromParsed(packageName: String, ps: ParsedSchedule) {
         val originalSchedule = activeSchedules.find { it.id == ps.id } ?: return
         showScheduleOverlay(packageName, originalSchedule)
@@ -1052,10 +1110,12 @@ class AppUsageMonitorService : Service() {
     private fun shouldBypassBlocking(packageName: String): Boolean {
         if (packageName == this.packageName) return true
         
-        // During bedtime, we only bypass if it's in the bedtime whitelist
-        if (isBedtimeActive && (currentPreferences?.bedtimeWindDownEnabled == true)) {
+        // During bedtime or wind down, we only bypass if it's in the bedtime whitelist
+        val prefs = currentPreferences
+        val isBedtimeOrWindDown = isBedtimeActive || (isWindDownActive && prefs?.bedtimeWindDownEnabled == true)
+        
+        if (isBedtimeOrWindDown) {
             if (packageName in bedtimeWhitelistedPackages) return true
-            // If it's not in bedtime whitelist, it might still be a critical system app or launcher
         } else {
             if (packageName in whitelistedPackages) return true
         }

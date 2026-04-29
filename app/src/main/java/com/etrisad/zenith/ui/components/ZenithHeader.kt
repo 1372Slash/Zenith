@@ -31,7 +31,8 @@ fun ZenithHeader(
     currentRoute: String?,
     scrollBehavior: TopAppBarScrollBehavior,
     isNavRailVisible: Boolean = false,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    actions: @Composable RowScope.() -> Unit = {}
 ) {
     val isHome = currentRoute == Screen.Home.route
     val isDeepScreen =
@@ -175,6 +176,7 @@ fun ZenithHeader(
                 }
             },
             actions = {
+                actions()
                 // Balance the side slots precisely to ensure perfect centering
                 Spacer(modifier = Modifier.width(sideSlotWidth))
             },

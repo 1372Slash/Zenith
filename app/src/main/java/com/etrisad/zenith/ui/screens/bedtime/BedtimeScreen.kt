@@ -66,16 +66,28 @@ fun BedtimeScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(innerPadding)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        BedtimeToggleCard(
-            enabled = preferences.bedtimeEnabled,
-            onToggle = { viewModel.setBedtimeEnabled(it) },
-            expressive = preferences.expressiveColors
-        )
+        Spacer(modifier = Modifier.height(innerPadding.calculateTopPadding() + 16.dp))
+
+        AnimatedVisibility(
+            visible = !preferences.bedtimeEnabled,
+            enter = fadeIn(spring(stiffness = Spring.StiffnessLow)) + 
+                    expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)),
+            exit = fadeOut(spring(stiffness = Spring.StiffnessLow)) + 
+                   shrinkVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow))
+        ) {
+            Column {
+                BedtimeToggleCard(
+                    enabled = preferences.bedtimeEnabled,
+                    onToggle = { viewModel.setBedtimeEnabled(it) },
+                    expressive = preferences.expressiveColors
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
 
         AnimatedVisibility(
             visible = preferences.bedtimeEnabled,
@@ -93,8 +105,6 @@ fun BedtimeScreen(
                     currentTime = currentTime
                 )
                 
-                Spacer(modifier = Modifier.height(12.dp))
-
                 TimeSelectionRow(
                     startTime = preferences.bedtimeStartTime,
                     endTime = preferences.bedtimeEndTime,
@@ -126,6 +136,7 @@ fun BedtimeScreen(
                 )
             }
         }
+        Spacer(modifier = Modifier.height(innerPadding.calculateBottomPadding() + 24.dp))
     }
 
     if (showAppPicker) {
@@ -252,7 +263,7 @@ fun BedtimeStatusProgress(
         CircularWavyProgressIndicator(
             progress = { progress },
             modifier = Modifier.fillMaxSize(),
-            color = if (isBedtime) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+            color = if (isBedtime) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.secondary,
             trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
             stroke = Stroke(width = strokeWidth),
             trackStroke = Stroke(width = strokeWidth),
@@ -264,7 +275,7 @@ fun BedtimeStatusProgress(
             Icon(
                 imageVector = if (isBedtime) Icons.Default.Bedtime else Icons.Default.WbSunny,
                 contentDescription = null,
-                tint = if (isBedtime) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                tint = if (isBedtime) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.secondary,
                 modifier = Modifier
                     .size(32.dp)
                     .graphicsLayer { 
@@ -626,7 +637,7 @@ fun FeaturesCard(
                 Text(text = "Features", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             FeatureRow(
                 icon = Icons.Outlined.DoNotDisturbOn,
                 title = "Do Not Disturb",
@@ -634,16 +645,16 @@ fun FeaturesCard(
                 enabled = dndEnabled,
                 onToggle = onDndToggle
             )
-            
+
             HorizontalDivider(
                 modifier = Modifier.padding(vertical = 8.dp),
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             )
-            
+
             FeatureRow(
                 icon = Icons.Outlined.Block,
                 title = "Wind Down",
-                subtitle = "Force block unallowed apps",
+                subtitle = "30-min period before bedtime with one-time session access per app",
                 enabled = windDownEnabled,
                 onToggle = onWindDownToggle
             )

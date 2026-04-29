@@ -153,7 +153,9 @@ class InterceptOverlayManager(private val context: Context) {
         appName: String,
         onCloseApp: () -> Unit
     ) {
-        if (isShowing) return
+        if (isShowing && currentPackage == packageName) return
+        if (isShowing) hideOverlay()
+        
         isShowing = true
         currentPackage = packageName
 
@@ -172,6 +174,51 @@ class InterceptOverlayManager(private val context: Context) {
                         BedtimeOverlayContent(
                             packageName = packageName,
                             appName = appName,
+                            onCloseApp = {
+                                onCloseApp()
+                                hideOverlay()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        setupAndAddView(composeView, lOwner, vStore)
+    }
+
+    fun showWindDownOverlay(
+        packageName: String,
+        appName: String,
+        sessionUsed: Boolean,
+        onAllowUse: (Int) -> Unit,
+        onCloseApp: () -> Unit
+    ) {
+        if (isShowing && currentPackage == packageName) return
+        if (isShowing) hideOverlay()
+
+        isShowing = true
+        currentPackage = packageName
+
+        val vStore = ViewModelStore()
+        viewModelStore = vStore
+        
+        val lOwner = MyLifecycleOwner()
+        lOwner.performRestore(null)
+        lOwner.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+        lifecycleOwner = lOwner
+
+        val composeView = ComposeView(context).apply {
+            setContent {
+                ZenithTheme {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        WindDownOverlayContent(
+                            packageName = packageName,
+                            appName = appName,
+                            sessionUsed = sessionUsed,
+                            onAllowUse = { minutes ->
+                                onAllowUse(minutes)
+                                hideOverlay()
+                            },
                             onCloseApp = {
                                 onCloseApp()
                                 hideOverlay()

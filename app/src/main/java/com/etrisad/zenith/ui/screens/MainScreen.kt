@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.*
@@ -14,6 +15,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -179,7 +182,27 @@ fun MainScreen(
                     currentRoute = currentRoute,
                     scrollBehavior = scrollBehavior,
                     isNavRailVisible = useNavigationRail && !isDeepScreen,
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    actions = {
+                        AnimatedVisibility(
+                            visible = currentRoute == Screen.Bedtime.route && preferences.bedtimeEnabled,
+                            enter = fadeIn(animationSpec = tween(600)) + scaleIn(initialScale = 0.8f, animationSpec = tween(600)) + expandHorizontally(expandFrom = Alignment.End, animationSpec = spring(stiffness = Spring.StiffnessLow)),
+                            exit = fadeOut(animationSpec = tween(600)) + scaleOut(targetScale = 0.8f, animationSpec = tween(600)) + shrinkHorizontally(shrinkTowards = Alignment.End, animationSpec = spring(stiffness = Spring.StiffnessLow))
+                        ) {
+                            Switch(
+                                checked = preferences.bedtimeEnabled,
+                                onCheckedChange = { bedtimeViewModel.setBedtimeEnabled(it) },
+                                modifier = Modifier.padding(end = 8.dp),
+                                thumbContent = {
+                                    Icon(
+                                        imageVector = Icons.Default.Bedtime,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(SwitchDefaults.IconSize)
+                                    )
+                                }
+                            )
+                        }
+                    }
                 )
             }
         ) { innerPadding ->
