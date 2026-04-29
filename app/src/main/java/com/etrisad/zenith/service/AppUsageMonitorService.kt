@@ -62,6 +62,8 @@ class AppUsageMonitorService : Service() {
     
     private var isBedtimeActive = false
     private var isWindDownActive = false
+    private var cachedBedtimeStartMinutes = -1
+    private var cachedBedtimeEndMinutes = -1
     private val windDownUsedPackages = mutableMapOf<String, Boolean>()
     private var bedtimeWhitelistedPackages = emptySet<String>()
     private var lastCheckedDayTimestamp = 0L
@@ -148,6 +150,13 @@ class AppUsageMonitorService : Service() {
                 currentPreferences = preferences
                 whitelistedPackages = preferences.whitelistedPackages
                 bedtimeWhitelistedPackages = preferences.bedtimeWhitelistedPackages
+                
+                // Cache bedtime minutes to avoid repeated parsing
+                val startParts = preferences.bedtimeStartTime.split(":")
+                val endParts = preferences.bedtimeEndTime.split(":")
+                cachedBedtimeStartMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 22) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0)
+                cachedBedtimeEndMinutes = (endParts.getOrNull(0)?.toIntOrNull() ?: 7) * 60 + (endParts.getOrNull(1)?.toIntOrNull() ?: 0)
+                
                 updateBedtimeStatus(preferences)
             }
         }
@@ -932,10 +941,10 @@ class AppUsageMonitorService : Service() {
         }
 
         val currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-        val startParts = prefs.bedtimeStartTime.split(":")
-        val endParts = prefs.bedtimeEndTime.split(":")
-        val startMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 22) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0)
-        val endMinutes = (endParts.getOrNull(0)?.toIntOrNull() ?: 7) * 60 + (endParts.getOrNull(1)?.toIntOrNull() ?: 0)
+        
+        // Use cached minutes instead of parsing strings every time
+        val startMinutes = cachedBedtimeStartMinutes
+        val endMinutes = cachedBedtimeEndMinutes
 
         val active = if (startMinutes <= endMinutes) {
             currentMinutes in startMinutes..endMinutes
