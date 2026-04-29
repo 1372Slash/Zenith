@@ -148,6 +148,42 @@ class InterceptOverlayManager(private val context: Context) {
         setupAndAddView(composeView, lOwner, vStore)
     }
 
+    fun showBedtimeOverlay(
+        packageName: String,
+        appName: String,
+        onCloseApp: () -> Unit
+    ) {
+        if (isShowing) return
+        isShowing = true
+        currentPackage = packageName
+
+        val vStore = ViewModelStore()
+        viewModelStore = vStore
+        
+        val lOwner = MyLifecycleOwner()
+        lOwner.performRestore(null)
+        lOwner.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+        lifecycleOwner = lOwner
+
+        val composeView = ComposeView(context).apply {
+            setContent {
+                ZenithTheme {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        BedtimeOverlayContent(
+                            packageName = packageName,
+                            appName = appName,
+                            onCloseApp = {
+                                onCloseApp()
+                                hideOverlay()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        setupAndAddView(composeView, lOwner, vStore)
+    }
+
     private fun setupAndAddView(composeView: ComposeView, lOwner: MyLifecycleOwner, vStore: ViewModelStore) {
         @Suppress("DEPRECATION")
         composeView.systemUiVisibility = (android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE

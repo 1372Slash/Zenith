@@ -48,6 +48,15 @@ class UserPreferencesRepository(private val context: Context) {
         val EXPRESSIVE_COLORS = booleanPreferencesKey("expressive_colors")
         val LAST_KNOWN_DAILY_USAGE = longPreferencesKey("last_known_daily_usage")
         val LAST_KNOWN_DAILY_USAGE_DATE = stringPreferencesKey("last_known_daily_usage_date")
+        
+        // Bedtime Settings
+        val BEDTIME_ENABLED = booleanPreferencesKey("bedtime_enabled")
+        val BEDTIME_START_TIME = stringPreferencesKey("bedtime_start_time")
+        val BEDTIME_END_TIME = stringPreferencesKey("bedtime_end_time")
+        val BEDTIME_DAYS = stringPreferencesKey("bedtime_days")
+        val BEDTIME_DND_ENABLED = booleanPreferencesKey("bedtime_dnd_enabled")
+        val BEDTIME_WIND_DOWN_ENABLED = booleanPreferencesKey("bedtime_wind_down_enabled")
+        val BEDTIME_WHITELISTED_PACKAGES = stringPreferencesKey("bedtime_whitelisted_packages")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -83,6 +92,15 @@ class UserPreferencesRepository(private val context: Context) {
             val expressiveColors = preferences[PreferencesKeys.EXPRESSIVE_COLORS] ?: false
             val lastKnownDailyUsage = preferences[PreferencesKeys.LAST_KNOWN_DAILY_USAGE] ?: 0L
             val lastKnownDailyUsageDate = preferences[PreferencesKeys.LAST_KNOWN_DAILY_USAGE_DATE] ?: ""
+            
+            val bedtimeEnabled = preferences[PreferencesKeys.BEDTIME_ENABLED] ?: false
+            val bedtimeStartTime = preferences[PreferencesKeys.BEDTIME_START_TIME] ?: "22:00"
+            val bedtimeEndTime = preferences[PreferencesKeys.BEDTIME_END_TIME] ?: "07:00"
+            val bedtimeDays = preferences[PreferencesKeys.BEDTIME_DAYS]?.split(",")?.filter { it.isNotEmpty() }?.map { it.toInt() }?.toSet() ?: setOf(1, 2, 3, 4, 5, 6, 7)
+            val bedtimeDndEnabled = preferences[PreferencesKeys.BEDTIME_DND_ENABLED] ?: false
+            val bedtimeWindDownEnabled = preferences[PreferencesKeys.BEDTIME_WIND_DOWN_ENABLED] ?: false
+            val bedtimeWhitelistedPackages = preferences[PreferencesKeys.BEDTIME_WHITELISTED_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
+
             UserPreferences(
                 themeConfig = themeConfig,
                 fontOption = fontOption,
@@ -103,7 +121,14 @@ class UserPreferencesRepository(private val context: Context) {
                 floatingTabBarEnabled = floatingTabBarEnabled,
                 expressiveColors = expressiveColors,
                 lastKnownDailyUsage = lastKnownDailyUsage,
-                lastKnownDailyUsageDate = lastKnownDailyUsageDate
+                lastKnownDailyUsageDate = lastKnownDailyUsageDate,
+                bedtimeEnabled = bedtimeEnabled,
+                bedtimeStartTime = bedtimeStartTime,
+                bedtimeEndTime = bedtimeEndTime,
+                bedtimeDays = bedtimeDays,
+                bedtimeDndEnabled = bedtimeDndEnabled,
+                bedtimeWindDownEnabled = bedtimeWindDownEnabled,
+                bedtimeWhitelistedPackages = bedtimeWhitelistedPackages
             )
         }
 
@@ -221,6 +246,48 @@ class UserPreferencesRepository(private val context: Context) {
             preferences[PreferencesKeys.LAST_KNOWN_DAILY_USAGE_DATE] = date
         }
     }
+
+    suspend fun setBedtimeEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.BEDTIME_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setBedtimeStartTime(time: String) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.BEDTIME_START_TIME] = time
+        }
+    }
+
+    suspend fun setBedtimeEndTime(time: String) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.BEDTIME_END_TIME] = time
+        }
+    }
+
+    suspend fun setBedtimeDays(days: Set<Int>) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.BEDTIME_DAYS] = days.joinToString(",")
+        }
+    }
+
+    suspend fun setBedtimeDndEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.BEDTIME_DND_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setBedtimeWindDownEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.BEDTIME_WIND_DOWN_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setBedtimeWhitelistedPackages(packages: Set<String>) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.BEDTIME_WHITELISTED_PACKAGES] = packages.joinToString(",")
+        }
+    }
 }
 
 data class UserPreferences(
@@ -243,5 +310,12 @@ data class UserPreferences(
     val floatingTabBarEnabled: Boolean = false,
     val expressiveColors: Boolean = false,
     val lastKnownDailyUsage: Long = 0L,
-    val lastKnownDailyUsageDate: String = ""
+    val lastKnownDailyUsageDate: String = "",
+    val bedtimeEnabled: Boolean = false,
+    val bedtimeStartTime: String = "22:00",
+    val bedtimeEndTime: String = "07:00",
+    val bedtimeDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7),
+    val bedtimeDndEnabled: Boolean = false,
+    val bedtimeWindDownEnabled: Boolean = false,
+    val bedtimeWhitelistedPackages: Set<String> = emptySet()
 )

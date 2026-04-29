@@ -38,6 +38,8 @@ import com.etrisad.zenith.ui.screens.bedtime.BedtimeScreen
 import com.etrisad.zenith.ui.screens.settings.SettingsScreen
 import com.etrisad.zenith.ui.viewmodel.FocusViewModel
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
+import com.etrisad.zenith.ui.viewmodel.BedtimeViewModel
+import com.etrisad.zenith.ui.viewmodel.BedtimeViewModelFactory
 
 import com.etrisad.zenith.data.preferences.UserPreferences
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
@@ -51,6 +53,9 @@ fun MainScreen(
     userPreferencesRepository: UserPreferencesRepository,
     windowSizeClass: WindowSizeClass
 ) {
+    val bedtimeViewModel: BedtimeViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = BedtimeViewModelFactory(userPreferencesRepository)
+    )
     val navController = rememberNavController()
     val context = LocalContext.current
 
@@ -303,7 +308,7 @@ fun MainScreen(
                         SettingsScreen(userPreferencesRepository, innerPadding)
                     }
                     composable(Screen.Bedtime.route) {
-                        BedtimeScreen(innerPadding)
+                        BedtimeScreen(bedtimeViewModel, innerPadding)
                     }
                     composable(Screen.UsageStats.route) {
                         UsageStatsScreen(

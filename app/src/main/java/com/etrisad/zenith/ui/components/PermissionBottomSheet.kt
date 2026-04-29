@@ -59,6 +59,7 @@ fun PermissionBottomSheet(
     var hasOverlay by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
     var hasAccessibility by remember { mutableStateOf(isAccessibilityServiceEnabled(context)) }
     var hasNotifications by remember { mutableStateOf(hasNotificationPermission(context)) }
+    var hasNotificationPolicy by remember { mutableStateOf((context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted) }
 
     val notificationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
@@ -82,6 +83,7 @@ fun PermissionBottomSheet(
                 hasOverlay = Settings.canDrawOverlays(context)
                 hasAccessibility = isAccessibilityServiceEnabled(context)
                 hasNotifications = hasNotificationPermission(context)
+                hasNotificationPolicy = (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted
                 
                 if (hasUsageStats && hasOverlay && hasNotifications && (hasAccessibility || preferences.accessibilityDisabled)) {
                     onAllPermissionsGranted()
@@ -160,6 +162,21 @@ fun PermissionBottomSheet(
                     })
                 },
                 icon = Icons.Outlined.BarChart,
+                shape = RoundedCornerShape(8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            PermissionItemRow(
+                title = "Notification Policy",
+                description = "Required for Bedtime Do Not Disturb",
+                isGranted = hasNotificationPolicy,
+                onClick = {
+                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    })
+                },
+                icon = Icons.Outlined.DoNotDisturbOn,
                 shape = RoundedCornerShape(8.dp)
             )
 

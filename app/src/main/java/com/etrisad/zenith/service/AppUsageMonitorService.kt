@@ -59,6 +59,9 @@ class AppUsageMonitorService : Service() {
     private var currentPreferences: UserPreferences? = null
     private var allShieldsCache = listOf<ShieldEntity>()
     private var goalShieldsCache = listOf<ShieldEntity>()
+    
+    private var isBedtimeActive = false
+    private var bedtimeWhitelistedPackages = emptySet<String>()
     private var lastCheckedDayTimestamp = 0L
     private var isScreenOn = true
     private var isPowerSaveMode = false
@@ -142,6 +145,8 @@ class AppUsageMonitorService : Service() {
             preferencesRepository.userPreferencesFlow.collect { preferences ->
                 currentPreferences = preferences
                 whitelistedPackages = preferences.whitelistedPackages
+                bedtimeWhitelistedPackages = preferences.bedtimeWhitelistedPackages
+                updateBedtimeStatus(preferences)
             }
         }
 
@@ -260,6 +265,28 @@ class AppUsageMonitorService : Service() {
             checkDayChangeOnStartup()
 
             while (true) {
+                val currentTime = System.currentTimeMillis()
+
+                if (currentTime - lastCheckedDayTimestamp > 60000) {
+                    currentPreferences?.let { updateBedtimeStatus(it) }
+
+                    reusableCalendar.timeInMillis = currentTime
+                    val currentDay = reusableCalendar.get(java.util.Calendar.DAY_OF_YEAR)
+                    if (lastCheckedDay != -1 && currentDay != lastCheckedDay) {
+                        updateStreaks()
+                        shieldRepository.resetAllRemainingTimes()
+                        notifiedGoals.clear()
+                        dailyUsageCache.clear()
+                        usageStatsCache = null
+                        lastUsageCacheTime = 0L
+                        lastUsageFetchTime = 0L
+                        cachedTotalUsage = 0L
+                        currentShieldCache = null
+                    }
+                    lastCheckedDay = currentDay
+                    lastCheckedDayTimestamp = currentTime
+                }
+
                 if (!isScreenOn) {
                     delay(5000)
                     continue
@@ -276,7 +303,6 @@ class AppUsageMonitorService : Service() {
                 }
 
                 val currentApp = getForegroundApp()
-                val currentTime = System.currentTimeMillis()
 
                 if (currentApp != null) {
                     overlayManager.checkAndHide(currentApp)
@@ -885,9 +911,87 @@ class AppUsageMonitorService : Service() {
         startActivity(intent)
     }
 
+    private fun updateBedtimeStatus(prefs: UserPreferences) {
+        if (!prefs.bedtimeEnabled) {
+            isBedtimeActive = false
+            updateDndAndWindDown(false, false)
+            return
+        }
+
+        val now = Calendar.getInstance()
+        val currentDay = now.get(Calendar.DAY_OF_WEEK)
+        // Preferences store days as 1 (Sun) to 7 (Sat) usually, or custom. 
+        // Let's assume 1=Sun, 2=Mon... which is same as Calendar.DAY_OF_WEEK
+        
+        if (currentDay !in prefs.bedtimeDays) {
+            isBedtimeActive = false
+            updateDndAndWindDown(false, false)
+            return
+        }
+
+        val currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
+        val startParts = prefs.bedtimeStartTime.split(":")
+        val endParts = prefs.bedtimeEndTime.split(":")
+        val startMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 22) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0)
+        val endMinutes = (endParts.getOrNull(0)?.toIntOrNull() ?: 7) * 60 + (endParts.getOrNull(1)?.toIntOrNull() ?: 0)
+
+        val active = if (startMinutes <= endMinutes) {
+            currentMinutes in startMinutes..endMinutes
+        } else {
+            currentMinutes >= startMinutes || currentMinutes <= endMinutes
+        }
+
+        if (active != isBedtimeActive) {
+            isBedtimeActive = active
+            updateDndAndWindDown(
+                active && prefs.bedtimeDndEnabled,
+                active && prefs.bedtimeWindDownEnabled
+            )
+        } else if (active) {
+            // Even if active status didn't change, we might need to update DND or Wind Down if they were toggled in settings
+            updateDndAndWindDown(
+                prefs.bedtimeDndEnabled,
+                prefs.bedtimeWindDownEnabled
+            )
+        }
+    }
+
+    private fun updateDndAndWindDown(dnd: Boolean, windDown: Boolean) {
+        // DND Implementation
+        val nm = getSystemService(NotificationManager::class.java)
+        if (nm.isNotificationPolicyAccessGranted) {
+            try {
+                val currentFilter = nm.currentInterruptionFilter
+                if (dnd && currentFilter != NotificationManager.INTERRUPTION_FILTER_PRIORITY) {
+                    nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+                } else if (!dnd && currentFilter == NotificationManager.INTERRUPTION_FILTER_PRIORITY) {
+                    nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        // Wind Down implementation logic
+        if (windDown) {
+            // When wind down is enabled and bedtime is active, 
+            // the checkSchedules function will handle showing the overlay
+            // for apps that are not in the bedtime whitelist.
+        }
+    }
+
     private fun checkSchedules(packageName: String): Boolean {
         if (shouldBypassBlocking(packageName)) return false
         
+        // Check Bedtime First
+        val prefs = currentPreferences
+        if (isBedtimeActive && prefs?.bedtimeWindDownEnabled == true) {
+            if (packageName !in bedtimeWhitelistedPackages) {
+                showBedtimeOverlay(packageName)
+                return true
+            }
+        }
+
         val now = System.currentTimeMillis()
         reusableCalendar.timeInMillis = now
         val currentTotalMinutes = reusableCalendar.get(java.util.Calendar.HOUR_OF_DAY) * 60 + 
@@ -920,6 +1024,20 @@ class AppUsageMonitorService : Service() {
         return false
     }
 
+    private fun showBedtimeOverlay(packageName: String) {
+        serviceScope.launch(Dispatchers.Main) {
+            val appName = try {
+                packageManager.getApplicationLabel(packageManager.getApplicationInfo(packageName, 0)).toString()
+            } catch (_: Exception) { packageName }
+            
+            overlayManager.showBedtimeOverlay(
+                packageName = packageName,
+                appName = appName,
+                onCloseApp = { goToHomeScreen() }
+            )
+        }
+    }
+
     private fun showScheduleOverlayFromParsed(packageName: String, ps: ParsedSchedule) {
         val originalSchedule = activeSchedules.find { it.id == ps.id } ?: return
         showScheduleOverlay(packageName, originalSchedule)
@@ -933,7 +1051,15 @@ class AppUsageMonitorService : Service() {
 
     private fun shouldBypassBlocking(packageName: String): Boolean {
         if (packageName == this.packageName) return true
-        if (packageName in whitelistedPackages) return true
+        
+        // During bedtime, we only bypass if it's in the bedtime whitelist
+        if (isBedtimeActive && (currentPreferences?.bedtimeWindDownEnabled == true)) {
+            if (packageName in bedtimeWhitelistedPackages) return true
+            // If it's not in bedtime whitelist, it might still be a critical system app or launcher
+        } else {
+            if (packageName in whitelistedPackages) return true
+        }
+
         if (packageName in CRITICAL_SYSTEM_PACKAGES) return true
 
         if (launcherPackages.contains(packageName)) return true

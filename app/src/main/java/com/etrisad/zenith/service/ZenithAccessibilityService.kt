@@ -66,6 +66,9 @@ class ZenithAccessibilityService : AccessibilityService() {
     private var lastCheckedDay = -1
     private var lastCheckedDayTimestamp = 0L
 
+    private var isBedtimeActive = false
+    private var bedtimeWhitelistedPackages = emptySet<String>()
+
     private class ParsedSchedule(
         val id: Long,
         val startMinutes: Int,
@@ -117,6 +120,8 @@ class ZenithAccessibilityService : AccessibilityService() {
             preferencesRepository.userPreferencesFlow.collect { preferences ->
                 currentPreferences = preferences
                 whitelistedPackages = preferences.whitelistedPackages
+                bedtimeWhitelistedPackages = preferences.bedtimeWhitelistedPackages
+                updateBedtimeStatus(preferences)
             }
         }
 
@@ -154,6 +159,7 @@ class ZenithAccessibilityService : AccessibilityService() {
             val currentTime = System.currentTimeMillis()
 
             if (currentTime - lastCheckedDayTimestamp > 60000) {
+                currentPreferences?.let { updateBedtimeStatus(it) }
                 val currentDay = synchronized(reusableCalendar) {
                     reusableCalendar.timeInMillis = currentTime
                     reusableCalendar.get(Calendar.DAY_OF_YEAR)
@@ -518,9 +524,45 @@ class ZenithAccessibilityService : AccessibilityService() {
         startActivity(intent)
     }
 
+    private fun updateBedtimeStatus(prefs: UserPreferences) {
+        if (!prefs.bedtimeEnabled) {
+            isBedtimeActive = false
+            return
+        }
+
+        val now = java.util.Calendar.getInstance()
+        val currentDay = now.get(java.util.Calendar.DAY_OF_WEEK)
+        
+        if (currentDay !in prefs.bedtimeDays) {
+            isBedtimeActive = false
+            return
+        }
+
+        val currentMinutes = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
+        val startParts = prefs.bedtimeStartTime.split(":")
+        val endParts = prefs.bedtimeEndTime.split(":")
+        val startMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 22) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0)
+        val endMinutes = (endParts.getOrNull(0)?.toIntOrNull() ?: 7) * 60 + (endParts.getOrNull(1)?.toIntOrNull() ?: 0)
+
+        isBedtimeActive = if (startMinutes <= endMinutes) {
+            currentMinutes in startMinutes..endMinutes
+        } else {
+            currentMinutes >= startMinutes || currentMinutes <= endMinutes
+        }
+    }
+
     private fun checkSchedules(packageName: String): Boolean {
         if (shouldBypassBlocking(packageName)) return false
         
+        // Check Bedtime First
+        val prefs = currentPreferences
+        if (isBedtimeActive && prefs?.bedtimeWindDownEnabled == true) {
+            if (packageName !in bedtimeWhitelistedPackages) {
+                showBedtimeOverlay(packageName)
+                return true
+            }
+        }
+
         val now = System.currentTimeMillis()
         val currentTotalMinutes = synchronized(reusableCalendar) {
             reusableCalendar.timeInMillis = now
@@ -554,6 +596,21 @@ class ZenithAccessibilityService : AccessibilityService() {
         return false
     }
 
+    private fun showBedtimeOverlay(packageName: String) {
+        serviceScope.launch(Dispatchers.Main) {
+            val appName = try {
+                packageManager.getApplicationLabel(packageManager.getApplicationInfo(packageName, 0)).toString()
+            } catch (_: Exception) { packageName }
+            
+            overlayManager.showBedtimeOverlay(
+                packageName = packageName,
+                appName = appName,
+                onCloseApp = { goToHomeScreen() }
+            )
+        }
+    }
+
+
     private fun showScheduleOverlayFromParsed(packageName: String, ps: ParsedSchedule) {
         val originalSchedule = activeSchedules.find { it.id == ps.id } ?: return
         showScheduleOverlay(packageName, originalSchedule)
@@ -566,7 +623,16 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private fun shouldBypassBlocking(packageName: String): Boolean {
-        if (packageName == this.packageName || packageName in whitelistedPackages) return true
+        if (packageName == this.packageName) return true
+        
+        // During bedtime, we only bypass if it's in the bedtime whitelist
+        if (isBedtimeActive && (currentPreferences?.bedtimeWindDownEnabled == true)) {
+            if (packageName in bedtimeWhitelistedPackages) return true
+            // If it's not in bedtime whitelist, it might still be a launcher
+        } else {
+            if (packageName in whitelistedPackages) return true
+        }
+
         if (packageName.contains("launcher", ignoreCase = true) || packageName.contains("home", ignoreCase = true)) return true
         return false
     }
