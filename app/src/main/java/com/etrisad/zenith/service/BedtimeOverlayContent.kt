@@ -252,8 +252,8 @@ fun BedtimeOverlayContent(
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
                                         text = bedtimeUiState.second,
-                                        style = MaterialTheme.typography.displayMedium,
-                                        fontWeight = FontWeight.Black,
+                                        style = MaterialTheme.typography.displaySmall,
+                                        fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.tertiary
                                     )
                                     Text(
