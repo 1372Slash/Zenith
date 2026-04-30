@@ -1588,7 +1588,7 @@ fun AppPickerBottomSheet(
 
                 if (uiState.isLoadingApps) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                        ContainedLoadingIndicator()
                     }
                 } else {
                     LazyColumn(
