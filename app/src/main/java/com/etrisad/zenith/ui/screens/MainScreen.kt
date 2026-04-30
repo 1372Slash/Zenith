@@ -28,6 +28,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import kotlinx.coroutines.delay
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -81,6 +82,38 @@ fun MainScreen(
     )
 
     val useNavigationRail = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
+
+    // Bedtime Switch Animation States
+    var bedtimeSwitchVisible by remember { mutableStateOf(false) }
+    var bedtimeSwitchInLayout by remember { mutableStateOf(false) }
+
+    // Phased animation logic for the Bedtime Switch in the Top Bar
+    LaunchedEffect(currentRoute, preferences.bedtimeEnabled) {
+        val isBedtimeScreen = currentRoute == Screen.Bedtime.route
+        val shouldShow = isBedtimeScreen && preferences.bedtimeEnabled
+        
+        if (shouldShow) {
+            if (!bedtimeSwitchInLayout) {
+                bedtimeSwitchInLayout = true
+                // Entrance "pre-load" effect: reserve the layout space first, 
+                // then fade the switch in after a deliberate delay.
+                delay(1200)
+            }
+            bedtimeSwitchVisible = true
+        } else {
+            if (bedtimeSwitchVisible) {
+                bedtimeSwitchVisible = false
+                // Wait for the switch's exit animation to complete (800ms)
+                delay(800)
+            }
+            if (bedtimeSwitchInLayout) {
+                // Delayed removal: keep the layout slot active for a moment longer
+                // to ensure a smooth transition, especially during navigation.
+                delay(1500)
+                bedtimeSwitchInLayout = false
+            }
+        }
+    }
 
     var showPermissionSheet by remember { mutableStateOf(false) }
     var showUserSheet by remember { mutableStateOf(false) }
@@ -184,36 +217,60 @@ fun MainScreen(
                     userName = preferences.userName,
                     onBack = { navController.popBackStack() },
                     actions = {
-                        AnimatedVisibility(
-                            visible = !isDeepScreen,
-                            enter = fadeIn() + scaleIn(),
-                            exit = fadeOut() + scaleOut()
-                        ) {
-                            IconButton(onClick = { showUserSheet = true }) {
-                                Icon(
-                                    imageVector = Icons.Outlined.AccountCircle,
-                                    contentDescription = "User Profile"
-                                )
-                            }
-                        }
-                        
-                        AnimatedVisibility(
-                            visible = currentRoute == Screen.Bedtime.route && preferences.bedtimeEnabled,
-                            enter = fadeIn(animationSpec = tween(600)) + scaleIn(initialScale = 0.8f, animationSpec = tween(600)) + expandHorizontally(expandFrom = Alignment.End, animationSpec = spring(stiffness = Spring.StiffnessLow)),
-                            exit = fadeOut(animationSpec = tween(600)) + scaleOut(targetScale = 0.8f, animationSpec = tween(600)) + shrinkHorizontally(shrinkTowards = Alignment.End, animationSpec = spring(stiffness = Spring.StiffnessLow))
-                        ) {
-                            Switch(
-                                checked = preferences.bedtimeEnabled,
-                                onCheckedChange = { bedtimeViewModel.setBedtimeEnabled(it) },
-                                modifier = Modifier.padding(end = 16.dp),
-                                thumbContent = {
+                        Box(contentAlignment = Alignment.CenterEnd) {
+                            // User Profile Icon - Cross-fades with the switch when navigating
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = !isDeepScreen,
+                                enter = fadeIn(spring(stiffness = Spring.StiffnessLow)) + 
+                                        scaleIn(initialScale = 0.8f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)) +
+                                        slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessLow)),
+                                exit = fadeOut(spring(stiffness = Spring.StiffnessLow)) + 
+                                       scaleOut(targetScale = 0.8f) +
+                                       slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessLow))
+                            ) {
+                                IconButton(
+                                    onClick = { showUserSheet = true },
+                                    modifier = Modifier.padding(end = 12.dp)
+                                ) {
                                     Icon(
-                                        imageVector = Icons.Default.Bedtime,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(SwitchDefaults.IconSize)
+                                        imageVector = Icons.Outlined.AccountCircle,
+                                        contentDescription = "User Profile"
                                     )
                                 }
-                            )
+                            }
+                            
+                            // Bedtime Switch with expressive entrance/exit sequences
+                            if (bedtimeSwitchInLayout) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(end = 16.dp)
+                                        .width(52.dp)
+                                        .height(32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = bedtimeSwitchVisible,
+                                        enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) + 
+                                                scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
+                                                slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+                                        exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) + 
+                                               scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                               slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                                    ) {
+                                        Switch(
+                                            checked = preferences.bedtimeEnabled,
+                                            onCheckedChange = { bedtimeViewModel.setBedtimeEnabled(it) },
+                                            thumbContent = {
+                                                Icon(
+                                                    imageVector = Icons.Default.Bedtime,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                                )
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 )
