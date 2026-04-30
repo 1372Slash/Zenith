@@ -64,6 +64,8 @@ class AppUsageMonitorService : Service() {
     private var isWindDownActive = false
     private var cachedBedtimeStartMinutes = -1
     private var cachedBedtimeEndMinutes = -1
+    private var lastBedtimeUpdateMinute = -1
+    private var lastBedtimeUpdateDay = -1
     private val windDownUsedPackages = mutableMapOf<String, Boolean>()
     private var bedtimeWhitelistedPackages = emptySet<String>()
     private var lastCheckedDayTimestamp = 0L
@@ -281,9 +283,17 @@ class AppUsageMonitorService : Service() {
                 if (currentTime - lastCheckedDayTimestamp > 60000) {
                     currentPreferences?.let { updateBedtimeStatus(it) }
 
-                    reusableCalendar.timeInMillis = currentTime
-                    val currentDay = reusableCalendar.get(java.util.Calendar.DAY_OF_YEAR)
-                    if (lastCheckedDay != -1 && currentDay != lastCheckedDay) {
+                    var shouldUpdateDayData = false
+                    synchronized(reusableCalendar) {
+                        reusableCalendar.timeInMillis = currentTime
+                        val currentDay = reusableCalendar.get(java.util.Calendar.DAY_OF_YEAR)
+                        if (lastCheckedDay != -1 && currentDay != lastCheckedDay) {
+                            shouldUpdateDayData = true
+                        }
+                        lastCheckedDay = currentDay
+                    }
+
+                    if (shouldUpdateDayData) {
                         updateStreaks()
                         shieldRepository.resetAllRemainingTimes()
                         notifiedGoals.clear()
@@ -294,7 +304,6 @@ class AppUsageMonitorService : Service() {
                         cachedTotalUsage = 0L
                         currentShieldCache = null
                     }
-                    lastCheckedDay = currentDay
                     lastCheckedDayTimestamp = currentTime
                 }
 
@@ -326,24 +335,6 @@ class AppUsageMonitorService : Service() {
                         launcherPackages = launchers.map { it.activityInfo.packageName }.toSet()
                         lastLauncherRefreshTime = currentTime
                     } catch (_: Exception) {}
-                }
-
-                if (currentTime - lastCheckedDayTimestamp > 60000) {
-                    reusableCalendar.timeInMillis = currentTime
-                    val currentDay = reusableCalendar.get(java.util.Calendar.DAY_OF_YEAR)
-                    if (lastCheckedDay != -1 && currentDay != lastCheckedDay) {
-                        updateStreaks()
-                        shieldRepository.resetAllRemainingTimes()
-                        notifiedGoals.clear()
-                        dailyUsageCache.clear()
-                        usageStatsCache = null
-                        lastUsageCacheTime = 0L
-                        lastUsageFetchTime = 0L
-                        cachedTotalUsage = 0L
-                        currentShieldCache = null
-                    }
-                    lastCheckedDay = currentDay
-                    lastCheckedDayTimestamp = currentTime
                 }
 
                 if (currentApp != null && currentApp != packageName) {
@@ -957,56 +948,70 @@ class AppUsageMonitorService : Service() {
 
     private fun updateBedtimeStatus(prefs: UserPreferences) {
         if (!prefs.bedtimeEnabled) {
-            isBedtimeActive = false
-            isWindDownActive = false
-            updateDndAndWindDown(false, false)
-            return
-        }
-
-        val now = Calendar.getInstance()
-        val currentDay = now.get(Calendar.DAY_OF_WEEK)
-        
-        if (currentDay !in prefs.bedtimeDays) {
-            isBedtimeActive = false
-            isWindDownActive = false
-            updateDndAndWindDown(false, false)
-            return
-        }
-
-        val currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-
-        val startMinutes = cachedBedtimeStartMinutes
-        val endMinutes = cachedBedtimeEndMinutes
-
-        val active = if (startMinutes <= endMinutes) {
-            currentMinutes in startMinutes..endMinutes
-        } else {
-            currentMinutes >= startMinutes || currentMinutes <= endMinutes
-        }
-
-        val windDownStartMinutes = (startMinutes - 30 + 1440) % 1440
-        
-        val wasWindDownActive = isWindDownActive
-        val windDownActive = if (windDownStartMinutes <= startMinutes) {
-            currentMinutes in windDownStartMinutes until startMinutes
-        } else {
-            currentMinutes >= windDownStartMinutes || currentMinutes < startMinutes
-        }
-
-        if (windDownActive && !wasWindDownActive) {
-            windDownUsedPackages.clear()
-            if (prefs.bedtimeNotificationEnabled) {
-                sendWindDownNotification()
+            if (isBedtimeActive || isWindDownActive) {
+                isBedtimeActive = false
+                isWindDownActive = false
+                updateDndAndWindDown(false, false)
             }
+            return
         }
 
-        isBedtimeActive = active
-        isWindDownActive = windDownActive
+        val now = System.currentTimeMillis()
+        
+        synchronized(reusableCalendar) {
+            reusableCalendar.timeInMillis = now
+            val currentMinuteOfToday = reusableCalendar.get(java.util.Calendar.HOUR_OF_DAY) * 60 + 
+                                     reusableCalendar.get(java.util.Calendar.MINUTE)
+            val currentDay = reusableCalendar.get(java.util.Calendar.DAY_OF_WEEK)
 
-        updateDndAndWindDown(
-            active && prefs.bedtimeDndEnabled,
-            (active || windDownActive) && prefs.bedtimeWindDownEnabled
-        )
+            // Only recalculate if the minute or day has changed
+            if (currentMinuteOfToday == lastBedtimeUpdateMinute && currentDay == lastBedtimeUpdateDay) {
+                return
+            }
+            
+            lastBedtimeUpdateMinute = currentMinuteOfToday
+            lastBedtimeUpdateDay = currentDay
+
+            if (currentDay !in prefs.bedtimeDays) {
+                isBedtimeActive = false
+                isWindDownActive = false
+                updateDndAndWindDown(false, false)
+                return
+            }
+
+            val startMinutes = cachedBedtimeStartMinutes
+            val endMinutes = cachedBedtimeEndMinutes
+
+            val active = if (startMinutes <= endMinutes) {
+                currentMinuteOfToday in startMinutes..endMinutes
+            } else {
+                currentMinuteOfToday >= startMinutes || currentMinuteOfToday <= endMinutes
+            }
+
+            val windDownStartMinutes = (startMinutes - 30 + 1440) % 1440
+            
+            val wasWindDownActive = isWindDownActive
+            val windDownActive = if (windDownStartMinutes <= startMinutes) {
+                currentMinuteOfToday in windDownStartMinutes until startMinutes
+            } else {
+                currentMinuteOfToday >= windDownStartMinutes || currentMinuteOfToday < startMinutes
+            }
+
+            if (windDownActive && !wasWindDownActive) {
+                windDownUsedPackages.clear()
+                if (prefs.bedtimeNotificationEnabled) {
+                    sendWindDownNotification()
+                }
+            }
+
+            isBedtimeActive = active
+            isWindDownActive = windDownActive
+
+            updateDndAndWindDown(
+                active && prefs.bedtimeDndEnabled,
+                (active || windDownActive) && prefs.bedtimeWindDownEnabled
+            )
+        }
     }
 
     private fun updateDndAndWindDown(dnd: Boolean, windDown: Boolean) {
