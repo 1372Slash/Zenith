@@ -35,6 +35,7 @@ import java.time.LocalTime
 import java.time.Duration
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import com.etrisad.zenith.ui.components.PauseBottomSheet
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -46,6 +47,7 @@ fun BedtimeScreen(
     var showAppPicker by remember { mutableStateOf(false) }
     var showStartTimePicker by remember { mutableStateOf(false) }
     var showEndTimePicker by remember { mutableStateOf(false) }
+    var showPauseSheet by remember { mutableStateOf(false) }
     
     var currentTime by remember { mutableStateOf(LocalTime.now()) }
     LaunchedEffect(Unit) {
@@ -82,7 +84,13 @@ fun BedtimeScreen(
             Column {
                 BedtimeToggleCard(
                     enabled = preferences.bedtimeEnabled,
-                    onToggle = { viewModel.setBedtimeEnabled(it) },
+                    onToggle = { 
+                        if (preferences.bedtimeEnabled) {
+                            showPauseSheet = true
+                        } else {
+                            viewModel.setBedtimeEnabled(true)
+                        }
+                    },
                     expressive = preferences.expressiveColors
                 )
                 Spacer(modifier = Modifier.height(16.dp))
@@ -150,6 +158,19 @@ fun BedtimeScreen(
                 viewModel.setBedtimeWhitelistedPackages(it)
                 showAppPicker = false
             }
+        )
+    }
+
+    if (showPauseSheet) {
+        PauseBottomSheet(
+            onDismiss = { showPauseSheet = false },
+            onConfirmPause = { _ ->
+                viewModel.setBedtimeEnabled(false)
+                showPauseSheet = false
+            },
+            leverCount = 10,
+            puzzleTimeoutSeconds = 10,
+            showTimeSelection = false
         )
     }
 

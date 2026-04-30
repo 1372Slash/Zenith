@@ -214,7 +214,10 @@ fun AppDetailScreen(
                                 onConfirmPause = { duration ->
                                     viewModel.pauseShield(duration)
                                     showPauseSheet = false
-                                }
+                                },
+                                leverCount = 5,
+                                puzzleTimeoutSeconds = 15,
+                                showTimeSelection = true
                             )
                         }
                     }

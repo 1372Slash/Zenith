@@ -3,6 +3,8 @@ package com.etrisad.zenith.ui.components
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -36,7 +38,8 @@ fun PauseBottomSheet(
     puzzleTimeoutSeconds: Int? = null,
     holdDurationMillis: Long = 10000L,
     processingDurationMillis: Long = 5000L,
-    successDisplayMillis: Long = 2000L
+    successDisplayMillis: Long = 2000L,
+    showTimeSelection: Boolean = true
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
@@ -91,7 +94,16 @@ fun PauseBottomSheet(
                     )
                     4 -> SuccessPopup(
                         displayMillis = successDisplayMillis,
-                        onDismiss = { currentPhase = 5 }
+                        onDismiss = {
+                            if (showTimeSelection) {
+                                currentPhase = 5
+                            } else {
+                                scope.launch {
+                                    sheetState.hide()
+                                    onConfirmPause(null)
+                                }
+                            }
+                        }
                     )
                     5 -> PhaseFourSelection(
                         onConfirm = { duration ->
@@ -177,7 +189,11 @@ fun PhaseOnePuzzle(
         Spacer(modifier = Modifier.height(16.dp))
         
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
             targetSequence.forEach { isOn ->

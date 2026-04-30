@@ -35,6 +35,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.etrisad.zenith.ui.components.PermissionBottomSheet
 import com.etrisad.zenith.ui.components.UserBottomSheet
 import com.etrisad.zenith.ui.components.ZenithHeader
+import com.etrisad.zenith.ui.components.PauseBottomSheet
 import com.etrisad.zenith.ui.navigation.Screen
 import com.etrisad.zenith.ui.navigation.navItems
 import com.etrisad.zenith.ui.screens.focus.FocusScreen
@@ -86,6 +87,7 @@ fun MainScreen(
     // Bedtime Switch Animation States
     var bedtimeSwitchVisible by remember { mutableStateOf(false) }
     var bedtimeSwitchInLayout by remember { mutableStateOf(false) }
+    var showPauseSheet by remember { mutableStateOf(false) }
 
     // Phased animation logic for the Bedtime Switch in the Top Bar
     LaunchedEffect(currentRoute, preferences.bedtimeEnabled) {
@@ -259,7 +261,13 @@ fun MainScreen(
                                     ) {
                                         Switch(
                                             checked = preferences.bedtimeEnabled,
-                                            onCheckedChange = { bedtimeViewModel.setBedtimeEnabled(it) },
+                                            onCheckedChange = { 
+                                                if (preferences.bedtimeEnabled) {
+                                                    showPauseSheet = true
+                                                } else {
+                                                    bedtimeViewModel.setBedtimeEnabled(true)
+                                                }
+                                            },
                                             thumbContent = {
                                                 Icon(
                                                     imageVector = Icons.Default.Bedtime,
@@ -276,6 +284,18 @@ fun MainScreen(
                 )
             }
         ) { innerPadding ->
+            if (showPauseSheet) {
+                PauseBottomSheet(
+                    onDismiss = { showPauseSheet = false },
+                    onConfirmPause = { _ ->
+                        bedtimeViewModel.setBedtimeEnabled(false)
+                        showPauseSheet = false
+                    },
+                    leverCount = 10,
+                    puzzleTimeoutSeconds = 10,
+                    showTimeSelection = false
+                )
+            }
             if (showUserSheet) {
                 UserBottomSheet(
                     userName = preferences.userName,
