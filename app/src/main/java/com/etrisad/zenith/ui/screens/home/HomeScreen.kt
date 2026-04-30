@@ -157,6 +157,7 @@ fun HomeScreenContent(
             TopAppsSection(
                 topApps = uiState.topApps,
                 formatDuration = formatDuration,
+                expressiveColors = preferences.expressiveColors,
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
                 onSeeFullList = onSeeFullList,
                 onAppClick = { packageName -> onAppClick(packageName) }
@@ -805,6 +806,7 @@ fun UsageGraph(
 fun TopAppsSection(
     topApps: List<AppUsageInfo>,
     formatDuration: (Long) -> String,
+    expressiveColors: Boolean,
     shape: Shape = RoundedCornerShape(32.dp),
     onSeeFullList: () -> Unit,
     onAppClick: (String) -> Unit
@@ -905,7 +907,7 @@ fun TopAppsSection(
                                 .clickable { onAppClick(app.packageName) },
                             shape = itemShape,
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                containerColor = if (expressiveColors) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceContainerHigh
                             )
                         ) {
                             ListItem(
@@ -1415,8 +1417,8 @@ fun NumberPicker(
 
 @Preview(showBackground = true)
 @Composable
-fun HomeScreenPreview() {
-    ZenithTheme {
+fun HomeScreenExpressivePreview() {
+    ZenithTheme(expressiveColors = true) {
         HomeScreenContent(
             uiState = HomeUiState(
                 totalScreenTime = 3600000 * 3 + 1800000,
@@ -1433,7 +1435,7 @@ fun HomeScreenPreview() {
                     ShieldEntity("com.duolingo", "Duolingo", FocusType.GOAL, 30, remainingTimeMillis = 10 * 60 * 1000L)
                 )
             ),
-            preferences = com.etrisad.zenith.data.preferences.UserPreferences(),
+            preferences = com.etrisad.zenith.data.preferences.UserPreferences(expressiveColors = true),
             onSetTarget = {},
             formatDuration = { "3h 30m" },
             onShieldSortTypeChange = {},
