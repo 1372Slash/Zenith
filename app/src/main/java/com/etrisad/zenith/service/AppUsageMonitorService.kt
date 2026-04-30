@@ -66,6 +66,9 @@ class AppUsageMonitorService : Service() {
     private var cachedBedtimeEndMinutes = -1
     private var lastBedtimeUpdateMinute = -1
     private var lastBedtimeUpdateDay = -1
+    private var nextBedtimeEvaluationTime = 0L
+    private var nextScheduleEvaluationTime = 0L
+    private var isAnyScheduleActiveNow = false
     private val windDownUsedPackages = mutableMapOf<String, Boolean>()
     private var bedtimeWhitelistedPackages = emptySet<String>()
     private var lastCheckedDayTimestamp = 0L
@@ -144,6 +147,7 @@ class AppUsageMonitorService : Service() {
                         packageNames = s.packageNames.toSet()
                     )
                 }
+                updateScheduleTransitions()
             }
         }
 
@@ -280,8 +284,11 @@ class AppUsageMonitorService : Service() {
             while (true) {
                 val currentTime = System.currentTimeMillis()
 
-                if (currentTime - lastCheckedDayTimestamp > 60000) {
-                    currentPreferences?.let { updateBedtimeStatus(it) }
+                if (currentTime >= nextBedtimeEvaluationTime || currentTime >= nextScheduleEvaluationTime || currentTime - lastCheckedDayTimestamp > 60000) {
+                    currentPreferences?.let { 
+                        updateBedtimeStatus(it)
+                        updateScheduleTransitions()
+                    }
 
                     var shouldUpdateDayData = false
                     synchronized(reusableCalendar) {
@@ -462,27 +469,44 @@ class AppUsageMonitorService : Service() {
 
                 val delayTime = when {
                     isPowerSaveMode -> 2000L
+                    currentApp == null || currentApp == packageName || launcherPackages.contains(currentApp) -> {
+                        if (isBedtimeActive || isWindDownActive || isAnyScheduleActiveNow) 3000L else 10000L
+                    }
                     currentShieldCache != null -> {
                         val shield = currentShieldCache!!
-                        val limitMillis = shield.timeLimitMinutes * 60 * 1000L
-                        val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
-
-                        if (shield.type == FocusType.GOAL) {
-                            when {
-                                remaining < 60000 -> 600L
-                                remaining < 300000 -> 1000L
-                                else -> 1500L
-                            }
+                        if (isPaused(shield)) {
+                             if (isBedtimeActive || isWindDownActive || isAnyScheduleActiveNow) 3000L else 10000L
                         } else {
-                            when {
-                                remaining > 3600000 -> 5000L
-                                remaining > 600000 -> 3000L
-                                remaining > 60000 -> 1500L
-                                else -> 600L
+                            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+                            val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
+
+                            if (shield.type == FocusType.GOAL) {
+                                when {
+                                    remaining < 60000 -> 600L
+                                    remaining < 300000 -> 1000L
+                                    else -> 1500L
+                                }
+                            } else {
+                                when {
+                                    remaining > 3600000 -> 5000L
+                                    remaining > 600000 -> 3000L
+                                    remaining > 60000 -> 1500L
+                                    else -> 600L
+                                }
                             }
                         }
                     }
-                    else -> 1200L
+                    else -> {
+                        if (isBedtimeActive || isWindDownActive || isAnyScheduleActiveNow) {
+                            1200L
+                        } else {
+                            val nextEvent = if (nextBedtimeEvaluationTime > 0 && nextScheduleEvaluationTime > 0) 
+                                minOf(nextBedtimeEvaluationTime, nextScheduleEvaluationTime)
+                            else maxOf(nextBedtimeEvaluationTime, nextScheduleEvaluationTime)
+                            
+                            if (nextEvent > currentTime && nextEvent - currentTime < 60000) 2000L else 10000L
+                        }
+                    }
                 }
                 delay(delayTime)
             }
@@ -947,28 +971,25 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun updateBedtimeStatus(prefs: UserPreferences) {
-        if (!prefs.bedtimeEnabled) {
-            if (isBedtimeActive || isWindDownActive) {
-                isBedtimeActive = false
-                isWindDownActive = false
-                updateDndAndWindDown(false, false)
-            }
+        val now = System.currentTimeMillis()
+        
+        if (now < nextBedtimeEvaluationTime && lastBedtimeUpdateMinute != -1) {
             return
         }
 
-        val now = System.currentTimeMillis()
-        
+        if (!prefs.bedtimeEnabled) {
+            isBedtimeActive = false
+            isWindDownActive = false
+            nextBedtimeEvaluationTime = now + 3600000 
+            return
+        }
+
         synchronized(reusableCalendar) {
             reusableCalendar.timeInMillis = now
             val currentMinuteOfToday = reusableCalendar.get(java.util.Calendar.HOUR_OF_DAY) * 60 + 
                                      reusableCalendar.get(java.util.Calendar.MINUTE)
             val currentDay = reusableCalendar.get(java.util.Calendar.DAY_OF_WEEK)
 
-            // Only recalculate if the minute or day has changed
-            if (currentMinuteOfToday == lastBedtimeUpdateMinute && currentDay == lastBedtimeUpdateDay) {
-                return
-            }
-            
             lastBedtimeUpdateMinute = currentMinuteOfToday
             lastBedtimeUpdateDay = currentDay
 
@@ -976,13 +997,19 @@ class AppUsageMonitorService : Service() {
                 isBedtimeActive = false
                 isWindDownActive = false
                 updateDndAndWindDown(false, false)
+                
+                reusableCalendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
+                reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                reusableCalendar.set(java.util.Calendar.MINUTE, 0)
+                reusableCalendar.set(java.util.Calendar.SECOND, 0)
+                nextBedtimeEvaluationTime = reusableCalendar.timeInMillis
                 return
             }
 
             val startMinutes = cachedBedtimeStartMinutes
             val endMinutes = cachedBedtimeEndMinutes
 
-            val active = if (startMinutes <= endMinutes) {
+            isBedtimeActive = if (startMinutes <= endMinutes) {
                 currentMinuteOfToday in startMinutes..endMinutes
             } else {
                 currentMinuteOfToday >= startMinutes || currentMinuteOfToday <= endMinutes
@@ -991,26 +1018,106 @@ class AppUsageMonitorService : Service() {
             val windDownStartMinutes = (startMinutes - 30 + 1440) % 1440
             
             val wasWindDownActive = isWindDownActive
-            val windDownActive = if (windDownStartMinutes <= startMinutes) {
+            isWindDownActive = if (windDownStartMinutes <= startMinutes) {
                 currentMinuteOfToday in windDownStartMinutes until startMinutes
             } else {
                 currentMinuteOfToday >= windDownStartMinutes || currentMinuteOfToday < startMinutes
             }
 
-            if (windDownActive && !wasWindDownActive) {
+            if (isWindDownActive && !wasWindDownActive) {
                 windDownUsedPackages.clear()
                 if (prefs.bedtimeNotificationEnabled) {
                     sendWindDownNotification()
                 }
             }
 
-            isBedtimeActive = active
-            isWindDownActive = windDownActive
-
             updateDndAndWindDown(
-                active && prefs.bedtimeDndEnabled,
-                (active || windDownActive) && prefs.bedtimeWindDownEnabled
+                isBedtimeActive && prefs.bedtimeDndEnabled,
+                (isBedtimeActive || isWindDownActive) && prefs.bedtimeWindDownEnabled
             )
+
+            val transitions = mutableListOf<Int>()
+            transitions.add(windDownStartMinutes)
+            transitions.add(startMinutes)
+            transitions.add((endMinutes + 1) % 1440)
+
+            var nextTransitionMinute = -1
+            val sortedTransitions = transitions.distinct().sorted()
+            for (t in sortedTransitions) {
+                if (t > currentMinuteOfToday) {
+                    nextTransitionMinute = t
+                    break
+                }
+            }
+
+            if (nextTransitionMinute == -1) {
+                reusableCalendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
+                reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                reusableCalendar.set(java.util.Calendar.MINUTE, 0)
+                reusableCalendar.set(java.util.Calendar.SECOND, 0)
+                reusableCalendar.set(java.util.Calendar.MILLISECOND, 0)
+                nextBedtimeEvaluationTime = reusableCalendar.timeInMillis
+            } else {
+                reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, nextTransitionMinute / 60)
+                reusableCalendar.set(java.util.Calendar.MINUTE, nextTransitionMinute % 60)
+                reusableCalendar.set(java.util.Calendar.SECOND, 0)
+                reusableCalendar.set(java.util.Calendar.MILLISECOND, 0)
+                nextBedtimeEvaluationTime = reusableCalendar.timeInMillis
+            }
+        }
+    }
+
+    private fun updateScheduleTransitions() {
+        val now = System.currentTimeMillis()
+        if (parsedSchedulesCache.isEmpty()) {
+            nextScheduleEvaluationTime = now + 3600000
+            isAnyScheduleActiveNow = false
+            return
+        }
+
+        synchronized(reusableCalendar) {
+            reusableCalendar.timeInMillis = now
+            val currentMinuteOfToday = reusableCalendar.get(java.util.Calendar.HOUR_OF_DAY) * 60 + 
+                                     reusableCalendar.get(java.util.Calendar.MINUTE)
+            
+            var anyActive = false
+            val transitions = mutableListOf<Int>()
+            for (ps in parsedSchedulesCache) {
+                val isInInterval = if (ps.startMinutes <= ps.endMinutes) {
+                    currentMinuteOfToday in ps.startMinutes..ps.endMinutes
+                } else {
+                    currentMinuteOfToday >= ps.startMinutes || currentMinuteOfToday <= ps.endMinutes
+                }
+                if (isInInterval) anyActive = true
+
+                transitions.add(ps.startMinutes)
+                transitions.add((ps.endMinutes + 1) % 1440)
+            }
+            isAnyScheduleActiveNow = anyActive
+            
+            var nextTransitionMinute = -1
+            val sortedTransitions = transitions.distinct().sorted()
+            for (t in sortedTransitions) {
+                if (t > currentMinuteOfToday) {
+                    nextTransitionMinute = t
+                    break
+                }
+            }
+
+            if (nextTransitionMinute == -1) {
+                reusableCalendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
+                reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                reusableCalendar.set(java.util.Calendar.MINUTE, 0)
+                reusableCalendar.set(java.util.Calendar.SECOND, 0)
+                reusableCalendar.set(java.util.Calendar.MILLISECOND, 0)
+                nextScheduleEvaluationTime = reusableCalendar.timeInMillis
+            } else {
+                reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, nextTransitionMinute / 60)
+                reusableCalendar.set(java.util.Calendar.MINUTE, nextTransitionMinute % 60)
+                reusableCalendar.set(java.util.Calendar.SECOND, 0)
+                reusableCalendar.set(java.util.Calendar.MILLISECOND, 0)
+                nextScheduleEvaluationTime = reusableCalendar.timeInMillis
+            }
         }
     }
 
