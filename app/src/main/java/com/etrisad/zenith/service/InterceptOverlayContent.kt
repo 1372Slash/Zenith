@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
@@ -36,7 +37,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.geometry.Size
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.preferences.UserPreferences
@@ -162,6 +162,38 @@ fun InterceptOverlayContent(
             ((limitMillis - totalUsageToday) / (60 * 1000L)).toInt().coerceAtLeast(0)
         }
     }
+
+    val isBlocked = remember(isUsesExceeded, isTimeLimitReached, remainingMinutes, isEmergencyUnlocked, shield) {
+        val effectivelyTimeReached = isTimeLimitReached || (remainingMinutes != null && remainingMinutes <= 0)
+        (isUsesExceeded || effectivelyTimeReached) && !isEmergencyUnlocked && shield?.type == FocusType.SHIELD
+    }
+
+    val autoKickProgress = remember { Animatable(0f) }
+    var isEmergencyHolding by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isBlocked, isEmergencyHolding) {
+        if (isBlocked) {
+            if (!isEmergencyHolding) {
+                val remainingProgress = 1f - autoKickProgress.value
+                val remainingTime = (remainingProgress * 5000).toInt()
+                if (remainingTime > 0) {
+                    autoKickProgress.animateTo(
+                        targetValue = 1f,
+                        animationSpec = tween(durationMillis = remainingTime, easing = LinearEasing)
+                    )
+                }
+                if (autoKickProgress.value >= 1f) {
+                    showContent = false
+                    delay(400)
+                    onCloseApp()
+                }
+            } else {
+                autoKickProgress.stop()
+            }
+        } else {
+            autoKickProgress.snapTo(0f)
+        }
+    }
     
     val refreshTimeLeftMillis = if (shield != null) {
         val nextRefresh = shield.lastPeriodResetTimestamp + (shield.refreshPeriodMinutes * 60 * 1000L)
@@ -231,6 +263,8 @@ fun InterceptOverlayContent(
                         refreshTimeLeftMillis = refreshTimeLeftMillis,
                         currentUses = currentUses,
                         maxUses = maxUses,
+                        autoKickProgress = autoKickProgress.value,
+                        onEmergencyHoldingChange = { isEmergencyHolding = it },
                         onEmergencyClick = { isEmergencyUnlocked = true },
                         onAllowUse = { minutes ->
                             scope.launch {
@@ -272,6 +306,8 @@ fun InterceptOverlayContent(
                         refreshTimeLeftMillis = refreshTimeLeftMillis,
                         currentUses = currentUses,
                         maxUses = maxUses,
+                        autoKickProgress = autoKickProgress.value,
+                        onEmergencyHoldingChange = { isEmergencyHolding = it },
                         onEmergencyClick = { isEmergencyUnlocked = true },
                         onAllowUse = { minutes ->
                             scope.launch {
@@ -320,7 +356,9 @@ fun PortraitInterceptLayout(
     refreshTimeLeftMillis: Long,
     currentUses: Int,
     maxUses: Int,
+    autoKickProgress: Float,
     onEmergencyClick: () -> Unit,
+    onEmergencyHoldingChange: (Boolean) -> Unit = {},
     onAllowUse: (Int) -> Unit,
     onCloseApp: () -> Unit,
     onGoalDismiss: () -> Unit
@@ -428,8 +466,8 @@ fun PortraitInterceptLayout(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = if (shield?.type == FocusType.GOAL) 
-                    "You're working towards your usage goal." 
+                text = if (shield?.type == FocusType.GOAL)
+                    "You're working towards your usage goal."
                     else "Zenith Shield is active for this app.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -451,7 +489,9 @@ fun PortraitInterceptLayout(
                     isUsesExceeded = isUsesExceeded,
                     isTimeLimitReached = isTimeLimitReached,
                     refreshTimeLeftMillis = refreshTimeLeftMillis,
+                    autoKickProgress = autoKickProgress,
                     onEmergencyClick = onEmergencyClick,
+                    onEmergencyHoldingChange = onEmergencyHoldingChange,
                     onAllowUse = onAllowUse,
                     onCloseApp = onCloseApp
                 )
@@ -479,7 +519,9 @@ fun LandscapeInterceptLayout(
     refreshTimeLeftMillis: Long,
     currentUses: Int,
     maxUses: Int,
+    autoKickProgress: Float,
     onEmergencyClick: () -> Unit,
+    onEmergencyHoldingChange: (Boolean) -> Unit = {},
     onAllowUse: (Int) -> Unit,
     onCloseApp: () -> Unit,
     onGoalDismiss: () -> Unit
@@ -609,7 +651,9 @@ fun LandscapeInterceptLayout(
                         isUsesExceeded = isUsesExceeded,
                         isTimeLimitReached = isTimeLimitReached,
                         refreshTimeLeftMillis = refreshTimeLeftMillis,
+                        autoKickProgress = autoKickProgress,
                         onEmergencyClick = onEmergencyClick,
+                        onEmergencyHoldingChange = onEmergencyHoldingChange,
                         onAllowUse = onAllowUse,
                         onCloseApp = onCloseApp
                     )
@@ -756,7 +800,9 @@ fun ShieldSection(
     isUsesExceeded: Boolean,
     isTimeLimitReached: Boolean,
     refreshTimeLeftMillis: Long,
+    autoKickProgress: Float,
     onEmergencyClick: () -> Unit,
+    onEmergencyHoldingChange: (Boolean) -> Unit = {},
     onAllowUse: (Int) -> Unit,
     onCloseApp: () -> Unit
 ) {
@@ -820,7 +866,8 @@ fun ShieldSection(
             isTimeLimitReached = effectivelyTimeReached,
             refreshTimeLeftMillis = refreshTimeLeftMillis,
             shield = shield,
-            onEmergencyClick = onEmergencyClick
+            onEmergencyClick = onEmergencyClick,
+            onEmergencyHoldingChange = onEmergencyHoldingChange
         )
     } else {
         val minutesToDisplay = if (isEmergencyUnlocked) null else currentRemainingMinutes
@@ -845,15 +892,7 @@ fun ShieldSection(
 
     Spacer(modifier = Modifier.height(24.dp))
 
-    TextButton(
-        onClick = onCloseApp,
-        modifier = Modifier.fillMaxWidth(),
-        colors = ButtonDefaults.textButtonColors(
-            contentColor = MaterialTheme.colorScheme.error
-        )
-    ) {
-        Text("Close App", fontWeight = FontWeight.Bold)
-    }
+    CloseAppTextButton(onCloseApp, autoKickProgress)
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -978,7 +1017,9 @@ fun ShieldLandscapeContent(
     isUsesExceeded: Boolean,
     isTimeLimitReached: Boolean,
     refreshTimeLeftMillis: Long,
+    autoKickProgress: Float,
     onEmergencyClick: () -> Unit,
+    onEmergencyHoldingChange: (Boolean) -> Unit = {},
     onAllowUse: (Int) -> Unit,
     onCloseApp: () -> Unit
 ) {
@@ -996,10 +1037,10 @@ fun ShieldLandscapeContent(
             LimitReachedContent(isUsesExceeded, isTimeLimitReached, refreshTimeLeftMillis)
             if (shield != null && shield.emergencyUseCount > 0) {
                 Spacer(modifier = Modifier.height(16.dp))
-                EmergencyButton(onEmergencyUse = onEmergencyClick)
+                EmergencyButton(onEmergencyUse = onEmergencyClick, onHoldingChange = onEmergencyHoldingChange)
             }
             Spacer(modifier = Modifier.weight(1f))
-            CloseAppTextButton(onCloseApp)
+            CloseAppTextButton(onCloseApp, autoKickProgress)
         }
     } else {
         if (isDelaying) {
@@ -1010,7 +1051,7 @@ fun ShieldLandscapeContent(
                 Spacer(modifier = Modifier.weight(1f))
                 DelayInProgressSection(randomMessage, delayProgressAnimatable, delayDurationSeconds)
                 Spacer(modifier = Modifier.weight(1f))
-                CloseAppTextButton(onCloseApp)
+                CloseAppTextButton(onCloseApp, 0f)
             }
         } else {
             Column(
@@ -1027,7 +1068,7 @@ fun ShieldLandscapeContent(
                 Spacer(modifier = Modifier.height(12.dp))
                 DurationButtonsGrid(if (isEmergencyUnlocked) null else remainingMinutes, onAllowUse)
                 Spacer(modifier = Modifier.weight(1f))
-                CloseAppTextButton(onCloseApp)
+                CloseAppTextButton(onCloseApp, 0f)
             }
         }
     }
@@ -1039,13 +1080,14 @@ fun LimitReachedSection(
     isTimeLimitReached: Boolean,
     refreshTimeLeftMillis: Long,
     shield: ShieldEntity?,
-    onEmergencyClick: () -> Unit
+    onEmergencyClick: () -> Unit,
+    onEmergencyHoldingChange: (Boolean) -> Unit = {}
 ) {
     Spacer(modifier = Modifier.height(24.dp))
     LimitReachedContent(isUsesExceeded, isTimeLimitReached, refreshTimeLeftMillis)
     if (shield != null && shield.emergencyUseCount > 0) {
         Spacer(modifier = Modifier.height(16.dp))
-        EmergencyButton(onEmergencyUse = onEmergencyClick)
+        EmergencyButton(onEmergencyUse = onEmergencyClick, onHoldingChange = onEmergencyHoldingChange)
     }
 }
 
@@ -1103,7 +1145,7 @@ fun DelayInProgressSection(
             modifier = Modifier.padding(horizontal = 16.dp)
         )
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         Box(contentAlignment = Alignment.Center) {
             CircularWavyProgressIndicator(
                 progress = { delayProgressAnimatable.value },
@@ -1142,8 +1184,21 @@ fun DurationSelectionSection(remainingMinutes: Int?, isEmergencyUnlocked: Boolea
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun CloseAppTextButton(onCloseApp: () -> Unit) {
+fun CloseAppTextButton(onCloseApp: () -> Unit, autoKickProgress: Float = 0f) {
+    val density = LocalDensity.current
+    val infiniteTransition = rememberInfiniteTransition(label = "autoKickWavy")
+    val waveAmplitude by infiniteTransition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "amplitude"
+    )
+
     TextButton(
         onClick = onCloseApp,
         modifier = Modifier.fillMaxWidth(),
@@ -1151,7 +1206,36 @@ fun CloseAppTextButton(onCloseApp: () -> Unit) {
             contentColor = MaterialTheme.colorScheme.error
         )
     ) {
-        Text("Close App", fontWeight = FontWeight.Bold)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "Close App",
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleMedium
+            )
+            AnimatedVisibility(
+                visible = autoKickProgress > 0.4f,
+                enter = expandHorizontally(
+                    animationSpec = spring(dampingRatio = 0.8f, stiffness = 400f)
+                ) + fadeIn(),
+                exit = shrinkHorizontally() + fadeOut()
+            ) {
+                CircularWavyProgressIndicator(
+                    progress = { autoKickProgress },
+                    modifier = Modifier
+                        .padding(start = 12.dp)
+                        .size(24.dp),
+                    color = MaterialTheme.colorScheme.error,
+                    trackColor = MaterialTheme.colorScheme.error.copy(alpha = 0.2f),
+                    stroke = with(density) { Stroke(width = 2.dp.toPx()) },
+                    trackStroke = with(density) { Stroke(width = 2.dp.toPx()) },
+                    wavelength = 8.dp,
+                    amplitude = { waveAmplitude }
+                )
+            }
+        }
     }
 }
 
@@ -1160,7 +1244,7 @@ fun TotalUsagePill(totalGlobalUsageToday: Long, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val userPrefsRepo = remember { UserPreferencesRepository(context) }
     val userPrefs by userPrefsRepo.userPreferencesFlow.collectAsState(initial = UserPreferences())
-    
+
     if (!userPrefs.totalUsagePillEnabled) return
 
     val screenTimeTargetMinutes = userPrefs.screenTimeTargetMinutes
@@ -1560,15 +1644,7 @@ fun PortraitScheduleLayout(
                 }
             }
 
-            TextButton(
-                onClick = onCloseApp,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
-                )
-            ) {
-                Text("Close App", fontWeight = FontWeight.Bold)
-            }
+            CloseAppTextButton(onCloseApp)
         }
     }
 }
@@ -1738,13 +1814,7 @@ fun LandscapeScheduleLayout(
                 }
                 Spacer(modifier = Modifier.weight(1f))
 
-                TextButton(
-                    onClick = onCloseApp,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Close App", fontWeight = FontWeight.Bold)
-                }
+                CloseAppTextButton(onCloseApp)
             }
         }
     }
@@ -1772,7 +1842,7 @@ private fun formatMillis(millis: Long): String {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun EmergencyButton(onEmergencyUse: () -> Unit) {
+fun EmergencyButton(onEmergencyUse: () -> Unit, onHoldingChange: (Boolean) -> Unit = {}) {
     var isHolding by remember { mutableStateOf(false) }
     var holdProgressTarget by remember { mutableFloatStateOf(0f) }
 
@@ -1783,6 +1853,7 @@ fun EmergencyButton(onEmergencyUse: () -> Unit) {
     )
 
     LaunchedEffect(isHolding) {
+        onHoldingChange(isHolding)
         if (isHolding) {
             holdProgressTarget = 1f
             delay(5000)

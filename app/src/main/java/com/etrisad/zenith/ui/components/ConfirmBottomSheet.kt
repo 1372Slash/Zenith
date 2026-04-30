@@ -146,7 +146,6 @@ fun PhaseOnePuzzle(
     val currentStates = remember(leverCount) {
         mutableStateListOf<Boolean>().apply {
             repeat(leverCount) { add(kotlin.random.Random.nextBoolean()) }
-            // Ensure initial state is not already solved
             if (size > 0 && indices.all { this[it] == targetSequence[it] }) {
                 this[0] = !this[0]
             }
