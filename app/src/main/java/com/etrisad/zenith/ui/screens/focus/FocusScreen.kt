@@ -58,6 +58,7 @@ import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.local.entity.ShieldEntity
+import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.components.ShieldSortHeader
 import com.etrisad.zenith.ui.theme.ZenithTheme
 import com.etrisad.zenith.ui.viewmodel.AppInfo
@@ -76,6 +77,9 @@ fun FocusScreen(
     val isAppPickerOpen = remember { mutableStateOf(false) }
     var isFabMenuExpanded by remember { mutableStateOf(false) }
 
+    var pendingDeleteShield by remember { mutableStateOf<ShieldEntity?>(null) }
+    var pendingDeleteSchedule by remember { mutableStateOf<ScheduleEntity?>(null) }
+
     val fabProgress by animateFloatAsState(
         targetValue = if (isFabMenuExpanded) 1f else 0f,
         animationSpec = spring(dampingRatio = 0.45f, stiffness = 150f),
@@ -91,9 +95,9 @@ fun FocusScreen(
             uiState = uiState,
             innerPadding = innerPadding,
             onEditShield = { viewModel.editShield(it) },
-            onDeleteShield = { viewModel.deleteShield(it) },
+            onDeleteShield = { pendingDeleteShield = it },
             onEditSchedule = { viewModel.editSchedule(it) },
-            onDeleteSchedule = { viewModel.deleteSchedule(it) },
+            onDeleteSchedule = { pendingDeleteSchedule = it },
             onShieldSortTypeChange = { viewModel.onShieldSortTypeChange(it) },
             onGoalSortTypeChange = { viewModel.onGoalSortTypeChange(it) },
             onAppClick = onAppClick
@@ -217,6 +221,30 @@ fun FocusScreen(
                 onSave = { limit, emergency, reminders, strict, autoQuit, maxUses, refresh, goalReminder, delayApp ->
                     viewModel.saveFocus(limit, emergency, reminders, strict, autoQuit, maxUses, refresh, goalReminder, delayApp)
                 }
+            )
+        }
+
+        pendingDeleteShield?.let { shield ->
+            ConfirmBottomSheet(
+                onDismiss = { pendingDeleteShield = null },
+                onConfirm = {
+                    viewModel.deleteShield(shield)
+                    pendingDeleteShield = null
+                },
+                leverCount = 3,
+                showTimeSelection = false
+            )
+        }
+
+        pendingDeleteSchedule?.let { schedule ->
+            ConfirmBottomSheet(
+                onDismiss = { pendingDeleteSchedule = null },
+                onConfirm = {
+                    viewModel.deleteSchedule(schedule)
+                    pendingDeleteSchedule = null
+                },
+                leverCount = 3,
+                showTimeSelection = false
             )
         }
     }
@@ -442,7 +470,7 @@ fun SwipeableItemContainer(
             when (it) {
                 SwipeToDismissBoxValue.StartToEnd -> {
                     onDelete()
-                    true
+                    false
                 }
                 SwipeToDismissBoxValue.EndToStart -> {
                     onEdit()

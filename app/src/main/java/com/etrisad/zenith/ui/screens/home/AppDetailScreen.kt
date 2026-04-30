@@ -172,6 +172,7 @@ fun AppDetailScreen(
                 ) {
                     if (shield != null) {
                         var showPauseSheet by remember { mutableStateOf(false) }
+                        var showDeleteSheet by remember { mutableStateOf(false) }
 
                         Column {
                             AnimatedContent(
@@ -202,9 +203,21 @@ fun AppDetailScreen(
 
                             DeleteShieldCard(
                                 onDelete = {
-                                    viewModel.deleteShieldFromDetail()
+                                    showDeleteSheet = true
                                 },
                                 shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                            )
+                        }
+
+                        if (showDeleteSheet) {
+                            ConfirmBottomSheet(
+                                onDismiss = { showDeleteSheet = false },
+                                onConfirm = {
+                                    viewModel.deleteShieldFromDetail()
+                                    showDeleteSheet = false
+                                },
+                                leverCount = 3,
+                                showTimeSelection = false
                             )
                         }
 
