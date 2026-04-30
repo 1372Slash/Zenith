@@ -59,11 +59,10 @@ fun BedtimeScreen(
         }
     }
 
-    val containerColor = if (preferences.expressiveColors) {
-        MaterialTheme.colorScheme.surfaceContainerLow
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-    }
+    val containerColor by animateColorAsState(
+        targetValue = MaterialTheme.colorScheme.surfaceContainerLow,
+        label = "containerColor"
+    )
 
     Column(
         modifier = Modifier
@@ -90,8 +89,7 @@ fun BedtimeScreen(
                         } else {
                             viewModel.setBedtimeEnabled(true)
                         }
-                    },
-                    expressive = preferences.expressiveColors
+                    }
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -322,14 +320,18 @@ fun BedtimeStatusProgress(
 }
 
 @Composable
-fun BedtimeToggleCard(enabled: Boolean, onToggle: (Boolean) -> Unit, expressive: Boolean = false) {
+fun BedtimeToggleCard(enabled: Boolean, onToggle: (Boolean) -> Unit) {
+    val containerColor by animateColorAsState(
+        targetValue = if (enabled) MaterialTheme.colorScheme.primaryContainer 
+                      else MaterialTheme.colorScheme.surfaceContainerLow,
+        label = "toggleCardColor"
+    )
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (enabled) MaterialTheme.colorScheme.primaryContainer 
-                            else if (expressive) MaterialTheme.colorScheme.surfaceContainerLow
-                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            containerColor = containerColor
         )
     ) {
         Row(
