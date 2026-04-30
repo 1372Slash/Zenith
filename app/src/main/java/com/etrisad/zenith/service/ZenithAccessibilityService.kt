@@ -117,7 +117,6 @@ class ZenithAccessibilityService : AccessibilityService() {
                         packageNames = s.packageNames.toSet()
                     )
                 }
-                updateScheduleTransitions()
             }
         }
 
@@ -169,17 +168,12 @@ class ZenithAccessibilityService : AccessibilityService() {
         while (lastForegroundApp == currentApp) {
             val currentTime = System.currentTimeMillis()
 
-            if (currentTime >= nextBedtimeEvaluationTime || currentTime >= nextScheduleEvaluationTime || currentTime - lastCheckedDayTimestamp > 60000) {
-                currentPreferences?.let { 
-                    updateBedtimeStatus(it)
-                    updateScheduleTransitions()
-                }
-                
+            if (currentTime - lastCheckedDayTimestamp > 60000) {
+                currentPreferences?.let { updateBedtimeStatus(it) }
                 val currentDay = synchronized(reusableCalendar) {
                     reusableCalendar.timeInMillis = currentTime
                     reusableCalendar.get(Calendar.DAY_OF_YEAR)
                 }
-                
                 if (lastCheckedDay != -1 && currentDay != lastCheckedDay) {
                     usageStatsCache = null
                     lastUsageCacheTime = 0L
@@ -187,6 +181,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                     cachedTotalUsage = 0L
                     currentShieldCache = null
                     notifiedGoals.clear()
+
                     baseUsageAtSessionStart = 0L
                     sessionStartTime = currentTime
                     
@@ -201,7 +196,7 @@ class ZenithAccessibilityService : AccessibilityService() {
             }
 
             if (shouldBypassBlocking(currentApp)) {
-                delay(5000)
+                delay(2000)
                 continue
             }
 
@@ -211,14 +206,29 @@ class ZenithAccessibilityService : AccessibilityService() {
             val isAppPaused = shield != null && isPaused(shield)
 
             if (shield != null && shield.type == FocusType.GOAL && !isAppPaused) {
+                val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+                if (cachedTotalUsage < limitMillis) {
+                    val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
+                    if (prefs.sessionUsageOverlayEnabled) {
+                        serviceScope.launch(Dispatchers.Main) {
+                            sessionUsageOverlayManager.showHUD(
+                                currentApp,
+                                shield.timeLimitMinutes,
+                                prefs.sessionUsageOverlaySize,
+                                prefs.sessionUsageOverlayOpacity,
+                                isGoal = true,
+                                initialSeconds = (cachedTotalUsage / 1000).toInt()
+                            )
+                        }
+                    }
+                }
             }
 
-            var scheduleTriggered = false
             if (!isAppPaused) {
                 val allowedUntil = allowedApps[currentApp] ?: 0L
                 if (System.currentTimeMillis() > allowedUntil && !InterceptOverlayManager.isShowing) {
-                    scheduleTriggered = checkSchedules(currentApp)
-                    if (!scheduleTriggered && shield != null) {
+                    if (checkSchedules(currentApp)) {
+                    } else if (shield != null) {
                         if (shield.isAutoQuitEnabled && allowedUntil > 0) {
                             goToHomeScreen()
                             allowedApps.remove(currentApp)
@@ -235,27 +245,20 @@ class ZenithAccessibilityService : AccessibilityService() {
 
                 if (shield.type == FocusType.GOAL) {
                     when {
-                        remaining < 60000 -> 1000L
-                        remaining < 300000 -> 2000L
-                        else -> 5000L
+                        remaining < 60000 -> 600L
+                        remaining < 300000 -> 1000L
+                        else -> 1500L
                     }
                 } else {
                     when {
-                        remaining > 3600000 -> 10000L
-                        remaining > 600000 -> 5000L 
-                        remaining > 60000 -> 3000L
+                        remaining > 3600000 -> 8000L
+                        remaining > 600000 -> 5000L
+                        remaining > 300000 -> 3000L
+                        remaining > 60000 -> 1500L
                         else -> 1000L
                     }
                 }
-            } else if (isBedtimeActive || isWindDownActive || activeSchedules.isNotEmpty()) {
-                2000L
-            } else {
-                val nextEvent = if (nextBedtimeEvaluationTime > 0 && nextScheduleEvaluationTime > 0)
-                    minOf(nextBedtimeEvaluationTime, nextScheduleEvaluationTime)
-                else maxOf(nextBedtimeEvaluationTime, nextScheduleEvaluationTime)
-
-                if (nextEvent > currentTime && nextEvent - currentTime < 60000) 2000L else 10000L
-            }
+            } else 1500L
 
             delay(delayTime)
         }
@@ -531,139 +534,47 @@ class ZenithAccessibilityService : AccessibilityService() {
         startActivity(intent)
     }
 
-    private var lastBedtimeUpdateMinute = -1
-    private var lastBedtimeUpdateDay = -1
-    private var nextBedtimeEvaluationTime = 0L
-    private var nextScheduleEvaluationTime = 0L
-
     private fun updateBedtimeStatus(prefs: UserPreferences) {
-        val now = System.currentTimeMillis()
-        
-        if (now < nextBedtimeEvaluationTime && lastBedtimeUpdateMinute != -1) {
-            return
-        }
-
         if (!prefs.bedtimeEnabled) {
             isBedtimeActive = false
             isWindDownActive = false
-            nextBedtimeEvaluationTime = now + 3600000 
             return
+        }
+
+        val currentDay: Int
+        val currentMinutes: Int
+        synchronized(reusableCalendar) {
+            reusableCalendar.timeInMillis = System.currentTimeMillis()
+            currentDay = reusableCalendar.get(Calendar.DAY_OF_WEEK)
+            currentMinutes = reusableCalendar.get(Calendar.HOUR_OF_DAY) * 60 + reusableCalendar.get(Calendar.MINUTE)
         }
         
-        synchronized(reusableCalendar) {
-            reusableCalendar.timeInMillis = now
-            val currentMinuteOfToday = reusableCalendar.get(java.util.Calendar.HOUR_OF_DAY) * 60 + 
-                                     reusableCalendar.get(java.util.Calendar.MINUTE)
-            val currentDay = reusableCalendar.get(java.util.Calendar.DAY_OF_WEEK)
-            
-            lastBedtimeUpdateMinute = currentMinuteOfToday
-            lastBedtimeUpdateDay = currentDay
-
-            if (currentDay !in prefs.bedtimeDays) {
-                isBedtimeActive = false
-                isWindDownActive = false
-                
-                reusableCalendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
-                reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
-                reusableCalendar.set(java.util.Calendar.MINUTE, 0)
-                reusableCalendar.set(java.util.Calendar.SECOND, 0)
-                nextBedtimeEvaluationTime = reusableCalendar.timeInMillis
-                return
-            }
-
-            val startMinutes = cachedBedtimeStartMinutes
-            val endMinutes = cachedBedtimeEndMinutes
-            val windDownStartMinutes = (startMinutes - 30 + 1440) % 1440
-
-            isBedtimeActive = if (startMinutes <= endMinutes) {
-                currentMinuteOfToday in startMinutes..endMinutes
-            } else {
-                currentMinuteOfToday >= startMinutes || currentMinuteOfToday <= endMinutes
-            }
-
-            val wasWindDownActive = isWindDownActive
-            isWindDownActive = if (windDownStartMinutes <= startMinutes) {
-                currentMinuteOfToday in windDownStartMinutes until startMinutes
-            } else {
-                currentMinuteOfToday >= windDownStartMinutes || currentMinuteOfToday < startMinutes
-            }
-
-            if (isWindDownActive && !wasWindDownActive) {
-                windDownUsedPackages.clear()
-            }
-
-            val transitions = mutableListOf<Int>()
-            transitions.add(windDownStartMinutes)
-            transitions.add(startMinutes)
-            transitions.add((endMinutes + 1) % 1440)
-
-            var nextTransitionMinute = -1
-            val sortedTransitions = transitions.distinct().sorted()
-            for (t in sortedTransitions) {
-                if (t > currentMinuteOfToday) {
-                    nextTransitionMinute = t
-                    break
-                }
-            }
-
-            if (nextTransitionMinute == -1) {
-                reusableCalendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
-                reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
-                reusableCalendar.set(java.util.Calendar.MINUTE, 0)
-                reusableCalendar.set(java.util.Calendar.SECOND, 0)
-                reusableCalendar.set(java.util.Calendar.MILLISECOND, 0)
-                nextBedtimeEvaluationTime = reusableCalendar.timeInMillis
-            } else {
-                reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, nextTransitionMinute / 60)
-                reusableCalendar.set(java.util.Calendar.MINUTE, nextTransitionMinute % 60)
-                reusableCalendar.set(java.util.Calendar.SECOND, 0)
-                reusableCalendar.set(java.util.Calendar.MILLISECOND, 0)
-                nextBedtimeEvaluationTime = reusableCalendar.timeInMillis
-            }
-        }
-    }
-
-    private fun updateScheduleTransitions() {
-        val now = System.currentTimeMillis()
-        if (parsedSchedulesCache.isEmpty()) {
-            nextScheduleEvaluationTime = now + 3600000
+        if (currentDay !in prefs.bedtimeDays) {
+            isBedtimeActive = false
+            isWindDownActive = false
             return
         }
 
-        synchronized(reusableCalendar) {
-            reusableCalendar.timeInMillis = now
-            val currentMinuteOfToday = reusableCalendar.get(java.util.Calendar.HOUR_OF_DAY) * 60 + 
-                                     reusableCalendar.get(java.util.Calendar.MINUTE)
-            
-            val transitions = mutableListOf<Int>()
-            for (ps in parsedSchedulesCache) {
-                transitions.add(ps.startMinutes)
-                transitions.add((ps.endMinutes + 1) % 1440)
-            }
-            
-            var nextTransitionMinute = -1
-            val sortedTransitions = transitions.distinct().sorted()
-            for (t in sortedTransitions) {
-                if (t > currentMinuteOfToday) {
-                    nextTransitionMinute = t
-                    break
-                }
-            }
+        val startMinutes = cachedBedtimeStartMinutes
+        val endMinutes = cachedBedtimeEndMinutes
 
-            if (nextTransitionMinute == -1) {
-                reusableCalendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
-                reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
-                reusableCalendar.set(java.util.Calendar.MINUTE, 0)
-                reusableCalendar.set(java.util.Calendar.SECOND, 0)
-                reusableCalendar.set(java.util.Calendar.MILLISECOND, 0)
-                nextScheduleEvaluationTime = reusableCalendar.timeInMillis
-            } else {
-                reusableCalendar.set(java.util.Calendar.HOUR_OF_DAY, nextTransitionMinute / 60)
-                reusableCalendar.set(java.util.Calendar.MINUTE, nextTransitionMinute % 60)
-                reusableCalendar.set(java.util.Calendar.SECOND, 0)
-                reusableCalendar.set(java.util.Calendar.MILLISECOND, 0)
-                nextScheduleEvaluationTime = reusableCalendar.timeInMillis
-            }
+        isBedtimeActive = if (startMinutes <= endMinutes) {
+            currentMinutes in startMinutes..endMinutes
+        } else {
+            currentMinutes >= startMinutes || currentMinutes <= endMinutes
+        }
+
+        val windDownStartMinutes = (startMinutes - 30 + 1440) % 1440
+        
+        val wasWindDownActive = isWindDownActive
+        isWindDownActive = if (windDownStartMinutes <= startMinutes) {
+            currentMinutes in windDownStartMinutes until startMinutes
+        } else {
+            currentMinutes >= windDownStartMinutes || currentMinutes < startMinutes
+        }
+
+        if (isWindDownActive && !wasWindDownActive) {
+            windDownUsedPackages.clear()
         }
     }
 
