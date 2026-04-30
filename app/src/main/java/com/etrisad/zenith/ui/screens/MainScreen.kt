@@ -35,7 +35,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.etrisad.zenith.ui.components.PermissionBottomSheet
 import com.etrisad.zenith.ui.components.UserBottomSheet
 import com.etrisad.zenith.ui.components.ZenithHeader
-import com.etrisad.zenith.ui.components.PauseBottomSheet
+import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.navigation.Screen
 import com.etrisad.zenith.ui.navigation.navItems
 import com.etrisad.zenith.ui.screens.focus.FocusScreen
@@ -285,9 +285,9 @@ fun MainScreen(
             }
         ) { innerPadding ->
             if (showPauseSheet) {
-                PauseBottomSheet(
+                ConfirmBottomSheet(
                     onDismiss = { showPauseSheet = false },
-                    onConfirmPause = { _ ->
+                    onConfirm = { _ ->
                         bedtimeViewModel.setBedtimeEnabled(false)
                         showPauseSheet = false
                     },

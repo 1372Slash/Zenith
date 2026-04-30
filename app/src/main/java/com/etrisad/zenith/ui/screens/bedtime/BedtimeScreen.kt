@@ -35,7 +35,7 @@ import java.time.LocalTime
 import java.time.Duration
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
-import com.etrisad.zenith.ui.components.PauseBottomSheet
+import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -162,9 +162,9 @@ fun BedtimeScreen(
     }
 
     if (showPauseSheet) {
-        PauseBottomSheet(
+        ConfirmBottomSheet(
             onDismiss = { showPauseSheet = false },
-            onConfirmPause = { _ ->
+            onConfirm = { _ ->
                 viewModel.setBedtimeEnabled(false)
                 showPauseSheet = false
             },

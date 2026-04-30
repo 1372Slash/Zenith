@@ -31,9 +31,9 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun PauseBottomSheet(
+fun ConfirmBottomSheet(
     onDismiss: () -> Unit,
-    onConfirmPause: (Int?) -> Unit,
+    onConfirm: (Int?) -> Unit,
     leverCount: Int = 3,
     puzzleTimeoutSeconds: Int? = null,
     holdDurationMillis: Long = 10000L,
@@ -70,7 +70,7 @@ fun PauseBottomSheet(
                         )
                     }.using(SizeTransform(clip = false))
                 },
-                label = "PausePhaseTransition"
+                label = "ConfirmPhaseTransition"
             ) { phase ->
                 when (phase) {
                     1 -> PhaseOnePuzzle(
@@ -100,7 +100,7 @@ fun PauseBottomSheet(
                             } else {
                                 scope.launch {
                                     sheetState.hide()
-                                    onConfirmPause(null)
+                                    onConfirm(null)
                                 }
                             }
                         }
@@ -109,7 +109,7 @@ fun PauseBottomSheet(
                         onConfirm = { duration ->
                             scope.launch {
                                 sheetState.hide()
-                                onConfirmPause(duration)
+                                onConfirm(duration)
                             }
                         }
                     )

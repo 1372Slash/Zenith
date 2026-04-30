@@ -38,7 +38,7 @@ import com.etrisad.zenith.data.local.entity.FocusType
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
-import com.etrisad.zenith.ui.components.PauseBottomSheet
+import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -209,14 +209,13 @@ fun AppDetailScreen(
                         }
 
                         if (showPauseSheet) {
-                            PauseBottomSheet(
+                            ConfirmBottomSheet(
                                 onDismiss = { showPauseSheet = false },
-                                onConfirmPause = { duration ->
+                                onConfirm = { duration ->
                                     viewModel.pauseShield(duration)
                                     showPauseSheet = false
                                 },
                                 leverCount = 5,
-                                puzzleTimeoutSeconds = 15,
                                 showTimeSelection = true
                             )
                         }
