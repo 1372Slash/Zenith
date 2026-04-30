@@ -156,7 +156,7 @@ fun WhitelistBottomSheet(
                             .fillMaxWidth(),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(strokeCap = androidx.compose.ui.graphics.StrokeCap.Round)
+                        ContainedLoadingIndicator()
                     }
                 } else {
                     LazyColumn(
