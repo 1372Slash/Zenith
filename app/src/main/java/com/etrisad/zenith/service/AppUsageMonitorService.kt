@@ -60,6 +60,8 @@ class AppUsageMonitorService : Service() {
     private var currentPreferences: UserPreferences? = null
     private var allShieldsCache = listOf<ShieldEntity>()
     private var goalShieldsCache = listOf<ShieldEntity>()
+    private var launcherAppsCache = emptySet<String>()
+    private var lastLauncherAppsRefreshTime = 0L
     
     private var isBedtimeActive = false
     private var isWindDownActive = false
@@ -860,24 +862,26 @@ class AppUsageMonitorService : Service() {
             null
         }
 
-        val pm = packageManager
-        if (System.currentTimeMillis() - lastLauncherRefreshTime > 3600000 || launcherPackages.isEmpty()) {
-            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-            launcherPackages = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+        if (currentTime - lastLauncherAppsRefreshTime > 3600000 || launcherAppsCache.isEmpty()) {
+            val pm = packageManager
+            launcherAppsCache = pm.queryIntentActivities(
+                Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
+            ).map { it.activityInfo.packageName }.toSet()
+            
+            val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            launcherPackages = pm.queryIntentActivities(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
                 .map { it.activityInfo.packageName }.toSet()
-            lastLauncherRefreshTime = System.currentTimeMillis()
+            
+            lastLauncherAppsRefreshTime = currentTime
+            lastLauncherRefreshTime = currentTime
         }
-
-        val launcherApps = pm.queryIntentActivities(
-            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
-        ).map { it.activityInfo.packageName }.toSet()
 
         val excludePackages = launcherPackages + packageName
 
         var totalToday = 0L
         stats?.forEach { stat ->
             val pkg = stat.packageName
-            if (pkg !in excludePackages && pkg in launcherApps) {
+            if (pkg !in excludePackages && pkg in launcherAppsCache) {
                 val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
                 if (time > 0) {
                     totalToday += time
@@ -962,9 +966,15 @@ class AppUsageMonitorService : Service() {
             return
         }
 
-        val calendar = java.util.Calendar.getInstance()
-        val currentDay = calendar.get(Calendar.DAY_OF_WEEK)
-        val currentMinutes = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE)
+        val currentTime = System.currentTimeMillis()
+        val currentDay: Int
+        val currentMinutes: Int
+        
+        synchronized(reusableCalendar) {
+            reusableCalendar.timeInMillis = currentTime
+            currentDay = reusableCalendar.get(Calendar.DAY_OF_WEEK)
+            currentMinutes = reusableCalendar.get(Calendar.HOUR_OF_DAY) * 60 + reusableCalendar.get(Calendar.MINUTE)
+        }
         
         if (currentDay !in prefs.bedtimeDays) {
             if (isBedtimeActive || isWindDownActive) {
