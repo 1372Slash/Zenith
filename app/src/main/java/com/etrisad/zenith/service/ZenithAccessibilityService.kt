@@ -3,6 +3,7 @@ package com.etrisad.zenith.service
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.accessibilityservice.AccessibilityService
+import android.util.Log
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
@@ -86,11 +87,16 @@ class ZenithAccessibilityService : AccessibilityService() {
     companion object {
         var isServiceRunning = false
             private set
+        @Volatile
+        var lastEventTime = 0L
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         isServiceRunning = true
+        lastEventTime = System.currentTimeMillis()
+        Log.d("ZenithAS", "Accessibility Service connected")
+        
         val app = application as com.etrisad.zenith.ZenithApplication
         shieldRepository = app.shieldRepository
         preferencesRepository = UserPreferencesRepository(this)
@@ -100,6 +106,9 @@ class ZenithAccessibilityService : AccessibilityService() {
         serviceScope.launch {
             shieldRepository.allShields.collect { shields ->
                 allShieldsCache = shields
+                lastForegroundApp?.let { currentPkg ->
+                    currentShieldCache = shields.find { it.packageName == currentPkg }
+                }
             }
         }
 
@@ -137,12 +146,27 @@ class ZenithAccessibilityService : AccessibilityService() {
 
         serviceScope.launch {
             packageChangeFlow.collectLatest { packageName ->
-                handlePackageChange(packageName)
+                try {
+                    handlePackageChange(packageName)
+                } catch (e: Exception) {
+                    Log.e("ZenithAS", "Error in handlePackageChange", e)
+                }
             }
         }
+
+        mainHandler.postDelayed({
+            rootInActiveWindow?.packageName?.toString()?.let { pkg ->
+                if (pkg != packageName) {
+                    packageChangeFlow.tryEmit(pkg)
+                }
+            }
+        }, 1000)
     }
 
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        lastEventTime = System.currentTimeMillis()
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
 
         val packageName = event.packageName?.toString() ?: return
@@ -156,17 +180,24 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun handlePackageChange(currentApp: String) {
-        if (currentApp != lastForegroundApp) {
+        if (currentApp != lastForegroundApp || currentShieldCache == null) {
             currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
-            lastUsageFetchTime = 0L
-            sessionStartTime = System.currentTimeMillis()
-            baseUsageAtSessionStart = getTotalUsageToday(currentApp)
-            cachedTotalUsage = baseUsageAtSessionStart
-            lastForegroundApp = currentApp
+            if (currentApp != lastForegroundApp) {
+                lastUsageFetchTime = 0L
+                sessionStartTime = System.currentTimeMillis()
+                baseUsageAtSessionStart = getTotalUsageToday(currentApp)
+                cachedTotalUsage = baseUsageAtSessionStart
+                lastForegroundApp = currentApp
+            }
         }
 
         while (lastForegroundApp == currentApp) {
+            lastEventTime = System.currentTimeMillis()
             val currentTime = System.currentTimeMillis()
+            
+            if (currentShieldCache == null) {
+                currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
+            }
 
             if (currentTime - lastCheckedDayTimestamp > 60000) {
                 currentPreferences?.let { updateBedtimeStatus(it) }
@@ -227,8 +258,7 @@ class ZenithAccessibilityService : AccessibilityService() {
             if (!isAppPaused) {
                 val allowedUntil = allowedApps[currentApp] ?: 0L
                 if (System.currentTimeMillis() > allowedUntil && !InterceptOverlayManager.isShowing) {
-                    if (checkSchedules(currentApp)) {
-                    } else if (shield != null) {
+                    if (!checkSchedules(currentApp) && shield != null) {
                         if (shield.isAutoQuitEnabled && allowedUntil > 0) {
                             goToHomeScreen()
                             allowedApps.remove(currentApp)

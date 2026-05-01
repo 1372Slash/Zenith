@@ -13,6 +13,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ScheduleMode
@@ -114,6 +115,7 @@ class AppUsageMonitorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        Log.d("ZenithAUMS", "AppUsageMonitorService created")
         val app = application as com.etrisad.zenith.ZenithApplication
         shieldRepository = app.shieldRepository
         preferencesRepository = UserPreferencesRepository(this)
@@ -123,6 +125,9 @@ class AppUsageMonitorService : Service() {
         serviceScope.launch {
             shieldRepository.allShields.collect { shields ->
                 allShieldsCache = shields
+                lastForegroundApp?.let { currentPkg ->
+                    currentShieldCache = shields.find { it.packageName == currentPkg }
+                }
                 goalShieldsCache = shields.filter { 
                     it.type == FocusType.GOAL && it.goalReminderPeriodMinutes > 0 
                 }
@@ -352,20 +357,22 @@ class AppUsageMonitorService : Service() {
                     
                     if (currentApp != lastForegroundApp || currentShieldCache == null) {
                         currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
-                        lastUsageFetchTime = 0L 
-                        lastHUDUpdateTime = 0L
-                        sessionStartTime = currentTime
-                        
-                        val systemUsage = getTotalUsageToday(currentApp)
-                        val startOfDay = getStartOfDay()
-                        val shield = currentShieldCache
-                        val dbUsage = if (shield != null && shield.lastUsedTimestamp >= startOfDay) {
-                            val limitMillis = (shield.timeLimitMinutes * 60 * 1000L)
-                            (limitMillis - shield.remainingTimeMillis).coerceAtLeast(0L)
-                        } else 0L
-                        
-                        baseUsageAtSessionStart = maxOf(systemUsage, dbUsage)
-                        cachedTotalUsage = baseUsageAtSessionStart
+                        if (currentApp != lastForegroundApp) {
+                            lastUsageFetchTime = 0L 
+                            lastHUDUpdateTime = 0L
+                            sessionStartTime = currentTime
+                            
+                            val systemUsage = getTotalUsageToday(currentApp)
+                            val startOfDay = getStartOfDay()
+                            val shield = currentShieldCache
+                            val dbUsage = if (shield != null && shield.lastUsedTimestamp >= startOfDay) {
+                                val limitMillis = (shield.timeLimitMinutes * 60 * 1000L)
+                                (limitMillis - shield.remainingTimeMillis).coerceAtLeast(0L)
+                            } else 0L
+                            
+                            baseUsageAtSessionStart = maxOf(systemUsage, dbUsage)
+                            cachedTotalUsage = baseUsageAtSessionStart
+                        }
                     }
 
                     if (shouldBypassBlocking(currentApp)) {
