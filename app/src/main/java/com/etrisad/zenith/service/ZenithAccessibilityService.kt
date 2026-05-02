@@ -171,6 +171,8 @@ class ZenithAccessibilityService : AccessibilityService() {
 
         val packageName = event.packageName?.toString() ?: return
         if (packageName == this.packageName) return
+        
+        Log.d("ZenithAS", "onAccessibilityEvent: Window state changed to $packageName")
 
         serviceScope.launch(Dispatchers.Main) {
             overlayManager.checkAndHide(packageName)
@@ -180,6 +182,7 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun handlePackageChange(currentApp: String) {
+        Log.d("ZenithAS", "handlePackageChange: $currentApp")
         if (currentApp != lastForegroundApp || currentShieldCache == null) {
             currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
             if (currentApp != lastForegroundApp) {

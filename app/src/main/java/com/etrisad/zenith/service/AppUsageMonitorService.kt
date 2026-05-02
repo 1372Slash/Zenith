@@ -461,7 +461,7 @@ class AppUsageMonitorService : Service() {
 
                 val delayTime = when {
                     isPowerSaveMode -> 2500L
-                    InterceptOverlayManager.isShowing -> 3500L
+                    InterceptOverlayManager.isShowing -> 3000L
                     currentShieldCache != null -> {
                         val shield = currentShieldCache!!
                         val limitMillis = shield.timeLimitMinutes * 60 * 1000L
@@ -1230,7 +1230,7 @@ class AppUsageMonitorService : Service() {
     private fun getForegroundApp(): String? {
         val time = System.currentTimeMillis()
         val usageEvents = try {
-            usageStatsManager.queryEvents(time - 5000, time)
+            usageStatsManager.queryEvents(time - 10000, time)
         } catch (_: Exception) { null } ?: return lastForegroundApp
         
         var lastPackage: String? = null
@@ -1241,10 +1241,10 @@ class AppUsageMonitorService : Service() {
                 lastPackage = reusableEvent.packageName
             }
         }
-        
-        if (lastPackage == null && lastForegroundApp == null) {
+
+        if (lastPackage == null) {
             try {
-                val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 10000, time)
+                val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 15000, time)
                 lastPackage = stats?.maxByOrNull { it.lastTimeUsed }?.packageName
             } catch (_: Exception) {}
         }

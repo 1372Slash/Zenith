@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.foundation.layout.Box
@@ -27,6 +28,7 @@ class InterceptOverlayManager(private val context: Context) {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     companion object {
+        private const val TAG = "InterceptOverlayManager"
         @Volatile
         var isShowing = false
             private set
@@ -56,8 +58,13 @@ class InterceptOverlayManager(private val context: Context) {
         onCloseApp: () -> Unit,
         onGoalDismiss: () -> Unit
     ) {
-        if (isShowing && currentPackage == packageName) return
+        Log.d(TAG, "Request to show overlay for $packageName")
+        if (isShowing && currentPackage == packageName) {
+            Log.d(TAG, "Overlay already showing for $packageName, ignoring")
+            return
+        }
         if (isShowing) {
+            Log.d(TAG, "Overlay showing for ${currentPackage}, hiding before showing new one")
             hideOverlay()
         }
 
@@ -266,8 +273,9 @@ class InterceptOverlayManager(private val context: Context) {
             overlayView = composeView
             lOwner.handleLifecycleEvent(Lifecycle.Event.ON_START)
             lOwner.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+            Log.d(TAG, "Overlay added to window for $currentPackage")
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Error adding overlay for $currentPackage", e)
             isShowing = false
             currentPackage = null
         }
@@ -278,16 +286,10 @@ class InterceptOverlayManager(private val context: Context) {
         
         val target = currentPackage ?: return
 
-        if (newPackage == target ||
-            newPackage == context.packageName || 
-            newPackage in SYSTEM_UI_PACKAGES ||
-            newPackage.contains("launcher", ignoreCase = true) ||
-            newPackage.contains("home", ignoreCase = true)) {
-            return
-        }
-
-        withContext(Dispatchers.Main) {
-            hideOverlay()
+        if (newPackage != target && newPackage != context.packageName) {
+            withContext(Dispatchers.Main) {
+                hideOverlay()
+            }
         }
     }
 
@@ -298,6 +300,8 @@ class InterceptOverlayManager(private val context: Context) {
         }
 
         val view = overlayView
+        val target = currentPackage
+        Log.d(TAG, "Hiding overlay for $target")
         if (view != null) {
             try {
                 lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
@@ -306,10 +310,11 @@ class InterceptOverlayManager(private val context: Context) {
                 
                 view.disposeComposition()
                 windowManager.removeViewImmediate(view)
+                Log.d(TAG, "Overlay removed for $target")
                 
                 viewModelStore?.clear()
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e(TAG, "Error removing overlay for $target", e)
             } finally {
                 overlayView = null
                 lifecycleOwner = null
@@ -318,6 +323,7 @@ class InterceptOverlayManager(private val context: Context) {
                 isShowing = false
             }
         } else {
+            Log.d(TAG, "hideOverlay: overlayView is already null")
             isShowing = false
             currentPackage = null
         }
