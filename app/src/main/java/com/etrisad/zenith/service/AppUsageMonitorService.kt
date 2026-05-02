@@ -381,7 +381,12 @@ class AppUsageMonitorService : Service() {
                             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
                             val actualRemaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
                             val prefs = currentPreferences
-                            if (earlyKickManager.shouldKick(currentApp, actualRemaining, prefs?.earlyKickEnabled ?: false)) {
+                            
+                            val isOverlayShowing = InterceptOverlayManager.isShowing
+                            val isSessionActive = allowedUntil > currentTime
+                            
+                            if (!isOverlayShowing && !isSessionActive && 
+                                earlyKickManager.shouldKick(currentApp, actualRemaining, prefs?.earlyKickEnabled ?: false)) {
                                 serviceScope.launch(Dispatchers.Main) {
                                     Toast.makeText(this@AppUsageMonitorService, "Early Kick: 2 minutes remaining", Toast.LENGTH_LONG).show()
                                 }
@@ -822,7 +827,6 @@ class AppUsageMonitorService : Service() {
 
         val usageMap = usageStatsManager.queryAndAggregateUsageStats(startTime, endTime)
         
-        // Global Streak Update
         val isGlobalAlreadyUpdated = synchronized(reusableCalendar) {
             reusableCalendar.timeInMillis = prefs.globalLastStreakUpdateTimestamp
             reusableCalendar.get(Calendar.YEAR).toLong() == todayYear &&
