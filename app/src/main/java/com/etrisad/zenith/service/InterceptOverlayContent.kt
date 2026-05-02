@@ -190,7 +190,7 @@ fun InterceptOverlayContent(
             } else {
                 autoKickProgress.stop()
             }
-        } else if (!isDelaying && (shield?.type == FocusType.SHIELD || shield == null)) {
+        } else if (!isDelaying && !isEmergencyUnlocked && (shield?.type == FocusType.SHIELD || shield == null)) {
             autoKickProgress.snapTo(0f)
             delay(10000)
             autoKickProgress.animateTo(
@@ -1398,16 +1398,6 @@ fun ScheduleOverlayContent(
             }
         } else {
             autoKickProgress.snapTo(0f)
-            delay(10000)
-            autoKickProgress.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(durationMillis = 5000, easing = LinearEasing)
-            )
-            if (autoKickProgress.value >= 1f) {
-                showContent = false
-                delay(400)
-                onCloseApp()
-            }
         }
     }
 
