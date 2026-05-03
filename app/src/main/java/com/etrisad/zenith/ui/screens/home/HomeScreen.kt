@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.graphics.shapes.toPath
 import com.etrisad.zenith.data.local.entity.FocusType
@@ -1274,6 +1275,44 @@ fun ShieldItem(
                             }
                         }
 
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = shield.currentStreak > 0,
+                            enter = fadeIn(spring(stiffness = Spring.StiffnessLow)) +
+                                    scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)),
+                            exit = fadeOut(spring(stiffness = Spring.StiffnessLow)) +
+                                    scaleOut(spring(stiffness = Spring.StiffnessLow)),
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .offset(y = 4.dp)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.tertiary,
+                                tonalElevation = 2.dp,
+                                shadowElevation = 2.dp
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 0.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.LocalFireDepartment,
+                                        contentDescription = "Streak",
+                                        modifier = Modifier.size(10.dp),
+                                        tint = MaterialTheme.colorScheme.onTertiary
+                                    )
+                                    Text(
+                                        text = "${shield.currentStreak}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onTertiary,
+                                        modifier = Modifier.padding(start = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+
                         if (isLocked) {
                             val (badgeProgress, badgeIcon, badgeColor) = when {
                                 isEffectivelyPaused -> {
@@ -1336,39 +1375,11 @@ fun ShieldItem(
                     } else {
                         (progress * 100).toInt()
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (shield.currentStreak > 0) {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.tertiary,
-                                modifier = Modifier.padding(end = 8.dp)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.LocalFireDepartment,
-                                        contentDescription = "Streak",
-                                        modifier = Modifier.size(14.dp),
-                                        tint = MaterialTheme.colorScheme.onTertiary
-                                    )
-                                    Text(
-                                        text = "${shield.currentStreak}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onTertiary,
-                                        modifier = Modifier.padding(start = 4.dp)
-                                    )
-                                }
-                            }
-                        }
-                        Text(
-                            text = "$percentage%",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = "$percentage%",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 },
                 colors = ListItemDefaults.colors(
                     containerColor = Color.Transparent

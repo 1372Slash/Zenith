@@ -923,6 +923,44 @@ fun ShieldConfigItem(
                         }
                     }
 
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = shield.currentStreak > 0,
+                        enter = fadeIn(spring(stiffness = Spring.StiffnessLow)) +
+                                scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)),
+                        exit = fadeOut(spring(stiffness = Spring.StiffnessLow)) +
+                                scaleOut(spring(stiffness = Spring.StiffnessLow)),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .offset(y = 4.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            tonalElevation = 2.dp,
+                            shadowElevation = 2.dp
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.LocalFireDepartment,
+                                    contentDescription = "Streak",
+                                    modifier = Modifier.size(10.dp),
+                                    tint = MaterialTheme.colorScheme.onTertiary
+                                )
+                                Text(
+                                    text = "${shield.currentStreak}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onTertiary,
+                                    modifier = Modifier.padding(start = 2.dp)
+                                )
+                            }
+                        }
+                    }
+
                     if (isLocked) {
                         val (badgeProgress, badgeIcon, badgeColor) = when {
                             isEffectivelyPaused -> {
@@ -1034,32 +1072,6 @@ fun ShieldConfigItem(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (shield.currentStreak > 0) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.padding(end = 12.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.LocalFireDepartment,
-                                    contentDescription = "Streak",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onTertiary
-                                )
-                                Text(
-                                    text = "${shield.currentStreak}",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onTertiary,
-                                    modifier = Modifier.padding(start = 4.dp)
-                                )
-                            }
-                        }
-                    }
                     Text(
                         text = "$percentage%",
                         style = MaterialTheme.typography.titleMedium,

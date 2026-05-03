@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.graphics.shapes.toPath
 import com.etrisad.zenith.data.local.entity.FocusType
@@ -307,6 +308,45 @@ fun AppHeader(
                         modifier = Modifier.size(48.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = iconAlpha)
                     )
+                }
+            }
+
+            shield?.let { s ->
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = s.currentStreak > 0,
+                    enter = fadeIn(spring(stiffness = Spring.StiffnessLow)) +
+                            scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)),
+                    exit = fadeOut(spring(stiffness = Spring.StiffnessLow)) +
+                            scaleOut(spring(stiffness = Spring.StiffnessLow)),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .offset(y = 8.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        tonalElevation = 3.dp,
+                        shadowElevation = 3.dp
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.LocalFireDepartment,
+                                contentDescription = "Streak",
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onTertiary
+                            )
+                            Text(
+                                text = "${s.currentStreak}",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.onTertiary,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        }
+                    }
                 }
             }
 
