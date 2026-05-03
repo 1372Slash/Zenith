@@ -59,11 +59,11 @@ class InterceptOverlayManager(private val context: Context) {
         onGoalDismiss: () -> Unit
     ) {
         Log.d(TAG, "Request to show overlay for $packageName")
-        if (isShowing && currentPackage == packageName) {
+        if (isShowing && currentPackage == packageName && overlayView != null) {
             Log.d(TAG, "Overlay already showing for $packageName, ignoring")
             return
         }
-        if (isShowing) {
+        if (isShowing || overlayView != null) {
             Log.d(TAG, "Overlay showing for ${currentPackage}, hiding before showing new one")
             hideOverlay()
         }
@@ -118,7 +118,9 @@ class InterceptOverlayManager(private val context: Context) {
         onAllowUse: (Int, Boolean) -> Unit,
         onCloseApp: () -> Unit
     ) {
-        if (isShowing) return
+        if (isShowing && currentPackage == packageName && overlayView != null) return
+        if (isShowing || overlayView != null) hideOverlay()
+        
         isShowing = true
         currentPackage = packageName
 
@@ -160,8 +162,8 @@ class InterceptOverlayManager(private val context: Context) {
         appName: String,
         onCloseApp: () -> Unit
     ) {
-        if (isShowing && currentPackage == packageName) return
-        if (isShowing) hideOverlay()
+        if (isShowing && currentPackage == packageName && overlayView != null) return
+        if (isShowing || overlayView != null) hideOverlay()
         
         isShowing = true
         currentPackage = packageName
@@ -200,8 +202,8 @@ class InterceptOverlayManager(private val context: Context) {
         onAllowUse: (Int) -> Unit,
         onCloseApp: () -> Unit
     ) {
-        if (isShowing && currentPackage == packageName) return
-        if (isShowing) hideOverlay()
+        if (isShowing && currentPackage == packageName && overlayView != null) return
+        if (isShowing || overlayView != null) hideOverlay()
 
         isShowing = true
         currentPackage = packageName

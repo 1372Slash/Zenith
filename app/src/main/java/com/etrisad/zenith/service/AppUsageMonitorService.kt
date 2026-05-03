@@ -129,6 +129,10 @@ class AppUsageMonitorService : Service() {
         overlayManager = InterceptOverlayManager(this)
         sessionUsageOverlayManager = SessionUsageOverlayManager(this)
 
+        serviceScope.launch(Dispatchers.Main) {
+            overlayManager.hideOverlay()
+        }
+
         serviceScope.launch {
             allShieldsCache = shieldRepository.allShields.first()
             shieldRepository.allShields.collect { shields ->

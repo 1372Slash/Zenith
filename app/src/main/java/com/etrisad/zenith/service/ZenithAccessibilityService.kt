@@ -103,6 +103,10 @@ class ZenithAccessibilityService : AccessibilityService() {
         overlayManager = InterceptOverlayManager(this)
         sessionUsageOverlayManager = SessionUsageOverlayManager(this)
 
+        serviceScope.launch(Dispatchers.Main) {
+            overlayManager.hideOverlay()
+        }
+
         serviceScope.launch {
             shieldRepository.allShields.collect { shields ->
                 allShieldsCache = shields
@@ -177,8 +181,8 @@ class ZenithAccessibilityService : AccessibilityService() {
         serviceScope.launch(Dispatchers.Main) {
             overlayManager.checkAndHide(packageName)
             sessionUsageOverlayManager.updateForegroundApp(packageName)
+            packageChangeFlow.tryEmit(packageName)
         }
-        packageChangeFlow.tryEmit(packageName)
     }
 
     private suspend fun handlePackageChange(currentApp: String) {
@@ -401,6 +405,7 @@ class ZenithAccessibilityService : AccessibilityService() {
             val shieldWithTimestamp = if (shield.isDelayAppEnabled) {
                 if (isGracePeriodActive) {
                     val updated = shield.copy(lastDelayStartTimestamp = currentTime - (delayDurationSeconds * 1000L) - 1000)
+                    serviceScope.launch { shieldRepository.updateShield(updated) }
                     updated
                 } else if (lastAction == 0L) {
                     val updated = shield.copy(lastDelayStartTimestamp = currentTime)
