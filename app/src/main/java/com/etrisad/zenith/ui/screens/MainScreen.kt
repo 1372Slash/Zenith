@@ -2,19 +2,13 @@ package com.etrisad.zenith.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.ui.unit.IntOffset
- import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerDefaults
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.graphicsLayer
-import kotlin.math.absoluteValue
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.*
@@ -35,7 +29,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -72,32 +65,13 @@ fun MainScreen(
     )
     val navController = rememberNavController()
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val pagerState = rememberPagerState(pageCount = { navItems.size })
-
-    val smoothTweenSpec = tween<Float>(
-        durationMillis = 500,
-        easing = FastOutSlowInEasing
-    )
-
-    val smoothIntOffsetTweenSpec = tween<IntOffset>(
-        durationMillis = 500,
-        easing = FastOutSlowInEasing
-    )
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    
-    val effectiveRoute = if (currentRoute == "main_tabs") {
-        navItems[pagerState.currentPage].route
-    } else {
-        currentRoute
-    }
-
     val isDeepScreen =
-        currentRoute == Screen.UsageStats.route || 
-        currentRoute == Screen.Bedtime.route ||
-        currentRoute?.startsWith("app_detail") == true
+        currentRoute == Screen.UsageStats.route ||
+                currentRoute == Screen.Bedtime.route ||
+                currentRoute?.startsWith("app_detail") == true
 
     val enterAlwaysScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     val pinnedScrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -116,22 +90,28 @@ fun MainScreen(
     var bedtimeSwitchInLayout by remember { mutableStateOf(false) }
     var showPauseSheet by remember { mutableStateOf(false) }
 
-    LaunchedEffect(effectiveRoute, preferences.bedtimeEnabled) {
-        val isBedtimeScreen = effectiveRoute == Screen.Bedtime.route
+    // Phased animation logic for the Bedtime Switch in the Top Bar
+    LaunchedEffect(currentRoute, preferences.bedtimeEnabled) {
+        val isBedtimeScreen = currentRoute == Screen.Bedtime.route
         val shouldShow = isBedtimeScreen && preferences.bedtimeEnabled
-        
+
         if (shouldShow) {
             if (!bedtimeSwitchInLayout) {
                 bedtimeSwitchInLayout = true
+                // Entrance "pre-load" effect: reserve the layout space first,
+                // then fade the switch in after a deliberate delay.
                 delay(1200)
             }
             bedtimeSwitchVisible = true
         } else {
             if (bedtimeSwitchVisible) {
                 bedtimeSwitchVisible = false
+                // Wait for the switch's exit animation to complete (800ms)
                 delay(800)
             }
             if (bedtimeSwitchInLayout) {
+                // Delayed removal: keep the layout slot active for a moment longer
+                // to ensure a smooth transition, especially during navigation.
                 delay(1500)
                 bedtimeSwitchInLayout = false
             }
@@ -185,9 +165,9 @@ fun MainScreen(
     ) {
         if (useNavigationRail) {
             val showNavRail =
-                currentRoute != Screen.UsageStats.route && 
-                currentRoute != Screen.Bedtime.route &&
-                currentRoute?.startsWith("app_detail") == false
+                currentRoute != Screen.UsageStats.route &&
+                        currentRoute != Screen.Bedtime.route &&
+                        currentRoute?.startsWith("app_detail") == false
 
             AnimatedVisibility(
                 visible = showNavRail,
@@ -201,11 +181,7 @@ fun MainScreen(
                 ) {
                     val currentDestination = navBackStackEntry?.destination
                     navItems.forEach { screen ->
-                        val selected = if (currentRoute == "main_tabs") {
-                            navItems[pagerState.currentPage].route == screen.route
-                        } else {
-                            currentDestination?.hierarchy?.any { it.route == screen.route } == true
-                        }
+                        val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
                         NavigationRailItem(
                             icon = {
                                 Icon(
@@ -216,22 +192,13 @@ fun MainScreen(
                             label = { Text(screen.title) },
                             selected = selected,
                             onClick = {
-                                val index = navItems.indexOf(screen)
-                                if (index != -1) {
-                                    if (currentRoute != "main_tabs") {
-                                        navController.navigate("main_tabs") {
-                                            popUpTo(navController.graph.findStartDestination().id) {
-                                                saveState = true
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = true
+                                if (currentDestination?.route != screen.route) {
+                                    navController.navigate(screen.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
                                         }
-                                    }
-                                    scope.launch {
-                                        pagerState.animateScrollToPage(
-                                            index,
-                                            animationSpec = smoothTweenSpec
-                                        )
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
                                 }
                             }
@@ -247,21 +214,22 @@ fun MainScreen(
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
             topBar = {
                 ZenithHeader(
-                    currentRoute = effectiveRoute,
+                    currentRoute = currentRoute,
                     scrollBehavior = scrollBehavior,
                     isNavRailVisible = useNavigationRail && !isDeepScreen,
                     userName = preferences.userName,
                     onBack = { navController.popBackStack() },
                     actions = {
                         Box(contentAlignment = Alignment.CenterEnd) {
+                            // User Profile Icon - Cross-fades with the switch when navigating
                             androidx.compose.animation.AnimatedVisibility(
                                 visible = !isDeepScreen,
-                                enter = fadeIn(tween(400)) + 
-                                        scaleIn(initialScale = 0.9f, animationSpec = tween(400)) +
-                                        slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = tween(400)),
-                                exit = fadeOut(tween(400)) + 
-                                       scaleOut(targetScale = 0.9f) +
-                                       slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = smoothIntOffsetTweenSpec)
+                                enter = fadeIn(spring(stiffness = Spring.StiffnessLow)) +
+                                        scaleIn(initialScale = 0.8f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)) +
+                                        slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessLow)),
+                                exit = fadeOut(spring(stiffness = Spring.StiffnessLow)) +
+                                        scaleOut(targetScale = 0.8f) +
+                                        slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessLow))
                             ) {
                                 IconButton(
                                     onClick = { showUserSheet = true },
@@ -273,7 +241,8 @@ fun MainScreen(
                                     )
                                 }
                             }
-                            
+
+                            // Bedtime Switch with expressive entrance/exit sequences
                             if (bedtimeSwitchInLayout) {
                                 Box(
                                     modifier = Modifier
@@ -284,16 +253,16 @@ fun MainScreen(
                                 ) {
                                     androidx.compose.animation.AnimatedVisibility(
                                         visible = bedtimeSwitchVisible,
-                                        enter = fadeIn(animationSpec = tween(400)) + 
-                                                scaleIn(initialScale = 0.8f, animationSpec = tween(400)) +
-                                                slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = tween(400)),
-                                        exit = fadeOut(animationSpec = tween(400)) + 
-                                               scaleOut(targetScale = 0.8f, animationSpec = tween(400)) +
-                                               slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = tween(400))
+                                        enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
+                                                slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+                                        exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
                                     ) {
                                         Switch(
                                             checked = preferences.bedtimeEnabled,
-                                            onCheckedChange = { 
+                                            onCheckedChange = {
                                                 if (preferences.bedtimeEnabled) {
                                                     showPauseSheet = true
                                                 } else {
@@ -340,113 +309,126 @@ fun MainScreen(
             Box(modifier = Modifier.fillMaxSize()) {
                 NavHost(
                     navController = navController,
-                    startDestination = "main_tabs",
+                    startDestination = Screen.Home.route,
                     modifier = Modifier.fillMaxSize(),
                     enterTransition = {
                         val initialRoute = initialState.destination.route
                         val targetRoute = targetState.destination.route
 
                         val isTargetDeep =
-                            targetRoute == Screen.UsageStats.route || 
-                            targetRoute == Screen.Bedtime.route ||
-                            targetRoute?.startsWith("app_detail") == true
+                            targetRoute == Screen.UsageStats.route ||
+                                    targetRoute == Screen.Bedtime.route ||
+                                    targetRoute?.startsWith("app_detail") == true
                         val isInitialDeep =
-                            initialRoute == Screen.UsageStats.route || 
-                            initialRoute == Screen.Bedtime.route ||
-                            initialRoute?.startsWith("app_detail") == true
+                            initialRoute == Screen.UsageStats.route ||
+                                    initialRoute == Screen.Bedtime.route ||
+                                    initialRoute?.startsWith("app_detail") == true
+
+                        val animationSpec = spring<IntOffset>(
+                            dampingRatio = Spring.DampingRatioLowBouncy,
+                            stiffness = Spring.StiffnessLow
+                        )
 
                         if (isTargetDeep && !isInitialDeep) {
                             slideInHorizontally(
                                 initialOffsetX = { it },
-                                animationSpec = smoothIntOffsetTweenSpec
-                            ) + fadeIn(animationSpec = smoothTweenSpec)
+                                animationSpec = animationSpec
+                            ) + fadeIn()
                         } else {
-                            slideInHorizontally(
-                                initialOffsetX = { if (isTargetDeep) it else -it },
-                                animationSpec = smoothIntOffsetTweenSpec
-                            ) + fadeIn(animationSpec = smoothTweenSpec)
+                            val initialIndex = navItems.indexOfFirst { it.route == initialRoute }
+                            val targetIndex = navItems.indexOfFirst { it.route == targetRoute }
+
+                            if (targetIndex > initialIndex) {
+                                slideInHorizontally(
+                                    initialOffsetX = { it },
+                                    animationSpec = animationSpec
+                                ) + fadeIn()
+                            } else {
+                                slideInHorizontally(
+                                    initialOffsetX = { -it },
+                                    animationSpec = animationSpec
+                                ) + fadeIn()
+                            }
                         }
                     },
                     exitTransition = {
+                        val initialRoute = initialState.destination.route
                         val targetRoute = targetState.destination.route
 
                         val isTargetDeep =
-                            targetRoute == Screen.UsageStats.route || 
-                            targetRoute == Screen.Bedtime.route ||
-                            targetRoute?.startsWith("app_detail") == true
+                            targetRoute == Screen.UsageStats.route ||
+                                    targetRoute == Screen.Bedtime.route ||
+                                    targetRoute?.startsWith("app_detail") == true
+
+                        val animationSpec = spring<IntOffset>(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessLow
+                        )
 
                         if (isTargetDeep) {
                             slideOutHorizontally(
                                 targetOffsetX = { -it / 3 },
-                                animationSpec = smoothIntOffsetTweenSpec
-                            ) + fadeOut(animationSpec = smoothTweenSpec)
+                                animationSpec = animationSpec
+                            ) + fadeOut()
                         } else {
-                            slideOutHorizontally(
-                                targetOffsetX = { it / 3 },
-                                animationSpec = smoothIntOffsetTweenSpec
-                            ) + fadeOut(animationSpec = smoothTweenSpec)
+                            val initialIndex = navItems.indexOfFirst { it.route == initialRoute }
+                            val targetIndex = navItems.indexOfFirst { it.route == targetRoute }
+
+                            if (targetIndex > initialIndex) {
+                                slideOutHorizontally(
+                                    targetOffsetX = { -it / 3 },
+                                    animationSpec = animationSpec
+                                ) + fadeOut()
+                            } else {
+                                slideOutHorizontally(
+                                    targetOffsetX = { it / 3 },
+                                    animationSpec = animationSpec
+                                ) + fadeOut()
+                            }
                         }
                     },
                     popEnterTransition = {
                         slideInHorizontally(
                             initialOffsetX = { -it / 3 },
-                            animationSpec = smoothIntOffsetTweenSpec
-                        ) + fadeIn(animationSpec = smoothTweenSpec)
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioLowBouncy,
+                                stiffness = Spring.StiffnessLow
+                            )
+                        ) + fadeIn()
                     },
                     popExitTransition = {
                         slideOutHorizontally(
                             targetOffsetX = { it },
-                            animationSpec = smoothIntOffsetTweenSpec
-                        ) + fadeOut(animationSpec = smoothTweenSpec)
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioLowBouncy,
+                                stiffness = Spring.StiffnessLow
+                            )
+                        ) + fadeOut()
                     }
                 ) {
-                    composable("main_tabs") {
-                        HorizontalPager(
-                            state = pagerState,
-                            modifier = Modifier.fillMaxSize(),
-                            beyondViewportPageCount = 2,
-                            userScrollEnabled = true,
-                            flingBehavior = PagerDefaults.flingBehavior(
-                                state = pagerState,
-                                snapAnimationSpec = smoothTweenSpec
-                            )
-                        ) { page ->
-                            val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-                            
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .graphicsLayer {
-                                        val pageAlpha = 1f - pageOffset.absoluteValue.coerceIn(0f, 1f)
-                                        val pageScale = 0.95f + (0.05f * pageAlpha)
-                                        alpha = pageAlpha
-                                        scaleX = pageScale
-                                        scaleY = pageScale
-                                    }
-                            ) {
-                                when (navItems[page]) {
-                                    Screen.Home -> HomeScreen(
-                                        homeViewModel,
-                                        userPreferencesRepository,
-                                        innerPadding,
-                                        onSeeFullList = { navController.navigate(Screen.UsageStats.route) },
-                                        onAppClick = { packageName ->
-                                            navController.navigate(Screen.AppDetail.createRoute(packageName))
-                                        },
-                                        onBedtimeClick = { navController.navigate(Screen.Bedtime.route) }
-                                    )
-                                    Screen.Focus -> FocusScreen(
-                                        focusViewModel,
-                                        innerPadding,
-                                        onAppClick = { packageName ->
-                                            navController.navigate(Screen.AppDetail.createRoute(packageName))
-                                        }
-                                    )
-                                    Screen.Settings -> SettingsScreen(userPreferencesRepository, innerPadding)
-                                    else -> {}
-                                }
+                    composable(Screen.Home.route) {
+                        HomeScreen(
+                            homeViewModel,
+                            userPreferencesRepository,
+                            innerPadding,
+                            onSeeFullList = { navController.navigate(Screen.UsageStats.route) },
+                            onAppClick = { packageName ->
+                                navController.navigate(Screen.AppDetail.createRoute(packageName))
+                            },
+                            onBedtimeClick = { navController.navigate(Screen.Bedtime.route) }
+                        )
+                    }
+                    composable(Screen.Focus.route) {
+                        FocusScreen(
+                            focusViewModel,
+                            innerPadding,
+                            onAppClick = { packageName ->
+                                navController.navigate(Screen.AppDetail.createRoute(packageName))
                             }
-                        }
+                        )
+                    }
+                    composable(Screen.Settings.route) {
+                        SettingsScreen(userPreferencesRepository, innerPadding)
                     }
                     composable(Screen.Bedtime.route) {
                         BedtimeScreen(bedtimeViewModel, innerPadding)
@@ -477,9 +459,9 @@ fun MainScreen(
 
                 if (!useNavigationRail) {
                     val showBottomBar =
-                        currentRoute != Screen.UsageStats.route && 
-                        currentRoute != Screen.Bedtime.route &&
-                        currentRoute?.startsWith("app_detail") == false
+                        currentRoute != Screen.UsageStats.route &&
+                                currentRoute != Screen.Bedtime.route &&
+                                currentRoute?.startsWith("app_detail") == false
 
                     androidx.compose.animation.AnimatedVisibility(
                         visible = showBottomBar,
@@ -517,30 +499,18 @@ fun MainScreen(
                                         )
                                     ) {
                                         navItems.forEach { screen ->
-                                            val selected = if (currentRoute == "main_tabs") {
-                                                navItems[pagerState.currentPage].route == screen.route
-                                            } else {
+                                            val selected =
                                                 currentDestination?.hierarchy?.any { it.route == screen.route } == true
-                                            }
                                             ShortNavigationBarItem(
                                                 selected = selected,
                                                 onClick = {
-                                                    val index = navItems.indexOf(screen)
-                                                    if (index != -1) {
-                                                        if (currentRoute != "main_tabs") {
-                                                            navController.navigate("main_tabs") {
-                                                                popUpTo(navController.graph.findStartDestination().id) {
-                                                                    saveState = true
-                                                                }
-                                                                launchSingleTop = true
-                                                                restoreState = true
+                                                    if (currentDestination?.route != screen.route) {
+                                                        navController.navigate(screen.route) {
+                                                            popUpTo(navController.graph.findStartDestination().id) {
+                                                                saveState = true
                                                             }
-                                                        }
-                                                        scope.launch {
-                                                            pagerState.animateScrollToPage(
-                                                                index,
-                                                                animationSpec = smoothTweenSpec
-                                                            )
+                                                            launchSingleTop = true
+                                                            restoreState = true
                                                         }
                                                     }
                                                 },
@@ -609,11 +579,8 @@ fun MainScreen(
                                 ) {
                                     val currentDestination = navBackStackEntry?.destination
                                     navItems.forEach { screen ->
-                                        val selected = if (currentRoute == "main_tabs") {
-                                            navItems[pagerState.currentPage].route == screen.route
-                                        } else {
+                                        val selected =
                                             currentDestination?.hierarchy?.any { it.route == screen.route } == true
-                                        }
                                         NavigationBarItem(
                                             icon = {
                                                 Icon(
@@ -624,22 +591,13 @@ fun MainScreen(
                                             label = { Text(screen.title) },
                                             selected = selected,
                                             onClick = {
-                                                val index = navItems.indexOf(screen)
-                                                if (index != -1) {
-                                                    if (currentRoute != "main_tabs") {
-                                                        navController.navigate("main_tabs") {
-                                                            popUpTo(navController.graph.findStartDestination().id) {
-                                                                saveState = true
-                                                            }
-                                                            launchSingleTop = true
-                                                            restoreState = true
+                                                if (currentDestination?.route != screen.route) {
+                                                    navController.navigate(screen.route) {
+                                                        popUpTo(navController.graph.findStartDestination().id) {
+                                                            saveState = true
                                                         }
-                                                    }
-                                                    scope.launch {
-                                                        pagerState.animateScrollToPage(
-                                                            index,
-                                                            animationSpec = smoothTweenSpec
-                                                        )
+                                                        launchSingleTop = true
+                                                        restoreState = true
                                                     }
                                                 }
                                             }
