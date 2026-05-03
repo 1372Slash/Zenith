@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.graphics.shapes.toPath
 import com.etrisad.zenith.data.local.entity.FocusType
+import com.etrisad.zenith.data.local.entity.ShieldEntity
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -93,7 +94,8 @@ fun AppDetailScreen(
                     isActive = isFocusActive,
                     isPaused = isEffectivelyPaused,
                     pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L,
-                    nowMillis = nowMillis
+                    nowMillis = nowMillis,
+                    shield = shield
                 )
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -246,16 +248,25 @@ fun AppHeader(
     isActive: Boolean,
     isPaused: Boolean = false,
     pauseEndTimestamp: Long = 0L,
-    nowMillis: Long = System.currentTimeMillis()
+    nowMillis: Long = System.currentTimeMillis(),
+    shield: ShieldEntity? = null
 ) {
+    val nextResetTimestamp = shield?.let { it.lastPeriodResetTimestamp + (it.refreshPeriodMinutes * 60 * 1000L) } ?: 0L
+    val remainingResetMillis = (nextResetTimestamp - nowMillis).coerceAtLeast(0L)
+    val usesExhausted = shield?.let {
+        it.currentPeriodUses >= it.maxUsesPerPeriod && it.maxUsesPerPeriod > 0
+    } ?: false
+
+    val isLocked = isPaused || (usesExhausted && remainingResetMillis > 0)
+
     val saturation by animateFloatAsState(
-        targetValue = if (isPaused) 0f else 1f,
+        targetValue = if (isLocked) 0f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
         label = "IconSaturation"
     )
 
     val iconAlpha by animateFloatAsState(
-        targetValue = if (isPaused) 0.6f else 1f,
+        targetValue = if (isLocked) 0.6f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
         label = "IconAlpha"
     )
@@ -299,24 +310,32 @@ fun AppHeader(
                 }
             }
 
-            if (isPaused) {
-                val remainingMillis = remember(pauseEndTimestamp, nowMillis) {
-                    if (pauseEndTimestamp == 0L) -1L
-                    else (pauseEndTimestamp - nowMillis).coerceAtLeast(0L)
-                }
+            if (isLocked) {
+                val (badgeProgress, badgeIcon, badgeColor) = when {
+                    isPaused -> {
+                        val remainingPauseMillis = if (pauseEndTimestamp == 0L) -1L
+                        else (pauseEndTimestamp - nowMillis).coerceAtLeast(0L)
 
-                val initialPauseDuration = remember(pauseEndTimestamp) {
-                    val diff = pauseEndTimestamp - System.currentTimeMillis()
-                    when {
-                        diff <= 3600000L -> 3600000L
-                        diff <= 21600000L -> 21600000L
-                        else -> 86400000L
+                        val initialPauseDuration = remember(pauseEndTimestamp) {
+                            val diff = pauseEndTimestamp - System.currentTimeMillis()
+                            when {
+                                diff <= 3600000L -> 3600000L
+                                diff <= 21600000L -> 21600000L
+                                else -> 86400000L
+                            }
+                        }
+
+                        val progress = if (pauseEndTimestamp == 0L) 1f
+                        else (remainingPauseMillis.toFloat() / initialPauseDuration).coerceIn(0f, 1f)
+                        Triple(progress, Icons.Outlined.Pause, MaterialTheme.colorScheme.secondary)
                     }
-                }
-
-                val progress = remember(remainingMillis) {
-                    if (pauseEndTimestamp == 0L) 1f
-                    else (remainingMillis.toFloat() / initialPauseDuration).coerceIn(0f, 1f)
+                    else -> {
+                        val resetPeriodMillis = (shield?.refreshPeriodMinutes ?: 0) * 60 * 1000L
+                        val progress = if (resetPeriodMillis > 0) {
+                            (remainingResetMillis.toFloat() / resetPeriodMillis).coerceIn(0f, 1f)
+                        } else 1f
+                        Triple(progress, Icons.Outlined.History, MaterialTheme.colorScheme.error)
+                    }
                 }
 
                 Box(
@@ -335,18 +354,18 @@ fun AppHeader(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(
-                                progress = { if (pauseEndTimestamp == 0L) 1f else progress },
+                                progress = { badgeProgress },
                                 modifier = Modifier.size(26.dp),
-                                color = MaterialTheme.colorScheme.secondary,
+                                color = badgeColor,
                                 strokeWidth = 2.dp,
-                                trackColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f),
+                                trackColor = badgeColor.copy(alpha = 0.2f),
                                 strokeCap = StrokeCap.Round
                             )
                             Icon(
-                                imageVector = Icons.Outlined.Pause,
-                                contentDescription = "Paused",
+                                imageVector = badgeIcon,
+                                contentDescription = null,
                                 modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.secondary
+                                tint = badgeColor
                             )
                         }
                     }
@@ -362,6 +381,16 @@ fun AppHeader(
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
+
+        if (usesExhausted && remainingResetMillis > 0) {
+            Text(
+                text = "Uses Exhausted • Reset in ${remainingResetMillis / 60000}m",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
 
         AnimatedVisibility(
             visible = isActive && focusType != null,

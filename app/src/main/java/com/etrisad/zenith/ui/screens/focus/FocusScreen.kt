@@ -850,14 +850,22 @@ fun ShieldConfigItem(
         shield.isPaused && (shield.pauseEndTimestamp == 0L || nowMillis < shield.pauseEndTimestamp)
     }
 
+    val nextResetTimestamp = shield.lastPeriodResetTimestamp + (shield.refreshPeriodMinutes * 60 * 1000L)
+    val remainingResetMillis = (nextResetTimestamp - nowMillis).coerceAtLeast(0L)
+    val usesExhausted = remember(shield.currentPeriodUses, shield.maxUsesPerPeriod) {
+        shield.currentPeriodUses >= shield.maxUsesPerPeriod && shield.maxUsesPerPeriod > 0
+    }
+
+    val isLocked = isEffectivelyPaused || (usesExhausted && remainingResetMillis > 0)
+
     val saturation by animateFloatAsState(
-        targetValue = if (isEffectivelyPaused) 0f else 1f,
+        targetValue = if (isLocked) 0f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
         label = "IconSaturation"
     )
 
     val iconAlpha by animateFloatAsState(
-        targetValue = if (isEffectivelyPaused) 0.6f else 1f,
+        targetValue = if (isLocked) 0.6f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
         label = "IconAlpha"
     )
@@ -915,21 +923,31 @@ fun ShieldConfigItem(
                         }
                     }
 
-                    if (isEffectivelyPaused) {
-                        val remainingPauseMillis = if (shield.pauseEndTimestamp == 0L) -1L
-                        else (shield.pauseEndTimestamp - nowMillis).coerceAtLeast(0L)
-
-                        val initialPauseDuration = remember(shield.pauseEndTimestamp) {
-                            val diff = shield.pauseEndTimestamp - System.currentTimeMillis()
-                            when {
-                                diff <= 3600000L -> 3600000L
-                                diff <= 21600000L -> 21600000L
-                                else -> 86400000L
+                    if (isLocked) {
+                        val (badgeProgress, badgeIcon, badgeColor) = when {
+                            isEffectivelyPaused -> {
+                                val remainingPauseMillis = if (shield.pauseEndTimestamp == 0L) -1L
+                                else (shield.pauseEndTimestamp - nowMillis).coerceAtLeast(0L)
+                                val initialPauseDuration = remember(shield.pauseEndTimestamp) {
+                                    val diff = shield.pauseEndTimestamp - System.currentTimeMillis()
+                                    when {
+                                        diff <= 3600000L -> 3600000L
+                                        diff <= 21600000L -> 21600000L
+                                        else -> 86400000L
+                                    }
+                                }
+                                val progress = if (shield.pauseEndTimestamp == 0L) 1f
+                                else (remainingPauseMillis.toFloat() / initialPauseDuration).coerceIn(0f, 1f)
+                                Triple(progress, Icons.Outlined.Pause, MaterialTheme.colorScheme.secondary)
+                            }
+                            else -> {
+                                val resetPeriodMillis = shield.refreshPeriodMinutes * 60 * 1000L
+                                val progress = if (resetPeriodMillis > 0) {
+                                    (remainingResetMillis.toFloat() / resetPeriodMillis).coerceIn(0f, 1f)
+                                } else 1f
+                                Triple(progress, Icons.Outlined.History, MaterialTheme.colorScheme.error)
                             }
                         }
-
-                        val pauseProgress = if (shield.pauseEndTimestamp == 0L) 1f
-                        else (remainingPauseMillis.toFloat() / initialPauseDuration).coerceIn(0f, 1f)
 
                         Surface(
                             color = MaterialTheme.colorScheme.surface,
@@ -943,18 +961,18 @@ fun ShieldConfigItem(
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(
-                                    progress = { pauseProgress },
+                                    progress = { badgeProgress },
                                     modifier = Modifier.size(14.dp),
-                                    color = MaterialTheme.colorScheme.secondary,
+                                    color = badgeColor,
                                     strokeWidth = 1.5.dp,
-                                    trackColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f),
+                                    trackColor = badgeColor.copy(alpha = 0.2f),
                                     strokeCap = StrokeCap.Round
                                 )
                                 Icon(
-                                    imageVector = Icons.Outlined.Pause,
-                                    contentDescription = "Paused",
+                                    imageVector = badgeIcon,
+                                    contentDescription = null,
                                     modifier = Modifier.size(8.dp),
-                                    tint = MaterialTheme.colorScheme.secondary
+                                    tint = badgeColor
                                 )
                             }
                         }
@@ -988,11 +1006,18 @@ fun ShieldConfigItem(
                     )
 
                     val timeLabel = if (shield.type == FocusType.GOAL) "To Go" else "Left"
+                    val timeText = if (usesExhausted && remainingResetMillis > 0) {
+                        "Reset in ${formatRemainingTime(remainingResetMillis)}"
+                    } else {
+                        "${formatRemainingTime(remainingMillis)} $timeLabel"
+                    }
                     Text(
-                        text = "${formatRemainingTime(remainingMillis)} $timeLabel",
+                        text = timeText,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (shield.type == FocusType.GOAL) {
+                        color = if (usesExhausted && remainingResetMillis > 0) {
+                            MaterialTheme.colorScheme.error
+                        } else if (shield.type == FocusType.GOAL) {
                             MaterialTheme.colorScheme.primary
                         } else {
                             if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
