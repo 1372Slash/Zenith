@@ -296,6 +296,7 @@ class AppUsageMonitorService : Service() {
             while (true) {
                 try {
                     val currentTime = System.currentTimeMillis()
+                    val currentApp = getForegroundApp()
 
                     if (currentTime - lastCheckedDayTimestamp > 60000) {
                         currentPreferences?.let { updateBedtimeStatus(it) }
@@ -312,6 +313,11 @@ class AppUsageMonitorService : Service() {
                             lastUsageFetchTime = 0L
                             cachedTotalUsage = 0L
                             currentShieldCache = null
+
+                            if (currentApp != null) {
+                                sessionStartTime = currentTime
+                                baseUsageAtSessionStart = 0L
+                            }
                         }
                         lastCheckedDay = currentDay
                         lastCheckedDayTimestamp = currentTime
@@ -334,10 +340,10 @@ class AppUsageMonitorService : Service() {
                         continue
                     }
 
-                    val currentApp = getForegroundApp()
-
-                    if (currentApp != null) {
-                        overlayManager.checkAndHide(currentApp)
+                    if (currentApp != null && currentApp != lastForegroundApp) {
+                        serviceScope.launch(Dispatchers.Main) {
+                            overlayManager.checkAndHide(currentApp)
+                        }
                     }
 
                     if (launcherPackages.isEmpty() || currentTime - lastLauncherRefreshTime > 300000) {
@@ -355,8 +361,10 @@ class AppUsageMonitorService : Service() {
                         sessionUsageOverlayManager.updateForegroundApp(currentApp)
                         
                         var shield = currentShieldCache ?: allShieldsCache.find { it.packageName == currentApp }
-                        if (shield == null && allShieldsCache.isEmpty()) {
-                            allShieldsCache = shieldRepository.allShields.first()
+                        if (shield == null) {
+                            if (allShieldsCache.isEmpty()) {
+                                allShieldsCache = shieldRepository.allShields.first()
+                            }
                             shield = allShieldsCache.find { it.packageName == currentApp }
                         }
 
@@ -670,8 +678,7 @@ class AppUsageMonitorService : Service() {
     }
 
     private suspend fun checkIfAppIsShielded(targetPackageName: String, forceShield: ShieldEntity? = null) {
-        val currentForeground = getForegroundApp()
-        if (targetPackageName != currentForeground) return
+        if (targetPackageName != lastForegroundApp) return
 
         val shield = forceShield ?: allShieldsCache.find { it.packageName == targetPackageName }
         val prefs = currentPreferences ?: return
