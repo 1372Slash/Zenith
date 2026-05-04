@@ -41,6 +41,13 @@ class SessionUsageOverlayManager(private val context: Context) {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
+    private val SYSTEM_UI_PACKAGES = setOf(
+        "com.android.systemui",
+        "android",
+        "com.google.android.permissioncontroller",
+        "com.google.android.packageinstaller"
+    )
+
     @Volatile
     private var currentForegroundPackage: String = ""
     private var foregroundUpdateJob: Job? = null
@@ -279,6 +286,7 @@ class SessionUsageOverlayManager(private val context: Context) {
     }
 
     fun updateForegroundApp(packageName: String) {
+        if (packageName.isEmpty() || SYSTEM_UI_PACKAGES.contains(packageName)) return
         if (currentForegroundPackage == packageName) return
         currentForegroundPackage = packageName
         

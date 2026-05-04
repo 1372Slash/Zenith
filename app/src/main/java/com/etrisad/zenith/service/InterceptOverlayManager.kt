@@ -357,7 +357,7 @@ class InterceptOverlayManager(private val context: Context) {
         
         val target = currentPackage ?: return
 
-        if (newPackage != target && newPackage != context.packageName) {
+        if (newPackage != target && newPackage != context.packageName && !SYSTEM_UI_PACKAGES.contains(newPackage)) {
             withContext(Dispatchers.Main) {
                 hideOverlay()
             }
