@@ -341,31 +341,27 @@ class AppUsageMonitorService : Service() {
 
                     if (currentApp != null && currentApp != packageName) {
                         sessionUsageOverlayManager.updateForegroundApp(currentApp)
-                        
-                        var shield = currentShieldCache ?: allShieldsCache.find { it.packageName == currentApp }
-                        if (shield == null && allShieldsCache.isEmpty()) {
-                            allShieldsCache = shieldRepository.allShields.first()
-                            shield = allShieldsCache.find { it.packageName == currentApp }
-                        }
 
-                        if (currentApp != lastForegroundApp || currentShieldCache == null) {
-                            currentShieldCache = shield
-                            if (currentApp != lastForegroundApp) {
-                                lastUsageFetchTime = 0L 
-                                lastHUDUpdateTime = 0L
-                                sessionStartTime = currentTime
-                                
-                                val systemUsage = getTotalUsageToday(currentApp)
-                                val startOfDay = getStartOfDay()
-                                val dbUsage = if (shield != null && shield.lastUsedTimestamp >= startOfDay) {
-                                    val limitMillis = (shield.timeLimitMinutes * 60 * 1000L)
-                                    (limitMillis - shield.remainingTimeMillis).coerceAtLeast(0L)
-                                } else 0L
-                                
-                                baseUsageAtSessionStart = maxOf(systemUsage, dbUsage)
-                                cachedTotalUsage = baseUsageAtSessionStart
-                            }
+                        if (currentApp != lastForegroundApp) {
+                            currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
+                            val shield = currentShieldCache
+                            
+                            lastUsageFetchTime = 0L
+                            lastHUDUpdateTime = 0L
+                            sessionStartTime = currentTime
+
+                            val systemUsage = getTotalUsageToday(currentApp)
+                            val startOfDay = getStartOfDay()
+                            val dbUsage = if (shield != null && shield.lastUsedTimestamp >= startOfDay) {
+                                val limitMillis = (shield.timeLimitMinutes * 60 * 1000L)
+                                (limitMillis - shield.remainingTimeMillis).coerceAtLeast(0L)
+                            } else 0L
+
+                            baseUsageAtSessionStart = maxOf(systemUsage, dbUsage)
+                            cachedTotalUsage = baseUsageAtSessionStart
                         }
+                        
+                        val shield = currentShieldCache
 
                         if (shouldBypassBlocking(currentApp)) {
                             lastForegroundApp = currentApp
@@ -380,11 +376,11 @@ class AppUsageMonitorService : Service() {
                             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
                             val actualRemaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
                             val prefs = currentPreferences
-                            
+
                             val isOverlayShowing = InterceptOverlayManager.isShowing
                             val isSessionActive = allowedUntil > currentTime
-                            
-                            if (!isOverlayShowing && !isSessionActive && 
+
+                            if (!isOverlayShowing && !isSessionActive &&
                                 earlyKickManager.shouldKick(currentApp, actualRemaining, prefs?.earlyKickEnabled ?: false)) {
                                 serviceScope.launch(Dispatchers.Main) {
                                     Toast.makeText(this@AppUsageMonitorService, "Early Kick: 2 minutes remaining", Toast.LENGTH_LONG).show()
@@ -1284,7 +1280,7 @@ class AppUsageMonitorService : Service() {
     private fun getForegroundApp(): String? {
         val time = System.currentTimeMillis()
         val usageEvents = try {
-            usageStatsManager.queryEvents(time - 10000, time)
+            usageStatsManager.queryEvents(time - 2500, time)
         } catch (_: Exception) { null }
         
         var lastPackage: String? = null
@@ -1300,8 +1296,8 @@ class AppUsageMonitorService : Service() {
 
         if (lastPackage == null) {
             try {
-                val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 30000, time)
-                lastPackage = stats?.maxByOrNull { it.lastTimeUsed }?.packageName
+                val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 10000, time)
+                lastPackage = stats?.filter { it.lastTimeUsed > time - 10000 }?.maxByOrNull { it.lastTimeUsed }?.packageName
             } catch (_: Exception) {}
         }
         
