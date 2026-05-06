@@ -449,7 +449,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                     onAllowUse = { minutes, isEmergency ->
                         val currentTimeOnUnlock = System.currentTimeMillis()
                         allowedApps[targetPackageName] = currentTimeOnUnlock + (minutes * 60 * 1000L)
-                        
+
                         serviceScope.launch {
                             val currentShield = shieldRepository.getShieldByPackageName(targetPackageName) ?: return@launch
                             val updatedShield = if (isEmergency) {
@@ -485,7 +485,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                                                     val updated = shield.copy(lastSessionEndTimestamp = System.currentTimeMillis())
                                                     shieldRepository.updateShield(updated)
                                                     currentShieldCache = updated
-                                                    
+
                                                     if (updated.isAutoQuitEnabled) {
                                                         goToHomeScreen()
                                                     } else {
