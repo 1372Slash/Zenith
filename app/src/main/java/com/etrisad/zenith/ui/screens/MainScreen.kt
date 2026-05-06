@@ -6,18 +6,27 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -82,6 +91,7 @@ fun MainScreen(
         initial = UserPreferences()
     )
     val homeUiState by homeViewModel.uiState.collectAsState()
+    val focusUiState by focusViewModel.uiState.collectAsState()
 
     val useNavigationRail = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
 
@@ -89,6 +99,9 @@ fun MainScreen(
     var bedtimeSwitchVisible by remember { mutableStateOf(false) }
     var bedtimeSwitchInLayout by remember { mutableStateOf(false) }
     var showPauseSheet by remember { mutableStateOf(false) }
+
+    var showBatchDeleteSheet by remember { mutableStateOf(false) }
+    var showBatchPauseSheet by remember { mutableStateOf(false) }
 
     // Phased animation logic for the Bedtime Switch in the Top Bar
     LaunchedEffect(currentRoute, preferences.bedtimeEnabled) {
@@ -219,26 +232,108 @@ fun MainScreen(
                     isNavRailVisible = useNavigationRail && !isDeepScreen,
                     userName = preferences.userName,
                     onBack = { navController.popBackStack() },
-                    actions = {
-                        Box(contentAlignment = Alignment.CenterEnd) {
-                            // User Profile Icon - Cross-fades with the switch when navigating
-                            androidx.compose.animation.AnimatedVisibility(
-                                visible = !isDeepScreen,
-                                enter = fadeIn(spring(stiffness = Spring.StiffnessLow)) +
-                                        scaleIn(initialScale = 0.8f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)) +
-                                        slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessLow)),
-                                exit = fadeOut(spring(stiffness = Spring.StiffnessLow)) +
-                                        scaleOut(targetScale = 0.8f) +
-                                        slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessLow))
-                            ) {
+                    navigationIcon = {
+                        AnimatedContent(
+                            targetState = if (currentRoute == Screen.Focus.route) "focus" else "none",
+                            transitionSpec = {
+                                (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                        scaleIn(initialScale = 0.92f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)) +
+                                        slideInHorizontally(initialOffsetX = { -it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessLow)))
+                                    .togetherWith(
+                                        fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                        scaleOut(targetScale = 0.92f) +
+                                        slideOutHorizontally(targetOffsetX = { -it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessLow))
+                                    )
+                            },
+                            label = "LeftActionsContent"
+                        ) { state ->
+                            if (state == "focus") {
+                                val isSelected = focusUiState.isSelectionMode
+                                val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                                val isPressed by interactionSource.collectIsPressedAsState()
+                                val scale by animateFloatAsState(
+                                    targetValue = if (isPressed) 0.92f else 1f,
+                                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
+                                    label = "SelectScale"
+                                )
+
                                 IconButton(
-                                    onClick = { showUserSheet = true },
-                                    modifier = Modifier.padding(end = 12.dp)
+                                    onClick = { focusViewModel.toggleSelectionMode() },
+                                    modifier = Modifier
+                                        .padding(start = 12.dp)
+                                        .clip(CircleShape)
+                                        .scale(scale),
+                                    interactionSource = interactionSource
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Outlined.AccountCircle,
-                                        contentDescription = "User Profile"
+                                        imageVector = if (isSelected) Icons.Outlined.Close else Icons.Outlined.Checklist,
+                                        contentDescription = "Select",
+                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+                                }
+                            }
+                        }
+                    },
+                    actions = {
+                        Box(contentAlignment = Alignment.CenterEnd) {
+                            val isSelectionMode = currentRoute == Screen.Focus.route && focusUiState.isSelectionMode
+                            val hasSelection = focusUiState.selectedShields.isNotEmpty() || focusUiState.selectedSchedules.isNotEmpty()
+
+                            AnimatedContent(
+                                targetState = if (isSelectionMode) "selection" else if (!isDeepScreen) "user" else "none",
+                                transitionSpec = {
+                                    (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                            scaleIn(initialScale = 0.92f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)) +
+                                            slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessLow)))
+                                        .togetherWith(
+                                            fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                            scaleOut(targetScale = 0.92f) +
+                                            slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessLow))
+                                        )
+                                },
+                                label = "RightActionsContent"
+                            ) { state ->
+                                when (state) {
+                                    "selection" -> {
+                                        Row(
+                                            modifier = Modifier.padding(end = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            IconButton(
+                                                onClick = { showBatchPauseSheet = true },
+                                                enabled = focusUiState.selectedShields.isNotEmpty(),
+                                                modifier = Modifier.size(48.dp).clip(CircleShape)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.PauseCircle,
+                                                    contentDescription = "Pause Selected",
+                                                    tint = if (focusUiState.selectedShields.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                                )
+                                            }
+                                            IconButton(
+                                                onClick = { showBatchDeleteSheet = true },
+                                                enabled = hasSelection,
+                                                modifier = Modifier.size(48.dp).clip(CircleShape)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Delete,
+                                                    contentDescription = "Delete Selected",
+                                                    tint = if (hasSelection) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline
+                                                )
+                                            }
+                                        }
+                                    }
+                                    "user" -> {
+                                        IconButton(
+                                            onClick = { showUserSheet = true },
+                                            modifier = Modifier.padding(end = 12.dp).clip(CircleShape)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.AccountCircle,
+                                                contentDescription = "User Profile"
+                                            )
+                                        }
+                                    }
                                 }
                             }
 
@@ -285,6 +380,29 @@ fun MainScreen(
                 )
             }
         ) { innerPadding ->
+            if (showBatchDeleteSheet) {
+                ConfirmBottomSheet(
+                    onDismiss = { showBatchDeleteSheet = false },
+                    onConfirm = {
+                        focusViewModel.deleteSelected()
+                        showBatchDeleteSheet = false
+                    },
+                    leverCount = 3,
+                    showTimeSelection = false
+                )
+            }
+            if (showBatchPauseSheet) {
+                ConfirmBottomSheet(
+                    onDismiss = { showBatchPauseSheet = false },
+                    onConfirm = { hours ->
+                        val minutes = if (hours == null) -1 else hours * 60
+                        focusViewModel.pauseSelected(minutes)
+                        showBatchPauseSheet = false
+                    },
+                    leverCount = 5,
+                    showTimeSelection = true
+                )
+            }
             if (showPauseSheet) {
                 ConfirmBottomSheet(
                     onDismiss = { showPauseSheet = false },

@@ -45,7 +45,10 @@ data class FocusUiState(
     val isSchedulePickerOpen: Boolean = false,
     val selectedAppsForSchedule: Set<String> = emptySet(),
     val isScheduleSettingsOpen: Boolean = false,
-    val editingSchedule: ScheduleEntity? = null
+    val editingSchedule: ScheduleEntity? = null,
+    val isSelectionMode: Boolean = false,
+    val selectedShields: Set<String> = emptySet(),
+    val selectedSchedules: Set<Long> = emptySet()
 )
 
 class FocusViewModel(
@@ -406,6 +409,70 @@ class FocusViewModel(
                 isSettingsSheetOpen = true,
                 selectedAppUsageToday = usage
             )
+        }
+    }
+
+    fun toggleSelectionMode() {
+        _uiState.value = _uiState.value.copy(
+            isSelectionMode = !_uiState.value.isSelectionMode,
+            selectedShields = emptySet(),
+            selectedSchedules = emptySet()
+        )
+    }
+
+    fun toggleShieldSelection(packageName: String) {
+        val current = _uiState.value.selectedShields
+        val newSelection = if (packageName in current) {
+            current - packageName
+        } else {
+            current + packageName
+        }
+        _uiState.value = _uiState.value.copy(selectedShields = newSelection)
+    }
+
+    fun toggleScheduleSelection(id: Long) {
+        val current = _uiState.value.selectedSchedules
+        val newSelection = if (id in current) {
+            current - id
+        } else {
+            current + id
+        }
+        _uiState.value = _uiState.value.copy(selectedSchedules = newSelection)
+    }
+
+    fun deleteSelected() {
+        viewModelScope.launch {
+            val shieldsToDelete = _uiState.value.selectedShields
+            val schedulesToDelete = _uiState.value.selectedSchedules
+
+            shieldsToDelete.forEach { pkg ->
+                allShields.find { it.packageName == pkg }?.let {
+                    shieldRepository.deleteShield(it)
+                }
+            }
+            schedulesToDelete.forEach { id ->
+                _uiState.value.activeSchedules.find { it.id == id }?.let {
+                    shieldRepository.deleteSchedule(it)
+                }
+            }
+            toggleSelectionMode()
+        }
+    }
+
+    fun pauseSelected(durationMinutes: Int) {
+        viewModelScope.launch {
+            val shieldsToPause = _uiState.value.selectedShields
+            val pauseEndTimestamp = if (durationMinutes == -1) 0L else System.currentTimeMillis() + (durationMinutes * 60 * 1000L)
+
+            shieldsToPause.forEach { pkg ->
+                allShields.find { it.packageName == pkg }?.let { shield ->
+                    shieldRepository.updateShield(shield.copy(
+                        isPaused = true,
+                        pauseEndTimestamp = pauseEndTimestamp
+                    ))
+                }
+            }
+            toggleSelectionMode()
         }
     }
 }

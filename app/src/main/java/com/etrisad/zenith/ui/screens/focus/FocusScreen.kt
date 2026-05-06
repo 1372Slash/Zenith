@@ -100,7 +100,18 @@ fun FocusScreen(
             onDeleteSchedule = { pendingDeleteSchedule = it },
             onShieldSortTypeChange = { viewModel.onShieldSortTypeChange(it) },
             onGoalSortTypeChange = { viewModel.onGoalSortTypeChange(it) },
-            onAppClick = onAppClick
+            onAppClick = { pkg ->
+                if (uiState.isSelectionMode) {
+                    viewModel.toggleShieldSelection(pkg)
+                } else {
+                    onAppClick(pkg)
+                }
+            },
+            isSelectionMode = uiState.isSelectionMode,
+            selectedShields = uiState.selectedShields,
+            selectedSchedules = uiState.selectedSchedules,
+            onToggleShieldSelection = { viewModel.toggleShieldSelection(it) },
+            onToggleScheduleSelection = { viewModel.toggleScheduleSelection(it) }
         )
 
         FloatingActionButtonMenu(
@@ -262,7 +273,12 @@ fun FocusScreenContent(
     onDeleteSchedule: (ScheduleEntity) -> Unit,
     onShieldSortTypeChange: (ShieldSortType) -> Unit,
     onGoalSortTypeChange: (ShieldSortType) -> Unit,
-    onAppClick: (String) -> Unit
+    onAppClick: (String) -> Unit,
+    isSelectionMode: Boolean = false,
+    selectedShields: Set<String> = emptySet(),
+    selectedSchedules: Set<Long> = emptySet(),
+    onToggleShieldSelection: (String) -> Unit = {},
+    onToggleScheduleSelection: (Long) -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier
@@ -316,13 +332,17 @@ fun FocusScreenContent(
                     SwipeableItemContainer(
                         onEdit = { onEditShield(shield) },
                         onDelete = { onDeleteShield(shield) },
-                        shape = shape
+                        shape = shape,
+                        enabled = !isSelectionMode
                     ) {
                         ShieldConfigItem(
                             shield = shield,
                             shape = shape,
                             onEdit = { onEditShield(shield) },
-                            onClick = { onAppClick(shield.packageName) }
+                            onClick = { onAppClick(shield.packageName) },
+                            isSelectionMode = isSelectionMode,
+                            isSelected = shield.packageName in selectedShields,
+                            onToggleSelection = { onToggleShieldSelection(shield.packageName) }
                         )
                     }
                     if (index < uiState.activeGoals.size - 1) {
@@ -377,13 +397,17 @@ fun FocusScreenContent(
                     SwipeableItemContainer(
                         onEdit = { onEditShield(shield) },
                         onDelete = { onDeleteShield(shield) },
-                        shape = shape
+                        shape = shape,
+                        enabled = !isSelectionMode
                     ) {
                         ShieldConfigItem(
                             shield = shield,
                             shape = shape,
                             onEdit = { onEditShield(shield) },
-                            onClick = { onAppClick(shield.packageName) }
+                            onClick = { onAppClick(shield.packageName) },
+                            isSelectionMode = isSelectionMode,
+                            isSelected = shield.packageName in selectedShields,
+                            onToggleSelection = { onToggleShieldSelection(shield.packageName) }
                         )
                     }
                     if (index < uiState.activeShields.size - 1) {
@@ -439,13 +463,17 @@ fun FocusScreenContent(
                     SwipeableItemContainer(
                         onEdit = { onEditSchedule(schedule) },
                         onDelete = { onDeleteSchedule(schedule) },
-                        shape = shape
+                        shape = shape,
+                        enabled = !isSelectionMode
                     ) {
                         ScheduleItem(
                             schedule = schedule,
                             shape = shape,
-                            onEdit = { onEditSchedule(schedule) },
-                            onDelete = { onDeleteSchedule(schedule) }
+                            onEdit = { if (isSelectionMode) onToggleScheduleSelection(schedule.id) else onEditSchedule(schedule) },
+                            onDelete = { onDeleteSchedule(schedule) },
+                            isSelectionMode = isSelectionMode,
+                            isSelected = schedule.id in selectedSchedules,
+                            onToggleSelection = { onToggleScheduleSelection(schedule.id) }
                         )
                     }
                     if (index < uiState.activeSchedules.size - 1) {
@@ -463,10 +491,12 @@ fun SwipeableItemContainer(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(24.dp),
+    enabled: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = {
+            if (!enabled) return@rememberSwipeToDismissBoxState false
             when (it) {
                 SwipeToDismissBoxValue.StartToEnd -> {
                     onDelete()
@@ -548,7 +578,10 @@ fun ScheduleItem(
     schedule: ScheduleEntity,
     shape: RoundedCornerShape,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    isSelectionMode: Boolean = false,
+    isSelected: Boolean = false,
+    onToggleSelection: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val appIcons = remember(schedule.packageNames) {
@@ -608,13 +641,19 @@ fun ScheduleItem(
         }
     }
 
+    val cardColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                      else MaterialTheme.colorScheme.surfaceContainerLow,
+        animationSpec = spring(stiffness = Spring.StiffnessLow)
+    )
+
     Card(
-        onClick = { onEdit() },
+        onClick = { if (isSelectionMode) onToggleSelection() else onEdit() },
         modifier = Modifier
             .fillMaxWidth(),
         shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = cardColor
         )
     ) {
         Column {
@@ -646,27 +685,52 @@ fun ScheduleItem(
                     }
                 },
                 leadingContent = {
-                    MultiAppIconGroup(
-                        appIcons = appIcons,
-                        totalCount = schedule.packageNames.size,
-                        size = 40.dp
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        MultiAppIconGroup(
+                            appIcons = appIcons,
+                            totalCount = schedule.packageNames.size,
+                            size = 40.dp
+                        )
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = isSelectionMode,
+                            enter = scaleIn() + fadeIn(),
+                            exit = scaleOut() + fadeOut()
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                                modifier = Modifier.size(24.dp),
+                                border = if (!isSelected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.outline) else null
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(4.dp),
+                                        tint = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
+                            }
+                        }
+                    }
                 },
                 trailingContent = {
-                    Row {
-                        IconButton(onClick = onEdit) {
-                            Icon(
-                                imageVector = Icons.Outlined.Edit,
-                                contentDescription = "Edit",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        IconButton(onClick = onDelete) {
-                            Icon(
-                                imageVector = Icons.Outlined.Delete,
-                                contentDescription = "Delete",
-                                tint = MaterialTheme.colorScheme.error
-                            )
+                    if (!isSelectionMode) {
+                        Row {
+                            IconButton(onClick = onEdit) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Edit,
+                                    contentDescription = "Edit",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            IconButton(onClick = onDelete) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Delete,
+                                    contentDescription = "Delete",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                     }
                 },
@@ -828,7 +892,10 @@ fun ShieldConfigItem(
     shield: ShieldEntity,
     shape: RoundedCornerShape,
     onEdit: () -> Unit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isSelectionMode: Boolean = false,
+    isSelected: Boolean = false,
+    onToggleSelection: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val appIcon = remember(shield.packageName) {
@@ -879,13 +946,19 @@ fun ShieldConfigItem(
     val remainingMillis = shield.remainingTimeMillis.coerceIn(0L, totalLimitMillis)
     val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
 
+    val cardColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                      else MaterialTheme.colorScheme.surfaceContainerLow,
+        animationSpec = spring(stiffness = Spring.StiffnessLow)
+    )
+
     Card(
-        onClick = { onClick() },
+        onClick = { if (isSelectionMode) onToggleSelection() else onClick() },
         modifier = Modifier
             .fillMaxWidth(),
         shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = cardColor
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1083,8 +1156,19 @@ fun ShieldConfigItem(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onEdit) {
-                        Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.primary)
+                    if (!isSelectionMode) {
+                        IconButton(onClick = onEdit) {
+                            Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.primary)
+                        }
+                    } else {
+                        Checkbox(
+                            checked = isSelected,
+                            onCheckedChange = { onToggleSelection() },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.primary,
+                                uncheckedColor = MaterialTheme.colorScheme.outline
+                            )
+                        )
                     }
                 }
             }
