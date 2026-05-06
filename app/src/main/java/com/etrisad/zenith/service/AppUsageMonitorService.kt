@@ -62,10 +62,12 @@ class AppUsageMonitorService : Service() {
     private var currentPreferences: UserPreferences? = null
     private var allShieldsCache = listOf<ShieldEntity>()
     private var goalShieldsCache = listOf<ShieldEntity>()
+    private var restrictedPackages = emptySet<String>()
+    private var hasGlobalAllowSchedule = false
     private var launcherAppsCache = emptySet<String>()
     private var lastLauncherAppsRefreshTime = 0L
 
-    //test
+    //hahaha
     private var isBedtimeActive = false
     private var isWindDownActive = false
     private var isBedtimeBlockingActive = false
@@ -77,7 +79,6 @@ class AppUsageMonitorService : Service() {
     private var lastCheckedDayTimestamp = 0L
     private var isScreenOn = true
     private var isPowerSaveMode = false
-    private var overlayShowingSince = 0L
 
     private val notificationManager by lazy { getSystemService(NotificationManager::class.java) }
 
@@ -140,6 +141,7 @@ class AppUsageMonitorService : Service() {
                 goalShieldsCache = shields.filter { 
                     it.type == FocusType.GOAL && it.goalReminderPeriodMinutes > 0 
                 }
+                updateRestrictedPackages()
             }
         }
 
@@ -157,6 +159,7 @@ class AppUsageMonitorService : Service() {
                         packageNames = s.packageNames.toSet()
                     )
                 }
+                updateRestrictedPackages()
             }
         }
 
@@ -331,16 +334,6 @@ class AppUsageMonitorService : Service() {
                         continue
                     }
 
-                    if (InterceptOverlayManager.isShowing) {
-                        if (overlayShowingSince == 0L) overlayShowingSince = currentTime
-                        else if (currentTime - overlayShowingSince > 30000L) {
-                            InterceptOverlayManager.isShowing = false
-                            overlayShowingSince = 0L
-                        }
-                    } else {
-                        overlayShowingSince = 0L
-                    }
-
                     val currentApp = getForegroundApp()
 
                     if (currentApp != null) {
@@ -362,10 +355,8 @@ class AppUsageMonitorService : Service() {
                         if (currentApp != lastForegroundApp || currentShieldCache == null) {
                             currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
                             if (currentApp != lastForegroundApp) {
-                                lastUsageFetchTime = 0L
+                                lastUsageFetchTime = 0L 
                                 lastHUDUpdateTime = 0L
-                                lastUsageCacheTime = 0L
-                                usageStatsCache = null
                                 sessionStartTime = currentTime
                                 
                                 val systemUsage = getTotalUsageToday(currentApp)
@@ -673,7 +664,8 @@ class AppUsageMonitorService : Service() {
     }
 
     private suspend fun checkIfAppIsShielded(targetPackageName: String) {
-        if (targetPackageName != lastForegroundApp) return
+        val currentForeground = getForegroundApp()
+        if (targetPackageName != currentForeground) return
 
         val shield = currentShieldCache ?: allShieldsCache.find { it.packageName == targetPackageName }
         val prefs = currentPreferences ?: return
@@ -866,6 +858,8 @@ class AppUsageMonitorService : Service() {
             }
         }
 
+
+        //test for push, dont see//
         shields.forEach { shield ->
             val isAlreadyUpdatedToday = synchronized(reusableCalendar) {
                 reusableCalendar.timeInMillis = shield.lastStreakUpdateTimestamp
@@ -1216,15 +1210,14 @@ class AppUsageMonitorService : Service() {
     private fun shouldBypassBlocking(packageName: String): Boolean {
         if (packageName == this.packageName) return true
 
-        val isWhitelisted = if (isBedtimeBlockingActive) {
-            packageName in bedtimeWhitelistedPackages
+        if (isBedtimeBlockingActive) {
+            if (packageName in bedtimeWhitelistedPackages) return true
         } else {
-            packageName in whitelistedPackages
+            if (packageName in whitelistedPackages) return true
         }
 
-        if (isWhitelisted) return true
-
         if (packageName in CRITICAL_SYSTEM_PACKAGES) return true
+
         if (launcherPackages.contains(packageName)) return true
 
         val isSystem = systemAppCache.getOrPut(packageName) {
@@ -1240,10 +1233,18 @@ class AppUsageMonitorService : Service() {
                 packageName.contains("car.mode", ignoreCase = true)) {
                 return true
             }
-            return false
+            return !(packageName in restrictedPackages || hasGlobalAllowSchedule)
         }
 
         return false
+    }
+
+    private fun updateRestrictedPackages() {
+        val shieldPkgs = allShieldsCache.map { it.packageName }.toSet()
+        val schedulePkgs = activeSchedules.filter { it.mode == com.etrisad.zenith.data.local.entity.ScheduleMode.BLOCK }
+            .flatMap { it.packageNames }.toSet()
+        hasGlobalAllowSchedule = activeSchedules.any { it.mode == com.etrisad.zenith.data.local.entity.ScheduleMode.ALLOW }
+        restrictedPackages = shieldPkgs + schedulePkgs + BLOCKABLE_SYSTEM_APPS
     }
 
     private fun showScheduleOverlay(packageName: String, schedule: com.etrisad.zenith.data.local.entity.ScheduleEntity) {
@@ -1299,19 +1300,14 @@ class AppUsageMonitorService : Service() {
             usageStatsManager.queryEvents(time - 10000, time)
         } catch (_: Exception) { null } ?: return lastForegroundApp
         
-        var moveToFgPackage: String? = null
-        var resumedPackage: String? = null
+        var lastPackage: String? = null
         while (usageEvents.hasNextEvent()) {
             usageEvents.getNextEvent(reusableEvent)
-            val eventType = reusableEvent.eventType
-            if (eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
-                moveToFgPackage = reusableEvent.packageName
-            }
-            if (eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
-                resumedPackage = reusableEvent.packageName
+            if (reusableEvent.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND || 
+                reusableEvent.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
+                lastPackage = reusableEvent.packageName
             }
         }
-        var lastPackage = moveToFgPackage ?: resumedPackage
 
         if (lastPackage == null) {
             try {
