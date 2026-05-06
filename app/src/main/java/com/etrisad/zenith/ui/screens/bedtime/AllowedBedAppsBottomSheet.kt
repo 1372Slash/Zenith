@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import com.etrisad.zenith.ui.screens.settings.WhitelistAppInfo
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -51,6 +52,8 @@ fun AllowedBedAppsBottomSheet(
 
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
+    val scope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -97,7 +100,7 @@ fun AllowedBedAppsBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp
     ) {
@@ -212,7 +215,12 @@ fun AllowedBedAppsBottomSheet(
             }
 
             FloatingActionButton(
-                onClick = { onSave(selectedApps) },
+                onClick = {
+                    scope.launch {
+                        sheetState.hide()
+                        onSave(selectedApps)
+                    }
+                },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(24.dp),

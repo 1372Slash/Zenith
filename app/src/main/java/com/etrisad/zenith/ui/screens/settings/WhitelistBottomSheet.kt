@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class WhitelistAppInfo(
@@ -60,6 +61,8 @@ fun WhitelistBottomSheet(
 
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
+    val scope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -112,7 +115,7 @@ fun WhitelistBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp
     ) {
@@ -322,7 +325,12 @@ fun WhitelistBottomSheet(
             }
 
             FloatingActionButton(
-                onClick = { onSave(selectedApps) },
+                onClick = {
+                    scope.launch {
+                        sheetState.hide()
+                        onSave(selectedApps)
+                    }
+                },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(24.dp),
