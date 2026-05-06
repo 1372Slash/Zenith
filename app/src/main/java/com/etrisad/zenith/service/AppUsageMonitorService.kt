@@ -67,7 +67,6 @@ class AppUsageMonitorService : Service() {
     private var launcherAppsCache = emptySet<String>()
     private var lastLauncherAppsRefreshTime = 0L
 
-    //hahaha
     private var isBedtimeActive = false
     private var isWindDownActive = false
     private var isBedtimeBlockingActive = false

@@ -10,14 +10,14 @@ import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.local.entity.ShieldEntity
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
 import kotlinx.coroutines.Dispatchers
-import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -59,7 +59,6 @@ class FocusViewModel(
 
     private val _allInstalledApps = MutableStateFlow<List<AppInfo>>(emptyList())
     private var allShields: List<ShieldEntity> = emptyList()
-    private var whitelistedPackages: Set<String> = emptySet()
 
     init {
         viewModelScope.launch {
@@ -70,16 +69,13 @@ class FocusViewModel(
             }
         }
         viewModelScope.launch {
-            preferencesRepository.userPreferencesFlow.collectLatest { prefs ->
-                if (whitelistedPackages != prefs.whitelistedPackages) {
-                    whitelistedPackages = prefs.whitelistedPackages
-                    loadInstalledApps()
-                }
+            shieldRepository.allSchedules.collect { schedules ->
+                _uiState.value = _uiState.value.copy(activeSchedules = schedules)
             }
         }
         viewModelScope.launch {
-            shieldRepository.allSchedules.collect { schedules ->
-                _uiState.value = _uiState.value.copy(activeSchedules = schedules)
+            preferencesRepository.userPreferencesFlow.collect {
+                loadInstalledApps()
             }
         }
         startRealTimeUpdates()
@@ -146,10 +142,16 @@ class FocusViewModel(
             val apps = withContext(Dispatchers.IO) {
                 val pm = context.packageManager
                 val installedApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+                val whitelist = try {
+                    preferencesRepository.userPreferencesFlow.first().whitelistedPackages
+                } catch (e: Exception) {
+                    emptySet()
+                }
+
                 installedApps
                     .filter { app ->
                         val isSystem = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                        !isSystem || app.packageName !in whitelistedPackages
+                        !isSystem || app.packageName !in whitelist
                     }
                     .filter { it.packageName != context.packageName }
                     .map {
