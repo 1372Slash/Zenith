@@ -1368,8 +1368,11 @@ class AppUsageMonitorService : Service() {
 
         if (lastPackage == null) {
             try {
-                val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 15000, time)
-                lastPackage = stats?.maxByOrNull { it.lastTimeUsed }?.packageName
+                val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 10000, time)
+                val topApp = stats?.maxByOrNull { it.lastTimeUsed }
+                if (topApp != null && time - topApp.lastTimeUsed < 3000) {
+                    lastPackage = topApp.packageName
+                }
             } catch (_: Exception) {}
         }
         

@@ -184,7 +184,14 @@ class ZenithAccessibilityService : AccessibilityService() {
         val packageName = event.packageName?.toString() ?: return
         if (packageName == this.packageName) return
         
-        Log.d("ZenithAS", "onAccessibilityEvent: Window state changed to $packageName")
+        if (!event.isFullScreen && !shouldBypassBlocking(packageName)) {
+            return
+        }
+
+        val className = event.className?.toString() ?: ""
+        if (className.contains("Toast") || className.contains("Notification") || className.contains("Tooltip")) {
+            return
+        }
 
         serviceScope.launch(Dispatchers.Main) {
             overlayManager.checkAndHide(packageName)
