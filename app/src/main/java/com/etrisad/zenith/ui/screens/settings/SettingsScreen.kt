@@ -414,7 +414,7 @@ fun SettingsScreenContent(
                 Spacer(modifier = Modifier.height(4.dp))
                 SettingsToggle(
                     title = "Early Kick",
-                    description = "Optionally eject from apps 2 minutes before your time limit expires",
+                    description = "Optionally eject from apps 5 minutes before your time limit expires",
                     checked = preferences.earlyKickEnabled,
                     onCheckedChange = onEarlyKickEnabledChange,
                     icon = Icons.Outlined.ExitToApp,

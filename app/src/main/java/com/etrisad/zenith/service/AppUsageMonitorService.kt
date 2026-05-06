@@ -392,7 +392,7 @@ class AppUsageMonitorService : Service() {
                             if (!isOverlayShowing && !isSessionActive && 
                                 earlyKickManager.shouldKick(currentApp, actualRemaining, prefs?.earlyKickEnabled ?: false)) {
                                 serviceScope.launch(Dispatchers.Main) {
-                                    Toast.makeText(this@AppUsageMonitorService, "Early Kick: 2 minutes remaining", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(this@AppUsageMonitorService, "Early Kick: 5 minutes remaining", Toast.LENGTH_LONG).show()
                                 }
                                 goToHomeScreen()
                                 lastForegroundApp = currentApp
