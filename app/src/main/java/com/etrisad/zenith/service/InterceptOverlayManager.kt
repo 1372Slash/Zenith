@@ -387,12 +387,18 @@ class InterceptOverlayManager(private val context: Context) {
 
     fun hideOverlay() {
         if (Looper.myLooper() != Looper.getMainLooper()) {
+            isShowing = false
+            currentPackage = null
             mainHandler.post { hideOverlay() }
             return
         }
 
         val view = overlayView
         val target = currentPackage
+        
+        isShowing = false
+        currentPackage = null
+
         Log.d(TAG, "Hiding overlay for $target")
         if (view != null) {
             try {
@@ -411,13 +417,9 @@ class InterceptOverlayManager(private val context: Context) {
                 overlayView = null
                 lifecycleOwner = null
                 viewModelStore = null
-                currentPackage = null
-                isShowing = false
             }
         } else {
             Log.d(TAG, "hideOverlay: overlayView is already null")
-            isShowing = false
-            currentPackage = null
         }
     }
 

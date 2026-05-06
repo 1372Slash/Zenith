@@ -342,6 +342,8 @@ class AppUsageMonitorService : Service() {
 
                     if (currentApp != null) {
                         overlayManager.checkAndHide(currentApp)
+                    } else if (lastForegroundApp != null) {
+                        overlayManager.hideOverlay()
                     }
 
                     if (launcherPackages.isEmpty() || currentTime - lastLauncherRefreshTime > 60000) {
@@ -356,34 +358,34 @@ class AppUsageMonitorService : Service() {
                     if (currentApp != null && currentApp != packageName) {
                         sessionUsageOverlayManager.updateForegroundApp(currentApp)
                         
-                    if (currentApp != lastForegroundApp || currentShieldCache == null) {
-                        lastForegroundApp?.let { prevPkg ->
-                            allShieldsCache.find { it.packageName == prevPkg }?.let { prevShield ->
-                                updateShieldInDatabase(prevShield, force = true)
+                        if (currentApp != lastForegroundApp || currentShieldCache?.packageName != currentApp) {
+                            lastForegroundApp?.let { prevPkg ->
+                                allShieldsCache.find { it.packageName == prevPkg }?.let { prevShield ->
+                                    updateShieldInDatabase(prevShield, force = true)
+                                }
+                            }
+
+                            currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
+                            if (currentApp != lastForegroundApp) {
+                                lastUsageFetchTime = 0L 
+                                lastHUDUpdateTime = 0L
+                                sessionStartTime = currentTime
+                                
+                                val systemUsage = getSystemUsageToday(currentApp)
+                                val systemGlobal = getSystemGlobalUsageToday()
+                                val startOfDay = getStartOfDay()
+                                val shield = currentShieldCache
+                                val dbUsage = if (shield != null && shield.lastUsedTimestamp >= startOfDay) {
+                                    val limitMillis = (shield.timeLimitMinutes * 60 * 1000L)
+                                    (limitMillis - shield.remainingTimeMillis).coerceAtLeast(0L)
+                                } else 0L
+                                
+                                baseUsageAtSessionStart = maxOf(systemUsage, dbUsage)
+                                cachedTotalUsage = baseUsageAtSessionStart
+                                baseGlobalUsageAtSessionStart = systemGlobal
+                                cachedTotalGlobalUsage = systemGlobal
                             }
                         }
-
-                        currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
-                        if (currentApp != lastForegroundApp) {
-                            lastUsageFetchTime = 0L 
-                            lastHUDUpdateTime = 0L
-                            sessionStartTime = currentTime
-                            
-                            val systemUsage = getSystemUsageToday(currentApp)
-                            val systemGlobal = getSystemGlobalUsageToday()
-                            val startOfDay = getStartOfDay()
-                            val shield = currentShieldCache
-                            val dbUsage = if (shield != null && shield.lastUsedTimestamp >= startOfDay) {
-                                val limitMillis = (shield.timeLimitMinutes * 60 * 1000L)
-                                (limitMillis - shield.remainingTimeMillis).coerceAtLeast(0L)
-                            } else 0L
-                            
-                            baseUsageAtSessionStart = maxOf(systemUsage, dbUsage)
-                            cachedTotalUsage = baseUsageAtSessionStart
-                            baseGlobalUsageAtSessionStart = systemGlobal
-                            cachedTotalGlobalUsage = systemGlobal
-                        }
-                    }
 
                         if (shouldBypassBlocking(currentApp)) {
                             lastForegroundApp = currentApp
@@ -703,7 +705,12 @@ class AppUsageMonitorService : Service() {
         val currentForeground = getForegroundApp()
         if (targetPackageName != currentForeground) return
 
-        val shield = currentShieldCache ?: allShieldsCache.find { it.packageName == targetPackageName }
+        val shield = if (currentShieldCache?.packageName == targetPackageName) {
+            currentShieldCache
+        } else {
+            allShieldsCache.find { it.packageName == targetPackageName }
+        }
+        
         val prefs = currentPreferences ?: return
         if (shield != null && !InterceptOverlayManager.isShowing) {
             val totalUsageToday = getTotalUsageToday(targetPackageName)
@@ -1360,7 +1367,7 @@ class AppUsageMonitorService : Service() {
         val time = System.currentTimeMillis()
         val usageEvents = try {
             usageStatsManager.queryEvents(time - 10000, time)
-        } catch (_: Exception) { null } ?: return lastForegroundApp
+        } catch (_: Exception) { null } ?: return null
         
         var lastPackage: String? = null
         while (usageEvents.hasNextEvent()) {
@@ -1373,7 +1380,7 @@ class AppUsageMonitorService : Service() {
 
         if (lastPackage == null) {
             try {
-                val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 10000, time)
+                val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 5000, time)
                 val topApp = stats?.maxByOrNull { it.lastTimeUsed }
                 if (topApp != null && time - topApp.lastTimeUsed < 3000) {
                     lastPackage = topApp.packageName
@@ -1381,7 +1388,7 @@ class AppUsageMonitorService : Service() {
             } catch (_: Exception) {}
         }
         
-        return lastPackage ?: lastForegroundApp
+        return lastPackage
     }
 
     override fun onLowMemory() {
