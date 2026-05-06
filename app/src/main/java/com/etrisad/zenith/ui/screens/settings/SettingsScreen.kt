@@ -290,7 +290,7 @@ fun SettingsScreenContent(
         try {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         } catch (e: Exception) {
-            "1.3"
+            "1.4"
         }
     }
 
@@ -566,7 +566,7 @@ fun SettingsScreenContent(
 
             item {
                 AppInfoCard(
-                    versionName = versionName ?: "1.3",
+                    versionName = versionName ?: "1.4",
                     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
                 )
             }
