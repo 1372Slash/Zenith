@@ -53,6 +53,10 @@ class ShieldRepository(
         return hourlyUsageDao.getHourlyUsageForDate(date)
     }
 
+    fun getDatesWithHourlyUsage(): Flow<List<String>> {
+        return hourlyUsageDao.getDatesWithHourlyUsage()
+    }
+
     suspend fun insertHourlyUsage(usages: List<HourlyUsageEntity>) {
         hourlyUsageDao.insertAll(usages)
     }

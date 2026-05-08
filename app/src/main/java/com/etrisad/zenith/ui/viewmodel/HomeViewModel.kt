@@ -97,7 +97,9 @@ data class UsageHistoryGroup(
     val hasDatabaseRecord: Boolean = false,
     val hasSystemData: Boolean = false,
     val isMissing: Boolean = false,
-    val isLive: Boolean = false
+    val isLive: Boolean = false,
+    val hasSnapshot: Boolean = false,
+    val hasHourlyUsage: Boolean = false
 )
 
 class HomeViewModel(
@@ -116,7 +118,10 @@ class HomeViewModel(
 
     val allDatabaseUsage: Flow<List<DailyUsageEntity>> = shieldRepository.getAllUsage()
 
-    val fullUsageHistory: Flow<List<UsageHistoryGroup>> = allDatabaseUsage.map { dbList ->
+    val fullUsageHistory: Flow<List<UsageHistoryGroup>> = combine(
+        allDatabaseUsage,
+        shieldRepository.getDatesWithHourlyUsage()
+    ) { dbList, hourlyDates ->
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val today = Calendar.getInstance()
         val todayStr = dateFormat.format(today.time)
@@ -138,6 +143,9 @@ class HomeViewModel(
             val dbTotal = dbRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
             val systemTotal = globalFallbackMap[dateStr] ?: 0L
             
+            val hasHourly = hourlyDates.contains(dateStr)
+            val hasSnap = dbRecords.any { it.packageName != "TOTAL" }
+
             if (isToday) {
                 val liveRecords = mutableListOf<UsageRecord>()
                 dbRecords.forEach { liveRecords.add(UsageRecord.Database(it)) }
@@ -154,21 +162,27 @@ class HomeViewModel(
                     totalTimeMillis = maxOf(dbTotal, liveTotal),
                     hasDatabaseRecord = dbRecords.isNotEmpty(),
                     hasSystemData = true,
-                    isLive = true
+                    isLive = true,
+                    hasSnapshot = hasSnap,
+                    hasHourlyUsage = hasHourly
                 ))
             } else if (dbRecords.isEmpty() && systemTotal == 0L) {
                 groups.add(UsageHistoryGroup(
                     date = dateStr, 
                     records = emptyList(), 
                     totalTimeMillis = 0L,
-                    isMissing = true
+                    isMissing = true,
+                    hasSnapshot = false,
+                    hasHourlyUsage = hasHourly
                 ))
             } else if (dbRecords.isEmpty() && systemTotal > 0L) {
                 groups.add(UsageHistoryGroup(
                     date = dateStr,
                     records = listOf(UsageRecord.Live("TOTAL", systemTotal)),
                     totalTimeMillis = systemTotal,
-                    hasSystemData = true
+                    hasSystemData = true,
+                    hasSnapshot = false,
+                    hasHourlyUsage = hasHourly
                 ))
             } else {
                 groups.add(UsageHistoryGroup(
@@ -176,7 +190,9 @@ class HomeViewModel(
                     records = dbRecords.map { UsageRecord.Database(it) },
                     totalTimeMillis = dbTotal,
                     hasDatabaseRecord = true,
-                    hasSystemData = systemTotal > 0L
+                    hasSystemData = systemTotal > 0L,
+                    hasSnapshot = hasSnap,
+                    hasHourlyUsage = hasHourly
                 ))
             }
             
