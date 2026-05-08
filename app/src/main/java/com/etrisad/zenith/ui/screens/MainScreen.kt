@@ -459,7 +459,7 @@ fun MainScreen(
                             stiffness = Spring.StiffnessLow
                         )
 
-                        if (isTargetDeep && !isInitialDeep) {
+                        if (isTargetDeep) {
                             slideInHorizontally(
                                 initialOffsetX = { it },
                                 animationSpec = animationSpec
