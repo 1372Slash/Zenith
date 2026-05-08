@@ -48,11 +48,18 @@ data class AppDetailUiState(
     val pauseEndTimestamp: Long = 0L
 )
 
+data class HourlyUsageInfo(
+    val hour: Int,
+    val usageTimeMillis: Long
+)
+
 data class HomeUiState(
     val totalScreenTime: Long = 0L,
     val yesterdayScreenTime: Long = 0L,
     val percentageChange: Float = 0f,
     val dailyUsageHistory: List<DailyUsage> = emptyList(),
+    val hourlyUsage: List<HourlyUsageInfo> = emptyList(),
+    val sevenDayStamps: List<AppUsageInfo> = emptyList(),
     val topApps: List<AppUsageInfo> = emptyList(),
     val allAppsUsage: List<AppUsageInfo> = emptyList(),
     val activeShields: List<ShieldEntity> = emptyList(),
@@ -79,10 +86,12 @@ data class UsageHistoryGroup(
 )
 
 class HomeViewModel(
-    private val context: Context,
+    context: Context,
     private val shieldRepository: ShieldRepository,
     private val userPreferencesRepository: UserPreferencesRepository
 ) : ViewModel() {
+
+    private val context = context.applicationContext
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -354,6 +363,60 @@ class HomeViewModel(
             catch (_: PackageManager.NameNotFoundException) { app }
         }
 
+        val hourlyMap = mutableMapOf<Int, Long>()
+        val events = usm.queryEvents(todayStart, now)
+        val event = android.app.usage.UsageEvents.Event()
+        val lastEventTime = mutableMapOf<String, Long>()
+        val cal = Calendar.getInstance()
+
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            val pkg = event.packageName
+            val time = event.timeStamp
+            
+            if (event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND || 
+                event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED) {
+                lastEventTime[pkg] = time
+            } else if (event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_BACKGROUND || 
+                       event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED) {
+                val startTime = lastEventTime.remove(pkg)
+                if (startTime != null) {
+                    val duration = time - startTime
+                    if (duration > 0) {
+                        cal.timeInMillis = startTime
+                        val hour = cal.get(Calendar.HOUR_OF_DAY)
+                        hourlyMap[hour] = (hourlyMap[hour] ?: 0L) + duration
+                    }
+                }
+            }
+        }
+
+        val hourlyUsage = (0..23).map { hour ->
+            HourlyUsageInfo(hour, hourlyMap[hour] ?: 0L)
+        }
+
+        val sevenDayStamps = (1..7).map { i ->
+            val dayStart = getMidnight(i)
+            val dayEnd = dayStart + (24 * 60 * 60 * 1000L)
+            val dayStats = usm.queryAndAggregateUsageStats(dayStart, dayEnd)
+            val topPackage = dayStats.filter { (pkg, _) -> 
+                pkg !in excludePackages && pkg in launcherApps 
+            }.maxByOrNull { (_, stat) -> 
+                stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground) 
+            }?.key
+            
+            if (topPackage != null) {
+                try {
+                    val appInfo = pm.getApplicationInfo(topPackage, 0)
+                    AppUsageInfo(topPackage, pm.getApplicationLabel(appInfo).toString(), 0, pm.getApplicationIcon(topPackage))
+                } catch (_: Exception) {
+                    AppUsageInfo("", "", 0)
+                }
+            } else {
+                AppUsageInfo("", "", 0)
+            }
+        }.reversed()
+
         val liveShields = allShields.map { shield ->
             val usage = todayRawStats.getUsageTime(shield.packageName)
             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
@@ -406,15 +469,17 @@ class HomeViewModel(
             bestStreakFromHistory = maxOf(bestStreakFromHistory, currentTempStreak)
         }
 
-        _uiState.update { it.copy(
+        _uiState.update { state -> state.copy(
             totalScreenTime      = totalToday,
             yesterdayScreenTime  = totalYesterday,
             percentageChange     = percentageChange,
             dailyUsageHistory    = history.reversed(),
+            hourlyUsage          = hourlyUsage,
+            sevenDayStamps       = sevenDayStamps,
             topApps              = topApps,
             allAppsUsage         = allAppsUsage,
-            activeShields = sortShields(liveShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.SHIELD }, it.shieldSortType),
-            activeGoals   = sortShields(liveShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL }, it.goalSortType),
+            activeShields = sortShields(liveShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.SHIELD }, state.shieldSortType),
+            activeGoals   = sortShields(liveShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL }, state.goalSortType),
             globalCurrentStreak = liveStreak,
             globalBestStreak = maxOf(prefGlobalBestStreak, bestStreakFromHistory)
         ) }

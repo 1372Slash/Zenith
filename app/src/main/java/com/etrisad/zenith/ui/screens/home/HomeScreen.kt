@@ -99,7 +99,8 @@ fun HomeScreen(
         onGoalSortTypeChange = viewModel::onGoalSortTypeChange,
         onSeeFullList = onSeeFullList,
         onAppClick = onAppClick,
-        onBedtimeClick = onBedtimeClick
+        onBedtimeClick = onBedtimeClick,
+        onStatsClick = onSeeFullList
     )
 }
 
@@ -114,7 +115,8 @@ fun HomeScreenContent(
     onGoalSortTypeChange: (ShieldSortType) -> Unit,
     onSeeFullList: () -> Unit,
     onAppClick: (String) -> Unit,
-    onBedtimeClick: () -> Unit
+    onBedtimeClick: () -> Unit,
+    onStatsClick: () -> Unit
 ) {
     val targetMillis = preferences.screenTimeTargetMinutes * 60 * 1000L
     LazyColumn(
@@ -169,7 +171,10 @@ fun HomeScreenContent(
         }
 
         item {
-            QuickActionsSection(onBedtimeClick = onBedtimeClick)
+            QuickActionsSection(
+                onBedtimeClick = onBedtimeClick,
+                onStatsClick = onStatsClick
+            )
             Spacer(modifier = Modifier.height(16.dp))
         }
 
@@ -728,7 +733,10 @@ fun TopAppsSection(
 }
 
 @Composable
-fun QuickActionsSection(onBedtimeClick: () -> Unit) {
+fun QuickActionsSection(
+    onBedtimeClick: () -> Unit,
+    onStatsClick: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -746,7 +754,8 @@ fun QuickActionsSection(onBedtimeClick: () -> Unit) {
         )
         QuickActionCard(
             icon = Icons.Outlined.Insights,
-            label = "Stats"
+            label = "Stats",
+            onClick = onStatsClick
         )
         QuickActionCard(
             icon = Icons.Outlined.Bedtime,
@@ -1206,6 +1215,7 @@ fun HomeScreenExpressivePreview() {
             onSeeFullList = {},
             onAppClick = {},
             onBedtimeClick = {},
+            onStatsClick = {},
             innerPadding = PaddingValues()
         )
     }
