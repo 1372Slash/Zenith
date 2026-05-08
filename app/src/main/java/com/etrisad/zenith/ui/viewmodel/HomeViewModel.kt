@@ -50,7 +50,8 @@ data class AppDetailUiState(
 
 data class HourlyUsageInfo(
     val hour: Int,
-    val usageTimeMillis: Long
+    val usageTimeMillis: Long,
+    val apps: List<AppUsageInfo> = emptyList()
 )
 
 data class HomeUiState(
@@ -67,7 +68,14 @@ data class HomeUiState(
     val shieldSortType: ShieldSortType = ShieldSortType.ALPHABETICAL,
     val goalSortType: ShieldSortType = ShieldSortType.ALPHABETICAL,
     val globalCurrentStreak: Int = 0,
-    val globalBestStreak: Int = 0
+    val globalBestStreak: Int = 0,
+    val targetMillis: Long = 0L,
+    val selectedDateMillis: Long = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
 )
 
 sealed class UsageRecord {
@@ -95,6 +103,9 @@ class HomeViewModel(
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+    private val appInfoCache = mutableMapOf<String, Pair<String, android.graphics.drawable.Drawable?>>()
+    private var refreshJob: Job? = null
 
     val allDatabaseUsage: Flow<List<DailyUsageEntity>> = shieldRepository.getAllUsage()
 
@@ -284,208 +295,280 @@ class HomeViewModel(
         detailFallbackMap = result
     }
 
-    private fun refreshUsageStats() {
-        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val pm = context.packageManager
-
-        val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        val launcherPackage = pm.resolveActivity(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY)
-            ?.activityInfo?.packageName
-
-        val launcherApps = pm.queryIntentActivities(
-            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
-        ).map { it.activityInfo.packageName }.toSet()
-
-        val excludePackages = setOfNotNull(context.packageName, launcherPackage)
-
-        val now = System.currentTimeMillis()
-        val todayStart = getMidnight(0)
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-
-        val todayRawStats = usm.queryAndAggregateUsageStats(todayStart, now)
-        var totalToday = 0L
-        val appList = mutableListOf<AppUsageInfo>()
-
-        todayRawStats.forEach { (pkg, stat) ->
-            if (pkg in excludePackages || pkg !in launcherApps) return@forEach
-            val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
-            if (time > 0) {
-                totalToday += time
-                try {
-                    val appInfo = pm.getApplicationInfo(pkg, 0)
-                    appList.add(AppUsageInfo(pkg, pm.getApplicationLabel(appInfo).toString(), time))
-                } catch (_: Exception) {}
-            }
-        }
-
-        val yesterdayCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
-        val yesterdayDateStr = dateFormat.format(yesterdayCal.time)
-
-        val totalYesterday = globalHistory.find { it.date == yesterdayDateStr }?.usageTimeMillis
-            ?: globalFallbackMap[yesterdayDateStr]
-            ?: 0L
-
-        val history = (0 until 21).map { i ->
-            val dStart = getMidnight(i)
-            val dateStr = dateFormat.format(Date(dStart))
-            
-            val dbEntry = globalHistory.find { it.date == dateStr }
-            val hasSystemData = globalFallbackMap[dateStr] != null
-            val dayTotal = if (i == 0) {
-                totalToday
-            } else {
-                dbEntry?.usageTimeMillis 
-                    ?: globalFallbackMap[dateStr] 
-                    ?: 0L
-            }
-            DailyUsage(
-                date = dStart, 
-                totalTime = dayTotal, 
-                hasDatabaseRecord = dbEntry != null,
-                hasSystemData = hasSystemData,
-                isLive = i == 0
-            )
-        }
-
-        val percentageChange = when {
-            totalYesterday > 0 -> ((totalToday - totalYesterday).toFloat() / totalYesterday) * 100
-            totalToday > 0     -> 100f
-            else               -> 0f
-        }
-
-        val topApps = appList.sortedByDescending { it.totalTimeVisible }.take(5).map { app ->
-            try { app.copy(icon = pm.getApplicationIcon(app.packageName)) }
-            catch (_: PackageManager.NameNotFoundException) { app }
-        }
-
-        val allAppsUsage = appList.sortedByDescending { it.totalTimeVisible }.map { app ->
-            try { app.copy(icon = pm.getApplicationIcon(app.packageName)) }
-            catch (_: PackageManager.NameNotFoundException) { app }
-        }
-
-        val hourlyMap = mutableMapOf<Int, Long>()
-        val events = usm.queryEvents(todayStart, now)
-        val event = android.app.usage.UsageEvents.Event()
-        val lastEventTime = mutableMapOf<String, Long>()
+    fun selectDate(dateMillis: Long?) {
         val cal = Calendar.getInstance()
+        if (dateMillis != null) cal.timeInMillis = dateMillis
+        cal.set(Calendar.HOUR_OF_DAY, 0)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        
+        val date = cal.timeInMillis
+        if (_uiState.value.selectedDateMillis == date && refreshJob?.isActive == true) return
 
-        while (events.hasNextEvent()) {
-            events.getNextEvent(event)
-            val pkg = event.packageName
-            val time = event.timeStamp
+        _uiState.update { it.copy(selectedDateMillis = date) }
+        refreshUsageStats()
+    }
+
+    private fun refreshUsageStats() {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+            val pm = context.packageManager
+
+            val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            val launcherPackage = pm.resolveActivity(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY)
+                ?.activityInfo?.packageName
+
+            val launcherApps = pm.queryIntentActivities(
+                Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
+            ).map { it.activityInfo.packageName }.toSet()
+
+            val excludePackages = setOfNotNull(context.packageName, launcherPackage)
+
+            val now = System.currentTimeMillis()
+            val selectedDate = _uiState.value.selectedDateMillis
+            val todayStart = getMidnight(0)
             
-            if (event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND || 
-                event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED) {
-                lastEventTime[pkg] = time
-            } else if (event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_BACKGROUND || 
-                       event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED) {
-                val startTime = lastEventTime.remove(pkg)
-                if (startTime != null) {
-                    val duration = time - startTime
-                    if (duration > 0) {
-                        cal.timeInMillis = startTime
-                        val hour = cal.get(Calendar.HOUR_OF_DAY)
-                        hourlyMap[hour] = (hourlyMap[hour] ?: 0L) + duration
-                    }
-                }
-            }
-        }
-
-        val hourlyUsage = (0..23).map { hour ->
-            HourlyUsageInfo(hour, hourlyMap[hour] ?: 0L)
-        }
-
-        val sevenDayStamps = (1..7).map { i ->
-            val dayStart = getMidnight(i)
-            val dayEnd = dayStart + (24 * 60 * 60 * 1000L)
-            val dayStats = usm.queryAndAggregateUsageStats(dayStart, dayEnd)
-            val topPackage = dayStats.filter { (pkg, _) -> 
-                pkg !in excludePackages && pkg in launcherApps 
-            }.maxByOrNull { (_, stat) -> 
-                stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground) 
-            }?.key
+            val isSelectedToday = selectedDate == todayStart
             
-            if (topPackage != null) {
-                try {
-                    val appInfo = pm.getApplicationInfo(topPackage, 0)
-                    AppUsageInfo(topPackage, pm.getApplicationLabel(appInfo).toString(), 0, pm.getApplicationIcon(topPackage))
-                } catch (_: Exception) {
-                    AppUsageInfo("", "", 0)
-                }
-            } else {
-                AppUsageInfo("", "", 0)
+            val calDate = Calendar.getInstance()
+            calDate.timeInMillis = selectedDate
+            calDate.set(Calendar.HOUR_OF_DAY, 0)
+            calDate.set(Calendar.MINUTE, 0)
+            calDate.set(Calendar.SECOND, 0)
+            calDate.set(Calendar.MILLISECOND, 0)
+            val dayStart = calDate.timeInMillis
+            
+            calDate.add(Calendar.DAY_OF_YEAR, 1)
+            val dayEnd = if (dayStart + (24 * 60 * 60 * 1000L) > now) now else calDate.timeInMillis
+            
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+            // 1. Calculate Summary (Only if needed or periodically)
+            val trueTodayStats = usm.queryAndAggregateUsageStats(todayStart, now)
+            var totalToday = 0L
+            trueTodayStats.forEach { (pkg, stat) ->
+                if (pkg in excludePackages || pkg !in launcherApps) return@forEach
+                val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+                if (time > 0) totalToday += time
             }
-        }.reversed()
 
-        val liveShields = allShields.map { shield ->
-            val usage = todayRawStats.getUsageTime(shield.packageName)
-            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
-            shield.copy(remainingTimeMillis = (limitMillis - usage).coerceAtLeast(0L))
-        }
-
-        val targetMillis = currentTargetMinutes * 60 * 1000L
-        var liveStreak = 0
-        var bestStreakFromHistory = 0
-
-        if (targetMillis > 0) {
-            // Calculate current live streak including today
-            if (totalToday <= targetMillis) {
-                liveStreak = 1
-                val cal = Calendar.getInstance()
-                for (i in 1..60) {
-                    cal.time = Date()
-                    cal.add(Calendar.DAY_OF_YEAR, -i)
-                    val dStr = dateFormat.format(cal.time)
-                    
-                    // Try to get from database first, then fallback to usage stats query
-                    val usage = globalHistory.find { it.date == dStr }?.usageTimeMillis ?: globalFallbackMap[dStr]
-                    
-                    if (usage != null && usage <= targetMillis) {
-                        liveStreak++
-                    } else if (usage != null) {
-                        // User failed target on this day
-                        break
+            // 2. Calculate Top Apps for Selected Day
+            val appList = mutableListOf<AppUsageInfo>()
+            val dayStats = if (isSelectedToday) trueTodayStats else usm.queryAndAggregateUsageStats(dayStart, dayEnd)
+            
+            dayStats.forEach { (pkg, stat) ->
+                if (pkg in excludePackages || pkg !in launcherApps) return@forEach
+                val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+                if (time > 0) {
+                    val cached = appInfoCache[pkg]
+                    if (cached != null) {
+                        appList.add(AppUsageInfo(pkg, cached.first, time, cached.second))
                     } else {
-                        // No data for this day, assume streak ended or data missing
-                        break
+                        try {
+                            val appInfo = pm.getApplicationInfo(pkg, 0)
+                            val label = pm.getApplicationLabel(appInfo).toString()
+                            val icon = pm.getApplicationIcon(appInfo)
+                            appInfoCache[pkg] = label to icon
+                            appList.add(AppUsageInfo(pkg, label, time, icon))
+                        } catch (_: Exception) {}
                     }
                 }
             }
 
-            // Calculate best streak from available history window
-            var currentTempStreak = 0
-            for (i in 60 downTo 0) {
-                val dStart = getMidnight(i)
-                val dStr = dateFormat.format(Date(dStart))
-                val usage = if (i == 0) totalToday else (globalHistory.find { it.date == dStr }?.usageTimeMillis ?: globalFallbackMap[dStr])
+            val topApps = appList.sortedByDescending { it.totalTimeVisible }.take(5)
+            val allAppsUsage = appList.sortedByDescending { it.totalTimeVisible }
+
+            // 3. Calculate Hourly for Selected Day
+            val hourlyMap = mutableMapOf<Int, Long>()
+            val hourlyAppUsage = mutableMapOf<Int, MutableMap<String, Long>>()
+            val events = usm.queryEvents(dayStart, dayEnd)
+            val event = android.app.usage.UsageEvents.Event()
+            val lastEventTime = mutableMapOf<String, Long>()
+            val cal = Calendar.getInstance()
+
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                val pkg = event.packageName
+                val time = event.timeStamp
                 
-                if (usage != null && usage <= targetMillis) {
-                    currentTempStreak++
-                } else {
-                    bestStreakFromHistory = maxOf(bestStreakFromHistory, currentTempStreak)
-                    currentTempStreak = 0
+                if (event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND || 
+                    event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED) {
+                    lastEventTime[pkg] = time
+                } else if (event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_BACKGROUND || 
+                           event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED) {
+                    val startTime = lastEventTime.remove(pkg)
+                    if (startTime != null) {
+                        val duration = time - startTime
+                        if (duration > 0) {
+                            cal.timeInMillis = startTime
+                            val hour = cal.get(Calendar.HOUR_OF_DAY)
+                            hourlyMap[hour] = (hourlyMap[hour] ?: 0L) + duration
+
+                            val pkgMap = hourlyAppUsage.getOrPut(hour) { mutableMapOf() }
+                            pkgMap[pkg] = (pkgMap[pkg] ?: 0L) + duration
+                        }
+                    }
                 }
             }
-            bestStreakFromHistory = maxOf(bestStreakFromHistory, currentTempStreak)
-        }
 
-        _uiState.update { state -> state.copy(
-            totalScreenTime      = totalToday,
-            yesterdayScreenTime  = totalYesterday,
-            percentageChange     = percentageChange,
-            dailyUsageHistory    = history.reversed(),
-            hourlyUsage          = hourlyUsage,
-            sevenDayStamps       = sevenDayStamps,
-            topApps              = topApps,
-            allAppsUsage         = allAppsUsage,
-            activeShields = sortShields(liveShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.SHIELD }, state.shieldSortType),
-            activeGoals   = sortShields(liveShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL }, state.goalSortType),
-            globalCurrentStreak = liveStreak,
-            globalBestStreak = maxOf(prefGlobalBestStreak, bestStreakFromHistory)
-        ) }
+            val hourlyUsage = (0..23).map { hour ->
+                val appsInHour = hourlyAppUsage[hour]?.mapNotNull { (pkg, time) ->
+                    if (pkg in excludePackages || pkg !in launcherApps) return@mapNotNull null
+                    val cached = appInfoCache[pkg]
+                    if (cached != null) {
+                        AppUsageInfo(pkg, cached.first, time, cached.second)
+                    } else {
+                        try {
+                            val appInfo = pm.getApplicationInfo(pkg, 0)
+                            val label = pm.getApplicationLabel(appInfo).toString()
+                            val icon = pm.getApplicationIcon(appInfo)
+                            appInfoCache[pkg] = label to icon
+                            AppUsageInfo(pkg, label, time, icon)
+                        } catch (_: Exception) { null }
+                    }
+                }?.sortedByDescending { it.totalTimeVisible } ?: emptyList()
 
-        viewModelScope.launch {
-            userPreferencesRepository.setLastKnownDailyUsage(totalToday, dateFormat.format(Date(now)))
+                HourlyUsageInfo(hour, hourlyMap[hour] ?: 0L, appsInHour)
+            }
+
+            // 4. Calculate Trends/History (Periodically or on init)
+            // To be even lighter, we only recalculate these if they are empty or "today" changed
+            val yesterdayCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+            val yesterdayDateStr = dateFormat.format(yesterdayCal.time)
+
+            val totalYesterday = globalHistory.find { it.date == yesterdayDateStr }?.usageTimeMillis
+                ?: globalFallbackMap[yesterdayDateStr]
+                ?: 0L
+
+            val history = (0 until 21).map { i ->
+                val dStart = getMidnight(i)
+                val dateStr = dateFormat.format(Date(dStart))
+                
+                val dbEntry = globalHistory.find { it.date == dateStr }
+                val hasSystemData = globalFallbackMap[dateStr] != null
+                val dayTotal = if (i == 0) {
+                    totalToday
+                } else {
+                    dbEntry?.usageTimeMillis 
+                        ?: globalFallbackMap[dateStr] 
+                        ?: 0L
+                }
+                DailyUsage(
+                    date = dStart, 
+                    totalTime = dayTotal, 
+                    hasDatabaseRecord = dbEntry != null,
+                    hasSystemData = hasSystemData,
+                    isLive = i == 0
+                )
+            }
+
+            val percentageChange = when {
+                totalYesterday > 0 -> ((totalToday - totalYesterday).toFloat() / totalYesterday) * 100
+                totalToday > 0     -> 100f
+                else               -> 0f
+            }
+
+            // 5. Calculate 7-Day Stamps (Only if not already set for today)
+            val currentSevenDayStamps = _uiState.value.sevenDayStamps
+            val sevenDayStamps = if (currentSevenDayStamps.isEmpty() || isSelectedToday) {
+                (1..7).map { i ->
+                    val dStart = getMidnight(i)
+                    val dEnd = dStart + (24 * 60 * 60 * 1000L)
+                    val dayStatsMap = usm.queryAndAggregateUsageStats(dStart, dEnd)
+                    val topPackage = dayStatsMap.filter { (pkg, _) -> 
+                        pkg !in excludePackages && pkg in launcherApps 
+                    }.maxByOrNull { (_, stat) -> 
+                        stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground) 
+                    }?.key
+                    
+                    if (topPackage != null) {
+                        val cached = appInfoCache[topPackage]
+                        if (cached != null) {
+                            AppUsageInfo(topPackage, cached.first, 0, cached.second)
+                        } else {
+                            try {
+                                val appInfo = pm.getApplicationInfo(topPackage, 0)
+                                val label = pm.getApplicationLabel(appInfo).toString()
+                                val icon = pm.getApplicationIcon(appInfo)
+                                appInfoCache[topPackage] = label to icon
+                                AppUsageInfo(topPackage, label, 0, icon)
+                            } catch (_: Exception) {
+                                AppUsageInfo("", "", 0)
+                            }
+                        }
+                    } else {
+                        AppUsageInfo("", "", 0)
+                    }
+                }.reversed()
+            } else {
+                currentSevenDayStamps
+            }
+
+            val liveShields = allShields.map { shield ->
+                val usage = trueTodayStats.getUsageTime(shield.packageName)
+                val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+                shield.copy(remainingTimeMillis = (limitMillis - usage).coerceAtLeast(0L))
+            }
+
+            val targetMillis = currentTargetMinutes * 60 * 1000L
+            var liveStreak = 0
+            var bestStreakFromHistory = 0
+
+            if (targetMillis > 0) {
+                if (totalToday <= targetMillis) {
+                    liveStreak = 1
+                    val c = Calendar.getInstance()
+                    for (i in 1..60) {
+                        c.time = Date()
+                        c.add(Calendar.DAY_OF_YEAR, -i)
+                        val dStr = dateFormat.format(c.time)
+                        val usage = globalHistory.find { it.date == dStr }?.usageTimeMillis ?: globalFallbackMap[dStr]
+                        if (usage != null && usage <= targetMillis) {
+                            liveStreak++
+                        } else if (usage != null) {
+                            break
+                        } else {
+                            break
+                        }
+                    }
+                }
+
+                var currentTempStreak = 0
+                for (i in 60 downTo 0) {
+                    val dStart = getMidnight(i)
+                    val dStr = dateFormat.format(Date(dStart))
+                    val usage = if (i == 0) totalToday else (globalHistory.find { it.date == dStr }?.usageTimeMillis ?: globalFallbackMap[dStr])
+                    if (usage != null && usage <= targetMillis) {
+                        currentTempStreak++
+                    } else {
+                        bestStreakFromHistory = maxOf(bestStreakFromHistory, currentTempStreak)
+                        currentTempStreak = 0
+                    }
+                }
+                bestStreakFromHistory = maxOf(bestStreakFromHistory, currentTempStreak)
+            }
+
+            _uiState.update { state -> state.copy(
+                totalScreenTime      = totalToday,
+                yesterdayScreenTime  = totalYesterday,
+                percentageChange     = percentageChange,
+                dailyUsageHistory    = history.reversed(),
+                hourlyUsage          = hourlyUsage,
+                sevenDayStamps       = sevenDayStamps,
+                topApps              = topApps,
+                allAppsUsage         = allAppsUsage,
+                activeShields = sortShields(liveShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.SHIELD }, state.shieldSortType),
+                activeGoals   = sortShields(liveShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL }, state.goalSortType),
+                globalCurrentStreak = liveStreak,
+                globalBestStreak = maxOf(prefGlobalBestStreak, bestStreakFromHistory),
+                targetMillis = targetMillis
+            ) }
+
+            viewModelScope.launch {
+                userPreferencesRepository.setLastKnownDailyUsage(totalToday, dateFormat.format(Date(now)))
+            }
         }
     }
 

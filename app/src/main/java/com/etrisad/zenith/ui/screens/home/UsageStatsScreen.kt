@@ -5,6 +5,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -24,9 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import com.etrisad.zenith.ui.components.UsageHistoryCard
@@ -36,6 +35,8 @@ import com.etrisad.zenith.ui.viewmodel.HourlyUsageInfo
 import java.text.SimpleDateFormat
 import java.util.*
 
+import androidx.compose.runtime.saveable.rememberSaveable
+
 @Composable
 fun UsageStatsScreen(
     viewModel: HomeViewModel,
@@ -43,6 +44,7 @@ fun UsageStatsScreen(
     onAppClick: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var selectedHour by rememberSaveable { mutableStateOf<Int?>(null) }
 
     val (regularApps, lowUsageApps) = remember(uiState.allAppsUsage) {
         uiState.allAppsUsage.partition { it.totalTimeVisible >= 60000L }
@@ -64,16 +66,59 @@ fun UsageStatsScreen(
                 GroupedCard(index = 0, total = 2) {
                     HourlyStatsContent(
                         hourlyUsage = uiState.hourlyUsage,
+                        selectedHour = selectedHour,
+                        onHourClick = { selectedHour = if (selectedHour == it) null else it },
                         formatDuration = viewModel::formatDuration
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
-                GroupedCard(index = 1, total = 2) {
-                    UsageHistoryContent(
-                        history = uiState.dailyUsageHistory,
-                        targetMillis = 0L, // Adjust if target is needed
-                        formatDuration = viewModel::formatDuration
-                    )
+                UsageHistoryCard(
+                    history = uiState.dailyUsageHistory,
+                    targetMillis = uiState.targetMillis,
+                    selectedDateMillis = uiState.selectedDateMillis,
+                    formatDuration = viewModel::formatDuration,
+                    onDaySelected = { usage ->
+                        viewModel.selectDate(usage?.date)
+                    },
+                    title = "Usage Trends",
+                    shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = 28.dp, bottomEnd = 28.dp),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            }
+        }
+
+        item {
+            AnimatedVisibility(
+                visible = selectedHour != null,
+                enter = expandVertically(animationSpec = spring(stiffness = Spring.StiffnessLow)) + fadeIn(),
+                exit = shrinkVertically(animationSpec = spring(stiffness = Spring.StiffnessLow)) + fadeOut()
+            ) {
+                val hourData = uiState.hourlyUsage.find { it.hour == selectedHour }
+                if (hourData != null && hourData.apps.isNotEmpty()) {
+                    Column(modifier = Modifier.padding(top = 16.dp)) {
+                        Text(
+                            text = "Apps at ${hourData.hour}:00",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        hourData.apps.forEachIndexed { index, app ->
+                            val shape = when {
+                                hourData.apps.size == 1 -> RoundedCornerShape(24.dp)
+                                index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                                index == hourData.apps.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                                else -> RoundedCornerShape(8.dp)
+                            }
+                            UsageItem(
+                                app = app,
+                                formatDuration = viewModel::formatDuration,
+                                shape = shape,
+                                onClick = { onAppClick(app.packageName) }
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                    }
                 }
             }
         }
@@ -201,24 +246,50 @@ fun GroupedCard(
 @Composable
 fun HourlyStatsContent(
     hourlyUsage: List<HourlyUsageInfo>,
+    selectedHour: Int?,
+    onHourClick: (Int) -> Unit,
     formatDuration: (Long) -> String
 ) {
     val maxUsage = hourlyUsage.maxOfOrNull { it.usageTimeMillis }?.coerceAtLeast(1L) ?: 1L
     
     Column(modifier = Modifier.padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Outlined.Schedule,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Hourly Usage",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Outlined.Schedule,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Hourly Usage",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            AnimatedContent(
+                targetState = selectedHour,
+                transitionSpec = {
+                    (fadeIn() + slideInVertically { it / 2 }).togetherWith(fadeOut() + slideOutVertically { -it / 2 })
+                },
+                label = "SelectedHourText"
+            ) { hour ->
+                if (hour != null) {
+                    val usage = hourlyUsage.find { it.hour == hour }?.usageTimeMillis ?: 0L
+                    Text(
+                        text = formatDuration(usage),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
         }
         Spacer(modifier = Modifier.height(16.dp))
         Row(
@@ -229,6 +300,9 @@ fun HourlyStatsContent(
             verticalAlignment = Alignment.Bottom
         ) {
             hourlyUsage.forEach { hourInfo ->
+                val isSelected = selectedHour == hourInfo.hour
+                val isCurrentHour = hourInfo.hour == Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+                
                 val barHeight = (hourInfo.usageTimeMillis.toFloat() / maxUsage).coerceIn(0.05f, 1f)
                 val animatedHeight by animateFloatAsState(
                     targetValue = barHeight,
@@ -236,18 +310,23 @@ fun HourlyStatsContent(
                     label = "HourlyBarHeight"
                 )
                 
+                val barColor = when {
+                    isSelected -> MaterialTheme.colorScheme.primary
+                    isCurrentHour -> MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                    else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                }
+
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .padding(horizontal = 1.dp)
+                        .padding(horizontal = 1.5.dp)
                         .fillMaxHeight(animatedHeight)
-                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                        .background(
-                            if (hourInfo.hour == Calendar.getInstance().get(Calendar.HOUR_OF_DAY))
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                        )
+                        .clip(CircleShape)
+                        .background(barColor)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { onHourClick(hourInfo.hour) }
                 )
             }
         }
@@ -256,38 +335,6 @@ fun HourlyStatsContent(
             Text("00:00", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("12:00", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("23:59", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-fun UsageHistoryContent(
-    history: List<com.etrisad.zenith.ui.viewmodel.DailyUsage>,
-    targetMillis: Long,
-    formatDuration: (Long) -> String
-) {
-    Column(modifier = Modifier.padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Outlined.History,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Usage Trends",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        Box(modifier = Modifier.height(120.dp)) {
-            com.etrisad.zenith.ui.components.UsageGraph(
-                history = history,
-                targetMillis = targetMillis,
-                onDaySelected = {}
-            )
         }
     }
 }

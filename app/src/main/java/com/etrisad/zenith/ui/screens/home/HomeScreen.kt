@@ -100,7 +100,8 @@ fun HomeScreen(
         onSeeFullList = onSeeFullList,
         onAppClick = onAppClick,
         onBedtimeClick = onBedtimeClick,
-        onStatsClick = onSeeFullList
+        onStatsClick = onSeeFullList,
+        onDaySelected = { viewModel.selectDate(it) }
     )
 }
 
@@ -116,7 +117,8 @@ fun HomeScreenContent(
     onSeeFullList: () -> Unit,
     onAppClick: (String) -> Unit,
     onBedtimeClick: () -> Unit,
-    onStatsClick: () -> Unit
+    onStatsClick: () -> Unit,
+    onDaySelected: (Long?) -> Unit
 ) {
     val targetMillis = preferences.screenTimeTargetMinutes * 60 * 1000L
     LazyColumn(
@@ -152,7 +154,11 @@ fun HomeScreenContent(
                 history = uiState.dailyUsageHistory,
                 targetMillis = targetMillis,
                 showDatabaseIndicator = preferences.showDatabaseIndicator,
+                selectedDateMillis = uiState.selectedDateMillis,
                 formatDuration = formatDuration,
+                onDaySelected = { usage ->
+                    onDaySelected(usage?.date)
+                },
                 shape = RoundedCornerShape(8.dp)
             )
             Spacer(modifier = Modifier.height(4.dp))
@@ -1216,6 +1222,7 @@ fun HomeScreenExpressivePreview() {
             onAppClick = {},
             onBedtimeClick = {},
             onStatsClick = {},
+            onDaySelected = {},
             innerPadding = PaddingValues()
         )
     }

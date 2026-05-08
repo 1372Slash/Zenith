@@ -30,21 +30,30 @@ import com.etrisad.zenith.ui.viewmodel.DailyUsage
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+import androidx.compose.runtime.saveable.rememberSaveable
+
 @Composable
 fun UsageHistoryCard(
     history: List<DailyUsage>,
     targetMillis: Long,
     focusType: FocusType? = null,
     showDatabaseIndicator: Boolean = false,
+    selectedDateMillis: Long? = null,
     formatDuration: (Long) -> String,
     onDaySelected: (DailyUsage?) -> Unit = {},
     shape: Shape = RoundedCornerShape(24.dp),
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
     title: String = "Last 21 Days"
 ) {
-    var selectedUsage by remember { mutableStateOf<DailyUsage?>(null) }
+    var internalSelectedDate by rememberSaveable { mutableStateOf<Long?>(null) }
+    val effectiveSelectedDate = selectedDateMillis ?: internalSelectedDate
+    
     val dateFormat = remember { SimpleDateFormat("dd", Locale.getDefault()) }
     val todayDate = remember { dateFormat.format(System.currentTimeMillis()) }
+    
+    val selectedUsage = remember(history, effectiveSelectedDate) {
+        history.find { it.date == effectiveSelectedDate }
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -93,8 +102,11 @@ fun UsageHistoryCard(
                 targetMillis = targetMillis,
                 focusType = focusType,
                 showDatabaseIndicator = showDatabaseIndicator,
+                selectedDateMillis = effectiveSelectedDate,
                 onDaySelected = { 
-                    selectedUsage = it
+                    if (selectedDateMillis == null) {
+                        internalSelectedDate = it?.date
+                    }
                     onDaySelected(it)
                 }
             )
@@ -109,6 +121,7 @@ fun UsageGraph(
     targetMillis: Long,
     focusType: FocusType? = null,
     showDatabaseIndicator: Boolean = false,
+    selectedDateMillis: Long? = null,
     onDaySelected: (DailyUsage?) -> Unit
 ) {
     val sunnyShape = remember {
@@ -138,7 +151,6 @@ fun UsageGraph(
     val dayFormat = remember { SimpleDateFormat("EEE", Locale.getDefault()) }
     val todayDate = remember { dateFormat.format(System.currentTimeMillis()) }
 
-    var selectedDate by remember { mutableStateOf<Long?>(null) }
     var animateTrigger by remember { mutableStateOf(false) }
 
     LaunchedEffect(history) {
@@ -149,15 +161,18 @@ fun UsageGraph(
     }
 
     LaunchedEffect(pagerState.currentPage) {
-        selectedDate = null
-        onDaySelected(null)
+        // Only reset if the current page doesn't contain the selected date
+        val currentPageData = pages.getOrNull(pagerState.currentPage) ?: emptyList()
+        if (selectedDateMillis != null && currentPageData.none { it.date == selectedDateMillis }) {
+            onDaySelected(null)
+        }
     }
 
     Column {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(180.dp)
+                .height(190.dp)
         ) {
             HorizontalPager(
                 state = pagerState,
@@ -182,7 +197,7 @@ fun UsageGraph(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(bottom = 24.dp),
+                            .padding(bottom = 32.dp),
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
                         repeat(4) { i ->
@@ -218,7 +233,7 @@ fun UsageGraph(
                         androidx.compose.foundation.Canvas(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(bottom = 24.dp, start = 32.dp)
+                                .padding(bottom = 32.dp, start = 32.dp)
                         ) {
                             val y = size.height * (1f - animatedGoalRatio)
                             drawLine(
@@ -233,12 +248,12 @@ fun UsageGraph(
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(bottom = 24.dp, start = 32.dp),
+                            .padding(bottom = 32.dp, start = 32.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.Bottom
                     ) {
                         pageData.forEach { usage ->
-                            val isSelected = selectedDate == usage.date
+                            val isSelected = selectedDateMillis == usage.date
                             val targetHeight = if (animateTrigger) (usage.totalTime.toFloat() / pageMax).coerceIn(0.01f, 1f) else 0.01f
                             val animatedHeight by animateFloatAsState(
                                 targetValue = targetHeight,
@@ -265,7 +280,6 @@ fun UsageGraph(
                                     .weight(1f)
                                     .clip(RoundedCornerShape(12.dp))
                                     .clickable {
-                                        selectedDate = if (isSelected) null else usage.date
                                         onDaySelected(if (isSelected) null else usage)
                                     }
                             ) {
@@ -308,7 +322,7 @@ fun UsageGraph(
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         pageData.forEach { usage ->
-                            val isSelected = selectedDate == usage.date
+                            val isSelected = selectedDateMillis == usage.date
                             val indicatorColor = when {
                                 usage.totalTime == 0L && !usage.isLive -> MaterialTheme.colorScheme.error
                                 usage.isLive -> MaterialTheme.colorScheme.tertiary
