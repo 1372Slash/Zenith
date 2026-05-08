@@ -64,6 +64,7 @@ class UserPreferencesRepository(private val context: Context) {
         val BEDTIME_WHITELISTED_PACKAGES = stringPreferencesKey("bedtime_whitelisted_packages")
         val USER_NAME = stringPreferencesKey("user_name")
         val EARLY_KICK_ENABLED = booleanPreferencesKey("early_kick_enabled")
+        val INTERCEPT_AUDIO_FOCUS_ENABLED = booleanPreferencesKey("intercept_audio_focus_enabled")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -114,6 +115,7 @@ class UserPreferencesRepository(private val context: Context) {
             val bedtimeWhitelistedPackages = preferences[PreferencesKeys.BEDTIME_WHITELISTED_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
             val userName = preferences[PreferencesKeys.USER_NAME] ?: "User"
             val earlyKickEnabled = preferences[PreferencesKeys.EARLY_KICK_ENABLED] ?: false
+            val interceptAudioFocusEnabled = preferences[PreferencesKeys.INTERCEPT_AUDIO_FOCUS_ENABLED] ?: true
 
             UserPreferences(
                 themeConfig = themeConfig,
@@ -149,7 +151,8 @@ class UserPreferencesRepository(private val context: Context) {
                 bedtimeNotificationEnabled = bedtimeNotificationEnabled,
                 bedtimeWhitelistedPackages = bedtimeWhitelistedPackages,
                 userName = userName,
-                earlyKickEnabled = earlyKickEnabled
+                earlyKickEnabled = earlyKickEnabled,
+                interceptAudioFocusEnabled = interceptAudioFocusEnabled
             )
         }
 
@@ -341,6 +344,12 @@ class UserPreferencesRepository(private val context: Context) {
             preferences[PreferencesKeys.EARLY_KICK_ENABLED] = enabled
         }
     }
+
+    suspend fun setInterceptAudioFocusEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.INTERCEPT_AUDIO_FOCUS_ENABLED] = enabled
+        }
+    }
 }
 
 data class UserPreferences(
@@ -377,5 +386,6 @@ data class UserPreferences(
     val bedtimeNotificationEnabled: Boolean = true,
     val bedtimeWhitelistedPackages: Set<String> = emptySet(),
     val userName: String = "User",
-    val earlyKickEnabled: Boolean = false
+    val earlyKickEnabled: Boolean = false,
+    val interceptAudioFocusEnabled: Boolean = true
 )

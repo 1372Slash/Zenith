@@ -228,6 +228,11 @@ fun SettingsScreen(
             coroutineScope.launch {
                 preferencesRepository.setEarlyKickEnabled(enabled)
             }
+        },
+        onInterceptAudioFocusEnabledChange = { enabled ->
+            coroutineScope.launch {
+                preferencesRepository.setInterceptAudioFocusEnabled(enabled)
+            }
         }
     )
 
@@ -280,7 +285,8 @@ fun SettingsScreenContent(
     onFloatingTabBarEnabledChange: (Boolean) -> Unit,
     onExpressiveColorsChange: (Boolean) -> Unit,
     onTotalUsagePillEnabledChange: (Boolean) -> Unit,
-    onEarlyKickEnabledChange: (Boolean) -> Unit
+    onEarlyKickEnabledChange: (Boolean) -> Unit,
+    onInterceptAudioFocusEnabledChange: (Boolean) -> Unit
 ) {
     var showTargetSheet by remember { mutableStateOf(false) }
     var showEmergencyRechargeSheet by remember { mutableStateOf(false) }
@@ -420,6 +426,18 @@ fun SettingsScreenContent(
                         )
                     }
                 }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                SettingsToggle(
+                    title = "Pause Media",
+                    description = "Automatically pause media when an overlay appears",
+                    checked = preferences.interceptAudioFocusEnabled,
+                    onCheckedChange = onInterceptAudioFocusEnabledChange,
+                    icon = Icons.Outlined.MusicNote,
+                    shape = RoundedCornerShape(8.dp)
+                )
             }
 
             item {

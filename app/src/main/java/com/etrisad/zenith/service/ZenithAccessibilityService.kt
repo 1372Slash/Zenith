@@ -106,7 +106,7 @@ class ZenithAccessibilityService : AccessibilityService() {
         val app = application as com.etrisad.zenith.ZenithApplication
         shieldRepository = app.shieldRepository
         preferencesRepository = UserPreferencesRepository(this)
-        overlayManager = InterceptOverlayManager(this)
+        overlayManager = InterceptOverlayManager(this, preferencesRepository)
         sessionUsageOverlayManager = SessionUsageOverlayManager(this)
 
         serviceScope.launch(Dispatchers.Main) {

@@ -2,6 +2,9 @@ package com.etrisad.zenith.service
 
 import android.content.Context
 import android.graphics.PixelFormat
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -19,13 +22,22 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.etrisad.zenith.ui.theme.ZenithTheme
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class InterceptOverlayManager(private val context: Context) {
+class InterceptOverlayManager(
+    private val context: Context,
+    private val preferencesRepository: com.etrisad.zenith.data.preferences.UserPreferencesRepository
+) {
 
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val managerScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     companion object {
         private const val TAG = "InterceptOverlayManager"
@@ -36,6 +48,9 @@ class InterceptOverlayManager(private val context: Context) {
         private var viewModelStore: ViewModelStore? = null
         @Volatile
         private var currentPackage: String? = null
+        private var audioFocusRequest: AudioFocusRequest? = null
+        private var focusRequestJob: kotlinx.coroutines.Job? = null
+        private val afChangeListener = AudioManager.OnAudioFocusChangeListener { }
 
         private val SYSTEM_UI_PACKAGES = setOf(
             "com.android.systemui",
@@ -363,6 +378,7 @@ class InterceptOverlayManager(private val context: Context) {
         }
 
         try {
+            requestMediaPause()
             windowManager.addView(composeView, params)
             overlayView = composeView
             lOwner.handleLifecycleEvent(Lifecycle.Event.ON_START)
@@ -386,19 +402,18 @@ class InterceptOverlayManager(private val context: Context) {
     }
 
     fun hideOverlay() {
+        isShowing = false
+        val target = currentPackage
+        currentPackage = null
+        
+        resumeMedia()
+
         if (Looper.myLooper() != Looper.getMainLooper()) {
-            isShowing = false
-            currentPackage = null
             mainHandler.post { hideOverlay() }
             return
         }
 
         val view = overlayView
-        val target = currentPackage
-        
-        isShowing = false
-        currentPackage = null
-
         Log.d(TAG, "Hiding overlay for $target")
         if (view != null) {
             try {
@@ -418,8 +433,112 @@ class InterceptOverlayManager(private val context: Context) {
                 lifecycleOwner = null
                 viewModelStore = null
             }
+        }
+    }
+
+    private fun requestMediaPause() {
+        val pkg = currentPackage ?: return
+        if (!shouldRequestMediaFocus(pkg)) return
+
+        focusRequestJob?.cancel()
+        focusRequestJob = managerScope.launch {
+            val enabled = preferencesRepository.userPreferencesFlow.first().interceptAudioFocusEnabled
+            if (!enabled) return@launch
+
+            if (!isShowing || currentPackage != pkg) return@launch
+
+            val focusType = if (isVideoApp(pkg)) {
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
+            } else {
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val playbackAttributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+                val focusRequest = AudioFocusRequest.Builder(focusType)
+                    .setAudioAttributes(playbackAttributes)
+                    .setAcceptsDelayedFocusGain(false)
+                    .setOnAudioFocusChangeListener(afChangeListener)
+                    .build()
+                audioFocusRequest = focusRequest
+                audioManager.requestAudioFocus(focusRequest)
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.requestAudioFocus(
+                    afChangeListener,
+                    AudioManager.STREAM_MUSIC,
+                    focusType
+                )
+            }
+        }
+    }
+
+    private fun isVideoApp(packageName: String): Boolean {
+        val strictVideoApps = setOf(
+            "com.google.android.youtube",
+            "com.netflix.mediaclient",
+            "com.disney.disneyplus",
+            "tv.twitch.android.app",
+            "com.ss.android.ugc.aweme",
+            "com.zhiliaoapp.musically",
+            "com.instagram.android",
+            "com.facebook.katana"
+        )
+        if (strictVideoApps.contains(packageName)) return true
+
+        return try {
+            val appInfo = context.packageManager.getApplicationInfo(packageName, 0)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                appInfo.category == android.content.pm.ApplicationInfo.CATEGORY_VIDEO
+            } else false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun shouldRequestMediaFocus(packageName: String): Boolean {
+        val mediaApps = setOf(
+            "com.google.android.youtube",
+            "com.zhiliaoapp.musically",
+            "com.ss.android.ugc.aweme",
+            "com.instagram.android",
+            "com.facebook.katana",
+            "com.netflix.mediaclient",
+            "com.disney.disneyplus",
+            "tv.twitch.android.app",
+            "com.twitter.android",
+            "com.snapchat.android",
+            "com.google.android.apps.youtube.music",
+            "com.spotify.music"
+        )
+        if (mediaApps.contains(packageName)) return true
+
+        return try {
+            val appInfo = context.packageManager.getApplicationInfo(packageName, 0)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                appInfo.category == android.content.pm.ApplicationInfo.CATEGORY_VIDEO ||
+                appInfo.category == android.content.pm.ApplicationInfo.CATEGORY_GAME ||
+                appInfo.category == android.content.pm.ApplicationInfo.CATEGORY_SOCIAL ||
+                appInfo.category == android.content.pm.ApplicationInfo.CATEGORY_AUDIO
+            } else false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun resumeMedia() {
+        focusRequestJob?.cancel()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let {
+                audioManager.abandonAudioFocusRequest(it)
+                audioFocusRequest = null
+            }
         } else {
-            Log.d(TAG, "hideOverlay: overlayView is already null")
+            @Suppress("DEPRECATION")
+            audioManager.abandonAudioFocus(afChangeListener)
         }
     }
 
