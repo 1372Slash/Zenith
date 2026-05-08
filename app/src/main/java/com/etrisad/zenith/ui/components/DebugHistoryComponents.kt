@@ -1,14 +1,14 @@
 package com.etrisad.zenith.ui.components
 
 import androidx.compose.animation.*
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.ui.viewmodel.UsageHistoryGroup
@@ -39,16 +40,21 @@ fun UsageHistoryList(
         modifier = modifier.fillMaxSize(),
         contentPadding = contentPadding
     ) {
-        items(
+        itemsIndexed(
             items = historyData,
-            key = { it.date }
-        ) { group ->
+            key = { _, it -> it.date }
+        ) { index, group ->
             UsageHistoryGroupCard(
                 group = group,
                 formatDuration = formatDuration,
-                dateFormatter = dateFormatter
+                dateFormatter = dateFormatter,
+                isFirst = index == 0,
+                isLast = index == historyData.size - 1
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            
+            if (index < historyData.size - 1) {
+                Spacer(modifier = Modifier.height(4.dp))
+            }
         }
     }
 }
@@ -58,6 +64,8 @@ fun UsageHistoryGroupCard(
     group: UsageHistoryGroup,
     formatDuration: (Long) -> String,
     dateFormatter: SimpleDateFormat,
+    isFirst: Boolean,
+    isLast: Boolean,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -66,17 +74,35 @@ fun UsageHistoryGroupCard(
         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)
     )
 
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
+    )
+
+    val shape = when {
+        isFirst && isLast -> RoundedCornerShape(24.dp)
+        isFirst -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+        isLast -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+        else -> RoundedCornerShape(8.dp)
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(shape)
             .animateContentSize(
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioLowBouncy,
                     stiffness = Spring.StiffnessLow
                 )
             ),
-        shape = RoundedCornerShape(24.dp),
+        shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = when {
                 group.isMissing -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
@@ -89,8 +115,12 @@ fun UsageHistoryGroupCard(
         Column {
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(24.dp))
-                    .clickable { if (!group.isMissing) expanded = !expanded }
+                    .clip(shape)
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = ripple(),
+                        onClick = { if (!group.isMissing) expanded = !expanded }
+                    )
                     .padding(16.dp)
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -118,7 +148,7 @@ fun UsageHistoryGroupCard(
 
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(40.dp)
                         .background(statusContainerColor, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
@@ -130,6 +160,7 @@ fun UsageHistoryGroupCard(
                             else -> Icons.Outlined.Assessment
                         },
                         contentDescription = null,
+                        modifier = Modifier.size(20.dp),
                         tint = onStatusContainerColor
                     )
                 }
@@ -169,77 +200,79 @@ fun UsageHistoryGroupCard(
                         color = statusColor
                     )
                     
-                    Row(
-                        modifier = Modifier.padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AnimatedVisibility(
-                            visible = group.hasSnapshot,
-                            enter = fadeIn() + expandHorizontally(),
-                            exit = fadeOut() + shrinkHorizontally()
+                    if (group.hasSnapshot || group.hasHourlyUsage) {
+                        Row(
+                            modifier = Modifier.padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                shape = RoundedCornerShape(8.dp),
-                                border = androidx.compose.foundation.BorderStroke(
-                                    1.dp, 
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                )
+                            AnimatedVisibility(
+                                visible = group.hasSnapshot,
+                                enter = fadeIn() + expandHorizontally(),
+                                exit = fadeOut() + shrinkHorizontally()
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp, 
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                    )
                                 ) {
-                                    Icon(
-                                        Icons.Outlined.Camera,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(10.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                    Text(
-                                        "SNAPSHOT",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.8f
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.Camera,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(10.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            "SNAPSHOT",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.8f
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        AnimatedVisibility(
-                            visible = group.hasHourlyUsage,
-                            enter = fadeIn() + expandHorizontally(),
-                            exit = fadeOut() + shrinkHorizontally()
-                        ) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f),
-                                shape = RoundedCornerShape(8.dp),
-                                border = androidx.compose.foundation.BorderStroke(
-                                    1.dp, 
-                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
-                                )
+                            AnimatedVisibility(
+                                visible = group.hasHourlyUsage,
+                                enter = fadeIn() + expandHorizontally(),
+                                exit = fadeOut() + shrinkHorizontally()
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                Surface(
+                                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp, 
+                                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
+                                    )
                                 ) {
-                                    Icon(
-                                        Icons.Outlined.Schedule,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(10.dp),
-                                        tint = MaterialTheme.colorScheme.secondary
-                                    )
-                                    Text(
-                                        "HOURLY",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.secondary,
-                                        fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.8f
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.Schedule,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(10.dp),
+                                            tint = MaterialTheme.colorScheme.secondary
+                                        )
+                                        Text(
+                                            "HOURLY",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.secondary,
+                                            fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.8f
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -268,8 +301,8 @@ fun UsageHistoryGroupCard(
                     )
                     
                     group.records.forEachIndexed { index, record ->
-                        val isFirst = index == 0
-                        val isLast = index == group.records.size - 1
+                        val isFirstRec = index == 0
+                        val isLastRec = index == group.records.size - 1
                         
                         when (record) {
                             is UsageRecord.Database -> {
@@ -278,8 +311,8 @@ fun UsageHistoryGroupCard(
                                     formattedDuration = formatDuration(record.entity.usageTimeMillis),
                                     formattedTime = dateFormatter.format(Date(record.entity.lastUpdated)),
                                     isDatabase = true,
-                                    isFirst = isFirst,
-                                    isLast = isLast
+                                    isFirst = isFirstRec,
+                                    isLast = isLastRec
                                 )
                             }
                             is UsageRecord.Live -> {
@@ -288,13 +321,13 @@ fun UsageHistoryGroupCard(
                                     formattedDuration = formatDuration(record.usageTimeMillis),
                                     formattedTime = "Now",
                                     isDatabase = false,
-                                    isFirst = isFirst,
-                                    isLast = isLast
+                                    isFirst = isFirstRec,
+                                    isLast = isLastRec
                                 )
                             }
                         }
                         
-                        if (!isLast) {
+                        if (!isLastRec) {
                             Spacer(modifier = Modifier.height(4.dp))
                         }
                     }
@@ -314,14 +347,12 @@ fun UsageRecordListItem(
     isLast: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val topRadius = if (isFirst) 16.dp else 4.dp
-    val bottomRadius = if (isLast) 16.dp else 4.dp
-    val shape = RoundedCornerShape(
-        topStart = topRadius,
-        topEnd = topRadius,
-        bottomStart = bottomRadius,
-        bottomEnd = bottomRadius
-    )
+    val shape = when {
+        isFirst && isLast -> RoundedCornerShape(16.dp)
+        isFirst -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+        isLast -> RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
+        else -> RoundedCornerShape(4.dp)
+    }
 
     Surface(
         modifier = modifier
@@ -335,12 +366,23 @@ fun UsageRecordListItem(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = if (packageName == "TOTAL") Icons.Outlined.History else Icons.Outlined.SdStorage,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = if (isDatabase) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
-            )
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(
+                        if (isDatabase) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        else MaterialTheme.colorScheme.tertiary.copy(alpha = 0.1f),
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (packageName == "TOTAL") Icons.Outlined.History else Icons.Outlined.SdStorage,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = if (isDatabase) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
+                )
+            }
 
             Spacer(modifier = Modifier.width(12.dp))
 

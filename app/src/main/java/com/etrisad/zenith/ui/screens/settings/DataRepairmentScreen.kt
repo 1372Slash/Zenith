@@ -5,6 +5,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -156,18 +158,27 @@ fun RepairableGroupCard(
         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)
     )
 
-    val topRadius = if (isFirst) 24.dp else 8.dp
-    val bottomRadius = if (isLast) 24.dp else 8.dp
-    val shape = RoundedCornerShape(
-        topStart = topRadius,
-        topEnd = topRadius,
-        bottomStart = bottomRadius,
-        bottomEnd = bottomRadius
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed && enabled) 0.97f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
     )
+
+    val shape = when {
+        isFirst && isLast -> RoundedCornerShape(24.dp)
+        isFirst -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+        isLast -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+        else -> RoundedCornerShape(8.dp)
+    }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clip(shape)
             .animateContentSize(
                 animationSpec = spring(
@@ -184,21 +195,27 @@ fun RepairableGroupCard(
             Row(
                 modifier = Modifier
                     .clip(shape)
-                    .clickable(enabled = enabled) { expanded = !expanded }
+                    .clickable(
+                        enabled = enabled,
+                        interactionSource = interactionSource,
+                        indication = ripple(),
+                        onClick = { expanded = !expanded }
+                    )
                     .padding(16.dp)
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(40.dp)
                         .background(MaterialTheme.colorScheme.errorContainer, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.BugReport,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onErrorContainer
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
@@ -298,12 +315,12 @@ fun RepairRecordItem(
     isFirst: Boolean,
     isLast: Boolean
 ) {
-    val shape = RoundedCornerShape(
-        topStart = if (isFirst) 16.dp else 4.dp,
-        topEnd = if (isFirst) 16.dp else 4.dp,
-        bottomStart = if (isLast) 16.dp else 4.dp,
-        bottomEnd = if (isLast) 16.dp else 4.dp
-    )
+    val shape = when {
+        isFirst && isLast -> RoundedCornerShape(16.dp)
+        isFirst -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+        isLast -> RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
+        else -> RoundedCornerShape(4.dp)
+    }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -314,12 +331,23 @@ fun RepairRecordItem(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = if (packageName == "TOTAL") Icons.Outlined.Analytics else Icons.Outlined.Android,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = if (packageName == "TOTAL") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
-            )
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(
+                        if (packageName == "TOTAL") MaterialTheme.colorScheme.primaryContainer 
+                        else MaterialTheme.colorScheme.secondaryContainer,
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (packageName == "TOTAL") Icons.Outlined.Analytics else Icons.Outlined.Android,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = if (packageName == "TOTAL") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                )
+            }
             Spacer(modifier = Modifier.width(12.dp))
             Text(
                 text = packageName,
