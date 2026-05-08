@@ -26,7 +26,8 @@ data class AppUsageInfo(
 
 data class DailyUsage(
     val date: Long,
-    val totalTime: Long
+    val totalTime: Long,
+    val hasDatabaseRecord: Boolean = false
 )
 
 data class AppDetailUiState(
@@ -231,14 +232,15 @@ class HomeViewModel(
             val dStart = getMidnight(i)
             val dateStr = dateFormat.format(Date(dStart))
             
+            val dbEntry = globalHistory.find { it.date == dateStr }
             val dayTotal = if (i == 0) {
                 totalToday
             } else {
-                globalHistory.find { it.date == dateStr }?.usageTimeMillis 
+                dbEntry?.usageTimeMillis 
                     ?: globalFallbackMap[dateStr] 
                     ?: 0L
             }
-            DailyUsage(dStart, dayTotal)
+            DailyUsage(dStart, dayTotal, hasDatabaseRecord = dbEntry != null)
         }
 
         val percentageChange = when {
@@ -370,14 +372,15 @@ class HomeViewModel(
                     val dStart = getMidnight(i)
                     val dateStr = dateFormat.format(Date(dStart))
                     
+                    val dbEntry = historyFromDb.find { it.date == dateStr }
                     val dayTotal = if (i == 0) {
                         currentTodayUsage
                     } else {
-                        historyFromDb.find { it.date == dateStr }?.usageTimeMillis 
+                        dbEntry?.usageTimeMillis 
                             ?: detailFallbackMap[dateStr]
                             ?: 0L
                     }
-                    DailyUsage(dStart, dayTotal)
+                    DailyUsage(dStart, dayTotal, hasDatabaseRecord = dbEntry != null)
                 }
 
                 val percentageChange = when {

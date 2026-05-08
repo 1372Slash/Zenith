@@ -51,9 +51,13 @@ import java.util.Locale
 fun AppDetailScreen(
     packageName: String,
     viewModel: HomeViewModel,
+    userPreferencesRepository: com.etrisad.zenith.data.preferences.UserPreferencesRepository,
     innerPadding: PaddingValues
 ) {
     val uiState by viewModel.appDetailUiState.collectAsState()
+    val preferences by userPreferencesRepository.userPreferencesFlow.collectAsState(
+        initial = com.etrisad.zenith.data.preferences.UserPreferences()
+    )
     val nowMillis by produceState(initialValue = System.currentTimeMillis()) {
         while (true) {
             delay(1000)
@@ -147,6 +151,7 @@ fun AppDetailScreen(
                         history = uiState.usageHistory,
                         targetMillis = targetMillis,
                         focusType = uiState.type,
+                        showDatabaseIndicator = preferences.showDatabaseIndicator,
                         formatDuration = { viewModel.formatDuration(it) },
                         onDaySelected = { },
                         shape = RoundedCornerShape(
@@ -635,6 +640,7 @@ fun UsageHistoryCard(
     history: List<com.etrisad.zenith.ui.viewmodel.DailyUsage>,
     targetMillis: Long,
     focusType: FocusType?,
+    showDatabaseIndicator: Boolean = false,
     formatDuration: (Long) -> String,
     onDaySelected: (com.etrisad.zenith.ui.viewmodel.DailyUsage?) -> Unit,
     shape: androidx.compose.ui.graphics.Shape
@@ -691,6 +697,7 @@ fun UsageHistoryCard(
                 history = history,
                 targetMillis = targetMillis,
                 focusType = focusType,
+                showDatabaseIndicator = showDatabaseIndicator,
                 onDaySelected = { 
                     selectedUsage = it
                     onDaySelected(it)

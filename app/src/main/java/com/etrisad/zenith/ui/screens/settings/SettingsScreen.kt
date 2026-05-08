@@ -233,6 +233,16 @@ fun SettingsScreen(
             coroutineScope.launch {
                 preferencesRepository.setInterceptAudioFocusEnabled(enabled)
             }
+        },
+        onShowDatabaseIndicatorChange = { enabled ->
+            coroutineScope.launch {
+                preferencesRepository.setShowDatabaseIndicator(enabled)
+            }
+        },
+        onDeveloperModeEnabledChange = { enabled ->
+            coroutineScope.launch {
+                preferencesRepository.setDeveloperModeEnabled(enabled)
+            }
         }
     )
 
@@ -286,7 +296,9 @@ fun SettingsScreenContent(
     onExpressiveColorsChange: (Boolean) -> Unit,
     onTotalUsagePillEnabledChange: (Boolean) -> Unit,
     onEarlyKickEnabledChange: (Boolean) -> Unit,
-    onInterceptAudioFocusEnabledChange: (Boolean) -> Unit
+    onInterceptAudioFocusEnabledChange: (Boolean) -> Unit,
+    onShowDatabaseIndicatorChange: (Boolean) -> Unit,
+    onDeveloperModeEnabledChange: (Boolean) -> Unit
 ) {
     var showTargetSheet by remember { mutableStateOf(false) }
     var showEmergencyRechargeSheet by remember { mutableStateOf(false) }
@@ -572,6 +584,24 @@ fun SettingsScreenContent(
                 )
             }
 
+            if (preferences.developerModeEnabled) {
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    PreferenceCategory(title = "Developer")
+                }
+
+                item {
+                    SettingsToggle(
+                        title = "Database Source Indicator",
+                        description = "Show indicator for database records in usage graphs",
+                        checked = preferences.showDatabaseIndicator,
+                        onCheckedChange = onShowDatabaseIndicatorChange,
+                        icon = Icons.Outlined.Storage,
+                        shape = RoundedCornerShape(24.dp)
+                    )
+                }
+            }
+
             item {
                 Spacer(modifier = Modifier.height(16.dp))
                 PreferenceCategory(title = "About")
@@ -580,6 +610,8 @@ fun SettingsScreenContent(
             item {
                 AppInfoCard(
                     versionName = versionName,
+                    developerModeEnabled = preferences.developerModeEnabled,
+                    onDeveloperModeChange = onDeveloperModeEnabledChange,
                     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
                 )
             }
@@ -1680,8 +1712,14 @@ fun HUDAppearanceSettings(
 @Composable
 fun AppInfoCard(
     versionName: String,
+    developerModeEnabled: Boolean,
+    onDeveloperModeChange: (Boolean) -> Unit,
     shape: Shape = RoundedCornerShape(24.dp)
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    var clickCount by remember { mutableIntStateOf(0) }
+    
     val logoShape = remember {
         GenericShape { size, _ ->
             val materialPath = MaterialShapes.Sunny.toPath()
@@ -1694,7 +1732,23 @@ fun AppInfoCard(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .clickable {
+                clickCount++
+                if (!developerModeEnabled) {
+                    if (clickCount >= 3) {
+                        onDeveloperModeChange(true)
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        Toast.makeText(context, "Developer mode enabled!", Toast.LENGTH_SHORT).show()
+                        clickCount = 0
+                    } else {
+                        val remaining = 3 - clickCount
+                        Toast.makeText(context, "Tap $remaining more times for Developer Mode", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
         shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow

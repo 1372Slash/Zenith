@@ -139,6 +139,7 @@ fun UsageItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(shape)
             .clickable { onClick() },
         shape = shape,
         colors = CardDefaults.cardColors(

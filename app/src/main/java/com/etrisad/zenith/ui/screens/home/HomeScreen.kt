@@ -148,6 +148,7 @@ fun HomeScreenContent(
             UsageHistoryCard(
                 history = uiState.dailyUsageHistory,
                 targetMillis = targetMillis,
+                showDatabaseIndicator = preferences.showDatabaseIndicator,
                 formatDuration = formatDuration,
                 shape = RoundedCornerShape(8.dp)
             )
@@ -528,6 +529,7 @@ fun UsageTrendsRow(
 fun UsageHistoryCard(
     history: List<com.etrisad.zenith.ui.viewmodel.DailyUsage>,
     targetMillis: Long,
+    showDatabaseIndicator: Boolean = false,
     formatDuration: (Long) -> String,
     shape: Shape
 ) {
@@ -581,6 +583,7 @@ fun UsageHistoryCard(
             UsageGraph(
                 history = history,
                 targetMillis = targetMillis,
+                showDatabaseIndicator = showDatabaseIndicator,
                 onDaySelected = { selectedUsage = it }
             )
         }
@@ -593,6 +596,7 @@ fun UsageGraph(
     history: List<com.etrisad.zenith.ui.viewmodel.DailyUsage>,
     targetMillis: Long,
     focusType: FocusType? = null,
+    showDatabaseIndicator: Boolean = false,
     onDaySelected: (com.etrisad.zenith.ui.viewmodel.DailyUsage?) -> Unit
 ) {
     val sunnyShape = remember {
@@ -747,10 +751,8 @@ fun UsageGraph(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable {
                                         selectedDate = if (isSelected) null else usage.date
                                         onDaySelected(if (isSelected) null else usage)
                                     }
@@ -790,17 +792,42 @@ fun UsageGraph(
                             .fillMaxWidth()
                             .align(Alignment.BottomStart)
                             .padding(start = 32.dp)
-                            .height(20.dp),
+                            .height(26.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         pageData.forEach { usage ->
-                            Text(
-                                text = dayFormat.format(usage.date).first().toString(),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.weight(1f),
-                                textAlign = TextAlign.Center
+                            val isSelected = selectedDate == usage.date
+                            val indicatorColor = if (usage.hasDatabaseRecord) Color(0xFFFFD700) else Color(0xFFFF5252)
+                            val animatedIndicatorColor by animateColorAsState(
+                                targetValue = if (animateTrigger) indicatorColor else indicatorColor.copy(alpha = 0f),
+                                animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessVeryLow)
                             )
+                            val animatedWidth by animateDpAsState(
+                                targetValue = if (animateTrigger) 12.dp else 0.dp,
+                                animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow)
+                            )
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = dayFormat.format(usage.date).first().toString(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    textAlign = TextAlign.Center
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .padding(top = 2.dp)
+                                        .width(animatedWidth)
+                                        .height(if (showDatabaseIndicator) 2.dp else 0.dp)
+                                        .clip(CircleShape)
+                                        .background(if (showDatabaseIndicator) animatedIndicatorColor else Color.Transparent)
+                                )
+                            }
                         }
                     }
                 }

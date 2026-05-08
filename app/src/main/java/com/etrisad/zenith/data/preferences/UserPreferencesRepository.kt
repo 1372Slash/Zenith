@@ -65,6 +65,8 @@ class UserPreferencesRepository(private val context: Context) {
         val USER_NAME = stringPreferencesKey("user_name")
         val EARLY_KICK_ENABLED = booleanPreferencesKey("early_kick_enabled")
         val INTERCEPT_AUDIO_FOCUS_ENABLED = booleanPreferencesKey("intercept_audio_focus_enabled")
+        val SHOW_DATABASE_INDICATOR = booleanPreferencesKey("show_database_indicator")
+        val DEVELOPER_MODE_ENABLED = booleanPreferencesKey("developer_mode_enabled")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -116,6 +118,8 @@ class UserPreferencesRepository(private val context: Context) {
             val userName = preferences[PreferencesKeys.USER_NAME] ?: "User"
             val earlyKickEnabled = preferences[PreferencesKeys.EARLY_KICK_ENABLED] ?: false
             val interceptAudioFocusEnabled = preferences[PreferencesKeys.INTERCEPT_AUDIO_FOCUS_ENABLED] ?: true
+            val showDatabaseIndicator = preferences[PreferencesKeys.SHOW_DATABASE_INDICATOR] ?: false
+            val developerModeEnabled = preferences[PreferencesKeys.DEVELOPER_MODE_ENABLED] ?: false
 
             UserPreferences(
                 themeConfig = themeConfig,
@@ -152,7 +156,9 @@ class UserPreferencesRepository(private val context: Context) {
                 bedtimeWhitelistedPackages = bedtimeWhitelistedPackages,
                 userName = userName,
                 earlyKickEnabled = earlyKickEnabled,
-                interceptAudioFocusEnabled = interceptAudioFocusEnabled
+                interceptAudioFocusEnabled = interceptAudioFocusEnabled,
+                showDatabaseIndicator = showDatabaseIndicator,
+                developerModeEnabled = developerModeEnabled
             )
         }
 
@@ -350,6 +356,18 @@ class UserPreferencesRepository(private val context: Context) {
             preferences[PreferencesKeys.INTERCEPT_AUDIO_FOCUS_ENABLED] = enabled
         }
     }
+
+    suspend fun setShowDatabaseIndicator(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.SHOW_DATABASE_INDICATOR] = enabled
+        }
+    }
+
+    suspend fun setDeveloperModeEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.DEVELOPER_MODE_ENABLED] = enabled
+        }
+    }
 }
 
 data class UserPreferences(
@@ -387,5 +405,7 @@ data class UserPreferences(
     val bedtimeWhitelistedPackages: Set<String> = emptySet(),
     val userName: String = "User",
     val earlyKickEnabled: Boolean = false,
-    val interceptAudioFocusEnabled: Boolean = true
+    val interceptAudioFocusEnabled: Boolean = true,
+    val showDatabaseIndicator: Boolean = false,
+    val developerModeEnabled: Boolean = false
 )

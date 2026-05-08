@@ -578,6 +578,7 @@ fun MainScreen(
                         com.etrisad.zenith.ui.screens.home.AppDetailScreen(
                             packageName = packageName,
                             viewModel = homeViewModel,
+                            userPreferencesRepository = userPreferencesRepository,
                             innerPadding = innerPadding
                         )
                     }
