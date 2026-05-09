@@ -216,7 +216,8 @@ fun UsageStatsScreen(
                         bedtimeEndTime = uiState.bedtimeEndTime,
                         bedtimeDays = uiState.bedtimeDays,
                         dateMillis = uiState.selectedDateMillis,
-                        accentColor = hourlyAccentColor
+                        accentColor = hourlyAccentColor,
+                        showDatabaseIndicator = showDatabaseIndicator
                     )
                 }
             }
@@ -987,7 +988,8 @@ fun HourlyStatsContent(
     bedtimeEndTime: String,
     bedtimeDays: Set<Int>,
     dateMillis: Long,
-    accentColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary
+    accentColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary,
+    showDatabaseIndicator: Boolean = false
 ) {
     val maxUsage = hourlyUsage.maxOfOrNull { it.usageTimeMillis }?.coerceAtLeast(1L) ?: 1L
     
@@ -1125,6 +1127,34 @@ fun HourlyStatsContent(
                 )
             }
         }
+        
+        if (showDatabaseIndicator) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                hourlyUsage.forEach { hourInfo ->
+                    val indicatorColor = when {
+                        hourInfo.usageTimeMillis == 0L && !hourInfo.isLive -> MaterialTheme.colorScheme.error
+                        hourInfo.isLive -> MaterialTheme.colorScheme.tertiary
+                        hourInfo.hasDatabaseRecord -> MaterialTheme.colorScheme.primary
+                        hourInfo.hasSystemData -> MaterialTheme.colorScheme.secondary
+                        else -> MaterialTheme.colorScheme.error
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 1.5.dp)
+                            .height(2.dp)
+                            .clip(CircleShape)
+                            .background(indicatorColor)
+                    )
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("00:00", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

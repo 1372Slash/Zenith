@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.entity.DailyUsageEntity
+import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import kotlinx.coroutines.Job
@@ -55,7 +56,10 @@ data class AppDetailUiState(
 data class HourlyUsageInfo(
     val hour: Int,
     val usageTimeMillis: Long,
-    val apps: List<AppUsageInfo> = emptyList()
+    val apps: List<AppUsageInfo> = emptyList(),
+    val hasDatabaseRecord: Boolean = false,
+    val hasSystemData: Boolean = false,
+    val isLive: Boolean = false
 )
 
 data class HomeUiState(
@@ -297,6 +301,11 @@ class HomeViewModel(
                 ) }
                 refreshUsageStats()
             }
+        }
+
+        viewModelScope.launch {
+            val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            shieldRepository.deleteOldHourlyUsage(todayStr)
         }
 
         refreshUsageStats()
@@ -552,16 +561,79 @@ class HomeViewModel(
                 (0..23).sumOf { h -> hourlyAppUsage[h]?.get(pkg) ?: 0L }
             }
 
+            val selectedDateStr = dateFormat.format(Date(selectedDate))
+            val dbHourly = shieldRepository.getHourlyUsageForDate(selectedDateStr).first()
+            val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+            val newlyLocked = mutableListOf<HourlyUsageEntity>()
+
+            if (isSelectedToday) {
+                val lockedHours = dbHourly.map { it.hour }.distinct().toSet()
+                for (h in 0 until currentHour) {
+                    if (h !in lockedHours) {
+                        val startOfH = Calendar.getInstance().apply {
+                            timeInMillis = selectedDate
+                            set(Calendar.HOUR_OF_DAY, h)
+                            set(Calendar.MINUTE, 0)
+                            set(Calendar.SECOND, 0)
+                            set(Calendar.MILLISECOND, 0)
+                        }.timeInMillis
+                        
+                        val endOfH = Calendar.getInstance().apply {
+                            timeInMillis = selectedDate
+                            set(Calendar.HOUR_OF_DAY, h)
+                            set(Calendar.MINUTE, 59)
+                            set(Calendar.SECOND, 59)
+                            set(Calendar.MILLISECOND, 999)
+                        }.timeInMillis
+
+                        val statsUntilH = usm.queryAndAggregateUsageStats(dayStart, endOfH)
+                        val statsUntilPrevH = if (h == 0) emptyMap() else usm.queryAndAggregateUsageStats(dayStart, startOfH - 1)
+
+                        appTotals.keys.forEach { pkg ->
+                            val totalUntilH = statsUntilH[pkg]?.let { it.totalTimeVisible.coerceAtLeast(it.totalTimeInForeground) } ?: 0L
+                            val totalUntilPrevH = statsUntilPrevH[pkg]?.let { it.totalTimeVisible.coerceAtLeast(it.totalTimeInForeground) } ?: 0L
+                            val diff = (totalUntilH - totalUntilPrevH).coerceAtLeast(0L)
+                            
+                            if (diff > 0) {
+                                newlyLocked.add(HourlyUsageEntity(
+                                    date = selectedDateStr,
+                                    hour = h,
+                                    packageName = pkg,
+                                    usageTimeMillis = diff,
+                                    lastUpdated = System.currentTimeMillis()
+                                ))
+                            }
+                        }
+                    }
+                }
+                if (newlyLocked.isNotEmpty()) {
+                    shieldRepository.insertHourlyUsage(newlyLocked)
+                }
+            }
+
+            val allHourlyData = dbHourly + newlyLocked
+
             val hourlyUsage = (0..23).map { hour ->
                 val appsInHour = appTotals.mapNotNull { (pkg, trueTotal) ->
-                    val rawTotal = rawTotals[pkg] ?: 0L
-                    val rawHourUsage = hourlyAppUsage[hour]?.get(pkg) ?: 0L
+                    val dbEntry = allHourlyData.find { it.hour == hour && it.packageName == pkg }
                     
                     val durationForThisHour = when {
-                        rawTotal > 0 -> (trueTotal * (rawHourUsage.toDouble() / rawTotal)).toLong()
-                        isSelectedToday && hour == Calendar.getInstance().get(Calendar.HOUR_OF_DAY) -> trueTotal
-                        !isSelectedToday && hour == 23 -> trueTotal
-                        else -> 0L
+                        dbEntry != null -> dbEntry.usageTimeMillis
+                        isSelectedToday && hour == currentHour -> {
+                            val sumLocked = allHourlyData.filter { it.packageName == pkg && it.hour < currentHour }.sumOf { it.usageTimeMillis }
+                            (trueTotal - sumLocked).coerceAtLeast(0L)
+                        }
+                        else -> {
+                            val rawTotal = rawTotals[pkg] ?: 0L
+                            val rawHourUsage = hourlyAppUsage[hour]?.get(pkg) ?: 0L
+                            if (rawTotal > 0) {
+                                (trueTotal * (rawHourUsage.toDouble() / rawTotal)).toLong()
+                            } else if (!isSelectedToday && hour == 23) {
+                                trueTotal
+                            } else {
+                                0L
+                            }
+                        }
                     }
 
                     if (durationForThisHour > 0) {
@@ -580,7 +652,15 @@ class HomeViewModel(
                     } else null
                 }.sortedByDescending { it.totalTimeVisible }
 
-                HourlyUsageInfo(hour, appsInHour.sumOf { it.totalTimeVisible }, appsInHour)
+                val hourUsageTotal = appsInHour.sumOf { it.totalTimeVisible }
+                HourlyUsageInfo(
+                    hour = hour,
+                    usageTimeMillis = hourUsageTotal,
+                    apps = appsInHour,
+                    hasDatabaseRecord = dbHourly.any { it.hour == hour },
+                    hasSystemData = hourUsageTotal > 0,
+                    isLive = isSelectedToday && hour == currentHour
+                )
             }
 
             val yesterdayCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
