@@ -2,9 +2,11 @@ package com.etrisad.zenith.ui.screens.focus
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -39,10 +41,12 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -107,6 +111,18 @@ fun FocusScreen(
                 } else {
                     onAppClick(pkg)
                 }
+            },
+            onAppLongClick = { pkg ->
+                if (!uiState.isSelectionMode) {
+                    viewModel.toggleSelectionMode()
+                }
+                viewModel.toggleShieldSelection(pkg)
+            },
+            onScheduleLongClick = { id ->
+                if (!uiState.isSelectionMode) {
+                    viewModel.toggleSelectionMode()
+                }
+                viewModel.toggleScheduleSelection(id)
             },
             isSelectionMode = uiState.isSelectionMode,
             selectedShields = uiState.selectedShields,
@@ -308,6 +324,8 @@ fun FocusScreenContent(
     onShieldSortTypeChange: (ShieldSortType) -> Unit,
     onGoalSortTypeChange: (ShieldSortType) -> Unit,
     onAppClick: (String) -> Unit,
+    onAppLongClick: (String) -> Unit = {},
+    onScheduleLongClick: (Long) -> Unit = {},
     isSelectionMode: Boolean = false,
     selectedShields: Set<String> = emptySet(),
     selectedSchedules: Set<Long> = emptySet(),
@@ -374,6 +392,7 @@ fun FocusScreenContent(
                             shape = shape,
                             onEdit = { onEditShield(shield) },
                             onClick = { onAppClick(shield.packageName) },
+                            onLongClick = { onAppLongClick(shield.packageName) },
                             isSelectionMode = isSelectionMode,
                             isSelected = shield.packageName in selectedShields,
                             onToggleSelection = { onToggleShieldSelection(shield.packageName) }
@@ -439,6 +458,7 @@ fun FocusScreenContent(
                             shape = shape,
                             onEdit = { onEditShield(shield) },
                             onClick = { onAppClick(shield.packageName) },
+                            onLongClick = { onAppLongClick(shield.packageName) },
                             isSelectionMode = isSelectionMode,
                             isSelected = shield.packageName in selectedShields,
                             onToggleSelection = { onToggleShieldSelection(shield.packageName) }
@@ -505,6 +525,7 @@ fun FocusScreenContent(
                             shape = shape,
                             onEdit = { if (isSelectionMode) onToggleScheduleSelection(schedule.id) else onEditSchedule(schedule) },
                             onDelete = { onDeleteSchedule(schedule) },
+                            onLongClick = { onScheduleLongClick(schedule.id) },
                             isSelectionMode = isSelectionMode,
                             isSelected = schedule.id in selectedSchedules,
                             onToggleSelection = { onToggleScheduleSelection(schedule.id) }
@@ -606,17 +627,19 @@ fun SwipeableItemContainer(
     )
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun ScheduleItem(
     schedule: ScheduleEntity,
     shape: RoundedCornerShape,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onLongClick: () -> Unit = {},
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onToggleSelection: () -> Unit = {}
 ) {
+    val haptic = LocalHapticFeedback.current
     val context = LocalContext.current
     val appIcons = remember(schedule.packageNames) {
         schedule.packageNames.take(4).mapNotNull { pkg ->
@@ -681,10 +704,29 @@ fun ScheduleItem(
         animationSpec = spring(stiffness = Spring.StiffnessLow)
     )
 
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                      else MaterialTheme.colorScheme.onSurface,
+        animationSpec = spring(stiffness = Spring.StiffnessLow)
+    )
+
+    val secondaryColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                      else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = spring(stiffness = Spring.StiffnessLow)
+    )
+
     Card(
-        onClick = { if (isSelectionMode) onToggleSelection() else onEdit() },
         modifier = Modifier
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .clip(shape)
+            .combinedClickable(
+                onClick = { if (isSelectionMode) onToggleSelection() else onEdit() },
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    if (isSelectionMode) onToggleSelection() else onLongClick()
+                }
+            ),
         shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = cardColor
@@ -692,7 +734,7 @@ fun ScheduleItem(
     ) {
         Column {
             ListItem(
-                headlineContent = { Text(schedule.name, fontWeight = FontWeight.Bold) },
+                headlineContent = { Text(schedule.name, fontWeight = FontWeight.Bold, color = contentColor) },
                 supportingContent = {
                     val modeText = schedule.mode.name.lowercase().replaceFirstChar { it.uppercase() }
                     val statusText = if (isActiveNow) "Active" else "Inactive"
@@ -700,20 +742,22 @@ fun ScheduleItem(
                         Text(
                             text = "${schedule.startTime} - ${schedule.endTime} • $modeText • $statusText • ${schedule.packageNames.size} apps",
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (isActiveNow) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (isActiveNow) {
+                                if (isSelected) contentColor else MaterialTheme.colorScheme.primary
+                            } else secondaryColor
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Outlined.Bolt,
                                 contentDescription = null,
                                 modifier = Modifier.size(12.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = secondaryColor
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "${schedule.emergencyUseCount}/${schedule.maxEmergencyUses} emergency uses left",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = secondaryColor
                             )
                         }
                     }
@@ -732,7 +776,7 @@ fun ScheduleItem(
                         ) {
                             Surface(
                                 shape = CircleShape,
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
                                 modifier = Modifier.size(24.dp),
                                 border = if (!isSelected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.outline) else null
                             ) {
@@ -741,7 +785,7 @@ fun ScheduleItem(
                                         imageVector = Icons.Outlined.Check,
                                         contentDescription = null,
                                         modifier = Modifier.padding(4.dp),
-                                        tint = MaterialTheme.colorScheme.onPrimary
+                                        tint = MaterialTheme.colorScheme.primaryContainer
                                     )
                                 }
                             }
@@ -755,14 +799,14 @@ fun ScheduleItem(
                                 Icon(
                                     imageVector = Icons.Outlined.Edit,
                                     contentDescription = "Edit",
-                                    tint = MaterialTheme.colorScheme.primary
+                                    tint = if (isSelected) contentColor else MaterialTheme.colorScheme.primary
                                 )
                             }
                             IconButton(onClick = onDelete) {
                                 Icon(
                                     imageVector = Icons.Outlined.Delete,
                                     contentDescription = "Delete",
-                                    tint = MaterialTheme.colorScheme.error
+                                    tint = if (isSelected) contentColor else MaterialTheme.colorScheme.error
                                 )
                             }
                         }
@@ -779,8 +823,8 @@ fun ScheduleItem(
                         .padding(horizontal = 16.dp)
                         .padding(bottom = 12.dp)
                         .height(8.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                    color = if (isSelected) contentColor else MaterialTheme.colorScheme.primary,
+                    trackColor = (if (isSelected) contentColor else MaterialTheme.colorScheme.primary).copy(alpha = 0.1f)
                 )
             }
         }
@@ -789,17 +833,19 @@ fun ScheduleItem(
 
 
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun ShieldConfigItem(
     shield: ShieldEntity,
     shape: RoundedCornerShape,
     onEdit: () -> Unit,
     onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onToggleSelection: () -> Unit = {}
 ) {
+    val haptic = LocalHapticFeedback.current
     val context = LocalContext.current
     val appIcon = remember(shield.packageName) {
         try {
@@ -855,10 +901,29 @@ fun ShieldConfigItem(
         animationSpec = spring(stiffness = Spring.StiffnessLow)
     )
 
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                      else MaterialTheme.colorScheme.onSurface,
+        animationSpec = spring(stiffness = Spring.StiffnessLow)
+    )
+
+    val secondaryColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                      else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = spring(stiffness = Spring.StiffnessLow)
+    )
+
     Card(
-        onClick = { if (isSelectionMode) onToggleSelection() else onClick() },
         modifier = Modifier
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .clip(shape)
+            .combinedClickable(
+                onClick = { if (isSelectionMode) onToggleSelection() else onClick() },
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    if (isSelectionMode) onToggleSelection() else onLongClick()
+                }
+            ),
         shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = cardColor
@@ -999,7 +1064,8 @@ fun ShieldConfigItem(
                     Text(
                         text = shield.appName,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = contentColor
                     )
 
                     val hours = shield.timeLimitMinutes / 60
@@ -1016,7 +1082,7 @@ fun ShieldConfigItem(
                     Text(
                         text = "$limitText • $statusText",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = secondaryColor
                     )
 
                     val timeLabel = if (shield.type == FocusType.GOAL) "To Go" else "Left"
@@ -1031,6 +1097,8 @@ fun ShieldConfigItem(
                         fontWeight = FontWeight.SemiBold,
                         color = if (usesExhausted && remainingResetMillis > 0) {
                             MaterialTheme.colorScheme.error
+                        } else if (isSelected) {
+                            contentColor
                         } else if (shield.type == FocusType.GOAL) {
                             MaterialTheme.colorScheme.primary
                         } else {
@@ -1052,7 +1120,7 @@ fun ShieldConfigItem(
                         text = "$percentage%",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = secondaryColor
                     )
                 }
 
@@ -1061,7 +1129,7 @@ fun ShieldConfigItem(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (!isSelectionMode) {
                         IconButton(onClick = onEdit) {
-                            Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Outlined.Edit, contentDescription = "Edit", tint = if (isSelected) contentColor else MaterialTheme.colorScheme.primary)
                         }
                     } else {
                         Checkbox(
@@ -1084,7 +1152,9 @@ fun ShieldConfigItem(
                 label = "Progress"
             )
 
-            val indicatorColor = if (shield.type == FocusType.GOAL) {
+            val indicatorColor = if (isSelected) {
+                contentColor
+            } else if (shield.type == FocusType.GOAL) {
                 MaterialTheme.colorScheme.primary
             } else {
                 if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
@@ -1097,7 +1167,7 @@ fun ShieldConfigItem(
                     .height(8.dp)
                     .clip(CircleShape),
                 color = indicatorColor,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                trackColor = if (isSelected) contentColor.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceVariant
             )
         }
     }

@@ -428,7 +428,13 @@ class FocusViewModel(
         } else {
             current + packageName
         }
-        _uiState.value = _uiState.value.copy(selectedShields = newSelection)
+        
+        val isSelectionStillActive = newSelection.isNotEmpty() || _uiState.value.selectedSchedules.isNotEmpty()
+        
+        _uiState.value = _uiState.value.copy(
+            selectedShields = newSelection,
+            isSelectionMode = if (_uiState.value.isSelectionMode) isSelectionStillActive else _uiState.value.isSelectionMode
+        )
     }
 
     fun toggleScheduleSelection(id: Long) {
@@ -438,7 +444,13 @@ class FocusViewModel(
         } else {
             current + id
         }
-        _uiState.value = _uiState.value.copy(selectedSchedules = newSelection)
+        
+        val isSelectionStillActive = _uiState.value.selectedShields.isNotEmpty() || newSelection.isNotEmpty()
+        
+        _uiState.value = _uiState.value.copy(
+            selectedSchedules = newSelection,
+            isSelectionMode = if (_uiState.value.isSelectionMode) isSelectionStillActive else _uiState.value.isSelectionMode
+        )
     }
 
     fun deleteSelected() {
