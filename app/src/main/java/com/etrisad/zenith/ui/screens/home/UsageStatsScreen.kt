@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import com.etrisad.zenith.data.local.entity.FocusType
-import com.etrisad.zenith.ui.components.SnapshotCard
+import com.etrisad.zenith.ui.components.SnapshotSection
 import com.etrisad.zenith.ui.components.UsageHistoryCard
 import com.etrisad.zenith.ui.viewmodel.AppUsageInfo
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
@@ -75,9 +75,10 @@ fun UsageStatsScreen(
         val appsCount = if (hourlyAppsData != null) {
             val (_, regular, lowData) = hourlyAppsData
             val (low, totalLowTime, _) = lowData
-            regular.size + (if (totalLowTime > 0) (if (isOtherHourAppsExpanded) 1 + low.size else 1) else 0)
+            val appsListSize = regular.size + (if (totalLowTime > 0) (if (isOtherHourAppsExpanded) 1 + low.size else 1) else 0)
+            1 + appsListSize
         } else 0
-        2 + appsCount // HourlyStats, UsageTrends, Apps (Snapshot separated)
+        2 + appsCount
     }
 
     fun getGroupShape(index: Int, total: Int): RoundedCornerShape {
@@ -117,20 +118,51 @@ fun UsageStatsScreen(
                         dateMillis = uiState.selectedDateMillis
                     )
                 }
-                if (hourlyAppsData != null) Spacer(modifier = Modifier.height(4.dp))
             }
         }
 
         if (hourlyAppsData != null) {
-            val (_, regularHourApps, lowData) = hourlyAppsData
+            val (hourData, regularHourApps, lowData) = hourlyAppsData
             val (lowUsageHourApps, totalLowUsageHourTime, currentTargetHour) = lowData
+
+            item(key = "hourly_apps_label_$currentTargetHour") {
+                Column(modifier = Modifier.animateItem()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    GroupedCard(
+                        index = 1,
+                        total = hourlyGroupTotal
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.History,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Apps used at ${String.format("%02d:00", currentTargetHour)}",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            }
 
             itemsIndexed(
                 items = regularHourApps,
                 key = { _, app -> "hourly-$currentTargetHour-${app.packageName}" }
             ) { index, app ->
-                val groupIndex = 1 + index
+                val groupIndex = 2 + index
                 Column(modifier = Modifier.animateItem()) {
+                    Spacer(modifier = Modifier.height(4.dp))
                     UsageItem(
                         app = app,
                         formatDuration = viewModel::formatDuration,
@@ -138,14 +170,14 @@ fun UsageStatsScreen(
                         total = hourlyGroupTotal,
                         onClick = { onAppClick(app.packageName) }
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
                 }
             }
 
             if (totalLowUsageHourTime > 0) {
-                val otherIndexInGroup = 1 + regularHourApps.size
+                val otherIndexInGroup = 2 + regularHourApps.size
                 item(key = "hourly_other_header_$currentTargetHour") {
                     Column(modifier = Modifier.animateItem()) {
+                        Spacer(modifier = Modifier.height(4.dp))
                         GroupedCard(
                             index = otherIndexInGroup,
                             total = hourlyGroupTotal,
@@ -203,7 +235,6 @@ fun UsageStatsScreen(
                                 )
                             )
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
                     }
                 }
 
@@ -212,8 +243,9 @@ fun UsageStatsScreen(
                         items = lowUsageHourApps,
                         key = { _, app -> "hourly-low-$currentTargetHour-${app.packageName}" }
                     ) { index, app ->
-                        val groupIndex = 1 + regularHourApps.size + 1 + index
+                        val groupIndex = 2 + regularHourApps.size + 1 + index
                         Column(modifier = Modifier.animateItem()) {
+                            Spacer(modifier = Modifier.height(4.dp))
                             UsageItem(
                                 app = app,
                                 formatDuration = viewModel::formatDuration,
@@ -221,7 +253,6 @@ fun UsageStatsScreen(
                                 total = hourlyGroupTotal,
                                 onClick = { onAppClick(app.packageName) }
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
                         }
                     }
                 }
@@ -230,6 +261,7 @@ fun UsageStatsScreen(
 
         item(key = "usage_trends_group_item") {
             Column(modifier = Modifier.animateItem()) {
+                Spacer(modifier = Modifier.height(4.dp))
                 UsageHistoryCard(
                     history = uiState.dailyUsageHistory,
                     targetMillis = uiState.targetMillis,
@@ -249,7 +281,7 @@ fun UsageStatsScreen(
         item(key = "snapshot_stamps") {
             Column(modifier = Modifier.animateItem()) {
                 Spacer(modifier = Modifier.height(12.dp))
-                SnapshotCard(
+                SnapshotSection(
                     stamps = uiState.snapshotStamps,
                     selectedDateMillis = uiState.selectedDateMillis,
                     getAppType = { pkg ->
@@ -258,9 +290,7 @@ fun UsageStatsScreen(
                     },
                     onDaySelected = { viewModel.selectDate(it) },
                     formatDuration = viewModel::formatDuration,
-                    showDatabaseIndicator = showDatabaseIndicator,
-                    shape = RoundedCornerShape(28.dp),
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    showDatabaseIndicator = showDatabaseIndicator
                 )
             }
         }
@@ -487,15 +517,23 @@ fun HourlyStatsContent(
             ) { hour ->
                 if (hour != null) {
                     val usage = hourlyUsage.find { it.hour == hour }?.usageTimeMillis ?: 0L
-                    Text(
-                        text = formatDuration(usage),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = String.format("%02d:00 - %02d:00", hour, (hour + 1) % 24),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = formatDuration(usage),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 } else {
                     Text(
-                        text = "Tap a bar to see the apps",
+                        text = "Tap a bar for details",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
@@ -517,7 +555,10 @@ fun HourlyStatsContent(
                 val barHeight = (hourInfo.usageTimeMillis.toFloat() / maxUsage).coerceIn(0.05f, 1f)
                 val animatedHeight by animateFloatAsState(
                     targetValue = barHeight,
-                    animationSpec = tween(500, easing = FastOutSlowInEasing),
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessLow
+                    ),
                     label = "HourlyBarHeight"
                 )
                 
