@@ -24,6 +24,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
@@ -126,21 +127,56 @@ fun BedtimeScreen(
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
+                
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Settings",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
 
                 AllowedAppsCard(
                     allowedCount = preferences.bedtimeWhitelistedPackages.size,
                     onClick = { showAppPicker = true },
-                    containerColor = containerColor
+                    containerColor = containerColor,
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
                 )
 
-                FeaturesCard(
-                    dndEnabled = preferences.bedtimeDndEnabled,
-                    windDownEnabled = preferences.bedtimeWindDownEnabled,
-                    notificationEnabled = preferences.bedtimeNotificationEnabled,
-                    onDndToggle = { viewModel.setBedtimeDndEnabled(it) },
-                    onWindDownToggle = { viewModel.setBedtimeWindDownEnabled(it) },
-                    onNotificationToggle = { viewModel.setBedtimeNotificationEnabled(it) },
-                    containerColor = containerColor
+                FeatureCard(
+                    icon = Icons.Outlined.NotificationsActive,
+                    title = "Wind Down Notification",
+                    subtitle = "Notify 30 minutes before bedtime",
+                    enabled = preferences.bedtimeNotificationEnabled,
+                    onToggle = { viewModel.setBedtimeNotificationEnabled(it) },
+                    containerColor = containerColor,
+                    shape = RoundedCornerShape(8.dp)
+                )
+
+                FeatureCard(
+                    icon = Icons.Outlined.DoNotDisturbOn,
+                    title = "Do Not Disturb",
+                    subtitle = "Silence notifications during bedtime",
+                    enabled = preferences.bedtimeDndEnabled,
+                    onToggle = { viewModel.setBedtimeDndEnabled(it) },
+                    containerColor = containerColor,
+                    shape = RoundedCornerShape(8.dp)
+                )
+
+                FeatureCard(
+                    icon = Icons.Outlined.Block,
+                    title = "Wind Down Restrictions",
+                    subtitle = "Restrict app usage 30-min before bedtime",
+                    enabled = preferences.bedtimeWindDownEnabled,
+                    onToggle = { viewModel.setBedtimeWindDownEnabled(it) },
+                    containerColor = containerColor,
+                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                 )
             }
         }
@@ -392,56 +428,80 @@ fun TimeSelectionRow(
             onClick = onStartTimeClick,
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 8.dp, topEnd = 8.dp, bottomEnd = 8.dp),
-            colors = CardDefaults.cardColors(containerColor = containerColor)
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            )
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
                             .size(32.dp)
-                            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Icons.Outlined.Schedule, 
                             null, 
                             modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text(text = "Start", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Start", 
+                        style = MaterialTheme.typography.labelLarge, 
+                        color = MaterialTheme.colorScheme.primary, 
+                        fontWeight = FontWeight.Bold
+                    )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(text = startTime, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Black)
+                Text(
+                    text = startTime, 
+                    style = MaterialTheme.typography.displayMedium, 
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
         }
         Card(
             onClick = onEndTimeClick,
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 8.dp, topStart = 8.dp, bottomStart = 8.dp),
-            colors = CardDefaults.cardColors(containerColor = containerColor)
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            )
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
                             .size(32.dp)
-                            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Icons.Outlined.Alarm, 
                             null, 
                             modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text(text = "End", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "End", 
+                        style = MaterialTheme.typography.labelLarge, 
+                        color = MaterialTheme.colorScheme.primary, 
+                        fontWeight = FontWeight.Bold
+                    )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(text = endTime, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Black)
+                Text(
+                    text = endTime, 
+                    style = MaterialTheme.typography.displayMedium, 
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
         }
     }
@@ -601,11 +661,16 @@ internal fun RowScope.ExpressiveDayButton(
 }
 
 @Composable
-fun AllowedAppsCard(allowedCount: Int, onClick: () -> Unit, containerColor: androidx.compose.ui.graphics.Color) {
+fun AllowedAppsCard(
+    allowedCount: Int, 
+    onClick: () -> Unit, 
+    containerColor: androidx.compose.ui.graphics.Color,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(24.dp)
+) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
+        shape = shape,
         colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
         Row(
@@ -631,96 +696,39 @@ fun AllowedAppsCard(allowedCount: Int, onClick: () -> Unit, containerColor: andr
 }
 
 @Composable
-fun FeaturesCard(
-    dndEnabled: Boolean,
-    windDownEnabled: Boolean,
-    notificationEnabled: Boolean,
-    onDndToggle: (Boolean) -> Unit,
-    onWindDownToggle: (Boolean) -> Unit,
-    onNotificationToggle: (Boolean) -> Unit,
-    containerColor: androidx.compose.ui.graphics.Color
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Outlined.Settings, 
-                        null, 
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                Text(text = "Features", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-
-            FeatureRow(
-                icon = Icons.Outlined.NotificationsActive,
-                title = "Wind Down Notification",
-                subtitle = "Notify 30 minutes before bedtime",
-                enabled = notificationEnabled,
-                onToggle = onNotificationToggle
-            )
-
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 8.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-
-            FeatureRow(
-                icon = Icons.Outlined.DoNotDisturbOn,
-                title = "Do Not Disturb",
-                subtitle = "Silence notifications during bedtime",
-                enabled = dndEnabled,
-                onToggle = onDndToggle
-            )
-
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 8.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-
-            FeatureRow(
-                icon = Icons.Outlined.Block,
-                title = "Wind Down Restrictions",
-                subtitle = "Restrict app usage 30-min before bedtime",
-                enabled = windDownEnabled,
-                onToggle = onWindDownToggle
-            )
-        }
-    }
-}
-
-@Composable
-fun FeatureRow(
+fun FeatureCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     subtitle: String,
     enabled: Boolean,
-    onToggle: (Boolean) -> Unit
+    onToggle: (Boolean) -> Unit,
+    containerColor: androidx.compose.ui.graphics.Color,
+    shape: androidx.compose.ui.graphics.Shape
 ) {
-    Row(
+    Card(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        shape = shape,
+        colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            Text(text = subtitle, style = MaterialTheme.typography.bodySmall)
+        Row(
+            modifier = Modifier.padding(20.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = enabled, onCheckedChange = onToggle)
         }
-        Switch(checked = enabled, onCheckedChange = onToggle)
     }
 }
 
