@@ -104,21 +104,22 @@ fun UsageStatsScreen(
         }
     }
 
-    val (shieldUsage, goalUsage, otherUsage) = remember(uiState.allAppsUsage, uiState.activeShields, uiState.activeGoals) {
+    val (shieldUsage, goalUsage, otherUsage) = remember(uiState.allAppsUsage, uiState.activeShields, uiState.activeGoals, uiState.dailyUsageHistory, uiState.selectedDateMillis) {
         val shieldPkgs = uiState.activeShields.map { it.packageName }.toSet()
         val goalPkgs = uiState.activeGoals.map { it.packageName }.toSet()
         
+        val selectedDayTotal = uiState.dailyUsageHistory.find { it.date == uiState.selectedDateMillis }?.totalTime ?: 0L
+
         var s = 0L
         var g = 0L
-        var o = 0L
         
         uiState.allAppsUsage.forEach { app ->
             when {
                 app.packageName in shieldPkgs -> s += app.totalTimeVisible
                 app.packageName in goalPkgs -> g += app.totalTimeVisible
-                else -> o += app.totalTimeVisible
             }
         }
+        val o = (selectedDayTotal - (s + g)).coerceAtLeast(0L)
         Triple(s, g, o)
     }
 
@@ -133,9 +134,11 @@ fun UsageStatsScreen(
     ) {
         item(key = "zenith_dashboard") {
             Column(modifier = Modifier.animateItem()) {
-                val dashboardTotalTime = shieldUsage + goalUsage + otherUsage
+                val selectedDayTotal = remember(uiState.dailyUsageHistory, uiState.selectedDateMillis) {
+                    uiState.dailyUsageHistory.find { it.date == uiState.selectedDateMillis }?.totalTime ?: 0L
+                }
                 ZenithDashboard(
-                    totalTime = dashboardTotalTime,
+                    totalTime = selectedDayTotal,
                     targetTime = uiState.targetMillis,
                     yesterdayTime = uiState.yesterdayScreenTime,
                     shieldUsage = shieldUsage,
