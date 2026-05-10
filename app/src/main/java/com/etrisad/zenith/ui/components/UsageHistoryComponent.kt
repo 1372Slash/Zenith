@@ -278,21 +278,43 @@ fun UsageGraph(
 
                             val isToday = dateFormat.format(usage.date) == todayDate
                             val baseColor = if (isGoalAchieved) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
-                            val barColor = when {
-                                isSelected -> baseColor
-                                isToday -> baseColor.copy(alpha = 0.8f)
-                                else -> baseColor.copy(alpha = 0.4f)
+                            val currentAlpha = when {
+                                isSelected -> 1f
+                                isToday -> 0.8f
+                                else -> 0.4f
                             }
+                            val barColor = baseColor.copy(alpha = currentAlpha)
 
+                            val isInside = animatedHeight > 0.22f
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Bottom,
                                 modifier = Modifier
                                     .weight(1f)
+                                    .fillMaxHeight()
                                     .clip(RoundedCornerShape(12.dp))
                                     .clickable {
                                         onDaySelected(if (isSelected) null else usage)
                                     }
                             ) {
+                                if (isGoalAchieved && !isInside) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(sunnyShape)
+                                            .background(MaterialTheme.colorScheme.tertiary.copy(alpha = currentAlpha)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onTertiary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                }
+
                                 Box(
                                     modifier = Modifier
                                         .width(40.dp)
@@ -301,7 +323,7 @@ fun UsageGraph(
                                         .background(barColor),
                                     contentAlignment = Alignment.TopCenter
                                 ) {
-                                    if (isGoalAchieved && animatedHeight > 0.15f) {
+                                    if (isGoalAchieved && isInside) {
                                         Box(
                                             modifier = Modifier
                                                 .padding(top = 8.dp)
