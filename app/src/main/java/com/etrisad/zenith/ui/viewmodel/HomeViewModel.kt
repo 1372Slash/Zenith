@@ -306,8 +306,10 @@ class HomeViewModel(
         }
 
         viewModelScope.launch {
-            val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-            shieldRepository.deleteOldHourlyUsage(todayStr)
+            val cal = Calendar.getInstance()
+            cal.add(Calendar.DAY_OF_YEAR, -21)
+            val thresholdDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
+            shieldRepository.deleteOldHourlyUsage(thresholdDate)
         }
 
         refreshUsageStats()
