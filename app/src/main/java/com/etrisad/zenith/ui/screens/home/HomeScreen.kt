@@ -150,6 +150,52 @@ fun HomeScreenContent(
         }
 
         item {
+            val selectedUsage = remember(uiState.dailyUsageHistory, uiState.selectedDateMillis) {
+                uiState.dailyUsageHistory.find { it.date == uiState.selectedDateMillis }
+            }
+            val showWarning = selectedUsage != null && 
+                             !selectedUsage.hasDatabaseRecord && 
+                             selectedUsage.hasSystemData && 
+                             !selectedUsage.isLive
+
+            AnimatedVisibility(
+                visible = showWarning,
+                enter = expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)) + fadeIn(),
+                exit = shrinkVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)) + fadeOut()
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 4.dp)
+                        .clip(RoundedCornerShape(8.dp)),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Data untuk hari yang dipilih diambil dari sistem penggunaan dan mungkin tidak sepenuhnya akurat.",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        }
+
+        item {
             UsageHistoryCard(
                 history = uiState.dailyUsageHistory,
                 targetMillis = targetMillis,
