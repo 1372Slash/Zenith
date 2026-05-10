@@ -173,14 +173,6 @@ fun UsageGraph(
         }
     }
 
-    LaunchedEffect(pagerState.currentPage) {
-        // Only reset if the current page doesn't contain the selected date
-        val currentPageData = pages.getOrNull(pagerState.currentPage) ?: emptyList()
-        if (selectedDateMillis != null && currentPageData.none { it.date == selectedDateMillis }) {
-            onDaySelected(null)
-        }
-    }
-
     Column {
         Box(
             modifier = Modifier
