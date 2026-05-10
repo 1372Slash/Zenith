@@ -31,6 +31,8 @@ import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
+import com.etrisad.zenith.data.preferences.UserPreferences
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.viewmodel.FocusUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,6 +47,16 @@ fun ScheduleSettingsBottomSheet(
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
     val context = LocalContext.current
+    val repository = remember { UserPreferencesRepository(context) }
+    val preferences by repository.userPreferencesFlow.collectAsState(initial = UserPreferences())
+
+    val containerColor by animateColorAsState(
+        targetValue = if (preferences.expressiveColors) MaterialTheme.colorScheme.surfaceContainerHighest
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "containerColor"
+    )
+
     val appIcons = remember(uiState.selectedAppsForSchedule) {
         val packages = uiState.selectedAppsForSchedule.toList()
         packages.take(4).mapNotNull { pkg ->
@@ -163,7 +175,7 @@ fun ScheduleSettingsBottomSheet(
                             topEnd = 8.dp,
                             bottomEnd = 8.dp
                         ),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        color = containerColor.copy(alpha = 0.6f)
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
@@ -200,7 +212,7 @@ fun ScheduleSettingsBottomSheet(
                             topStart = 8.dp,
                             bottomStart = 8.dp
                         ),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        color = containerColor.copy(alpha = 0.6f),
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
@@ -247,7 +259,8 @@ fun ScheduleSettingsBottomSheet(
                         selected = mode == ScheduleMode.BLOCK,
                         onClick = { mode = ScheduleMode.BLOCK },
                         isFirst = true,
-                        isLast = false
+                        isLast = false,
+                        containerColor = containerColor
                     )
                     ScheduleModeOptionButton(
                         label = "Allow",
@@ -255,7 +268,8 @@ fun ScheduleSettingsBottomSheet(
                         selected = mode == ScheduleMode.ALLOW,
                         onClick = { mode = ScheduleMode.ALLOW },
                         isFirst = false,
-                        isLast = true
+                        isLast = true,
+                        containerColor = containerColor
                     )
                 }
 
@@ -282,24 +296,29 @@ fun ScheduleSettingsBottomSheet(
 
                 PreferenceCategory(title = "Settings")
 
-                SettingsToggle(
-                    title = "Intercept Notifications",
-                    description = "Hold notifications until schedule ends",
-                    checked = if (mode == ScheduleMode.BLOCK) interceptNotifications else false,
-                    onCheckedChange = { 
-                        if (it && !com.etrisad.zenith.util.isNotificationListenerEnabled(context)) {
-                            android.widget.Toast.makeText(context, "Please grant Notification Access in settings", android.widget.Toast.LENGTH_LONG).show()
-                            context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
-                                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                            })
-                        } else {
-                            interceptNotifications = it 
-                        }
-                    },
-                    icon = Icons.Outlined.NotificationsPaused,
-                    enabled = mode == ScheduleMode.BLOCK,
-                    shape = RoundedCornerShape(24.dp)
-                )
+                CardGroup(
+                    shape = RoundedCornerShape(24.dp),
+                    containerColor = containerColor
+                ) {
+                    SettingsToggle(
+                        title = "Intercept Notifications",
+                        description = "Hold notifications until schedule ends",
+                        checked = if (mode == ScheduleMode.BLOCK) interceptNotifications else false,
+                        onCheckedChange = { 
+                            if (it && !com.etrisad.zenith.util.isNotificationListenerEnabled(context)) {
+                                android.widget.Toast.makeText(context, "Please grant Notification Access in settings", android.widget.Toast.LENGTH_LONG).show()
+                                context.startActivity(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                })
+                            } else {
+                                interceptNotifications = it 
+                            }
+                        },
+                        icon = Icons.Outlined.NotificationsPaused,
+                        enabled = mode == ScheduleMode.BLOCK,
+                        shape = RoundedCornerShape(24.dp)
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(32.dp))
             }
@@ -361,7 +380,8 @@ fun RowScope.ScheduleModeOptionButton(
     selected: Boolean,
     onClick: () -> Unit,
     isFirst: Boolean,
-    isLast: Boolean
+    isLast: Boolean,
+    containerColor: Color
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -381,7 +401,7 @@ fun RowScope.ScheduleModeOptionButton(
 
     val backgroundColor by animateColorAsState(
         targetValue = if (selected) MaterialTheme.colorScheme.secondaryContainer
-        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        else containerColor,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "BgColor"
     )

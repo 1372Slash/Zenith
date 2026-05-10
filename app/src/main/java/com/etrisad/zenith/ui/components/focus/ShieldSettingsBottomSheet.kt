@@ -1,5 +1,8 @@
 package com.etrisad.zenith.ui.components.focus
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -17,10 +20,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import com.etrisad.zenith.data.local.entity.ShieldEntity
+import com.etrisad.zenith.data.preferences.UserPreferences
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.viewmodel.AppInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -33,6 +39,17 @@ fun ShieldSettingsBottomSheet(
     onSave: (Int, Int, Boolean, Boolean, Boolean, Int, Int, Boolean) -> Unit
 ) {
     val configuration = LocalConfiguration.current
+    val context = LocalContext.current
+    val repository = remember { UserPreferencesRepository(context) }
+    val preferences by repository.userPreferencesFlow.collectAsState(initial = UserPreferences())
+
+    val containerColor by animateColorAsState(
+        targetValue = if (preferences.expressiveColors) MaterialTheme.colorScheme.surfaceContainerHighest
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "containerColor"
+    )
+
     val screenHeight = configuration.screenHeightDp.dp
     val timePickerState = rememberTimePickerState(
         initialHour = (existingShield?.timeLimitMinutes ?: 30) / 60,
@@ -224,64 +241,66 @@ fun ShieldSettingsBottomSheet(
 
                 PreferenceCategory(title = "Settings")
 
-                SettingsToggle(
-                    title = "Show Reminders",
-                    description = "Get notified before limit is reached",
-                    checked = remindersEnabled,
-                    onCheckedChange = { remindersEnabled = it },
-                    icon = Icons.Outlined.NotificationsActive,
-                    shape = RoundedCornerShape(
-                        topStart = 24.dp,
-                        topEnd = 24.dp,
-                        bottomStart = 2.dp,
-                        bottomEnd = 2.dp
+                val topShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                val middleShape = RoundedCornerShape(8.dp)
+                val bottomShape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 28.dp, bottomEnd = 28.dp)
+
+                CardGroup(shape = topShape, containerColor = containerColor) {
+                    SettingsToggle(
+                        title = "Show Reminders",
+                        description = "Get notified before limit is reached",
+                        checked = remindersEnabled,
+                        onCheckedChange = { remindersEnabled = it },
+                        icon = Icons.Outlined.NotificationsActive,
+                        shape = topShape
                     )
-                )
+                }
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                SettingsToggle(
-                    title = "Strict Mode",
-                    description = "No extensions allowed after limit",
-                    checked = strictModeEnabled,
-                    onCheckedChange = { strictModeEnabled = it },
-                    icon = Icons.Outlined.GppGood,
-                    shape = RoundedCornerShape(2.dp)
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                SettingsToggle(
-                    title = "Auto Quit",
-                    description = "Exit app automatically when session ends",
-                    checked = autoQuitEnabled,
-                    onCheckedChange = { autoQuitEnabled = it },
-                    icon = Icons.AutoMirrored.Outlined.ExitToApp,
-                    shape = RoundedCornerShape(2.dp)
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                SettingsToggle(
-                    title = "Delay App",
-                    description = "Wait before reopening after being kicked out",
-                    checked = isDelayAppEnabled,
-                    onCheckedChange = { isDelayAppEnabled = it },
-                    icon = Icons.Outlined.History,
-                    shape = RoundedCornerShape(
-                        topStart = 2.dp,
-                        topEnd = 2.dp,
-                        bottomStart = 24.dp,
-                        bottomEnd = 24.dp
+                CardGroup(shape = middleShape, containerColor = containerColor) {
+                    SettingsToggle(
+                        title = "Strict Mode",
+                        description = "No extensions allowed after limit",
+                        checked = strictModeEnabled,
+                        onCheckedChange = { strictModeEnabled = it },
+                        icon = Icons.Outlined.GppGood,
+                        shape = middleShape
                     )
-                )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                CardGroup(shape = middleShape, containerColor = containerColor) {
+                    SettingsToggle(
+                        title = "Auto Quit",
+                        description = "Exit app automatically when session ends",
+                        checked = autoQuitEnabled,
+                        onCheckedChange = { autoQuitEnabled = it },
+                        icon = Icons.AutoMirrored.Outlined.ExitToApp,
+                        shape = middleShape
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                CardGroup(shape = bottomShape, containerColor = containerColor) {
+                    SettingsToggle(
+                        title = "Delay App",
+                        description = "Wait before reopening after being kicked out",
+                        checked = isDelayAppEnabled,
+                        onCheckedChange = { isDelayAppEnabled = it },
+                        icon = Icons.Outlined.History,
+                        shape = bottomShape
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(32.dp))
 
                 if (isPreventEdit) {
                     Card(
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            containerColor = containerColor
                         ),
                         modifier = Modifier
                             .fillMaxWidth()

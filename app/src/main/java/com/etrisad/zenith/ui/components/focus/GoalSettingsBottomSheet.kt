@@ -21,9 +21,12 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import com.etrisad.zenith.data.local.entity.ShieldEntity
+import com.etrisad.zenith.data.preferences.UserPreferences
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.viewmodel.AppInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,6 +40,16 @@ fun GoalSettingsBottomSheet(
 ) {
     val configuration = LocalConfiguration.current
     val context = androidx.compose.ui.platform.LocalContext.current
+    val repository = remember { UserPreferencesRepository(context) }
+    val preferences by repository.userPreferencesFlow.collectAsState(initial = UserPreferences())
+
+    val containerColor by animateColorAsState(
+        targetValue = if (preferences.expressiveColors) MaterialTheme.colorScheme.surfaceContainerHighest
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "containerColor"
+    )
+
     val screenHeight = configuration.screenHeightDp.dp
     val timePickerState = rememberTimePickerState(
         initialHour = (existingShield?.timeLimitMinutes ?: 60) / 60,
@@ -223,7 +236,7 @@ fun GoalSettingsBottomSheet(
                 val middleShape = RoundedCornerShape(8.dp)
                 val bottomShape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 28.dp, bottomEnd = 28.dp)
 
-                CardGroup(shape = topShape) {
+                CardGroup(shape = topShape, containerColor = containerColor) {
                     SettingsToggle(
                         title = "Goal Reminders",
                         description = "Receive notifications to reach your daily target",
@@ -237,7 +250,8 @@ fun GoalSettingsBottomSheet(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 CardGroup(
-                    shape = if (isGoalCallerEnabled) middleShape else bottomShape
+                    shape = if (isGoalCallerEnabled) middleShape else bottomShape,
+                    containerColor = containerColor
                 ) {
                     SettingsToggle(
                         title = "Goal Caller Overlay",
@@ -260,7 +274,7 @@ fun GoalSettingsBottomSheet(
                 ) {
                     Column {
                         Spacer(modifier = Modifier.height(4.dp))
-                        CardGroup(shape = bottomShape) {
+                        CardGroup(shape = bottomShape, containerColor = containerColor) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -330,7 +344,8 @@ fun GoalSettingsBottomSheet(
                                                 selected = isDefault,
                                                 onClick = { goalCallerSoundUri = null },
                                                 isFirst = true,
-                                                isLast = false
+                                                isLast = false,
+                                                containerColor = containerColor
                                             )
                                             GroupedOptionButton(
                                                 label = "System",
@@ -346,14 +361,16 @@ fun GoalSettingsBottomSheet(
                                                     ringtonePickerLauncher.launch(intent)
                                                 },
                                                 isFirst = false,
-                                                isLast = false
+                                                isLast = false,
+                                                containerColor = containerColor
                                             )
                                             GroupedOptionButton(
                                                 label = "File",
                                                 selected = isFile,
                                                 onClick = { filePickerLauncher.launch(arrayOf("audio/*")) },
                                                 isFirst = false,
-                                                isLast = true
+                                                isLast = true,
+                                                containerColor = containerColor
                                             )
                                         }
                                         
