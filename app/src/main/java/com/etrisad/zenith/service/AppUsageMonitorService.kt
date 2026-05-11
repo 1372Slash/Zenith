@@ -1123,54 +1123,58 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun updateBedtimeStatus(prefs: UserPreferences) {
-        if (!prefs.bedtimeEnabled) {
-            if (isBedtimeActive || isWindDownActive) {
-                isBedtimeActive = false
-                isWindDownActive = false
-                isBedtimeBlockingActive = false
-                updateDndAndWindDown(false, false)
-            }
-            return
-        }
-
         val currentTime = System.currentTimeMillis()
         val currentDay: Int
         val currentMinutes: Int
         
+        val yesterdayCalendar = Calendar.getInstance().apply {
+            timeInMillis = currentTime
+            add(Calendar.DAY_OF_YEAR, -1)
+        }
+        val yesterdayDay = yesterdayCalendar.get(Calendar.DAY_OF_WEEK)
+
         synchronized(reusableCalendar) {
             reusableCalendar.timeInMillis = currentTime
             currentDay = reusableCalendar.get(Calendar.DAY_OF_WEEK)
             currentMinutes = reusableCalendar.get(Calendar.HOUR_OF_DAY) * 60 + reusableCalendar.get(Calendar.MINUTE)
         }
-        
-        if (currentDay !in prefs.bedtimeDays) {
-            if (isBedtimeActive || isWindDownActive) {
-                isBedtimeActive = false
-                isWindDownActive = false
-                isBedtimeBlockingActive = false
-                updateDndAndWindDown(false, false)
-            }
-            return
-        }
 
         val startMinutes = cachedBedtimeStartMinutes
         val endMinutes = cachedBedtimeEndMinutes
 
-        val active = if (startMinutes <= endMinutes) {
-            currentMinutes in startMinutes..endMinutes
-        } else {
-            currentMinutes >= startMinutes || currentMinutes <= endMinutes
+        var active = false
+        var windDownActive = false
+
+        if (prefs.bedtimeEnabled) {
+            if (startMinutes <= endMinutes) {
+                if (currentDay in prefs.bedtimeDays) {
+                    active = currentMinutes in startMinutes..endMinutes
+                }
+            } else {
+                if (currentDay in prefs.bedtimeDays && currentMinutes >= startMinutes) {
+                    active = true
+                } else if (yesterdayDay in prefs.bedtimeDays && currentMinutes <= endMinutes) {
+                    active = true
+                }
+            }
+
+            if (!active) {
+                val windDownStartMinutes = (startMinutes - 30 + 1440) % 1440
+                if (windDownStartMinutes < startMinutes) {
+                    if (currentDay in prefs.bedtimeDays) {
+                        windDownActive = currentMinutes in windDownStartMinutes until startMinutes
+                    }
+                } else {
+                    if (currentDay in prefs.bedtimeDays && currentMinutes >= windDownStartMinutes) {
+                        windDownActive = true
+                    } else if (yesterdayDay in prefs.bedtimeDays && currentMinutes < startMinutes) {
+                        windDownActive = true
+                    }
+                }
+            }
         }
 
-        val windDownStartMinutes = (startMinutes - 30 + 1440) % 1440
-        
         val wasWindDownActive = isWindDownActive
-        val windDownActive = if (windDownStartMinutes <= startMinutes) {
-            currentMinutes in windDownStartMinutes until startMinutes
-        } else {
-            currentMinutes >= windDownStartMinutes || currentMinutes < startMinutes
-        }
-
         if (windDownActive && !wasWindDownActive) {
             windDownUsedPackages.clear()
             if (prefs.bedtimeNotificationEnabled) {
@@ -1178,22 +1182,25 @@ class AppUsageMonitorService : Service() {
             }
         }
 
-        if (active != isBedtimeActive || windDownActive != isWindDownActive) {
-            isBedtimeActive = active
-            isWindDownActive = windDownActive
-            isBedtimeBlockingActive = active || (windDownActive && prefs.bedtimeWindDownEnabled)
+        isBedtimeActive = active
+        isWindDownActive = windDownActive
+        isBedtimeBlockingActive = active || (windDownActive && prefs.bedtimeWindDownEnabled)
 
-            updateDndAndWindDown(
-                active && prefs.bedtimeDndEnabled,
-                (active || windDownActive) && prefs.bedtimeWindDownEnabled
-            )
-        }
+        updateDndAndWindDown(
+            active && prefs.bedtimeDndEnabled,
+            (active || windDownActive) && prefs.bedtimeWindDownEnabled
+        )
     }
 
     private fun updateDndAndWindDown(dnd: Boolean, windDown: Boolean) {
         if (notificationManager.isNotificationPolicyAccessGranted) {
             try {
                 val targetFilter = if (dnd) NotificationManager.INTERRUPTION_FILTER_PRIORITY else NotificationManager.INTERRUPTION_FILTER_ALL
+                
+                if (lastDndFilter == null) {
+                    lastDndFilter = notificationManager.currentInterruptionFilter
+                }
+
                 if (lastDndFilter != targetFilter) {
                     notificationManager.setInterruptionFilter(targetFilter)
                     lastDndFilter = targetFilter

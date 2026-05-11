@@ -621,43 +621,60 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private fun updateBedtimeStatus(prefs: UserPreferences) {
-        if (!prefs.bedtimeEnabled) {
-            isBedtimeActive = false
-            isWindDownActive = false
-            return
-        }
-
+        val currentTime = System.currentTimeMillis()
         val currentDay: Int
         val currentMinutes: Int
+        
+        val yesterdayCalendar = Calendar.getInstance().apply {
+            timeInMillis = currentTime
+            add(Calendar.DAY_OF_YEAR, -1)
+        }
+        val yesterdayDay = yesterdayCalendar.get(Calendar.DAY_OF_WEEK)
+
         synchronized(reusableCalendar) {
-            reusableCalendar.timeInMillis = System.currentTimeMillis()
+            reusableCalendar.timeInMillis = currentTime
             currentDay = reusableCalendar.get(Calendar.DAY_OF_WEEK)
             currentMinutes = reusableCalendar.get(Calendar.HOUR_OF_DAY) * 60 + reusableCalendar.get(Calendar.MINUTE)
-        }
-        
-        if (currentDay !in prefs.bedtimeDays) {
-            isBedtimeActive = false
-            isWindDownActive = false
-            return
         }
 
         val startMinutes = cachedBedtimeStartMinutes
         val endMinutes = cachedBedtimeEndMinutes
 
-        isBedtimeActive = if (startMinutes <= endMinutes) {
-            currentMinutes in startMinutes..endMinutes
-        } else {
-            currentMinutes >= startMinutes || currentMinutes <= endMinutes
+        var active = false
+        var windDownActive = false
+
+        if (prefs.bedtimeEnabled) {
+            if (startMinutes <= endMinutes) {
+                if (currentDay in prefs.bedtimeDays) {
+                    active = currentMinutes in startMinutes..endMinutes
+                }
+            } else {
+                if (currentDay in prefs.bedtimeDays && currentMinutes >= startMinutes) {
+                    active = true
+                } else if (yesterdayDay in prefs.bedtimeDays && currentMinutes <= endMinutes) {
+                    active = true
+                }
+            }
+
+            if (!active) {
+                val windDownStartMinutes = (startMinutes - 30 + 1440) % 1440
+                if (windDownStartMinutes < startMinutes) {
+                    if (currentDay in prefs.bedtimeDays) {
+                        windDownActive = currentMinutes in windDownStartMinutes until startMinutes
+                    }
+                } else {
+                    if (currentDay in prefs.bedtimeDays && currentMinutes >= windDownStartMinutes) {
+                        windDownActive = true
+                    } else if (yesterdayDay in prefs.bedtimeDays && currentMinutes < startMinutes) {
+                        windDownActive = true
+                    }
+                }
+            }
         }
 
-        val windDownStartMinutes = (startMinutes - 30 + 1440) % 1440
-        
         val wasWindDownActive = isWindDownActive
-        isWindDownActive = if (windDownStartMinutes <= startMinutes) {
-            currentMinutes in windDownStartMinutes until startMinutes
-        } else {
-            currentMinutes >= windDownStartMinutes || currentMinutes < startMinutes
-        }
+        isBedtimeActive = active
+        isWindDownActive = windDownActive
 
         if (isWindDownActive && !wasWindDownActive) {
             windDownUsedPackages.clear()
