@@ -1417,8 +1417,8 @@ fun GoalHeatmapItem(
                     
                     val color = when {
                         day.totalTime == 0L -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                        isMet -> MaterialTheme.colorScheme.primary
-                        else -> MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
+                        isMet -> MaterialTheme.colorScheme.tertiary
+                        else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
                     }
                     
                     val animatedScale by animateFloatAsState(
@@ -1445,7 +1445,7 @@ fun GoalHeatmapItem(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Last 14 Days", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+                    Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Target Met", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
