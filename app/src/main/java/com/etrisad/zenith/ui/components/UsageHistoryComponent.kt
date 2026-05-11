@@ -45,6 +45,7 @@ fun UsageHistoryCard(
     selectedDateMillis: Long? = null,
     formatDuration: (Long) -> String,
     onDaySelected: (DailyUsage?) -> Unit = {},
+    onPageSelected: (Int) -> Unit = {},
     shape: Shape = RoundedCornerShape(24.dp),
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
     title: String = "Last 21 Days"
@@ -112,7 +113,8 @@ fun UsageHistoryCard(
                         internalSelectedDate = it?.date
                     }
                     onDaySelected(it)
-                }
+                },
+                onPageSelected = onPageSelected
             )
         }
     }
@@ -126,7 +128,8 @@ fun UsageGraph(
     focusType: FocusType? = null,
     showDatabaseIndicator: Boolean = false,
     selectedDateMillis: Long? = null,
-    onDaySelected: (DailyUsage?) -> Unit
+    onDaySelected: (DailyUsage?) -> Unit,
+    onPageSelected: (Int) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val sunnyShape = remember {
@@ -142,6 +145,10 @@ fun UsageGraph(
     val pageCount = pages.size.coerceAtLeast(1)
     val initialPage = remember(history) { (pageCount - 1).coerceAtLeast(0) }
     val pagerState = rememberPagerState(pageCount = { pageCount }, initialPage = initialPage)
+
+    LaunchedEffect(pagerState.currentPage) {
+        onPageSelected(pagerState.currentPage)
+    }
 
     var hasInitializedPager by remember { mutableStateOf(false) }
     LaunchedEffect(history, selectedDateMillis) {

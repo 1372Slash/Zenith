@@ -81,6 +81,8 @@ data class HomeUiState(
     val globalCurrentStreak: Int = 0,
     val globalBestStreak: Int = 0,
     val targetMillis: Long = 0L,
+    val weeklyAvgTime: Long = 0L,
+    val weeklyTopApps: List<AppUsageInfo> = emptyList(),
     val bedtimeEnabled: Boolean = false,
     val bedtimeStartTime: String = "22:00",
     val bedtimeEndTime: String = "07:00",
@@ -1120,6 +1122,51 @@ class HomeViewModel(
             hours > 0 -> "${hours}h ${minutes}m"
             minutes > 0 -> "${minutes}m"
             else -> "${seconds}s"
+        }
+    }
+
+    fun onVisibleWeekChanged(pageIndex: Int) {
+        viewModelScope.launch {
+            val history = _uiState.value.dailyUsageHistory
+            if (history.isEmpty()) return@launch
+
+            val pages = history.chunked(7)
+            if (pageIndex !in pages.indices) return@launch
+
+            val weekDays = pages[pageIndex]
+            val avg = if (weekDays.isNotEmpty()) weekDays.map { it.totalTime }.average().toLong() else 0L
+
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val appUsageMap = mutableMapOf<String, Long>()
+
+            weekDays.forEach { day ->
+                val dateStr = dateFormat.format(Date(day.date))
+                globalFallbackMap[dateStr]?.forEach { record ->
+                    if (record.packageName != "TOTAL") {
+                        appUsageMap[record.packageName] = (appUsageMap[record.packageName] ?: 0L) + record.usageTimeMillis
+                    }
+                }
+            }
+
+            val pm = context.packageManager
+            val topApps = appUsageMap.entries.sortedByDescending { it.value }.take(3).map { (pkg, time) ->
+                val cached = appInfoCache[pkg]
+                if (cached != null) {
+                    AppUsageInfo(pkg, cached.first, time, cached.second)
+                } else {
+                    try {
+                        val appInfo = pm.getApplicationInfo(pkg, 0)
+                        val label = pm.getApplicationLabel(appInfo).toString()
+                        val icon = pm.getApplicationIcon(appInfo)
+                        appInfoCache[pkg] = label to icon
+                        AppUsageInfo(pkg, label, time, icon)
+                    } catch (_: Exception) {
+                        AppUsageInfo(pkg, pkg, time, null)
+                    }
+                }
+            }
+
+            _uiState.update { it.copy(weeklyAvgTime = avg, weeklyTopApps = topApps) }
         }
     }
 }

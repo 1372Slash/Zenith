@@ -105,10 +105,10 @@ fun UsageStatsScreen(
 
     fun getGroupShape(index: Int, total: Int): RoundedCornerShape {
         return when {
-            total == 1 -> RoundedCornerShape(28.dp)
-            index == 0 -> RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 12.dp, bottomEnd = 12.dp)
-            index == total - 1 -> RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = 28.dp, bottomEnd = 28.dp)
-            else -> RoundedCornerShape(12.dp)
+            total == 1 -> RoundedCornerShape(24.dp)
+            index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+            index == total - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+            else -> RoundedCornerShape(8.dp)
         }
     }
 
@@ -387,6 +387,7 @@ fun UsageStatsScreen(
                     onDaySelected = { usage ->
                         viewModel.selectDate(usage?.date)
                     },
+                    onPageSelected = viewModel::onVisibleWeekChanged,
                     title = "Usage Trends",
                     showDatabaseIndicator = showDatabaseIndicator,
                     shape = getGroupShape(hourlyGroupTotal - 1, hourlyGroupTotal),
@@ -420,7 +421,20 @@ fun UsageStatsScreen(
                     formatDuration = viewModel::formatDuration,
                     showDatabaseIndicator = showDatabaseIndicator,
                     startIndex = 0,
-                    totalCount = 4
+                    totalCount = 5
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+        }
+
+        item(key = "weekly_double_card") {
+            Column(modifier = Modifier.animateItem()) {
+                WeeklyStatsDoubleCard(
+                    avgTime = uiState.weeklyAvgTime,
+                    topApps = uiState.weeklyTopApps,
+                    formatDuration = viewModel::formatDuration,
+                    index = 2,
+                    total = 5
                 )
                 Spacer(modifier = Modifier.height(4.dp))
             }
@@ -437,8 +451,8 @@ fun UsageStatsScreen(
                     goalUsage = goalUsage,
                     shieldUsage = shieldUsage,
                     formatDuration = viewModel::formatDuration,
-                    index = 2,
-                    total = 4,
+                    index = 3,
+                    total = 5,
                     onClick = {
                         highlightedCategory = if (highlightedCategory == "GOAL") "SHIELD" else "GOAL"
                     }
@@ -452,8 +466,8 @@ fun UsageStatsScreen(
                 GoalHeatmapItem(
                     history = uiState.dailyUsageHistory,
                     targetMillis = uiState.targetMillis,
-                    index = 3,
-                    total = 4,
+                    index = 4,
+                    total = 5,
                     selectedDateMillis = uiState.selectedDateMillis,
                     onDayClick = { viewModel.selectDate(it) }
                 )
@@ -973,10 +987,10 @@ fun GroupedCard(
     content: @Composable () -> Unit
 ) {
     val shape = when {
-        total == 1 -> RoundedCornerShape(28.dp)
-        index == 0 -> RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 12.dp, bottomEnd = 12.dp)
-        index == total - 1 -> RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = 28.dp, bottomEnd = 28.dp)
-        else -> RoundedCornerShape(12.dp)
+        total == 1 -> RoundedCornerShape(24.dp)
+        index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+        index == total - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+        else -> RoundedCornerShape(8.dp)
     }
     Card(
         modifier = modifier
@@ -1460,6 +1474,114 @@ fun GoalHeatmapItem(
                     Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Target Met", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun WeeklyStatsDoubleCard(
+    avgTime: Long,
+    topApps: List<AppUsageInfo>,
+    formatDuration: (Long) -> String,
+    index: Int,
+    total: Int
+) {
+    val shape = when {
+        total == 1 -> RoundedCornerShape(24.dp)
+        index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+        index == total - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+        else -> RoundedCornerShape(8.dp)
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(110.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Card(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            shape = shape,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Weekly Avg",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                AnimatedContent(
+                    targetState = avgTime,
+                    transitionSpec = {
+                        (slideInVertically { it / 2 } + fadeIn(spring(stiffness = Spring.StiffnessLow)))
+                            .togetherWith(slideOutVertically { -it / 2 } + fadeOut(spring(stiffness = Spring.StiffnessLow)))
+                    },
+                    label = "WeeklyAvgAnim"
+                ) { targetAvg ->
+                    Text(
+                        text = formatDuration(targetAvg),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+
+        Card(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            shape = shape,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Top Activities",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                AnimatedContent(
+                    targetState = topApps,
+                    transitionSpec = {
+                        (scaleIn(initialScale = 0.8f) + fadeIn(spring(stiffness = Spring.StiffnessLow)))
+                            .togetherWith(scaleOut(targetScale = 0.8f) + fadeOut(spring(stiffness = Spring.StiffnessLow)))
+                    },
+                    label = "TopAppsAnim"
+                ) { targetApps ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy((-12).dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (targetApps.isEmpty()) {
+                            Text("-", style = MaterialTheme.typography.bodyMedium)
+                        } else {
+                            targetApps.take(3).forEach { app ->
+                                if (app.icon != null) {
+                                    Image(
+                                        painter = BitmapPainter(app.icon.toBitmap().asImageBitmap()),
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.surface)
+                                            .padding(2.dp)
+                                            .clip(CircleShape),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

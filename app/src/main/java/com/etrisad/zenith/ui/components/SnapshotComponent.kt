@@ -117,10 +117,10 @@ fun SnapshotSection(
 
     fun getLocalGroupShape(index: Int): RoundedCornerShape {
         return when {
-            totalCount == 1 -> RoundedCornerShape(28.dp)
-            index == 0 -> RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 12.dp, bottomEnd = 12.dp)
-            index == totalCount - 1 -> RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = 28.dp, bottomEnd = 28.dp)
-            else -> RoundedCornerShape(12.dp)
+            totalCount == 1 -> RoundedCornerShape(24.dp)
+            index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+            index == totalCount - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+            else -> RoundedCornerShape(8.dp)
         }
     }
 
@@ -263,7 +263,7 @@ fun SnapshotCard(
     formatDuration: (Long) -> String,
     showDatabaseIndicator: Boolean = false,
     pagerState: PagerState,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(28.dp),
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(24.dp),
     containerColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.surfaceContainerLow
 ) {
     val pages = remember(stamps) { stamps.chunked(7) }
