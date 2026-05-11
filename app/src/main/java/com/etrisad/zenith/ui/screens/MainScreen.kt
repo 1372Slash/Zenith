@@ -43,6 +43,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.etrisad.zenith.ui.components.PermissionBottomSheet
+import com.etrisad.zenith.ui.components.OnboardingStatsBottomSheet
 import com.etrisad.zenith.ui.components.UserBottomSheet
 import com.etrisad.zenith.ui.components.ZenithHeader
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
@@ -143,6 +144,7 @@ fun MainScreen(
     }
 
     var showPermissionSheet by remember { mutableStateOf(false) }
+    var showOnboardingStatsSheet by remember { mutableStateOf(false) }
     var showUserSheet by remember { mutableStateOf(false) }
 
     fun checkPermissions() {
@@ -153,6 +155,10 @@ fun MainScreen(
         val allGranted =
             hasUsageStats && hasOverlay && (hasAccessibility || preferences.accessibilityDisabled)
         showPermissionSheet = !allGranted
+        
+        if (allGranted && !preferences.onboardingStatsCompleted) {
+            showOnboardingStatsSheet = true
+        }
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -177,9 +183,24 @@ fun MainScreen(
             preferencesRepository = userPreferencesRepository,
             onDismissRequest = {
                 showPermissionSheet = false
+                if (!preferences.onboardingStatsCompleted) {
+                    showOnboardingStatsSheet = true
+                }
             },
             onAllPermissionsGranted = {
                 showPermissionSheet = false
+                if (!preferences.onboardingStatsCompleted) {
+                    showOnboardingStatsSheet = true
+                }
+            }
+        )
+    }
+
+    if (showOnboardingStatsSheet) {
+        OnboardingStatsBottomSheet(
+            repository = userPreferencesRepository,
+            onDismiss = {
+                showOnboardingStatsSheet = false
             }
         )
     }

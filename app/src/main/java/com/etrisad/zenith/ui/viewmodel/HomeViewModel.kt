@@ -149,8 +149,8 @@ class HomeViewModel(
             
             val dbRecords = dbList.filter { it.date == dateStr }
             val dbTotal = dbRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
-            val systemRecords = globalFallbackMap[dateStr] ?: emptyList()
-            val systemTotal = systemRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
+            val systemRecords = if (preferSystemUsageHistory || isToday) globalFallbackMap[dateStr] ?: emptyList() else emptyList()
+            val systemTotal = if (preferSystemUsageHistory || isToday) systemRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L else 0L
             
             val hasHourly = hourlyDates.contains(dateStr)
             val hasSnap = dbRecords.any { it.packageName != "TOTAL" }
@@ -255,6 +255,7 @@ class HomeViewModel(
     private var detailFallbackMap: Map<String, Long> = emptyMap()
     private var currentTargetMinutes: Int = 0
     private var prefGlobalBestStreak: Int = 0
+    private var preferSystemUsageHistory: Boolean = true
 
     init {
         viewModelScope.launch {
@@ -296,6 +297,7 @@ class HomeViewModel(
             userPreferencesRepository.userPreferencesFlow.collect { prefs ->
                 currentTargetMinutes = prefs.screenTimeTargetMinutes
                 prefGlobalBestStreak = prefs.globalBestStreak
+                preferSystemUsageHistory = prefs.preferSystemUsageHistory
                 _uiState.update { it.copy(
                     bedtimeEnabled = prefs.bedtimeEnabled,
                     bedtimeStartTime = prefs.bedtimeStartTime,
@@ -694,8 +696,9 @@ class HomeViewModel(
                     totalToday
                 } else {
                     dbEntry?.usageTimeMillis 
-                        ?: globalFallbackMap[dateStr]?.find { it.packageName == "TOTAL" }?.usageTimeMillis
-                        ?: 0L
+                        ?: if (preferSystemUsageHistory) {
+                             globalFallbackMap[dateStr]?.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
+                        } else 0L
                 }
                 DailyUsage(
                     date = dStart, 
@@ -731,8 +734,10 @@ class HomeViewModel(
 
                     val hasDb = allHistory.any { it.date == dateStr && it.packageName != "TOTAL" }
                     val hasSys = globalFallbackMap[dateStr] != null
+                    
+                    val shouldShow = i == 0 || hasDb || preferSystemUsageHistory
 
-                    if (topPackage != null) {
+                    if (topPackage != null && shouldShow) {
                         val cached = appInfoCache[topPackage]
                         if (cached != null) {
                             AppUsageInfo(topPackage, cached.first, usageTime, cached.second, hasDb, hasSys, i == 0)
@@ -774,7 +779,9 @@ class HomeViewModel(
                         c.add(Calendar.DAY_OF_YEAR, -i)
                         val dStr = dateFormat.format(c.time)
                         val usage = globalHistory.find { it.date == dStr }?.usageTimeMillis 
-                            ?: globalFallbackMap[dStr]?.find { it.packageName == "TOTAL" }?.usageTimeMillis
+                            ?: if (preferSystemUsageHistory) {
+                                globalFallbackMap[dStr]?.find { it.packageName == "TOTAL" }?.usageTimeMillis
+                            } else null
                         if (usage != null && usage <= targetMillis) {
                             liveStreak++
                         } else if (usage != null) {
@@ -789,7 +796,12 @@ class HomeViewModel(
                 for (i in 60 downTo 0) {
                     val dStart = getMidnight(i)
                     val dStr = dateFormat.format(Date(dStart))
-                    val usage = if (i == 0) totalToday else (globalHistory.find { it.date == dStr }?.usageTimeMillis ?: globalFallbackMap[dStr]?.find { it.packageName == "TOTAL" }?.usageTimeMillis)
+                    val usage = if (i == 0) totalToday else {
+                        globalHistory.find { it.date == dStr }?.usageTimeMillis 
+                            ?: if (preferSystemUsageHistory) {
+                                globalFallbackMap[dStr]?.find { it.packageName == "TOTAL" }?.usageTimeMillis
+                            } else null
+                    }
                     if (usage != null && usage <= targetMillis) {
                         currentTempStreak++
                     } else {
@@ -871,8 +883,9 @@ class HomeViewModel(
                         currentTodayUsage
                     } else {
                         dbEntry?.usageTimeMillis 
-                            ?: detailFallbackMap[dateStr]
-                            ?: 0L
+                            ?: if (preferSystemUsageHistory) {
+                                detailFallbackMap[dateStr] ?: 0L
+                            } else 0L
                     }
                     DailyUsage(
                         date = dStart, 

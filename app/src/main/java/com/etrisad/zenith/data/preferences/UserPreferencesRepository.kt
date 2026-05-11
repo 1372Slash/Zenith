@@ -68,6 +68,8 @@ class UserPreferencesRepository(private val context: Context) {
         val SHOW_DATABASE_INDICATOR = booleanPreferencesKey("show_database_indicator")
         val DEVELOPER_MODE_ENABLED = booleanPreferencesKey("developer_mode_enabled")
         val LAST_SYNC_TIMESTAMP = longPreferencesKey("last_sync_timestamp")
+        val PREFER_SYSTEM_USAGE_HISTORY = booleanPreferencesKey("prefer_system_usage_history")
+        val ONBOARDING_STATS_COMPLETED = booleanPreferencesKey("onboarding_stats_completed")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -122,6 +124,8 @@ class UserPreferencesRepository(private val context: Context) {
             val showDatabaseIndicator = preferences[PreferencesKeys.SHOW_DATABASE_INDICATOR] ?: false
             val developerModeEnabled = preferences[PreferencesKeys.DEVELOPER_MODE_ENABLED] ?: false
             val lastSyncTimestamp = preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP] ?: (System.currentTimeMillis() - 24 * 60 * 60 * 1000L)
+            val preferSystemUsageHistory = preferences[PreferencesKeys.PREFER_SYSTEM_USAGE_HISTORY] ?: true
+            val onboardingStatsCompleted = preferences[PreferencesKeys.ONBOARDING_STATS_COMPLETED] ?: false
 
             UserPreferences(
                 themeConfig = themeConfig,
@@ -161,7 +165,9 @@ class UserPreferencesRepository(private val context: Context) {
                 interceptAudioFocusEnabled = interceptAudioFocusEnabled,
                 showDatabaseIndicator = showDatabaseIndicator,
                 developerModeEnabled = developerModeEnabled,
-                lastSyncTimestamp = lastSyncTimestamp
+                lastSyncTimestamp = lastSyncTimestamp,
+                preferSystemUsageHistory = preferSystemUsageHistory,
+                onboardingStatsCompleted = onboardingStatsCompleted
             )
         }
 
@@ -377,6 +383,18 @@ class UserPreferencesRepository(private val context: Context) {
             preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP] = timestamp
         }
     }
+
+    suspend fun setPreferSystemUsageHistory(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.PREFER_SYSTEM_USAGE_HISTORY] = enabled
+        }
+    }
+
+    suspend fun setOnboardingStatsCompleted(completed: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.ONBOARDING_STATS_COMPLETED] = completed
+        }
+    }
 }
 
 data class UserPreferences(
@@ -417,5 +435,7 @@ data class UserPreferences(
     val interceptAudioFocusEnabled: Boolean = true,
     val showDatabaseIndicator: Boolean = false,
     val developerModeEnabled: Boolean = false,
-    val lastSyncTimestamp: Long = 0L
+    val lastSyncTimestamp: Long = 0L,
+    val preferSystemUsageHistory: Boolean = true,
+    val onboardingStatsCompleted: Boolean = false
 )
