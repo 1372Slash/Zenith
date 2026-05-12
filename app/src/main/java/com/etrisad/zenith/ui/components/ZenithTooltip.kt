@@ -186,7 +186,8 @@ fun ZenithTooltipBox(
                 TooltipArrowPosition.EndCenter -> TooltipAnchorPosition.Left
                 TooltipArrowPosition.TopStart, TooltipArrowPosition.TopCenter, TooltipArrowPosition.TopEnd -> TooltipAnchorPosition.Below
                 else -> TooltipAnchorPosition.Above
-            }
+            },
+            spacingBetweenTooltipAndAnchor = 4.dp
         ),
         tooltip = {
             ZenithTooltip(

@@ -458,8 +458,7 @@ fun SessionUsageHUD(
         ZenithTooltipBox(
             tooltipText = "Double click to\nhide for 30s",
             state = tooltipState,
-            arrowPosition = TooltipArrowPosition.StartCenter,
-            modifier = Modifier.offset(x = 12.dp)
+            arrowPosition = TooltipArrowPosition.StartCenter
         ) {
             Box(
                 modifier = Modifier
