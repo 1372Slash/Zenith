@@ -739,20 +739,31 @@ fun ZenithDashboard(
                 .weight(1.1f)
                 .fillMaxHeight()
         ) {
-            val totalDistributionTime = (shieldUsage + goalUsage + otherUsage).toFloat().coerceAtLeast(1f)
-            
+            val rawTotal = (shieldUsage + goalUsage + otherUsage).toFloat().coerceAtLeast(1f)
+            val minAngleThreshold = 20f
+
+            val shieldIsVisible = (shieldUsage.toFloat() / rawTotal) * 360f >= minAngleThreshold || highlightedCategory == "SHIELD"
+            val goalIsVisible = (goalUsage.toFloat() / rawTotal) * 360f >= minAngleThreshold || highlightedCategory == "GOAL"
+            val otherIsVisible = (otherUsage.toFloat() / rawTotal) * 360f >= minAngleThreshold || highlightedCategory == "OTHER"
+
+            val visibleTotal = (
+                (if (shieldIsVisible) shieldUsage else 0L) +
+                (if (goalIsVisible) goalUsage else 0L) +
+                (if (otherIsVisible) otherUsage else 0L)
+            ).toFloat().coerceAtLeast(1f)
+
             val animShieldAngle by animateFloatAsState(
-                targetValue = (shieldUsage.toFloat() / totalDistributionTime) * 360f,
+                targetValue = if (shieldIsVisible) (shieldUsage.toFloat() / visibleTotal) * 360f else 0f,
                 animationSpec = spring(stiffness = Spring.StiffnessLow),
                 label = "ShieldAngle"
             )
             val animGoalAngle by animateFloatAsState(
-                targetValue = (goalUsage.toFloat() / totalDistributionTime) * 360f,
+                targetValue = if (goalIsVisible) (goalUsage.toFloat() / visibleTotal) * 360f else 0f,
                 animationSpec = spring(stiffness = Spring.StiffnessLow),
                 label = "GoalAngle"
             )
             val animOtherAngle by animateFloatAsState(
-                targetValue = (otherUsage.toFloat() / totalDistributionTime) * 360f,
+                targetValue = if (otherIsVisible) (otherUsage.toFloat() / visibleTotal) * 360f else 0f,
                 animationSpec = spring(stiffness = Spring.StiffnessLow),
                 label = "OtherAngle"
             )
@@ -801,52 +812,46 @@ fun ZenithDashboard(
                     .fillMaxSize()
                     .padding(2.dp)
             ) {
-                val baseStrokeWidth = baseStroke.toPx()
                 val radius = (size.minDimension - highlightStroke.toPx()) / 2
                 val center = androidx.compose.ui.geometry.Offset(size.width / 2, size.height / 2)
                 val arcSize = androidx.compose.ui.geometry.Size(radius * 2, radius * 2)
                 val topLeft = androidx.compose.ui.geometry.Offset(center.x - radius, center.y - radius)
 
-                var startAngle = -90f
-                val gap = if (totalTime > 0) 22f else 0f
+                var currentAngle = -90f
+                val totalVisibleCount = (if (shieldIsVisible) 1 else 0) + (if (goalIsVisible) 1 else 0) + (if (otherIsVisible) 1 else 0)
+                val gap = if (totalVisibleCount > 1) 22f else 0f
 
-                if (animShieldAngle > gap) {
-                    drawArc(
-                        color = shieldColor.copy(alpha = animShieldAlpha),
-                        startAngle = startAngle + gap / 2,
-                        sweepAngle = (animShieldAngle - gap).coerceAtLeast(0.1f),
-                        useCenter = false,
-                        topLeft = topLeft,
-                        size = arcSize,
-                        style = Stroke(width = animShieldStroke.toPx(), cap = StrokeCap.Round)
-                    )
+                fun drawSegment(angle: Float, alpha: Float, strokeWidth: Float, color: Color, category: String) {
+                    if (angle > 0.1f) {
+                        val sweep = (angle - gap).coerceAtLeast(0f)
+                        if (sweep > 2f) {
+                            drawArc(
+                                color = color.copy(alpha = alpha),
+                                startAngle = currentAngle + gap / 2,
+                                sweepAngle = sweep,
+                                useCenter = false,
+                                topLeft = topLeft,
+                                size = arcSize,
+                                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                            )
+                        } else if (highlightedCategory == category) {
+                            drawArc(
+                                color = color,
+                                startAngle = currentAngle + angle / 2 - 1f,
+                                sweepAngle = 2f,
+                                useCenter = false,
+                                topLeft = topLeft,
+                                size = arcSize,
+                                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                            )
+                        }
+                    }
+                    currentAngle += angle
                 }
-                startAngle += animShieldAngle
 
-                if (animGoalAngle > gap) {
-                    drawArc(
-                        color = goalColor.copy(alpha = animGoalAlpha),
-                        startAngle = startAngle + gap / 2,
-                        sweepAngle = (animGoalAngle - gap).coerceAtLeast(0.1f),
-                        useCenter = false,
-                        topLeft = topLeft,
-                        size = arcSize,
-                        style = Stroke(width = animGoalStroke.toPx(), cap = StrokeCap.Round)
-                    )
-                }
-                startAngle += animGoalAngle
-
-                if (animOtherAngle > gap) {
-                    drawArc(
-                        color = otherColor.copy(alpha = animOtherAlpha),
-                        startAngle = startAngle + gap / 2,
-                        sweepAngle = (animOtherAngle - gap).coerceAtLeast(0.1f),
-                        useCenter = false,
-                        topLeft = topLeft,
-                        size = arcSize,
-                        style = Stroke(width = animOtherStroke.toPx(), cap = StrokeCap.Round)
-                    )
-                }
+                drawSegment(animShieldAngle, animShieldAlpha, animShieldStroke.toPx(), shieldColor, "SHIELD")
+                drawSegment(animGoalAngle, animGoalAlpha, animGoalStroke.toPx(), goalColor, "GOAL")
+                drawSegment(animOtherAngle, animOtherAlpha, animOtherStroke.toPx(), otherColor, "OTHER")
             }
 
             Column(
@@ -860,9 +865,9 @@ fun ZenithDashboard(
                             .togetherWith(slideOutVertically { height -> -height / 2 } + fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)))
                     },
                     label = "TotalTimeAnimation"
-                ) { targetTime ->
+                ) { targetTimeValue ->
                     Text(
-                        text = formatDuration(targetTime),
+                        text = formatDuration(targetTimeValue),
                         style = MaterialTheme.typography.displaySmall.copy(fontSize = 24.sp),
                         fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.onSurface
@@ -936,7 +941,8 @@ fun DashboardSmallCard(
     textColor: Color,
     modifier: Modifier = Modifier,
     isHighlighted: Boolean = false,
-    anyHighlighted: Boolean = false
+    anyHighlighted: Boolean = false,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(16.dp)
 ) {
     val animAlpha by animateFloatAsState(
         targetValue = if (!anyHighlighted || isHighlighted) 1f else 0.4f,
@@ -958,7 +964,7 @@ fun DashboardSmallCard(
                 scaleX = animScale
                 scaleY = animScale
             },
-        shape = RoundedCornerShape(16.dp),
+        shape = shape,
         colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
