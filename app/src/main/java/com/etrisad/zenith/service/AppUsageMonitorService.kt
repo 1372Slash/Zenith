@@ -1112,7 +1112,10 @@ class AppUsageMonitorService : Service() {
             }
 
             dailyUsageCache.clear()
-            dailyUsageCache.putAll(tempUsageMap)
+            tempUsageMap.forEach { (pkg, time) ->
+                val cappedTime = if (time > timeSinceMidnight + 5000) timeSinceMidnight else time
+                if (cappedTime > 0) dailyUsageCache[pkg] = cappedTime
+            }
             usageStatsCache = statsList
         } catch (e: Exception) {
             usageStatsCache = null

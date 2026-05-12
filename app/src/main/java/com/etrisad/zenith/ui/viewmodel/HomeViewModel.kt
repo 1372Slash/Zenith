@@ -405,6 +405,8 @@ class HomeViewModel(
         val resultMap = mutableMapOf<String, List<UsageRecord.Live>>()
 
         val now = System.currentTimeMillis()
+        val todayStart = getMidnight(0)
+
         for (i in 0..30) {
             val start = getMidnight(i)
             val end = if (i == 0) now else getMidnight(i - 1)
@@ -414,9 +416,14 @@ class HomeViewModel(
             
             val dayRecords = mutableListOf<UsageRecord.Live>()
             var dayTotal = 0L
+            val timeSinceStart = end - start
+
             stats.forEach { (pkg, stat) ->
                 if (pkg in excludePackages || pkg !in launcherApps) return@forEach
-                val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+                var time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+                if (i == 0 && time > timeSinceStart + 10000) {
+                    time = timeSinceStart
+                }
                 if (time > 0) {
                     dayTotal += time
                     dayRecords.add(UsageRecord.Live(pkg, time))
@@ -486,6 +493,7 @@ class HomeViewModel(
             val now = System.currentTimeMillis()
             val selectedDate = _uiState.value.selectedDateMillis
             val todayStart = getMidnight(0)
+            val timeSinceMidnight = now - todayStart
             
             val isSelectedToday = selectedDate == todayStart
             
@@ -506,7 +514,10 @@ class HomeViewModel(
             var totalToday = 0L
             trueTodayStats.forEach { (pkg, stat) ->
                 if (pkg in excludePackages || pkg !in launcherApps) return@forEach
-                val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+                var time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+                if (isSelectedToday && time > timeSinceMidnight + 10000) {
+                    time = timeSinceMidnight
+                }
                 if (time > 0) totalToday += time
             }
 
@@ -516,7 +527,10 @@ class HomeViewModel(
             
             dayStats.forEach { (pkg, stat) ->
                 if (pkg in excludePackages || pkg !in launcherApps) return@forEach
-                val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+                var time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+                if (isSelectedToday && time > timeSinceMidnight + 10000) {
+                    time = timeSinceMidnight
+                }
                 if (time > 0) appTotals[pkg] = time
             }
 
@@ -806,7 +820,11 @@ class HomeViewModel(
                     }
                     
                     val topPackage = topEntry?.key
-                    val usageTime = topEntry?.value?.let { it.totalTimeVisible.coerceAtLeast(it.totalTimeInForeground) } ?: 0L
+                    var usageTime = topEntry?.value?.let { it.totalTimeVisible.coerceAtLeast(it.totalTimeInForeground) } ?: 0L
+                    
+                    if (i == 0 && usageTime > timeSinceMidnight + 10000) {
+                        usageTime = timeSinceMidnight
+                    }
 
                     val hasDb = allHistory.any { it.date == dateStr && it.packageName != "TOTAL" }
                     val hasSys = globalFallbackMap[dateStr] != null
@@ -1040,9 +1058,19 @@ class HomeViewModel(
     }
 
     private fun Map<String, android.app.usage.UsageStats>.getUsageTime(packageName: String): Long {
-        return this[packageName]?.let {
-            it.totalTimeVisible.coerceAtLeast(it.totalTimeInForeground)
-        } ?: 0L
+        val stats = this[packageName] ?: return 0L
+        val time = stats.totalTimeVisible.coerceAtLeast(stats.totalTimeInForeground)
+        
+        val now = System.currentTimeMillis()
+        val todayStart = getMidnight(0)
+        val timeSinceMidnight = now - todayStart
+        
+        // If the query is for today and it returns more than elapsed time, cap it
+        if (stats.firstTimeStamp >= todayStart && time > timeSinceMidnight + 10000) {
+            return timeSinceMidnight
+        }
+        
+        return time
     }
 
     fun onShieldSortTypeChange(sortType: ShieldSortType) {

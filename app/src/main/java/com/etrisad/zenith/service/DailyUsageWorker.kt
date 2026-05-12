@@ -70,11 +70,15 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         
         val usages = mutableListOf<DailyUsageEntity>()
         var totalUsage = 0L
+        val timeSinceStart = System.currentTimeMillis().coerceAtMost(endTime) - startTime
 
         stats.forEach { (pkg, stat) ->
             if (pkg in excludePackages || pkg !in launcherApps) return@forEach
 
-            val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+            var time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+            if (time > timeSinceStart + 30000) {
+                time = timeSinceStart
+            }
             if (time > 0) {
                 usages.add(DailyUsageEntity(date = dateString, packageName = pkg, usageTimeMillis = time))
                 totalUsage += time
@@ -87,7 +91,13 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         for (i in 1..5) {
             val lastKnown = userPrefsRepo.userPreferencesFlow.first()
             if (lastKnown.lastKnownDailyUsageDate == dateString && lastKnown.lastKnownDailyUsage > finalTotalUsage) {
-                finalTotalUsage = lastKnown.lastKnownDailyUsage
+                // Ensure last known usage doesn't exceed possible time in the day
+                val cappedLastKnown = if (lastKnown.lastKnownDailyUsage > timeSinceStart + 60000) {
+                    timeSinceStart
+                } else {
+                    lastKnown.lastKnownDailyUsage
+                }
+                finalTotalUsage = maxOf(finalTotalUsage, cappedLastKnown)
                 break 
             }
             if (i < 5) delay(2000)
