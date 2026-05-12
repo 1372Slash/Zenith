@@ -200,7 +200,7 @@ fun UsageHistoryGroupCard(
                         color = statusColor
                     )
                     
-                    if (group.hasSnapshot || group.hasHourlyUsage) {
+                    if (group.hasSnapshot || group.hasHourlyUsage || group.hasPiechartData) {
                         Row(
                             modifier = Modifier.padding(top = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -270,6 +270,41 @@ fun UsageHistoryGroupCard(
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.secondary,
+                                            fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.8f
+                                        )
+                                    }
+                                }
+                            }
+
+                            AnimatedVisibility(
+                                visible = group.hasPiechartData,
+                                enter = fadeIn() + expandHorizontally(),
+                                exit = fadeOut() + shrinkHorizontally()
+                            ) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.1f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp, 
+                                        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f)
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.PieChart,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(10.dp),
+                                            tint = MaterialTheme.colorScheme.tertiary
+                                        )
+                                        Text(
+                                            "PIECHART",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.tertiary,
                                             fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.8f
                                         )
                                     }
@@ -347,6 +382,16 @@ fun UsageRecordListItem(
     isLast: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val displayName = remember(packageName) {
+        when (packageName) {
+            "TOTAL" -> "Total Screen Time"
+            "SHIELD_TOTAL" -> "Shielded Apps Snapshot"
+            "GOAL_TOTAL" -> "Goal Apps Snapshot"
+            "OTHER_TOTAL" -> "Other Apps Snapshot"
+            else -> packageName
+        }
+    }
+
     val shape = when {
         isFirst && isLast -> RoundedCornerShape(16.dp)
         isFirst -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
@@ -377,7 +422,11 @@ fun UsageRecordListItem(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = if (packageName == "TOTAL") Icons.Outlined.History else Icons.Outlined.SdStorage,
+                    imageVector = when (packageName) {
+                        "TOTAL" -> Icons.Outlined.History
+                        "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL" -> Icons.Outlined.PieChart
+                        else -> Icons.Outlined.SdStorage
+                    },
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
                     tint = if (isDatabase) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
@@ -388,7 +437,7 @@ fun UsageRecordListItem(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = packageName,
+                    text = displayName,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold
                 )

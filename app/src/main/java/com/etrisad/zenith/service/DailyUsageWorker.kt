@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import androidx.work.*
 import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.local.entity.DailyUsageEntity
+import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import kotlinx.coroutines.delay
@@ -93,6 +94,22 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         }
 
         usages.add(DailyUsageEntity(date = dateString, packageName = "TOTAL", usageTimeMillis = finalTotalUsage))
+
+        val allShields = database.shieldDao().getAllShields().first()
+        val shieldPkgs = allShields.filter { it.type == FocusType.SHIELD }.map { it.packageName }.toSet()
+        val goalPkgs = allShields.filter { it.type == FocusType.GOAL }.map { it.packageName }.toSet()
+
+        var sUsage = 0L
+        var gUsage = 0L
+        usages.filter { it.packageName != "TOTAL" }.forEach { 
+            if (it.packageName in shieldPkgs) sUsage += it.usageTimeMillis
+            else if (it.packageName in goalPkgs) gUsage += it.usageTimeMillis
+        }
+        val oUsage = (finalTotalUsage - (sUsage + gUsage)).coerceAtLeast(0L)
+
+        usages.add(DailyUsageEntity(date = dateString, packageName = "SHIELD_TOTAL", usageTimeMillis = sUsage))
+        usages.add(DailyUsageEntity(date = dateString, packageName = "GOAL_TOTAL", usageTimeMillis = gUsage))
+        usages.add(DailyUsageEntity(date = dateString, packageName = "OTHER_TOTAL", usageTimeMillis = oUsage))
 
         dailyUsageDao.insertAll(usages)
 

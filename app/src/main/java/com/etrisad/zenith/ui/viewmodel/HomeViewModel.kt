@@ -83,6 +83,9 @@ data class HomeUiState(
     val targetMillis: Long = 0L,
     val weeklyAvgTime: Long = 0L,
     val weeklyTopApps: List<AppUsageInfo> = emptyList(),
+    val shieldUsage: Long = 0L,
+    val goalUsage: Long = 0L,
+    val otherUsage: Long = 0L,
     val bedtimeEnabled: Boolean = false,
     val bedtimeStartTime: String = "22:00",
     val bedtimeEndTime: String = "07:00",
@@ -111,7 +114,11 @@ data class UsageHistoryGroup(
     val isLive: Boolean = false,
     val hasSnapshot: Boolean = false,
     val hasHourlyUsage: Boolean = false,
-    val systemTotalMillis: Long = 0L
+    val hasPiechartData: Boolean = false,
+    val systemTotalMillis: Long = 0L,
+    val shieldTotalMillis: Long = 0L,
+    val goalTotalMillis: Long = 0L,
+    val otherTotalMillis: Long = 0L
 )
 
 class HomeViewModel(
@@ -156,17 +163,30 @@ class HomeViewModel(
             val systemTotal = if (preferSystemUsageHistory || isToday) systemRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L else 0L
             
             val hasHourly = hourlyDates.contains(dateStr)
-            val hasSnap = dbRecords.any { it.packageName != "TOTAL" }
+            val hasSnap = dbRecords.any { it.packageName != "TOTAL" && it.packageName != "SHIELD_TOTAL" && it.packageName != "GOAL_TOTAL" && it.packageName != "OTHER_TOTAL" }
+            val hasPiechart = dbRecords.any { it.packageName == "SHIELD_TOTAL" || it.packageName == "GOAL_TOTAL" || it.packageName == "OTHER_TOTAL" }
+            
+            val dbShieldTotal = dbRecords.find { it.packageName == "SHIELD_TOTAL" }?.usageTimeMillis ?: 0L
+            val dbGoalTotal = dbRecords.find { it.packageName == "GOAL_TOTAL" }?.usageTimeMillis ?: 0L
+            val dbOtherTotal = dbRecords.find { it.packageName == "OTHER_TOTAL" }?.usageTimeMillis ?: 0L
 
             if (isToday) {
                 val liveRecords = mutableListOf<UsageRecord>()
                 dbRecords.forEach { liveRecords.add(UsageRecord.Database(it)) }
                 
                 val liveTotal = uiState.value.totalScreenTime
+                val liveShield = uiState.value.shieldUsage
+                val liveGoal = uiState.value.goalUsage
+                val liveOther = uiState.value.otherUsage
+
                 if (dbRecords.none { it.packageName == "TOTAL" } || 
                     (dbRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L) < liveTotal - 60000) {
                     liveRecords.add(UsageRecord.Live("TOTAL", liveTotal))
                 }
+
+                if (dbRecords.none { it.packageName == "SHIELD_TOTAL" }) liveRecords.add(UsageRecord.Live("SHIELD_TOTAL", liveShield))
+                if (dbRecords.none { it.packageName == "GOAL_TOTAL" }) liveRecords.add(UsageRecord.Live("GOAL_TOTAL", liveGoal))
+                if (dbRecords.none { it.packageName == "OTHER_TOTAL" }) liveRecords.add(UsageRecord.Live("OTHER_TOTAL", liveOther))
                 
                 groups.add(UsageHistoryGroup(
                     date = dateStr, 
@@ -177,7 +197,11 @@ class HomeViewModel(
                     isLive = true,
                     hasSnapshot = hasSnap,
                     hasHourlyUsage = hasHourly,
-                    systemTotalMillis = liveTotal
+                    hasPiechartData = true,
+                    systemTotalMillis = liveTotal,
+                    shieldTotalMillis = maxOf(dbShieldTotal, liveShield),
+                    goalTotalMillis = maxOf(dbGoalTotal, liveGoal),
+                    otherTotalMillis = maxOf(dbOtherTotal, liveOther)
                 ))
             } else if (dbRecords.isEmpty() && systemRecords.isEmpty()) {
                 groups.add(UsageHistoryGroup(
@@ -208,7 +232,11 @@ class HomeViewModel(
                     hasSystemData = systemTotal > 0L,
                     hasSnapshot = hasSnap,
                     hasHourlyUsage = hasHourly,
-                    systemTotalMillis = systemTotal
+                    hasPiechartData = hasPiechart,
+                    systemTotalMillis = systemTotal,
+                    shieldTotalMillis = dbShieldTotal,
+                    goalTotalMillis = dbGoalTotal,
+                    otherTotalMillis = dbOtherTotal
                 ))
             }
             
@@ -229,6 +257,13 @@ class HomeViewModel(
         viewModelScope.launch {
             _isRepairing.value = true
             try {
+                val shieldPkgs = allShields.filter { it.type == FocusType.SHIELD }.map { it.packageName }.toSet()
+                val goalPkgs = allShields.filter { it.type == FocusType.GOAL }.map { it.packageName }.toSet()
+                
+                var sUsage = 0L
+                var gUsage = 0L
+                var total = 0L
+
                 systemRecords.forEach { record ->
                     shieldRepository.insertDailyUsage(
                         DailyUsageEntity(
@@ -237,7 +272,20 @@ class HomeViewModel(
                             usageTimeMillis = record.usageTimeMillis
                         )
                     )
+                    
+                    if (record.packageName == "TOTAL") {
+                        total = record.usageTimeMillis
+                    } else if (record.packageName in shieldPkgs) {
+                        sUsage += record.usageTimeMillis
+                    } else if (record.packageName in goalPkgs) {
+                        gUsage += record.usageTimeMillis
+                    }
                 }
+                
+                val oUsage = (total - (sUsage + gUsage)).coerceAtLeast(0L)
+                shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "SHIELD_TOTAL", usageTimeMillis = sUsage))
+                shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "GOAL_TOTAL", usageTimeMillis = gUsage))
+                shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "OTHER_TOTAL", usageTimeMillis = oUsage))
             } finally {
                 delay(500)
                 _isRepairing.value = false
@@ -577,6 +625,35 @@ class HomeViewModel(
             }
 
             val selectedDateStr = dateFormat.format(Date(selectedDate))
+            
+            val selectedDayHistory = allHistory.filter { it.date == selectedDateStr }
+            val storedShieldUsage = selectedDayHistory.find { it.packageName == "SHIELD_TOTAL" }?.usageTimeMillis
+            val storedGoalUsage = selectedDayHistory.find { it.packageName == "GOAL_TOTAL" }?.usageTimeMillis
+            val storedOtherUsage = selectedDayHistory.find { it.packageName == "OTHER_TOTAL" }?.usageTimeMillis
+
+            val liveShields = allShields.map { shield ->
+                val usage = trueTodayStats.getUsageTime(shield.packageName)
+                val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+                shield.copy(remainingTimeMillis = (limitMillis - usage).coerceAtLeast(0L))
+            }
+
+            val (finalShieldUsage, finalGoalUsage, finalOtherUsage) = if (isSelectedToday || (storedShieldUsage == null && storedGoalUsage == null)) {
+                val shieldPkgs = liveShields.filter { it.type == FocusType.SHIELD }.map { it.packageName }.toSet()
+                val goalPkgs = liveShields.filter { it.type == FocusType.GOAL }.map { it.packageName }.toSet()
+                
+                var s = 0L
+                var g = 0L
+                allAppsUsage.forEach { app ->
+                    if (app.packageName in shieldPkgs) s += app.totalTimeVisible
+                    else if (app.packageName in goalPkgs) g += app.totalTimeVisible
+                }
+                val currentTotal = if (isSelectedToday) totalToday else (selectedDayHistory.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: allAppsUsage.sumOf { it.totalTimeVisible })
+                val o = (currentTotal - (s + g)).coerceAtLeast(0L)
+                Triple(s, g, o)
+            } else {
+                Triple(storedShieldUsage ?: 0L, storedGoalUsage ?: 0L, storedOtherUsage ?: 0L)
+            }
+
             val dbHourly = shieldRepository.getHourlyUsageForDate(selectedDateStr).first()
             val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
             val newlyLocked = mutableListOf<HourlyUsageEntity>()
@@ -759,12 +836,6 @@ class HomeViewModel(
                 currentSnapshotStamps
             }
 
-            val liveShields = allShields.map { shield ->
-                val usage = trueTodayStats.getUsageTime(shield.packageName)
-                val limitMillis = shield.timeLimitMinutes * 60 * 1000L
-                shield.copy(remainingTimeMillis = (limitMillis - usage).coerceAtLeast(0L))
-            }
-
             val targetMillis = currentTargetMinutes * 60 * 1000L
             var liveStreak = 0
             var bestStreakFromHistory = 0
@@ -820,6 +891,9 @@ class HomeViewModel(
                 snapshotStamps       = snapshotStamps,
                 topApps              = topApps,
                 allAppsUsage         = allAppsUsage,
+                shieldUsage          = finalShieldUsage,
+                goalUsage            = finalGoalUsage,
+                otherUsage           = finalOtherUsage,
                 activeShields = sortShields(liveShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.SHIELD }, state.shieldSortType),
                 activeGoals   = sortShields(liveShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL }, state.goalSortType),
                 globalCurrentStreak = liveStreak,
