@@ -21,6 +21,8 @@ class UsageSyncManager(
     private val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
+    private data class UsageChunk(val packageName: String, var duration: Long)
+
     suspend fun syncUsageData() {
         val lastSyncTime = preferencesRepository.userPreferencesFlow.first().lastSyncTimestamp
         val currentTime = System.currentTimeMillis()
@@ -43,7 +45,7 @@ class UsageSyncManager(
         val event = UsageEvents.Event()
         
         val activeSessions = mutableMapOf<String, Long>()
-        val hourlyBuckets = mutableMapOf<String, MutableMap<Int, MutableMap<String, Long>>>()
+        val hourlyBuckets = mutableMapOf<String, MutableMap<Int, MutableList<UsageChunk>>>()
 
         var isScreenOn = powerManager.isInteractive
 
@@ -90,7 +92,7 @@ class UsageSyncManager(
         pkg: String,
         start: Long,
         end: Long,
-        buckets: MutableMap<String, MutableMap<Int, MutableMap<String, Long>>>
+        buckets: MutableMap<String, MutableMap<Int, MutableList<UsageChunk>>>
     ) {
         val cal = Calendar.getInstance()
         var current = start
@@ -112,31 +114,82 @@ class UsageSyncManager(
 
             if (duration > 0) {
                 buckets.getOrPut(dateStr) { mutableMapOf() }
-                    .getOrPut(hour) { mutableMapOf() }
-                    .let { it[pkg] = (it[pkg] ?: 0L) + duration }
+                    .getOrPut(hour) { mutableListOf() }
+                    .add(UsageChunk(pkg, duration))
             }
             current = chunkEnd
         }
     }
 
     private suspend fun saveBucketsToDatabase(
-        buckets: MutableMap<String, MutableMap<Int, MutableMap<String, Long>>>
+        buckets: MutableMap<String, MutableMap<Int, MutableList<UsageChunk>>>
     ) {
-        val entities = mutableListOf<HourlyUsageEntity>()
         val now = System.currentTimeMillis()
+        val limit = 3600000L
+        val finalEntities = mutableListOf<HourlyUsageEntity>()
+        val carryOver = mutableListOf<UsageChunk>()
+        val sortedDates = buckets.keys.sorted().toMutableList()
+        
+        var dateIdx = 0
+        while (dateIdx < sortedDates.size || carryOver.isNotEmpty()) {
+            val date = if (dateIdx < sortedDates.size) {
+                sortedDates[dateIdx]
+            } else {
+                val lastDate = sortedDates.lastOrNull() ?: break
+                val cal = Calendar.getInstance()
+                cal.time = try { dateFormat.parse(lastDate) } catch (_: Exception) { null } ?: break
+                cal.add(Calendar.DAY_OF_YEAR, 1)
+                val nextDate = dateFormat.format(cal.time)
+                sortedDates.add(nextDate)
+                nextDate
+            }
+            dateIdx++
 
-        buckets.forEach { (date, hours) ->
             val existingRecords = repository.getHourlyUsageForDate(date).first()
-            
-            hours.forEach { (hour, apps) ->
-                var hourTotal = 0L
-                apps.forEach { (pkg, duration) ->
+            val dayBuckets = buckets[date] ?: mutableMapOf()
+
+            for (hour in 0..23) {
+                val newChunks = dayBuckets[hour] ?: mutableListOf()
+                val combined = mutableListOf<UsageChunk>()
+                combined.addAll(carryOver)
+                carryOver.clear()
+                combined.addAll(newChunks)
+
+                val existingHourTotal = existingRecords
+                    .filter { it.hour == hour && it.packageName != "TOTAL" }
+                    .sumOf { it.usageTimeMillis }
+                
+                val currentNewTotal = combined.sumOf { it.duration }
+                
+                if (existingHourTotal + currentNewTotal > limit) {
+                    var excess = (existingHourTotal + currentNewTotal) - limit
+                    while (excess > 0 && combined.isNotEmpty()) {
+                        val last = combined.last()
+                        if (last.duration <= excess) {
+                            excess -= last.duration
+                            carryOver.add(0, combined.removeAt(combined.size - 1))
+                        } else {
+                            val move = excess
+                            last.duration -= move
+                            carryOver.add(0, UsageChunk(last.packageName, move))
+                            excess = 0
+                        }
+                    }
+                }
+
+                val appsToSave = mutableMapOf<String, Long>()
+                combined.forEach { 
+                    appsToSave[it.packageName] = (appsToSave[it.packageName] ?: 0L) + it.duration 
+                }
+
+                var hourTotalIncrement = 0L
+                appsToSave.forEach { (pkg, duration) ->
+                    if (duration <= 0) return@forEach
                     val existing = existingRecords.find { it.hour == hour && it.packageName == pkg }
                     val totalDuration = (existing?.usageTimeMillis ?: 0L) + duration
-                    
-                    hourTotal += duration
+                    hourTotalIncrement += duration
 
-                    entities.add(
+                    finalEntities.add(
                         HourlyUsageEntity(
                             id = existing?.id ?: 0,
                             date = date,
@@ -147,13 +200,13 @@ class UsageSyncManager(
                         )
                     )
                 }
-                
-                if (hourTotal > 0) {
-                    val existingTotal = existingRecords.find { it.hour == hour && it.packageName == "TOTAL" }
-                    val newTotal = (existingTotal?.usageTimeMillis ?: 0L) + hourTotal
-                    entities.add(
+
+                if (hourTotalIncrement > 0) {
+                    val existingTotalRec = existingRecords.find { it.hour == hour && it.packageName == "TOTAL" }
+                    val newTotal = (existingTotalRec?.usageTimeMillis ?: 0L) + hourTotalIncrement
+                    finalEntities.add(
                         HourlyUsageEntity(
-                            id = existingTotal?.id ?: 0,
+                            id = existingTotalRec?.id ?: 0,
                             date = date,
                             hour = hour,
                             packageName = "TOTAL",
@@ -163,10 +216,11 @@ class UsageSyncManager(
                     )
                 }
             }
+            if (dateIdx > 100) break 
         }
-        
-        if (entities.isNotEmpty()) {
-            repository.insertHourlyUsage(entities)
+
+        if (finalEntities.isNotEmpty()) {
+            repository.insertHourlyUsage(finalEntities)
         }
     }
 }
