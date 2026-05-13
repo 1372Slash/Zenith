@@ -1099,29 +1099,15 @@ class AppUsageMonitorService : Service() {
             val tempUsageMap = mutableMapOf<String, Long>()
             val statsList = mutableListOf<android.app.usage.UsageStats>()
 
-            if (timeSinceMidnight < 3 * 3600000) {
-                val usageMap = com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usageStatsManager)
-                usageMap.forEach { (pkg, seconds) ->
-                    tempUsageMap[pkg] = seconds * 1000L
-                }
-                
-                usageStatsManager.queryAndAggregateUsageStats(startTime, currentTime)?.forEach { (_, stat) ->
-                    statsList.add(stat)
-                }
-            } else {
-                val statsMap = usageStatsManager.queryAndAggregateUsageStats(startTime, currentTime)
-                if (statsMap != null && statsMap.isNotEmpty()) {
-                    statsMap.forEach { (pkg, stat) ->
-                        var time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
-                        if (time > timeSinceMidnight + 10000) {
-                            time = timeSinceMidnight 
-                        }
-                        if (time > 0) {
-                            tempUsageMap[pkg] = time
-                            statsList.add(stat)
-                        }
-                    }
-                }
+            // Always use the accurate helper for today's app usage to ensure midnight reset is perfect
+            val accurateUsageMap = com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usageStatsManager)
+            accurateUsageMap.forEach { (pkg, seconds) ->
+                tempUsageMap[pkg] = seconds * 1000L
+            }
+            
+            // Still query aggregate stats for other metadata if needed, but the time is taken from accurateUsageMap
+            usageStatsManager.queryAndAggregateUsageStats(startTime, currentTime)?.forEach { (_, stat) ->
+                statsList.add(stat)
             }
 
             dailyUsageCache.clear()

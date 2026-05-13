@@ -96,18 +96,12 @@ class FocusViewModel(
 
     private fun updateShieldedLists() {
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
-        val now = System.currentTimeMillis()
-        val calendar = java.util.Calendar.getInstance().apply {
-            set(java.util.Calendar.HOUR_OF_DAY, 0)
-            set(java.util.Calendar.MINUTE, 0)
-            set(java.util.Calendar.SECOND, 0)
-            set(java.util.Calendar.MILLISECOND, 0)
-        }
-        val stats = usm.queryAndAggregateUsageStats(calendar.timeInMillis, now)
+        
+        // Use the accurate helper for today's usage to avoid "sticky" cross-day stats
+        val accurateUsageMap = com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usm)
 
         val liveShields = allShields.map { shield ->
-            val usageStat = stats[shield.packageName]
-            val usage = usageStat?.let { it.totalTimeVisible.coerceAtLeast(it.totalTimeInForeground) } ?: 0L
+            val usage = (accurateUsageMap[shield.packageName] ?: 0L) * 1000L
             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
             shield.copy(remainingTimeMillis = (limitMillis - usage).coerceAtLeast(0L))
         }
@@ -195,14 +189,14 @@ class FocusViewModel(
     private fun getTopUsedApps(limit: Int): List<AppInfo> {
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
         val pm = context.packageManager
-        val now = System.currentTimeMillis()
-        val start = now - 24 * 60 * 60 * 1000L
-
-        val stats = usm.queryAndAggregateUsageStats(start, now)
-        return stats.values
-            .sortedByDescending { it.totalTimeVisible.coerceAtLeast(it.totalTimeInForeground) }
-            .mapNotNull { stat ->
-                _allInstalledApps.value.find { it.packageName == stat.packageName }
+        
+        // Use accurate usage map to ensure correct ordering especially near midnight
+        val accurateUsageMap = com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usm)
+        
+        return accurateUsageMap.entries
+            .sortedByDescending { it.value }
+            .mapNotNull { (pkg, _) ->
+                _allInstalledApps.value.find { it.packageName == pkg }
             }
             .take(limit)
     }
@@ -326,18 +320,8 @@ class FocusViewModel(
 
     private fun getUsageTodayForPackage(packageName: String): Long {
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
-        val now = System.currentTimeMillis()
-        val calendar = java.util.Calendar.getInstance()
-        calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
-        calendar.set(java.util.Calendar.MINUTE, 0)
-        calendar.set(java.util.Calendar.SECOND, 0)
-        calendar.set(java.util.Calendar.MILLISECOND, 0)
-        val start = calendar.timeInMillis
-
-        val stats = usm.queryAndAggregateUsageStats(start, now)
-        return stats[packageName]?.let {
-            it.totalTimeVisible.coerceAtLeast(it.totalTimeInForeground)
-        } ?: 0L
+        val accurateUsageMap = com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usm)
+        return (accurateUsageMap[packageName] ?: 0L) * 1000L
     }
 
     fun closeSettingsSheet() {

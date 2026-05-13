@@ -66,24 +66,147 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
             ?.activityInfo?.packageName
         val excludePackages = setOfNotNull(applicationContext.packageName, launcherPackage)
 
-        val stats = usm.queryAndAggregateUsageStats(startTime, System.currentTimeMillis().coerceAtMost(endTime))
-        
-        val usages = mutableListOf<DailyUsageEntity>()
-        var totalUsage = 0L
         val timeSinceStart = System.currentTimeMillis().coerceAtMost(endTime) - startTime
+        val accurateAppTotals = mutableMapOf<String, Long>()
+        val hourlyMap = mutableMapOf<Int, Long>()
+        val hourlyAppUsage = mutableMapOf<Int, MutableMap<String, Long>>()
+        
+        val eventBuffer = 24 * 60 * 60 * 1000L
+        val events = usm.queryEvents(startTime - eventBuffer, System.currentTimeMillis().coerceAtMost(endTime))
+        val event = android.app.usage.UsageEvents.Event()
+        val lastEventTime = mutableMapOf<String, Long>()
+        val cal = Calendar.getInstance()
+        
+        var isScreenOn = true 
 
-        stats.forEach { (pkg, stat) ->
-            if (pkg in excludePackages || pkg !in launcherApps) return@forEach
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            val pkg = event.packageName
+            val time = event.timeStamp
+            val type = event.eventType
 
-            var time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
-            if (time > timeSinceStart + 30000) {
-                time = timeSinceStart
-            }
-            if (time > 0) {
-                usages.add(DailyUsageEntity(date = dateString, packageName = pkg, usageTimeMillis = time))
-                totalUsage += time
+            when (type) {
+                android.app.usage.UsageEvents.Event.SCREEN_INTERACTIVE -> isScreenOn = true
+                android.app.usage.UsageEvents.Event.SCREEN_NON_INTERACTIVE -> {
+                    isScreenOn = false
+                    lastEventTime.forEach { (p, sTime) ->
+                        val segmentStart = maxOf(sTime, startTime)
+                        val segmentEnd = minOf(time, endTime)
+                        if (segmentStart < segmentEnd) {
+                            val duration = segmentEnd - segmentStart
+                            accurateAppTotals[p] = (accurateAppTotals[p] ?: 0L) + duration
+                            
+                            var current = segmentStart
+                            while (current < segmentEnd) {
+                                cal.timeInMillis = current
+                                val hour = cal.get(Calendar.HOUR_OF_DAY)
+                                val nextHourStart = (cal.clone() as Calendar).apply {
+                                    add(Calendar.HOUR_OF_DAY, 1)
+                                    set(Calendar.MINUTE, 0)
+                                    set(Calendar.SECOND, 0)
+                                    set(Calendar.MILLISECOND, 0)
+                                }.timeInMillis
+                                val end = minOf(segmentEnd, nextHourStart)
+                                if (end > current) {
+                                    hourlyMap[hour] = (hourlyMap[hour] ?: 0L) + (end - current)
+                                    if (p !in excludePackages && p in launcherApps) {
+                                        val pkgMap = hourlyAppUsage.getOrPut(hour) { mutableMapOf() }
+                                        pkgMap[p] = (pkgMap[p] ?: 0L) + (end - current)
+                                    }
+                                }
+                                current = end
+                            }
+                        }
+                    }
+                    lastEventTime.clear()
+                }
+                android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED -> {
+                    if (isScreenOn) {
+                        val className = event.className ?: ""
+                        if (!className.contains("Notification", ignoreCase = true) &&
+                            !className.contains("Toast", ignoreCase = true)) {
+                            lastEventTime[pkg] = time
+                        }
+                    }
+                }
+                android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED -> {
+                    val sTime = lastEventTime.remove(pkg)
+                    if (sTime != null) {
+                        val segmentStart = maxOf(sTime, startTime)
+                        val segmentEnd = minOf(time, endTime)
+                        if (segmentStart < segmentEnd) {
+                            val duration = segmentEnd - segmentStart
+                            accurateAppTotals[pkg] = (accurateAppTotals[pkg] ?: 0L) + duration
+
+                            var current = segmentStart
+                            while (current < segmentEnd) {
+                                cal.timeInMillis = current
+                                val hour = cal.get(Calendar.HOUR_OF_DAY)
+                                val nextHourStart = (cal.clone() as Calendar).apply {
+                                    add(Calendar.HOUR_OF_DAY, 1)
+                                    set(Calendar.MINUTE, 0)
+                                    set(Calendar.SECOND, 0)
+                                    set(Calendar.MILLISECOND, 0)
+                                }.timeInMillis
+                                val end = minOf(segmentEnd, nextHourStart)
+                                if (end > current) {
+                                    hourlyMap[hour] = (hourlyMap[hour] ?: 0L) + (end - current)
+                                    if (pkg !in excludePackages && pkg in launcherApps) {
+                                        val pkgMap = hourlyAppUsage.getOrPut(hour) { mutableMapOf() }
+                                        pkgMap[pkg] = (pkgMap[pkg] ?: 0L) + (end - current)
+                                    }
+                                }
+                                current = end
+                            }
+                        }
+                    }
+                }
             }
         }
+        
+        lastEventTime.forEach { (p, sTime) ->
+            val segmentStart = maxOf(sTime, startTime)
+            val segmentEnd = minOf(System.currentTimeMillis(), endTime)
+            if (segmentStart < segmentEnd) {
+                val duration = segmentEnd - segmentStart
+                accurateAppTotals[p] = (accurateAppTotals[p] ?: 0L) + duration
+                
+                var current = segmentStart
+                while (current < segmentEnd) {
+                    cal.timeInMillis = current
+                    val hour = cal.get(Calendar.HOUR_OF_DAY)
+                    val nextHourStart = (cal.clone() as Calendar).apply {
+                        add(Calendar.HOUR_OF_DAY, 1)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }.timeInMillis
+                    val end = minOf(segmentEnd, nextHourStart)
+                    if (end > current) {
+                        hourlyMap[hour] = (hourlyMap[hour] ?: 0L) + (end - current)
+                        if (p !in excludePackages && p in launcherApps) {
+                            val pkgMap = hourlyAppUsage.getOrPut(hour) { mutableMapOf() }
+                            pkgMap[p] = (pkgMap[p] ?: 0L) + (end - current)
+                        }
+                    }
+                    current = end
+                }
+            }
+        }
+
+        val usages = mutableListOf<DailyUsageEntity>()
+        var totalUsage = 0L
+
+        accurateAppTotals.forEach { (pkg, time) ->
+            if (pkg in excludePackages || pkg !in launcherApps) return@forEach
+            val cappedTime = time.coerceAtMost(timeSinceStart + 5000)
+            if (cappedTime > 0) {
+                usages.add(DailyUsageEntity(date = dateString, packageName = pkg, usageTimeMillis = cappedTime))
+                totalUsage += cappedTime
+            }
+        }
+        
+        totalUsage = totalUsage.coerceAtMost(timeSinceStart)
 
         val userPrefsRepo = UserPreferencesRepository(applicationContext)
         var finalTotalUsage = totalUsage
@@ -91,7 +214,6 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         for (i in 1..5) {
             val lastKnown = userPrefsRepo.userPreferencesFlow.first()
             if (lastKnown.lastKnownDailyUsageDate == dateString && lastKnown.lastKnownDailyUsage > finalTotalUsage) {
-                // Ensure last known usage doesn't exceed possible time in the day
                 val cappedLastKnown = if (lastKnown.lastKnownDailyUsage > timeSinceStart + 60000) {
                     timeSinceStart
                 } else {
@@ -124,67 +246,7 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         dailyUsageDao.insertAll(usages)
 
         val hourlyUsages = mutableListOf<HourlyUsageEntity>()
-        val hourlyMap = mutableMapOf<Int, Long>()
-        val hourlyAppUsage = mutableMapOf<Int, MutableMap<String, Long>>()
-        val events = usm.queryEvents(startTime, System.currentTimeMillis().coerceAtMost(endTime))
-        val event = android.app.usage.UsageEvents.Event()
-        val lastEventTime = mutableMapOf<String, Long>()
-        val cal = Calendar.getInstance()
         
-        var isScreenOn = false 
-
-        while (events.hasNextEvent()) {
-            events.getNextEvent(event)
-            val pkg = event.packageName
-            val time = event.timeStamp
-            val type = event.eventType
-
-            when (type) {
-                android.app.usage.UsageEvents.Event.SCREEN_INTERACTIVE -> isScreenOn = true
-                android.app.usage.UsageEvents.Event.SCREEN_NON_INTERACTIVE -> {
-                    isScreenOn = false
-                    lastEventTime.forEach { (p, sTime) ->
-                        val duration = time - sTime
-                        if (duration > 0) {
-                            cal.timeInMillis = sTime
-                            val hour = cal.get(Calendar.HOUR_OF_DAY)
-                            hourlyMap[hour] = (hourlyMap[hour] ?: 0L) + duration
-                            if (p !in excludePackages && p in launcherApps) {
-                                val pkgMap = hourlyAppUsage.getOrPut(hour) { mutableMapOf() }
-                                pkgMap[p] = (pkgMap[p] ?: 0L) + duration
-                            }
-                        }
-                    }
-                    lastEventTime.clear()
-                }
-                android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED -> {
-                    if (isScreenOn) {
-                        val className = event.className ?: ""
-                        if (!className.contains("Notification", ignoreCase = true) &&
-                            !className.contains("Toast", ignoreCase = true)) {
-                            lastEventTime[pkg] = time
-                        }
-                    }
-                }
-                android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED -> {
-                    val sTime = lastEventTime.remove(pkg)
-                    if (sTime != null) {
-                        val duration = time - sTime
-                        if (duration > 0) {
-                            cal.timeInMillis = sTime
-                            val hour = cal.get(Calendar.HOUR_OF_DAY)
-                            hourlyMap[hour] = (hourlyMap[hour] ?: 0L) + duration
-
-                            if (pkg !in excludePackages && pkg in launcherApps) {
-                                val pkgMap = hourlyAppUsage.getOrPut(hour) { mutableMapOf() }
-                                pkgMap[pkg] = (pkgMap[pkg] ?: 0L) + duration
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         hourlyMap.forEach { (hour, time) ->
             hourlyUsages.add(HourlyUsageEntity(date = dateString, hour = hour, packageName = "TOTAL", usageTimeMillis = time))
         }
