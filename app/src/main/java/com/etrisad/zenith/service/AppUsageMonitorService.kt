@@ -428,6 +428,16 @@ class AppUsageMonitorService : Service() {
                         overlayManager.hideOverlay()
                     }
 
+                    if (InterceptOverlayManager.isShowing) {
+                        lastForegroundApp = currentApp
+                        val delayTimeShowing = when {
+                            isPowerSaveMode -> 2500L
+                            else -> 8000L
+                        }
+                        delay(delayTimeShowing)
+                        continue
+                    }
+
                     if (launcherPackages.isEmpty() || currentTime - lastLauncherRefreshTime > 60000) {
                         refreshLauncherCache()
                     }
@@ -816,6 +826,9 @@ class AppUsageMonitorService : Service() {
     }
 
     private suspend fun checkIfAppIsShielded(targetPackageName: String) {
+        if (InterceptOverlayManager.isShowing && InterceptOverlayManager.currentPackage == targetPackageName) {
+            return
+        }
         val currentForeground = getForegroundApp() ?: lastForegroundApp
         if (targetPackageName != currentForeground && targetPackageName != lastForegroundApp) return
 

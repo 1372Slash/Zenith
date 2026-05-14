@@ -38,6 +38,7 @@ class InterceptOverlayManager(
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val mainHandler = Handler(Looper.getMainLooper())
     private val managerScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var overlayUsageState: androidx.compose.runtime.MutableState<Pair<Long, Long>>? = null
 
     companion object {
         private const val TAG = "InterceptOverlayManager"
@@ -47,7 +48,7 @@ class InterceptOverlayManager(
         private var lifecycleOwner: MyLifecycleOwner? = null
         private var viewModelStore: ViewModelStore? = null
         @Volatile
-        private var currentPackage: String? = null
+        var currentPackage: String? = null
         private var audioFocusRequest: AudioFocusRequest? = null
         private var focusRequestJob: kotlinx.coroutines.Job? = null
         private val afChangeListener = AudioManager.OnAudioFocusChangeListener { }
@@ -80,32 +81,7 @@ class InterceptOverlayManager(
         }
 
         if (isShowing && currentPackage == packageName && overlayView != null) {
-            overlayView?.setContent {
-                ZenithTheme {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        InterceptOverlayContent(
-                            packageName = packageName,
-                            appName = appName,
-                            shield = shield,
-                            totalUsageToday = totalUsageToday,
-                            totalGlobalUsageToday = totalGlobalUsageToday,
-                            delayDurationSeconds = delayDurationSeconds,
-                            onAllowUse = { minutes, isEmergency ->
-                                onAllowUse(minutes, isEmergency)
-                                hideOverlay()
-                            },
-                            onCloseApp = {
-                                onCloseApp()
-                                hideOverlay()
-                            },
-                            onGoalDismiss = {
-                                onGoalDismiss()
-                                hideOverlay()
-                            }
-                        )
-                    }
-                }
-            }
+            overlayUsageState?.value = Pair(totalUsageToday, totalGlobalUsageToday)
             return
         }
 
@@ -115,6 +91,9 @@ class InterceptOverlayManager(
 
         isShowing = true
         currentPackage = packageName
+
+        val usageState = androidx.compose.runtime.mutableStateOf(Pair(totalUsageToday, totalGlobalUsageToday))
+        overlayUsageState = usageState
 
         val vStore = ViewModelStore()
         viewModelStore = vStore
@@ -133,13 +112,14 @@ class InterceptOverlayManager(
             
             setContent {
                 ZenithTheme {
+                    val (usage, globalUsage) = usageState.value
                     Box(modifier = Modifier.fillMaxSize()) {
                         InterceptOverlayContent(
                             packageName = packageName,
                             appName = appName,
                             shield = shield,
-                            totalUsageToday = totalUsageToday,
-                            totalGlobalUsageToday = totalGlobalUsageToday,
+                            totalUsageToday = usage,
+                            totalGlobalUsageToday = globalUsage,
                             delayDurationSeconds = delayDurationSeconds,
                             onAllowUse = { minutes, isEmergency ->
                                 onAllowUse(minutes, isEmergency)
@@ -176,32 +156,16 @@ class InterceptOverlayManager(
             return
         }
         if (isShowing && currentPackage == packageName && overlayView != null) {
-            overlayView?.setContent {
-                ZenithTheme {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        ScheduleOverlayContent(
-                            packageName = packageName,
-                            appName = appName,
-                            schedule = schedule,
-                            totalGlobalUsageToday = totalGlobalUsageToday,
-                            onAllowUse = { minutes, isEmergency ->
-                                onAllowUse(minutes, isEmergency)
-                                hideOverlay()
-                            },
-                            onCloseApp = {
-                                onCloseApp()
-                                hideOverlay()
-                            }
-                        )
-                    }
-                }
-            }
+            overlayUsageState?.value = Pair(0L, totalGlobalUsageToday)
             return
         }
         if (isShowing || overlayView != null) hideOverlay()
         
         isShowing = true
         currentPackage = packageName
+
+        val usageState = androidx.compose.runtime.mutableStateOf(Pair(0L, totalGlobalUsageToday))
+        overlayUsageState = usageState
 
         val vStore = ViewModelStore()
         viewModelStore = vStore
@@ -220,12 +184,13 @@ class InterceptOverlayManager(
 
             setContent {
                 ZenithTheme {
+                    val (_, globalUsage) = usageState.value
                     Box(modifier = Modifier.fillMaxSize()) {
                         ScheduleOverlayContent(
                             packageName = packageName,
                             appName = appName,
                             schedule = schedule,
-                            totalGlobalUsageToday = totalGlobalUsageToday,
+                            totalGlobalUsageToday = globalUsage,
                             onAllowUse = { minutes, isEmergency ->
                                 onAllowUse(minutes, isEmergency)
                                 hideOverlay()
@@ -445,6 +410,7 @@ class InterceptOverlayManager(
                 overlayView = null
                 lifecycleOwner = null
                 viewModelStore = null
+                overlayUsageState = null
             }
         }
     }
