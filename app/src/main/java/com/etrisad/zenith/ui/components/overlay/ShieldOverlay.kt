@@ -85,46 +85,8 @@ fun ShieldOverlay(
     var showContent by remember { mutableStateOf(false) }
     var isEmergencyUnlocked by remember { mutableStateOf(false) }
 
-    var currentTotalUsageToday by remember { mutableLongStateOf(maxOf(totalUsageToday, dbAppUsage)) }
-    var currentTotalGlobalUsageToday by remember { mutableLongStateOf(maxOf(totalGlobalUsageToday, dbGlobalUsage)) }
-
-    LaunchedEffect(packageName, dbAppUsage, dbGlobalUsage) {
-        val usm = context.getSystemService(android.content.Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
-        val pm = context.packageManager
-        
-        while (true) {
-            val accurateUsageMap = com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usm)
-            val liveAppUsage = accurateUsageMap[packageName] ?: 0L
-            
-            val todayStart = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-            val timeSinceMidnight = System.currentTimeMillis() - todayStart
-
-            currentTotalUsageToday = maxOf(dbAppUsage, liveAppUsage).coerceAtMost(timeSinceMidnight)
-
-            val launcherIntent = android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_HOME)
-            val launcherPackage = pm.resolveActivity(launcherIntent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
-                ?.activityInfo?.packageName
-            val launcherAppsSet = pm.queryIntentActivities(
-                android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_LAUNCHER), 0
-            ).map { it.activityInfo.packageName }.toSet()
-            val excludePackages = setOfNotNull(context.packageName, launcherPackage)
-
-            var newGlobalTotal = 0L
-            accurateUsageMap.forEach { (pkg, time) ->
-                if (pkg !in excludePackages && pkg in launcherAppsSet) {
-                    if (time > 0) newGlobalTotal += time
-                }
-            }
-            currentTotalGlobalUsageToday = maxOf(dbGlobalUsage, newGlobalTotal).coerceAtMost(timeSinceMidnight)
-            
-            delay(10000)
-        }
-    }
+    val currentTotalUsageToday = remember(totalUsageToday, dbAppUsage) { maxOf(totalUsageToday, dbAppUsage) }
+    val currentTotalGlobalUsageToday = remember(totalGlobalUsageToday, dbGlobalUsage) { maxOf(totalGlobalUsageToday, dbGlobalUsage) }
 
     val isDelayEnabled = currentShield?.isDelayAppEnabled == true && currentShield.type == FocusType.SHIELD
     

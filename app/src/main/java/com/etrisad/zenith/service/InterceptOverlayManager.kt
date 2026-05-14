@@ -78,9 +78,8 @@ class InterceptOverlayManager(
             }
             return
         }
-        Log.d(TAG, "Request to show overlay for $packageName")
+
         if (isShowing && currentPackage == packageName && overlayView != null) {
-            Log.d(TAG, "Overlay already showing for $packageName, updating parameters")
             overlayView?.setContent {
                 ZenithTheme {
                     Box(modifier = Modifier.fillMaxSize()) {
@@ -109,8 +108,8 @@ class InterceptOverlayManager(
             }
             return
         }
+
         if (isShowing || overlayView != null) {
-            Log.d(TAG, "Overlay showing for ${currentPackage}, hiding before showing new one")
             hideOverlay()
         }
 
@@ -126,6 +125,12 @@ class InterceptOverlayManager(
         lifecycleOwner = lOwner
 
         val composeView = ComposeView(context).apply {
+            setViewTreeLifecycleOwner(lOwner)
+            setViewTreeViewModelStoreOwner(object : ViewModelStoreOwner {
+                override val viewModelStore: ViewModelStore = vStore
+            })
+            setViewTreeSavedStateRegistryOwner(lOwner)
+            
             setContent {
                 ZenithTheme {
                     Box(modifier = Modifier.fillMaxSize()) {
@@ -153,7 +158,7 @@ class InterceptOverlayManager(
                 }
             }
         }
-        setupAndAddView(composeView, lOwner, vStore)
+        setupAndAddView(composeView, lOwner)
     }
 
     fun showScheduleOverlay(
@@ -207,6 +212,12 @@ class InterceptOverlayManager(
         lifecycleOwner = lOwner
 
         val composeView = ComposeView(context).apply {
+            setViewTreeLifecycleOwner(lOwner)
+            setViewTreeViewModelStoreOwner(object : ViewModelStoreOwner {
+                override val viewModelStore: ViewModelStore = vStore
+            })
+            setViewTreeSavedStateRegistryOwner(lOwner)
+
             setContent {
                 ZenithTheme {
                     Box(modifier = Modifier.fillMaxSize()) {
@@ -228,7 +239,7 @@ class InterceptOverlayManager(
                 }
             }
         }
-        setupAndAddView(composeView, lOwner, vStore)
+        setupAndAddView(composeView, lOwner)
     }
 
     fun showBedtimeOverlay(
@@ -272,7 +283,7 @@ class InterceptOverlayManager(
                 }
             }
         }
-        setupAndAddView(composeView, lOwner, vStore)
+        setupAndAddView(composeView, lOwner)
     }
 
     fun showWindDownOverlay(
@@ -344,10 +355,12 @@ class InterceptOverlayManager(
                 }
             }
         }
-        setupAndAddView(composeView, lOwner, vStore)
+        setupAndAddView(composeView, lOwner)
     }
 
-    private fun setupAndAddView(composeView: ComposeView, lOwner: MyLifecycleOwner, vStore: ViewModelStore) {
+    private fun setupAndAddView(composeView: ComposeView, lOwner: MyLifecycleOwner) {
+        val vStore = viewModelStore ?: return
+
         @Suppress("DEPRECATION")
         composeView.systemUiVisibility = (android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                 or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
