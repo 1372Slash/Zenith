@@ -11,18 +11,28 @@ object ScreenUsageHelper {
         val sessionCounts: Map<String, Int>
     )
 
+    private var lastResult: UsageResult? = null
+    private var lastQueryTime = 0L
+    private const val CACHE_DURATION = 3000L // 3 seconds cache
+
     fun fetchDetailedUsageToday(
         usageStatsManager: UsageStatsManager,
         includeHourly: Boolean = false
     ): UsageResult {
+        val currentTime = System.currentTimeMillis()
+        if (lastResult != null && currentTime - lastQueryTime < CACHE_DURATION && (!includeHourly || lastResult!!.hourlyUsageMap.isNotEmpty())) {
+            return lastResult!!
+        }
+
         val calendar = Calendar.getInstance().apply {
+            timeInMillis = currentTime
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
         val start = calendar.timeInMillis
-        val end = System.currentTimeMillis()
+        val end = currentTime
 
         val usageMap = mutableMapOf<String, Long>()
         val hourlyMap = mutableMapOf<Int, MutableMap<String, Long>>()
@@ -31,7 +41,7 @@ object ScreenUsageHelper {
         var activePkg: String? = null
         var activeStartTime = 0L
 
-        val events = usageStatsManager.queryEvents(start - (24 * 60 * 60 * 1000L), end)
+        val events = usageStatsManager.queryEvents(start - (60 * 60 * 1000L), end)
         val event = UsageEvents.Event()
         
         var isScreenOn = true 
@@ -136,7 +146,10 @@ object ScreenUsageHelper {
             }
         }
 
-        return UsageResult(usageMap, hourlyMap, sessionCounts)
+        val result = UsageResult(usageMap, hourlyMap, sessionCounts)
+        lastResult = result
+        lastQueryTime = currentTime
+        return result
     }
 
     private fun addHourlyUsage(
@@ -150,12 +163,12 @@ object ScreenUsageHelper {
         while (current < end) {
             cal.timeInMillis = current
             val hour = cal.get(Calendar.HOUR_OF_DAY)
-            val nextHourStart = (cal.clone() as Calendar).apply {
-                add(Calendar.HOUR_OF_DAY, 1)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
+            
+            cal.add(Calendar.HOUR_OF_DAY, 1)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            val nextHourStart = cal.timeInMillis
             
             val segmentEnd = minOf(end, nextHourStart)
             val duration = segmentEnd - current

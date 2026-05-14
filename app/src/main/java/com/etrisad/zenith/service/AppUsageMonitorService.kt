@@ -47,6 +47,7 @@ class AppUsageMonitorService : Service() {
     private val usageStatsManager by lazy { getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager }
     private val powerManager by lazy { getSystemService(POWER_SERVICE) as android.os.PowerManager }
     private val reusableEvent = UsageEvents.Event()
+    private var lastEventQueryTime = 0L
     private var lastForegroundApp: String? = null
     private var currentShieldCache: ShieldEntity? = null
     private var currentSessionPackage: String? = null
@@ -430,11 +431,7 @@ class AppUsageMonitorService : Service() {
 
                     if (InterceptOverlayManager.isShowing) {
                         lastForegroundApp = currentApp
-                        val delayTimeShowing = when {
-                            isPowerSaveMode -> 2500L
-                            else -> 8000L
-                        }
-                        delay(delayTimeShowing)
+                        delay(5000)
                         continue
                     }
 
@@ -611,8 +608,8 @@ class AppUsageMonitorService : Service() {
                 }
 
                 val delayTime = when {
-                    isPowerSaveMode -> 2500L
-                    InterceptOverlayManager.isShowing -> 3000L
+                    isPowerSaveMode -> 5000L
+                    InterceptOverlayManager.isShowing -> 8000L
                     currentShieldCache != null -> {
                         val shield = currentShieldCache!!
                         val limitMillis = shield.timeLimitMinutes * 60 * 1000L
@@ -620,20 +617,20 @@ class AppUsageMonitorService : Service() {
 
                         if (shield.type == FocusType.GOAL) {
                             when {
-                                remaining < 60000 -> 600L
-                                remaining < 300000 -> 1200L
-                                else -> 1800L
+                                remaining < 60000 -> 2000L
+                                remaining < 300000 -> 5000L
+                                else -> 10000L
                             }
                         } else {
                             when {
-                                remaining > 3600000 -> 5000L
-                                remaining > 600000 -> 3000L
-                                remaining > 60000 -> 1500L
-                                else -> 600L
+                                remaining > 3600000 -> 15000L
+                                remaining > 600000 -> 10000L
+                                remaining > 60000 -> 5000L
+                                else -> 2000L
                             }
                         }
                     }
-                    else -> 1200L
+                    else -> 5000L
                 }
                 delay(delayTime)
             }
@@ -677,10 +674,10 @@ class AppUsageMonitorService : Service() {
             val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
             
             val uiUpdateInterval = when {
-                remaining < 60000 -> 2500L
-                remaining < 300000 -> 6000L
-                remaining < 900000 -> 12000L
-                else -> 20000L
+                remaining < 60000 -> 5000L
+                remaining < 300000 -> 10000L
+                remaining < 900000 -> 20000L
+                else -> 30000L
             }
 
             if (currentTime - lastHUDUpdateTime > uiUpdateInterval || lastHUDUpdateTime == 0L) {
@@ -739,7 +736,8 @@ class AppUsageMonitorService : Service() {
 
         val timeSinceLastUsed = currentTime - shield.lastUsedTimestamp
         val isNearLimit = remainingMillis < 60000 
-        val shouldUpdateDB = force || timeSinceLastUsed > 3000 || (isNearLimit && timeSinceLastUsed > 1000) || updatedShield != shield
+        // Optimisasi: Update DB tidak terlalu sering (minimal 5 detik, atau 2 detik jika mendekati limit)
+        val shouldUpdateDB = force || timeSinceLastUsed > 10000 || (isNearLimit && timeSinceLastUsed > 5000) || updatedShield != shield
 
         if (shouldUpdateDB) {
             val finalShield = updatedShield.copy(
@@ -1136,7 +1134,8 @@ class AppUsageMonitorService : Service() {
 
     private fun getUsageStatsList(): List<android.app.usage.UsageStats>? {
         val currentTime = System.currentTimeMillis()
-        if (usageStatsCache != null && currentTime - lastUsageCacheTime < 3000) {
+        // Optimisasi: Cache lebih lama (5 detik) untuk mengurangi frekuensi query yang berat
+        if (usageStatsCache != null && currentTime - lastUsageCacheTime < 5000) {
             return usageStatsCache
         }
 
@@ -1506,35 +1505,40 @@ class AppUsageMonitorService : Service() {
 
     private fun getForegroundApp(): String? {
         val time = System.currentTimeMillis()
+        // Optimisasi: Gunakan window waktu yang lebih kecil dan simpan lastEventQueryTime
+        val queryStart = if (lastEventQueryTime == 0L) time - 10000 else lastEventQueryTime
         val usageEvents = try {
-            usageStatsManager.queryEvents(time - 10000, time)
-        } catch (_: Exception) { null } ?: return null
-        
-        var lastPackage: String? = null
-        while (usageEvents.hasNextEvent()) {
-            usageEvents.getNextEvent(reusableEvent)
-            if (reusableEvent.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND || 
-                reusableEvent.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
+            usageStatsManager.queryEvents(queryStart, time)
+        } catch (_: Exception) { null } 
 
-                val className = reusableEvent.className ?: ""
-                if (className.contains("Notification", ignoreCase = true) || 
-                    className.contains("Toast", ignoreCase = true)) continue
-                
-                lastPackage = reusableEvent.packageName
+        var foundPackage: String? = null
+        if (usageEvents != null) {
+            while (usageEvents.hasNextEvent()) {
+                usageEvents.getNextEvent(reusableEvent)
+                if (reusableEvent.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND || 
+                    reusableEvent.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
+
+                    val className = reusableEvent.className ?: ""
+                    if (className.contains("Notification", ignoreCase = true) || 
+                        className.contains("Toast", ignoreCase = true)) continue
+                    
+                    foundPackage = reusableEvent.packageName
+                }
+                lastEventQueryTime = reusableEvent.timeStamp
             }
         }
 
-        if (lastPackage == null) {
-            try {
-                val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 5000, time)
-                val topApp = stats?.maxByOrNull { it.lastTimeUsed }
-                if (topApp != null && time - topApp.lastTimeUsed < 3000) {
-                    lastPackage = topApp.packageName
-                }
-            } catch (_: Exception) {}
+        // Pastikan lastEventQueryTime selalu maju
+        if (lastEventQueryTime < time) {
+            lastEventQueryTime = time
+        }
+
+        // Jika tidak ada event baru, kemungkinan besar masih di app yang sama
+        if (foundPackage == null) {
+            return lastForegroundApp
         }
         
-        return lastPackage
+        return foundPackage
     }
 
     override fun onLowMemory() {

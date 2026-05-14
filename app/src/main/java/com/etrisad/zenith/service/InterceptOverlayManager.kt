@@ -62,6 +62,47 @@ class InterceptOverlayManager(
         )
     }
 
+    private fun updateOverlayContent(
+        packageName: String,
+        appName: String,
+        shield: com.etrisad.zenith.data.local.entity.ShieldEntity?,
+        totalUsageToday: Long,
+        totalGlobalUsageToday: Long,
+        delayDurationSeconds: Int = 0,
+        onAllowUse: (Int, Boolean) -> Unit,
+        onCloseApp: () -> Unit,
+        onGoalDismiss: () -> Unit
+    ) {
+        overlayUsageState?.value = Pair(totalUsageToday, totalGlobalUsageToday)
+        overlayView?.setContent {
+            ZenithTheme {
+                val usageState = overlayUsageState?.value ?: Pair(totalUsageToday, totalGlobalUsageToday)
+                Box(modifier = Modifier.fillMaxSize()) {
+                    InterceptOverlayContent(
+                        packageName = packageName,
+                        appName = appName,
+                        shield = shield,
+                        totalUsageToday = usageState.first,
+                        totalGlobalUsageToday = usageState.second,
+                        delayDurationSeconds = delayDurationSeconds,
+                        onAllowUse = { minutes, isEmergency ->
+                            onAllowUse(minutes, isEmergency)
+                            hideOverlay()
+                        },
+                        onCloseApp = {
+                            onCloseApp()
+                            hideOverlay()
+                        },
+                        onGoalDismiss = {
+                            onGoalDismiss()
+                            hideOverlay()
+                        }
+                    )
+                }
+            }
+        }
+    }
+
     fun showOverlay(
         packageName: String,
         appName: String,
@@ -84,8 +125,13 @@ class InterceptOverlayManager(
             return
         }
 
-        if (isShowing || overlayView != null) {
-            hideOverlay()
+        // Optimisasi: Jika sudah ada overlay yang tampil (misal untuk paket lain), 
+        // kita cukup update content-nya daripada remove dan add view baru yang berat.
+        if (overlayView != null) {
+            isShowing = true
+            currentPackage = packageName
+            updateOverlayContent(packageName, appName, shield, totalUsageToday, totalGlobalUsageToday, delayDurationSeconds, onAllowUse, onCloseApp, onGoalDismiss)
+            return
         }
 
         isShowing = true

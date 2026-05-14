@@ -236,6 +236,11 @@ class ZenithAccessibilityService : AccessibilityService() {
         while (lastForegroundApp == currentApp) {
             lastEventTime = System.currentTimeMillis()
             val currentTime = System.currentTimeMillis()
+
+            if (InterceptOverlayManager.isShowing) {
+                delay(if (currentPreferences?.bedtimeEnabled == true) 5000L else 3000L)
+                continue
+            }
             
             if (localShield == null) {
                 localShield = allShieldsCache.find { it.packageName == currentApp }
@@ -341,20 +346,20 @@ class ZenithAccessibilityService : AccessibilityService() {
 
                 if (shield.type == FocusType.GOAL) {
                     when {
-                        remaining < 60000 -> 600L
-                        remaining < 300000 -> 1000L
-                        else -> 1500L
+                        remaining < 60000 -> 2000L
+                        remaining < 300000 -> 5000L
+                        else -> 10000L
                     }
                 } else {
                     when {
-                        remaining > 3600000 -> 8000L
-                        remaining > 600000 -> 5000L
-                        remaining > 300000 -> 3000L
-                        remaining > 60000 -> 1500L
-                        else -> 1000L
+                        remaining > 3600000 -> 15000L
+                        remaining > 600000 -> 10000L
+                        remaining > 300000 -> 5000L
+                        remaining > 60000 -> 3000L
+                        else -> 1500L
                     }
                 }
-            } else 1500L
+            } else 3000L
 
             delay(delayTime)
         }
@@ -393,10 +398,10 @@ class ZenithAccessibilityService : AccessibilityService() {
             val remaining = (limitMillis - currentTotalUsage).coerceAtLeast(0L)
 
             val uiUpdateInterval = when {
-                remaining < 60000 -> 1000L
-                remaining < 300000 -> 2500L
-                remaining < 900000 -> 8000L
-                else -> 15000L
+                remaining < 60000 -> 5000L
+                remaining < 300000 -> 10000L
+                remaining < 900000 -> 20000L
+                else -> 30000L
             }
 
             if (currentTime - lastUsageFetchTime >= uiUpdateInterval) {
@@ -418,7 +423,8 @@ class ZenithAccessibilityService : AccessibilityService() {
 
         val timeSinceLastUsed = currentTime - shield.lastUsedTimestamp
         val isNearLimit = remainingMillis < 60000 
-        val shouldUpdateDB = timeSinceLastUsed > 10000 || (isNearLimit && timeSinceLastUsed > 2000)
+        // Optimisasi: Update DB tidak terlalu sering
+        val shouldUpdateDB = timeSinceLastUsed > 15000 || (isNearLimit && timeSinceLastUsed > 5000)
 
         if (shouldUpdateDB) {
             val updatedShield = shield.copy(
@@ -580,23 +586,37 @@ class ZenithAccessibilityService : AccessibilityService() {
 
     private var cachedTotalGlobalUsage: Long = 0L
     private var lastGlobalUsageCacheTime: Long = 0L
+    private var launcherAppsCache = emptySet<String>()
+    private var defaultLauncherPackage: String? = null
+    private var lastLauncherAppsRefreshTime = 0L
+
+    private fun refreshLauncherCache() {
+        try {
+            val pm = packageManager
+            launcherAppsCache = pm.queryIntentActivities(
+                Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
+            ).map { it.activityInfo.packageName }.toSet()
+            
+            val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            defaultLauncherPackage = pm.resolveActivity(launcherIntent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+                ?.activityInfo?.packageName
+            
+            lastLauncherAppsRefreshTime = System.currentTimeMillis()
+        } catch (_: Exception) {}
+    }
 
     private fun getTotalGlobalUsageToday(): Long {
         val currentTime = System.currentTimeMillis()
-        if (currentTime - lastGlobalUsageCacheTime < 3000) {
+        // Optimisasi: Cache lebih lama (5 detik)
+        if (currentTime - lastGlobalUsageCacheTime < 5000) {
             return cachedTotalGlobalUsage
         }
 
-        val pm = packageManager
-        val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        val launcherPackage = pm.resolveActivity(launcherIntent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
-            ?.activityInfo?.packageName
+        if (currentTime - lastLauncherAppsRefreshTime > 3600000 || launcherAppsCache.isEmpty()) {
+            refreshLauncherCache()
+        }
 
-        val launcherApps = pm.queryIntentActivities(
-            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
-        ).map { it.activityInfo.packageName }.toSet()
-
-        val excludePackages = setOfNotNull(packageName, launcherPackage)
+        val excludePackages = setOfNotNull(packageName, defaultLauncherPackage)
 
         // Use accurate helper to ensure consistency with Home screen
         val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
@@ -604,7 +624,7 @@ class ZenithAccessibilityService : AccessibilityService() {
 
         var totalToday = 0L
         accurateUsageMap.forEach { (pkg, time) ->
-            if (pkg !in excludePackages && pkg in launcherApps) {
+            if (pkg !in excludePackages && pkg in launcherAppsCache) {
                 if (time > 0) {
                     totalToday += time
                 }
@@ -626,7 +646,8 @@ class ZenithAccessibilityService : AccessibilityService() {
     private fun getTotalUsageToday(packageName: String): Long {
         val currentTime = System.currentTimeMillis()
 
-        if (currentTime - lastUsageCacheTime > 3000) {
+        // Optimisasi: Cache lebih lama (10 detik)
+        if (currentTime - lastUsageCacheTime > 10000) {
             val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
             val tempMap = detailedUsage.appUsageMap
             
