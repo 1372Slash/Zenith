@@ -71,8 +71,7 @@ fun BedtimeOverlayContent(
     val showButtonProgress = exitProgress >= 0.4f
 
     val bedtimeUiState by produceState(
-        initialValue = Triple(0f, "0m", ""),
-        userPrefs
+        initialValue = Triple(0f, "0m", "")
     ) {
         val now = Calendar.getInstance()
         val currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)

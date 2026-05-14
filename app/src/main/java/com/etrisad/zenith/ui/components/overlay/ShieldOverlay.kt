@@ -80,7 +80,10 @@ fun ShieldOverlay(
     }
 
     val todayDate = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
-    val combinedState by produceState(initialValue = Triple(shield, totalUsageToday, totalGlobalUsageToday)) {
+    val combinedState by produceState<Triple<ShieldEntity?, Long, Long>>(
+        initialValue = Triple(shield, totalUsageToday, totalGlobalUsageToday)
+    ) {
+        // Ambil data terbaru dari DB secara sekaligus (hanya satu kali)
         val s = shieldRepository.getShieldByPackageNameFlow(packageName).first()
         val appUsage = shieldRepository.getUsageByDateAndPackageFlow(todayDate, packageName).first()
         val globalUsage = shieldRepository.getUsageByDateAndPackageFlow(todayDate, "TOTAL").first()
@@ -88,13 +91,23 @@ fun ShieldOverlay(
         val dbAppUsage = appUsage?.usageTimeMillis ?: 0L
         val dbGlobalUsage = globalUsage?.usageTimeMillis ?: 0L
 
-        value = Triple(s ?: shield, maxOf(totalUsageToday, dbAppUsage), maxOf(totalGlobalUsageToday, dbGlobalUsage))
+        // Nilai ini akan menjadi final dan tidak akan berubah lagi selama overlay terbuka
+        value = Triple(
+            s ?: shield, 
+            maxOf(totalUsageToday, dbAppUsage), 
+            maxOf(totalGlobalUsageToday, dbGlobalUsage)
+        )
     }
 
     val (currentShield, currentTotalUsageToday, currentTotalGlobalUsageToday) = combinedState
-
+    
     var showContent by remember { mutableStateOf(false) }
     var isEmergencyUnlocked by remember { mutableStateOf(false) }
+
+    val userPrefsRepo = remember(context.applicationContext) { UserPreferencesRepository(context.applicationContext) }
+    val userPrefs by produceState(initialValue = UserPreferences()) {
+        value = userPrefsRepo.userPreferencesFlow.first()
+    }
 
     val isDelayEnabled = currentShield?.isDelayAppEnabled == true && currentShield.type == FocusType.SHIELD
     
@@ -129,11 +142,6 @@ fun ShieldOverlay(
     }
     val randomMessage = remember(isDelaying) {
         if (isDelaying) motivationalMessages.random() else ""
-    }
-    
-    val userPrefsRepo = remember(context.applicationContext) { UserPreferencesRepository(context.applicationContext) }
-    val userPrefs by produceState(initialValue = UserPreferences()) {
-        value = userPrefsRepo.userPreferencesFlow.first()
     }
 
     val backgroundAlpha by animateFloatAsState(
