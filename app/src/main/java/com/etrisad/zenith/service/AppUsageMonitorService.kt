@@ -67,6 +67,7 @@ class AppUsageMonitorService : Service() {
     private var restrictedPackages = emptySet<String>()
     private var hasGlobalAllowSchedule = false
     private var launcherAppsCache = emptySet<String>()
+    private var defaultLauncherPackage: String? = null
     private var lastLauncherAppsRefreshTime = 0L
 
     private var isBedtimeActive = false
@@ -428,12 +429,7 @@ class AppUsageMonitorService : Service() {
                     }
 
                     if (launcherPackages.isEmpty() || currentTime - lastLauncherRefreshTime > 60000) {
-                        try {
-                            val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-                            val launchers = packageManager.queryIntentActivities(homeIntent, android.content.pm.PackageManager.MATCH_ALL)
-                            launcherPackages = launchers.map { it.activityInfo.packageName }.toSet()
-                            lastLauncherRefreshTime = currentTime
-                        } catch (_: Exception) {}
+                        refreshLauncherCache()
                     }
 
                     if (currentApp != null && currentApp != packageName) {
@@ -452,11 +448,10 @@ class AppUsageMonitorService : Service() {
                                 lastHUDUpdateTime = 0L
                                 sessionStartTime = currentTime
                                 currentSessionPackage = currentApp
-                                
-                                // Fetch fresh usage immediately to avoid "app lain" usage contamination
+
                                 val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
                                 val systemUsage = detailedUsage.appUsageMap[currentApp] ?: 0L
-                                val systemGlobal = detailedUsage.appUsageMap.values.sum()
+                                val systemGlobal = getFilteredGlobalUsage(detailedUsage.appUsageMap)
 
                                 val startOfDay = getStartOfDay()
                                 val shield = currentShieldCache
@@ -680,12 +675,10 @@ class AppUsageMonitorService : Service() {
 
             if (currentTime - lastHUDUpdateTime > uiUpdateInterval || lastHUDUpdateTime == 0L) {
                 lastHUDUpdateTime = currentTime
-                
-                // Fetch fresh, event-based usage for this SPECIFIC package to ensure accuracy
+
                 val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
                 val realUsage = detailedUsage.appUsageMap[packageName] ?: 0L
-                
-                // Sync our live trackers with the accurate query results
+
                 baseUsageAtSessionStart = realUsage
                 sessionStartTime = currentTime
                 cachedTotalUsage = realUsage
@@ -697,7 +690,7 @@ class AppUsageMonitorService : Service() {
         } else if (currentTime - lastUsageFetchTime > 30000) {
             val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
             val systemUsage = detailedUsage.appUsageMap[packageName] ?: 0L
-            val systemGlobal = detailedUsage.appUsageMap.values.sum()
+            val systemGlobal = getFilteredGlobalUsage(detailedUsage.appUsageMap)
             val startOfDay = getStartOfDay()
             
             val dbUsage = if (shield.lastUsedTimestamp >= startOfDay) {
@@ -1071,31 +1064,21 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun getSystemGlobalUsageToday(): Long {
+        val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
+        return getFilteredGlobalUsage(detailedUsage.appUsageMap)
+    }
+
+    private fun getFilteredGlobalUsage(appUsageMap: Map<String, Long>): Long {
         val currentTime = System.currentTimeMillis()
 
-        // Use accurate helper to ensure consistency with Home screen
-        val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
-        val accurateUsageMap = detailedUsage.appUsageMap
-
         if (currentTime - lastLauncherAppsRefreshTime > 3600000 || launcherAppsCache.isEmpty()) {
-            val pm = packageManager
-            launcherAppsCache = pm.queryIntentActivities(
-                Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
-            ).map { it.activityInfo.packageName }.toSet()
-            
-            val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-            val defaultLauncher = pm.resolveActivity(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY)
-                ?.activityInfo?.packageName
-            launcherPackages = setOfNotNull(defaultLauncher)
-            
-            lastLauncherAppsRefreshTime = currentTime
-            lastLauncherRefreshTime = currentTime
+            refreshLauncherCache()
         }
 
-        val excludePackages = launcherPackages + (packageName ?: "")
+        val excludePackages = setOfNotNull(packageName, defaultLauncherPackage)
 
         var totalToday = 0L
-        accurateUsageMap.forEach { (pkg, time) ->
+        appUsageMap.forEach { (pkg, time) ->
             if (pkg !in excludePackages && pkg in launcherAppsCache) {
                 if (time > 0) {
                     totalToday += time
@@ -1104,6 +1087,26 @@ class AppUsageMonitorService : Service() {
         }
         val todayStart = getStartOfDay()
         return totalToday.coerceAtMost(currentTime - todayStart)
+    }
+
+    private fun refreshLauncherCache() {
+        try {
+            val pm = packageManager
+            launcherAppsCache = pm.queryIntentActivities(
+                Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
+            ).map { it.activityInfo.packageName }.toSet()
+            
+            val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            val launchers = pm.queryIntentActivities(launcherIntent, PackageManager.MATCH_ALL)
+            launcherPackages = launchers.map { it.activityInfo.packageName }.toSet()
+            
+            defaultLauncherPackage = pm.resolveActivity(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY)
+                ?.activityInfo?.packageName
+            
+            val currentTime = System.currentTimeMillis()
+            lastLauncherAppsRefreshTime = currentTime
+            lastLauncherRefreshTime = currentTime
+        } catch (_: Exception) {}
     }
 
     private fun getTotalUsageToday(packageName: String): Long {
