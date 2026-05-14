@@ -50,7 +50,6 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import androidx.compose.material.icons.outlined.Public
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -112,7 +111,7 @@ fun InterceptOverlayContent(
     
     val initialProgress = remember(packageName, delayDurationSeconds) {
         if (isDelayEnabled && (shield?.lastDelayStartTimestamp ?: 0L) > 0 && delayDurationSeconds > 0) {
-            val elapsed = System.currentTimeMillis() - shield!!.lastDelayStartTimestamp
+            val elapsed = System.currentTimeMillis() - shield.lastDelayStartTimestamp
             (elapsed.toFloat() / (delayDurationSeconds * 1000f)).coerceIn(0f, 1f)
         } else {
             0f
@@ -144,6 +143,8 @@ fun InterceptOverlayContent(
     }
     
     val scope = rememberCoroutineScope()
+    val userPrefsRepo = remember { UserPreferencesRepository(context) }
+    val userPrefs by userPrefsRepo.userPreferencesFlow.collectAsState(initial = UserPreferences())
 
     val backgroundAlphaState = animateFloatAsState(
         targetValue = if (showContent) 0.6f else 0f,
@@ -299,6 +300,7 @@ fun InterceptOverlayContent(
                         shield = shield,
                         totalUsageToday = currentTotalUsageToday,
                         totalGlobalUsageToday = currentTotalGlobalUsageToday,
+                        userPrefs = userPrefs,
                         remainingMinutes = remainingMinutes,
                         isEmergencyUnlocked = isEmergencyUnlocked,
                         isDelaying = isDelaying,
@@ -310,7 +312,7 @@ fun InterceptOverlayContent(
                         refreshTimeLeftMillis = refreshTimeLeftMillis,
                         currentUses = currentUses,
                         maxUses = maxUses,
-                        autoKickProgress = autoKickProgress.value,
+                        autoKickProgress = { autoKickProgress.value },
                         onEmergencyHoldingChange = { isEmergencyHolding = it },
                         onEmergencyClick = { isEmergencyUnlocked = true },
                         onAllowUse = { minutes ->
@@ -342,6 +344,7 @@ fun InterceptOverlayContent(
                         shield = shield,
                         totalUsageToday = currentTotalUsageToday,
                         totalGlobalUsageToday = currentTotalGlobalUsageToday,
+                        userPrefs = userPrefs,
                         remainingMinutes = remainingMinutes,
                         isEmergencyUnlocked = isEmergencyUnlocked,
                         isDelaying = isDelaying,
@@ -353,7 +356,7 @@ fun InterceptOverlayContent(
                         refreshTimeLeftMillis = refreshTimeLeftMillis,
                         currentUses = currentUses,
                         maxUses = maxUses,
-                        autoKickProgress = autoKickProgress.value,
+                        autoKickProgress = { autoKickProgress.value },
                         onEmergencyHoldingChange = { isEmergencyHolding = it },
                         onEmergencyClick = { isEmergencyUnlocked = true },
                         onAllowUse = { minutes ->
@@ -392,6 +395,7 @@ fun PortraitInterceptLayout(
     shield: ShieldEntity?,
     totalUsageToday: Long,
     totalGlobalUsageToday: Long,
+    userPrefs: UserPreferences,
     remainingMinutes: Int?,
     isEmergencyUnlocked: Boolean,
     isDelaying: Boolean,
@@ -403,7 +407,7 @@ fun PortraitInterceptLayout(
     refreshTimeLeftMillis: Long,
     currentUses: Int,
     maxUses: Int,
-    autoKickProgress: Float,
+    autoKickProgress: () -> Float,
     onEmergencyClick: () -> Unit,
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
     onAllowUse: (Int) -> Unit,
@@ -521,13 +525,14 @@ fun PortraitInterceptLayout(
             )
 
             if (shield != null && shield.type == FocusType.GOAL) {
-                GoalSection(shield, totalUsageToday, totalGlobalUsageToday, onGoalDismiss)
+                GoalSection(shield, totalUsageToday, totalGlobalUsageToday, userPrefs, onGoalDismiss)
             } else {
                 ShieldSection(
                     shield = shield,
                     remainingMinutes = remainingMinutes,
                     totalUsageToday = totalUsageToday,
                     totalGlobalUsageToday = totalGlobalUsageToday,
+                    userPrefs = userPrefs,
                     isEmergencyUnlocked = isEmergencyUnlocked,
                     isDelaying = isDelaying,
                     randomMessage = randomMessage,
@@ -555,6 +560,7 @@ fun LandscapeInterceptLayout(
     shield: ShieldEntity?,
     totalUsageToday: Long,
     totalGlobalUsageToday: Long,
+    userPrefs: UserPreferences,
     remainingMinutes: Int?,
     isEmergencyUnlocked: Boolean,
     isDelaying: Boolean,
@@ -566,7 +572,7 @@ fun LandscapeInterceptLayout(
     refreshTimeLeftMillis: Long,
     currentUses: Int,
     maxUses: Int,
-    autoKickProgress: Float,
+    autoKickProgress: () -> Float,
     onEmergencyClick: () -> Unit,
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
     onAllowUse: (Int) -> Unit,
@@ -669,9 +675,9 @@ fun LandscapeInterceptLayout(
                 if (shield != null) {
                     Spacer(modifier = Modifier.height(16.dp))
                     if (shield.type == FocusType.GOAL) {
-                        GoalProgressMini(shield, totalUsageToday, totalGlobalUsageToday)
+                        GoalProgressMini(shield, totalUsageToday, totalGlobalUsageToday, userPrefs)
                     } else {
-                        ShieldProgressMini(shield, totalUsageToday, totalGlobalUsageToday)
+                        ShieldProgressMini(shield, totalUsageToday, totalGlobalUsageToday, userPrefs)
                     }
                 }
             }
@@ -712,7 +718,7 @@ fun LandscapeInterceptLayout(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageToday: Long, onGoalDismiss: () -> Unit) {
+fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageToday: Long, userPrefs: UserPreferences, onGoalDismiss: () -> Unit) {
     val targetLimitMillis = shield.timeLimitMinutes * 60 * 1000L
     val progress = if (targetLimitMillis > 0) totalUsageToday.toFloat() / targetLimitMillis else 0f
     val remainingMillis = (targetLimitMillis - totalUsageToday).coerceAtLeast(0L)
@@ -745,7 +751,7 @@ fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageTod
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.align(Alignment.CenterStart)
             )
-            TotalUsagePill(totalGlobalUsageToday)
+            TotalUsagePill(totalGlobalUsageToday, userPrefs)
             Text(
                 text = "Target: ${shield.timeLimitMinutes}m",
                 style = MaterialTheme.typography.labelMedium,
@@ -839,6 +845,7 @@ fun ShieldSection(
     remainingMinutes: Int?,
     totalUsageToday: Long,
     totalGlobalUsageToday: Long,
+    userPrefs: UserPreferences,
     isEmergencyUnlocked: Boolean,
     isDelaying: Boolean,
     randomMessage: String,
@@ -847,7 +854,7 @@ fun ShieldSection(
     isUsesExceeded: Boolean,
     isTimeLimitReached: Boolean,
     refreshTimeLeftMillis: Long,
-    autoKickProgress: Float,
+    autoKickProgress: () -> Float,
     onEmergencyClick: () -> Unit,
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
     onAllowUse: (Int) -> Unit,
@@ -881,7 +888,7 @@ fun ShieldSection(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.align(Alignment.CenterStart)
                 )
-                TotalUsagePill(totalGlobalUsageToday)
+                TotalUsagePill(totalGlobalUsageToday, userPrefs)
                 Text(
                     text = "${formatMillis(remainingMillis)} left today",
                     style = MaterialTheme.typography.labelMedium,
@@ -944,7 +951,7 @@ fun ShieldSection(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun GoalProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageToday: Long) {
+fun GoalProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageToday: Long, userPrefs: UserPreferences) {
     val targetLimitMillis = shield.timeLimitMinutes * 60 * 1000L
     val progress = if (targetLimitMillis > 0) totalUsageToday.toFloat() / targetLimitMillis else 0f
 
@@ -960,7 +967,7 @@ fun GoalProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsa
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.align(Alignment.CenterStart)
             )
-            TotalUsagePill(totalGlobalUsageToday)
+            TotalUsagePill(totalGlobalUsageToday, userPrefs)
             Text(
                 text = "${shield.timeLimitMinutes}m",
                 style = MaterialTheme.typography.labelSmall,
@@ -983,7 +990,7 @@ fun GoalProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsa
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ShieldProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageToday: Long) {
+fun ShieldProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageToday: Long, userPrefs: UserPreferences) {
     val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
     val remainingMillis = (totalLimitMillis - totalUsageToday).coerceAtLeast(0L)
     val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
@@ -999,7 +1006,7 @@ fun ShieldProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalU
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.align(Alignment.CenterStart)
             )
-            TotalUsagePill(totalGlobalUsageToday)
+            TotalUsagePill(totalGlobalUsageToday, userPrefs)
             Text(
                 text = "${formatMillis(remainingMillis)} left",
                 style = MaterialTheme.typography.labelSmall,
@@ -1064,16 +1071,16 @@ fun ShieldLandscapeContent(
     isUsesExceeded: Boolean,
     isTimeLimitReached: Boolean,
     refreshTimeLeftMillis: Long,
-    autoKickProgress: Float,
+    autoKickProgress: () -> Float,
     onEmergencyClick: () -> Unit,
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
     onAllowUse: (Int) -> Unit,
     onCloseApp: () -> Unit
 ) {
-    val remainingMinutes = if (shield != null) {
+    val displayRemainingMinutes = if (shield != null) {
         val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
         ((totalLimitMillis - totalUsageToday).coerceAtLeast(0L) / 60000).toInt()
-    } else null
+    } else remainingMinutes
 
     if ((isUsesExceeded || isTimeLimitReached) && !isEmergencyUnlocked) {
         Column(
@@ -1113,7 +1120,7 @@ fun ShieldLandscapeContent(
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                DurationButtonsGrid(if (isEmergencyUnlocked) null else remainingMinutes, onAllowUse)
+                DurationButtonsGrid(if (isEmergencyUnlocked) null else displayRemainingMinutes, onAllowUse)
                 Spacer(modifier = Modifier.weight(1f))
                 CloseAppTextButton(onCloseApp, autoKickProgress)
             }
@@ -1202,7 +1209,9 @@ fun DelayInProgressSection(
                 wavelength = 30.dp,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
             )
-            val secondsLeft = kotlin.math.ceil((1f - delayProgressAnimatable.value) * delayDurationSeconds).toInt()
+            val secondsLeft by remember(delayDurationSeconds) {
+                derivedStateOf { kotlin.math.ceil((1f - delayProgressAnimatable.value) * delayDurationSeconds).toInt() }
+            }
             Text(
                 text = "${secondsLeft}s",
                 style = MaterialTheme.typography.headlineSmall,
@@ -1233,10 +1242,10 @@ fun DurationSelectionSection(remainingMinutes: Int?, isEmergencyUnlocked: Boolea
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun CloseAppTextButton(onCloseApp: () -> Unit, autoKickProgress: Float = 0f) {
+fun CloseAppTextButton(onCloseApp: () -> Unit, autoKickProgress: () -> Float = { 0f }) {
     val density = LocalDensity.current
     val infiniteTransition = rememberInfiniteTransition(label = "autoKickWavy")
-    val waveAmplitude by infiniteTransition.animateFloat(
+    val waveAmplitudeState = infiniteTransition.animateFloat(
         initialValue = 0.5f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -1262,15 +1271,16 @@ fun CloseAppTextButton(onCloseApp: () -> Unit, autoKickProgress: Float = 0f) {
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleMedium
             )
+            val isVisible by remember { derivedStateOf { autoKickProgress() > 0.4f } }
             AnimatedVisibility(
-                visible = autoKickProgress > 0.4f,
+                visible = isVisible,
                 enter = expandHorizontally(
                     animationSpec = spring(dampingRatio = 0.8f, stiffness = 400f)
                 ) + fadeIn(),
                 exit = shrinkHorizontally() + fadeOut()
             ) {
                 CircularWavyProgressIndicator(
-                    progress = { autoKickProgress },
+                    progress = autoKickProgress,
                     modifier = Modifier
                         .padding(start = 12.dp)
                         .size(24.dp),
@@ -1279,7 +1289,7 @@ fun CloseAppTextButton(onCloseApp: () -> Unit, autoKickProgress: Float = 0f) {
                     stroke = with(density) { Stroke(width = 2.dp.toPx()) },
                     trackStroke = with(density) { Stroke(width = 2.dp.toPx()) },
                     wavelength = 8.dp,
-                    amplitude = { waveAmplitude }
+                    amplitude = { waveAmplitudeState.value }
                 )
             }
         }
@@ -1287,17 +1297,13 @@ fun CloseAppTextButton(onCloseApp: () -> Unit, autoKickProgress: Float = 0f) {
 }
 
 @Composable
-fun TotalUsagePill(totalGlobalUsageToday: Long, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val userPrefsRepo = remember { UserPreferencesRepository(context) }
-    val userPrefs by userPrefsRepo.userPreferencesFlow.collectAsState(initial = UserPreferences())
-
+fun TotalUsagePill(totalGlobalUsageToday: Long, userPrefs: UserPreferences, modifier: Modifier = Modifier) {
     if (!userPrefs.totalUsagePillEnabled) return
 
     val screenTimeTargetMinutes = userPrefs.screenTimeTargetMinutes
 
     val totalUsageMinutes = totalGlobalUsageToday / 60000
-    val isTargetExceeded = screenTimeTargetMinutes > 0 && totalUsageMinutes >= screenTimeTargetMinutes
+    val isTargetExceeded = totalUsageMinutes >= screenTimeTargetMinutes && screenTimeTargetMinutes > 0
 
     val totalPillColor = if (isTargetExceeded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
     val totalPillContentColor = if (isTargetExceeded) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onTertiary
@@ -1392,6 +1398,8 @@ fun ScheduleOverlayContent(
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val userPrefsRepo = remember { UserPreferencesRepository(context) }
+    val userPrefs by userPrefsRepo.userPreferencesFlow.collectAsState(initial = UserPreferences())
 
     val appIcon = remember(packageName) {
         try {
@@ -1519,8 +1527,9 @@ fun ScheduleOverlayContent(
                         schedule = schedule,
                         progress = progress,
                         totalGlobalUsageToday = totalGlobalUsageToday,
+                        userPrefs = userPrefs,
                         isEmergencyUnlocked = isEmergencyUnlocked,
-                        autoKickProgress = autoKickProgress.value,
+                        autoKickProgress = { autoKickProgress.value },
                         onEmergencyHoldingChange = { isEmergencyHolding = it },
                         onEmergencyClick = { isEmergencyUnlocked = true },
                         onAllowUse = { minutes ->
@@ -1545,8 +1554,9 @@ fun ScheduleOverlayContent(
                         schedule = schedule,
                         progress = progress,
                         totalGlobalUsageToday = totalGlobalUsageToday,
+                        userPrefs = userPrefs,
                         isEmergencyUnlocked = isEmergencyUnlocked,
-                        autoKickProgress = autoKickProgress.value,
+                        autoKickProgress = { autoKickProgress.value },
                         onEmergencyHoldingChange = { isEmergencyHolding = it },
                         onEmergencyClick = { isEmergencyUnlocked = true },
                         onAllowUse = { minutes ->
@@ -1578,8 +1588,9 @@ fun PortraitScheduleLayout(
     schedule: ScheduleEntity,
     progress: Float,
     totalGlobalUsageToday: Long,
+    userPrefs: UserPreferences,
     isEmergencyUnlocked: Boolean,
-    autoKickProgress: Float = 0f,
+    autoKickProgress: () -> Float = { 0f },
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
     onEmergencyClick: () -> Unit,
     onAllowUse: (Int) -> Unit,
@@ -1689,7 +1700,7 @@ fun PortraitScheduleLayout(
             Spacer(modifier = Modifier.height(20.dp))
 
             if (schedule.mode == ScheduleMode.ALLOW) {
-                TotalUsagePill(totalGlobalUsageToday)
+                TotalUsagePill(totalGlobalUsageToday, userPrefs)
                 CircularWavyProgressIndicator(
                     progress = { progress },
                     modifier = Modifier
@@ -1737,8 +1748,9 @@ fun LandscapeScheduleLayout(
     schedule: ScheduleEntity,
     progress: Float,
     totalGlobalUsageToday: Long,
+    userPrefs: UserPreferences,
     isEmergencyUnlocked: Boolean,
-    autoKickProgress: Float = 0f,
+    autoKickProgress: () -> Float = { 0f },
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
     onEmergencyClick: () -> Unit,
     onAllowUse: (Int) -> Unit,
@@ -1852,7 +1864,7 @@ fun LandscapeScheduleLayout(
 
                 if (schedule.mode == ScheduleMode.ALLOW) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    TotalUsagePill(totalGlobalUsageToday)
+                    TotalUsagePill(totalGlobalUsageToday, userPrefs)
                     CircularWavyProgressIndicator(
                         progress = { progress },
                         modifier = Modifier
@@ -1984,8 +1996,11 @@ fun EmergencyButton(onEmergencyUse: () -> Unit, onHoldingChange: (Boolean) -> Un
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Bolt, contentDescription = null, tint = MaterialTheme.colorScheme.error)
             Spacer(modifier = Modifier.width(8.dp))
+            val secondsRemaining by remember {
+                derivedStateOf { 5 - (animatedProgressState.value * 5).toInt() }
+            }
             Text(
-                text = if (isHolding) "Hold for ${5 - (animatedProgressState.value * 5).toInt()}s..." else "Hold for 5s to use Emergency",
+                text = if (isHolding) "Hold for ${secondsRemaining}s..." else "Hold for 5s to use Emergency",
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 fontWeight = FontWeight.Bold
             )
@@ -2115,9 +2130,13 @@ fun DurationButton(
                         trackStroke = Stroke(width = 6.dp.value),
                         wavelength = 12.dp
                     )
-                    val secondsLeft = if (delaySeconds > 0) {
-                        kotlin.math.ceil(delaySeconds * (1f - progressState.value)).toInt().coerceAtLeast(1)
-                    } else 0
+                    val secondsLeft by remember(delaySeconds) {
+                        derivedStateOf {
+                            if (delaySeconds > 0) {
+                                kotlin.math.ceil(delaySeconds * (1f - progressState.value)).toInt().coerceAtLeast(1)
+                            } else 0
+                        }
+                    }
 
                     if (secondsLeft > 0) {
                         Text(

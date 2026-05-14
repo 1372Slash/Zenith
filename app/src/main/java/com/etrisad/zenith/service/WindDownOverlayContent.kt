@@ -283,7 +283,7 @@ fun WindDownOverlayContent(
                                 onCloseApp()
                             }
                         },
-                        autoKickProgress = autoKickProgress.value
+                        autoKickProgress = { autoKickProgress.value }
                     )
                 }
             }
@@ -320,7 +320,9 @@ fun WindDownDelaySection(
                 wavelength = 30.dp,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
             )
-            val secondsLeft = kotlin.math.ceil((1f - progressAnimatable.value) * durationSeconds).toInt()
+            val secondsLeft by remember(durationSeconds) {
+                derivedStateOf { kotlin.math.ceil((1f - progressAnimatable.value) * durationSeconds).toInt() }
+            }
             Text(
                 text = "${secondsLeft}s",
                 style = MaterialTheme.typography.headlineSmall,
