@@ -39,7 +39,9 @@ import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -94,13 +96,18 @@ fun ShieldOverlay(
     var showContent by remember { mutableStateOf(false) }
     var isEmergencyUnlocked by remember { mutableStateOf(false) }
 
-    val sampledUsage by produceState(totalUsageToday, totalUsageToday) {
-        delay(2000)
-        value = totalUsageToday
+    var sampledUsage by remember { mutableLongStateOf(totalUsageToday) }
+    LaunchedEffect(packageName) {
+        snapshotFlow { totalUsageToday }
+            .debounce(2000)
+            .collect { sampledUsage = it }
     }
-    val sampledGlobalUsage by produceState(totalGlobalUsageToday, totalGlobalUsageToday) {
-        delay(2000)
-        value = totalGlobalUsageToday
+
+    var sampledGlobalUsage by remember { mutableLongStateOf(totalGlobalUsageToday) }
+    LaunchedEffect(packageName) {
+        snapshotFlow { totalGlobalUsageToday }
+            .debounce(2000)
+            .collect { sampledGlobalUsage = it }
     }
 
     val currentTotalUsageToday = remember(sampledUsage, dbAppUsage) { maxOf(sampledUsage, dbAppUsage) }
@@ -195,13 +202,22 @@ fun ShieldOverlay(
         }
     }
 
-    val isBlocked = remember(isUsesExceeded, isTimeLimitReached, remainingMinutes, isEmergencyUnlocked, currentShield?.type) {
-        val effectivelyTimeReached = isTimeLimitReached || (remainingMinutes != null && remainingMinutes <= 0)
-        (isUsesExceeded || effectivelyTimeReached) && !isEmergencyUnlocked && currentShield?.type == FocusType.SHIELD
+    val isBlocked by remember(isUsesExceeded, isTimeLimitReached, remainingMinutes, isEmergencyUnlocked, currentShield?.type) {
+        derivedStateOf {
+            val effectivelyTimeReached = isTimeLimitReached || (remainingMinutes != null && remainingMinutes <= 0)
+            (isUsesExceeded || effectivelyTimeReached) && !isEmergencyUnlocked && currentShield?.type == FocusType.SHIELD
+        }
     }
 
     val autoKickProgress = remember(packageName) { Animatable(0f) }
     var isEmergencyHolding by remember(packageName) { mutableStateOf(false) }
+
+    data class ShieldOverlayState(
+        val isBlocked: Boolean,
+        val isEmergencyHolding: Boolean,
+        val isDelaying: Boolean,
+        val isEmergencyUnlocked: Boolean
+    )
 
     LaunchedEffect(showContent) {
         if (!showContent) {
@@ -212,16 +228,11 @@ fun ShieldOverlay(
 
     LaunchedEffect(packageName) {
         snapshotFlow { 
-            listOf(isBlocked, isEmergencyHolding, isDelaying, isEmergencyUnlocked)
+            ShieldOverlayState(isBlocked, isEmergencyHolding, isDelaying, isEmergencyUnlocked)
         }
-            .collect { state ->
-                val blocked = state[0]
-                val holding = state[1]
-                val delaying = state[2]
-                val unlocked = state[3]
-
-                if (blocked) {
-                    if (!holding) {
+            .collectLatest { state ->
+                if (state.isBlocked) {
+                    if (!state.isEmergencyHolding) {
                         autoKickProgress.snapTo(0f)
                         autoKickProgress.animateTo(
                             targetValue = 1f,
@@ -236,7 +247,7 @@ fun ShieldOverlay(
                         autoKickProgress.stop()
                         autoKickProgress.snapTo(0f)
                     }
-                } else if (!delaying && !unlocked && (currentShield?.type == FocusType.SHIELD || currentShield == null)) {
+                } else if (!state.isDelaying && !state.isEmergencyUnlocked && (currentShield?.type == FocusType.SHIELD || currentShield == null)) {
                     autoKickProgress.snapTo(0f)
                     delay(8000)
                     
@@ -257,10 +268,12 @@ fun ShieldOverlay(
             }
     }
     
-    val refreshTimeLeftMillis = if (currentShield != null) {
-        val nextRefresh = currentShield.lastPeriodResetTimestamp + (currentShield.refreshPeriodMinutes * 60 * 1000L)
-        (nextRefresh - System.currentTimeMillis()).coerceAtLeast(0L)
-    } else 0L
+    val refreshTimeLeftMillis = remember(currentShield) {
+        if (currentShield != null) {
+            val nextRefresh = currentShield.lastPeriodResetTimestamp + (currentShield.refreshPeriodMinutes * 60 * 1000L)
+            (nextRefresh - System.currentTimeMillis()).coerceAtLeast(0L)
+        } else 0L
+    }
 
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
