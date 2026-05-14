@@ -1070,7 +1070,8 @@ class AppUsageMonitorService : Service() {
         val currentTime = System.currentTimeMillis()
 
         // Use accurate helper to ensure consistency with Home screen
-        val accurateUsageMap = com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usageStatsManager)
+        val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
+        val accurateUsageMap = detailedUsage.appUsageMap
 
         if (currentTime - lastLauncherAppsRefreshTime > 3600000 || launcherAppsCache.isEmpty()) {
             val pm = packageManager
@@ -1078,9 +1079,10 @@ class AppUsageMonitorService : Service() {
                 Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
             ).map { it.activityInfo.packageName }.toSet()
             
-            val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-            launcherPackages = pm.queryIntentActivities(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
-                .map { it.activityInfo.packageName }.toSet()
+            val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            val defaultLauncher = pm.resolveActivity(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY)
+                ?.activityInfo?.packageName
+            launcherPackages = setOfNotNull(defaultLauncher)
             
             lastLauncherAppsRefreshTime = currentTime
             lastLauncherRefreshTime = currentTime
@@ -1096,7 +1098,8 @@ class AppUsageMonitorService : Service() {
                 }
             }
         }
-        return totalToday
+        val todayStart = getStartOfDay()
+        return totalToday.coerceAtMost(currentTime - todayStart)
     }
 
     private fun getTotalUsageToday(packageName: String): Long {
@@ -1124,8 +1127,8 @@ class AppUsageMonitorService : Service() {
             val tempUsageMap = mutableMapOf<String, Long>()
             val statsList = mutableListOf<android.app.usage.UsageStats>()
 
-            val accurateUsageMap = com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usageStatsManager)
-            accurateUsageMap.forEach { (pkg, millis) ->
+            val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
+            detailedUsage.appUsageMap.forEach { (pkg, millis) ->
                 tempUsageMap[pkg] = millis
             }
 

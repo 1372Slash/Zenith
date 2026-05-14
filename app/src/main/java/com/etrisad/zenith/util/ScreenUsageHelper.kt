@@ -5,7 +5,16 @@ import android.app.usage.UsageStatsManager
 import java.util.Calendar
 
 object ScreenUsageHelper {
-    fun fetchAppUsageTodayTillNow(usageStatsManager: UsageStatsManager): Map<String, Long> {
+    data class UsageResult(
+        val appUsageMap: Map<String, Long>,
+        val hourlyUsageMap: Map<Int, Map<String, Long>>,
+        val sessionCounts: Map<String, Int>
+    )
+
+    fun fetchDetailedUsageToday(
+        usageStatsManager: UsageStatsManager,
+        includeHourly: Boolean = false
+    ): UsageResult {
         val calendar = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -16,6 +25,8 @@ object ScreenUsageHelper {
         val end = System.currentTimeMillis()
 
         val usageMap = mutableMapOf<String, Long>()
+        val hourlyMap = mutableMapOf<Int, MutableMap<String, Long>>()
+        val sessionCounts = mutableMapOf<String, Int>()
 
         var activePkg: String? = null
         var activeStartTime = 0L
@@ -24,6 +35,7 @@ object ScreenUsageHelper {
         val event = UsageEvents.Event()
         
         var isScreenOn = true 
+        val cal = Calendar.getInstance()
 
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
@@ -41,6 +53,13 @@ object ScreenUsageHelper {
                             val duration = segmentEnd - segmentStart
                             if (duration > 1500) {
                                 usageMap[p] = (usageMap[p] ?: 0L) + duration
+                                if (duration > 4000) {
+                                    sessionCounts[p] = (sessionCounts[p] ?: 0) + 1
+                                }
+
+                                if (includeHourly) {
+                                    addHourlyUsage(hourlyMap, p, segmentStart, segmentEnd, cal)
+                                }
                             }
                         }
                     }
@@ -63,6 +82,12 @@ object ScreenUsageHelper {
                                 val duration = segmentEnd - segmentStart
                                 if (duration > 1500) {
                                     usageMap[activePkg!!] = (usageMap[activePkg!!] ?: 0L) + duration
+                                    if (duration > 4000) {
+                                        sessionCounts[activePkg!!] = (sessionCounts[activePkg!!] ?: 0) + 1
+                                    }
+                                    if (includeHourly) {
+                                        addHourlyUsage(hourlyMap, activePkg!!, segmentStart, segmentEnd, cal)
+                                    }
                                 }
                             }
                         }
@@ -79,6 +104,12 @@ object ScreenUsageHelper {
                             val duration = segmentEnd - segmentStart
                             if (duration > 1500) {
                                 usageMap[pkg] = (usageMap[pkg] ?: 0L) + duration
+                                if (duration > 4000) {
+                                    sessionCounts[pkg] = (sessionCounts[pkg] ?: 0) + 1
+                                }
+                                if (includeHourly) {
+                                    addHourlyUsage(hourlyMap, pkg, segmentStart, segmentEnd, cal)
+                                }
                             }
                         }
                         activePkg = null
@@ -95,10 +126,48 @@ object ScreenUsageHelper {
                 val duration = segmentEnd - segmentStart
                 if (duration > 1500) {
                     usageMap[activePkg!!] = (usageMap[activePkg!!] ?: 0L) + duration
+                    if (duration > 4000) {
+                        sessionCounts[activePkg!!] = (sessionCounts[activePkg!!] ?: 0) + 1
+                    }
+                    if (includeHourly) {
+                        addHourlyUsage(hourlyMap, activePkg!!, segmentStart, segmentEnd, cal)
+                    }
                 }
             }
         }
 
-        return usageMap
+        return UsageResult(usageMap, hourlyMap, sessionCounts)
+    }
+
+    private fun addHourlyUsage(
+        hourlyMap: MutableMap<Int, MutableMap<String, Long>>,
+        packageName: String,
+        start: Long,
+        end: Long,
+        cal: Calendar
+    ) {
+        var current = start
+        while (current < end) {
+            cal.timeInMillis = current
+            val hour = cal.get(Calendar.HOUR_OF_DAY)
+            val nextHourStart = (cal.clone() as Calendar).apply {
+                add(Calendar.HOUR_OF_DAY, 1)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            
+            val segmentEnd = minOf(end, nextHourStart)
+            val duration = segmentEnd - current
+            if (duration > 0) {
+                val pkgMap = hourlyMap.getOrPut(hour) { mutableMapOf() }
+                pkgMap[packageName] = (pkgMap[packageName] ?: 0L) + duration
+            }
+            current = segmentEnd
+        }
+    }
+
+    fun fetchAppUsageTodayTillNow(usageStatsManager: UsageStatsManager): Map<String, Long> {
+        return fetchDetailedUsageToday(usageStatsManager).appUsageMap
     }
 }

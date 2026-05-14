@@ -64,6 +64,7 @@ class ZenithAccessibilityService : AccessibilityService() {
     private var restrictedPackages = emptySet<String>()
     @Volatile
     private var hasGlobalAllowSchedule = false
+    private val dailyUsageCache = mutableMapOf<String, Long>()
     @Volatile
     private var usageStatsCache: List<UsageStats>? = null
     private var lastUsageCacheTime = 0L
@@ -598,7 +599,8 @@ class ZenithAccessibilityService : AccessibilityService() {
         val excludePackages = setOfNotNull(packageName, launcherPackage)
 
         // Use accurate helper to ensure consistency with Home screen
-        val accurateUsageMap = com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usageStatsManager)
+        val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
+        val accurateUsageMap = detailedUsage.appUsageMap
 
         var totalToday = 0L
         accurateUsageMap.forEach { (pkg, time) ->
@@ -609,33 +611,42 @@ class ZenithAccessibilityService : AccessibilityService() {
             }
         }
 
-        cachedTotalGlobalUsage = totalToday
+        val todayStart = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        
+        cachedTotalGlobalUsage = totalToday.coerceAtMost(currentTime - todayStart)
         lastGlobalUsageCacheTime = currentTime
-        return totalToday
+        return cachedTotalGlobalUsage
     }
 
     private fun getTotalUsageToday(packageName: String): Long {
         val currentTime = System.currentTimeMillis()
 
-        var stats = usageStatsCache
-        if (stats == null || currentTime - lastUsageCacheTime > 3000) {
-            synchronized(reusableCalendar) {
-                reusableCalendar.timeInMillis = currentTime
-                reusableCalendar.set(Calendar.HOUR_OF_DAY, 0)
-                reusableCalendar.set(Calendar.MINUTE, 0)
-                reusableCalendar.set(Calendar.SECOND, 0)
-                reusableCalendar.set(Calendar.MILLISECOND, 0)
-                val startTime = reusableCalendar.timeInMillis
+        if (currentTime - lastUsageCacheTime > 3000) {
+            val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
+            val tempMap = detailedUsage.appUsageMap
+            
+            dailyUsageCache.clear()
+            val todayStart = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            val timeSinceMidnight = currentTime - todayStart
 
-                stats = try {
-                    usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, currentTime)
-                } catch (_: Exception) { null }
-                usageStatsCache = stats
-                lastUsageCacheTime = currentTime
+            tempMap.forEach { (pkg, time) ->
+                val cappedTime = if (time > timeSinceMidnight + 5000) timeSinceMidnight else time
+                if (cappedTime > 0) dailyUsageCache[pkg] = cappedTime
             }
+            lastUsageCacheTime = currentTime
         }
         
-        return stats?.find { it.packageName == packageName }?.totalTimeVisible ?: 0L
+        return dailyUsageCache[packageName] ?: 0L
     }
 
     private fun goToHomeScreen() {

@@ -534,194 +534,30 @@ class HomeViewModel(
 
             val appTotals = mutableMapOf<String, Long>()
             val appSessionCounts = mutableMapOf<String, Int>()
-            
             val hourlyAppUsage = mutableMapOf<Int, MutableMap<String, Long>>()
-            val eventBuffer = 24 * 60 * 60 * 1000L
-            val events = usm.queryEvents(dayStart - eventBuffer, dayEnd)
-            val event = android.app.usage.UsageEvents.Event()
-            val lastEventTime = mutableMapOf<String, Long>()
-            val cal = Calendar.getInstance()
-
-            val accurateAppTotals = mutableMapOf<String, Long>()
-            var isScreenOn = true 
-            var activePkg: String? = null
-            var activeStartTime: Long = 0L
-
-            while (events.hasNextEvent()) {
-                events.getNextEvent(event)
-                val pkg = event.packageName
-                val time = event.timeStamp
-                val type = event.eventType
-
-                when (type) {
-                    android.app.usage.UsageEvents.Event.SCREEN_INTERACTIVE -> isScreenOn = true
-                    android.app.usage.UsageEvents.Event.SCREEN_NON_INTERACTIVE -> {
-                        isScreenOn = false
-                        if (activePkg != null) {
-                            val segmentStart = maxOf(activeStartTime, dayStart)
-                            val segmentEnd = minOf(time, dayEnd)
-                            if (segmentStart < segmentEnd) {
-                                val duration = segmentEnd - segmentStart
-                                if (duration > 1500) { // Ignore background transients < 1.5s
-                                    accurateAppTotals[activePkg!!] = (accurateAppTotals[activePkg!!] ?: 0L) + duration
-                                    
-                                    var current = segmentStart
-                                    while (current < segmentEnd) {
-                                        cal.timeInMillis = current
-                                        val hour = cal.get(Calendar.HOUR_OF_DAY)
-                                        val nextHourStart = (cal.clone() as Calendar).apply {
-                                            add(Calendar.HOUR_OF_DAY, 1)
-                                            set(Calendar.MINUTE, 0)
-                                            set(Calendar.SECOND, 0)
-                                            set(Calendar.MILLISECOND, 0)
-                                        }.timeInMillis
-                                        
-                                        val end = minOf(segmentEnd, nextHourStart)
-                                        val d = end - current
-                                        if (d > 0) {
-                                            val pkgMap = hourlyAppUsage.getOrPut(hour) { mutableMapOf() }
-                                            pkgMap[activePkg!!] = (pkgMap[activePkg!!] ?: 0L) + d
-                                        }
-                                        current = end
-                                    }
-                                }
-                            }
-                            activePkg = null
-                            activeStartTime = 0L
-                        }
-                    }
-                    android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND,
-                    android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED -> {
-                        if (pkg in excludePackages || pkg !in launcherApps) continue
-                        if (isScreenOn) {
-                            val className = event.className ?: ""
-                            if (className.contains("Notification", ignoreCase = true) || 
-                                className.contains("Toast", ignoreCase = true)) continue
-
-                            // End previous session if different app takes focus
-                            if (activePkg != null && activePkg != pkg) {
-                                val segmentStart = maxOf(activeStartTime, dayStart)
-                                val segmentEnd = minOf(time, dayEnd)
-                                if (segmentStart < segmentEnd) {
-                                    val duration = segmentEnd - segmentStart
-                                    if (duration > 1500) {
-                                        accurateAppTotals[activePkg!!] = (accurateAppTotals[activePkg!!] ?: 0L) + duration
-                                        
-                                        // Count as a "Session Open" only if used for more than 4 seconds
-                                        if (duration > 4000) {
-                                            appSessionCounts[activePkg!!] = (appSessionCounts[activePkg!!] ?: 0) + 1
-                                        }
-
-                                        // Process hourly data for previous app
-                                        var current = segmentStart
-                                        while (current < segmentEnd) {
-                                            cal.timeInMillis = current
-                                            val hour = cal.get(Calendar.HOUR_OF_DAY)
-                                            val nextHourStart = (cal.clone() as Calendar).apply {
-                                                add(Calendar.HOUR_OF_DAY, 1)
-                                                set(Calendar.MINUTE, 0)
-                                                set(Calendar.SECOND, 0)
-                                                set(Calendar.MILLISECOND, 0)
-                                            }.timeInMillis
-                                            val end = minOf(segmentEnd, nextHourStart)
-                                            val d = end - current
-                                            if (d > 0) {
-                                                val pkgMap = hourlyAppUsage.getOrPut(hour) { mutableMapOf() }
-                                                pkgMap[activePkg!!] = (pkgMap[activePkg!!] ?: 0L) + d
-                                            }
-                                            current = end
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            activePkg = pkg
-                            activeStartTime = time
-                        }
-                    }
-                    android.app.usage.UsageEvents.Event.MOVE_TO_BACKGROUND,
-                    android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED -> {
-                        if (activePkg == pkg) {
-                            val segmentStart = maxOf(activeStartTime, dayStart)
-                            val segmentEnd = minOf(time, dayEnd)
-                            
-                            if (segmentStart < segmentEnd) {
-                                val duration = segmentEnd - segmentStart
-                                if (duration > 1500) {
-                                    accurateAppTotals[pkg] = (accurateAppTotals[pkg] ?: 0L) + duration
-                                    
-                                    // Count as a "Session Open" only if used for more than 4 seconds
-                                    if (duration > 4000) {
-                                        appSessionCounts[pkg] = (appSessionCounts[pkg] ?: 0) + 1
-                                    }
-
-                                    var current = segmentStart
-                                    while (current < segmentEnd) {
-                                        cal.timeInMillis = current
-                                        val hour = cal.get(Calendar.HOUR_OF_DAY)
-                                        val nextHourStart = (cal.clone() as Calendar).apply {
-                                            add(Calendar.HOUR_OF_DAY, 1)
-                                            set(Calendar.MINUTE, 0)
-                                            set(Calendar.SECOND, 0)
-                                            set(Calendar.MILLISECOND, 0)
-                                        }.timeInMillis
-                                        
-                                        val end = minOf(segmentEnd, nextHourStart)
-                                        val d = end - current
-                                        if (d > 0) {
-                                            val pkgMap = hourlyAppUsage.getOrPut(hour) { mutableMapOf() }
-                                            pkgMap[pkg] = (pkgMap[pkg] ?: 0L) + d
-                                        }
-                                        current = end
-                                    }
-                                }
-                            }
-                            activePkg = null
-                            activeStartTime = 0L
-                        }
-                    }
-                }
-            }
-
-            if (isScreenOn && activePkg != null) {
-                val segmentStart = maxOf(activeStartTime, dayStart)
-                val segmentEnd = dayEnd
-                if (segmentStart < segmentEnd) {
-                    val duration = segmentEnd - segmentStart
-                    if (duration > 1500) {
-                        accurateAppTotals[activePkg!!] = (accurateAppTotals[activePkg!!] ?: 0L) + duration
-
-                        var current = segmentStart
-                        while (current < segmentEnd) {
-                            cal.timeInMillis = current
-                            val hour = cal.get(Calendar.HOUR_OF_DAY)
-                            val nextHourStart = (cal.clone() as Calendar).apply {
-                                add(Calendar.HOUR_OF_DAY, 1)
-                                set(Calendar.MINUTE, 0)
-                                set(Calendar.SECOND, 0)
-                                set(Calendar.MILLISECOND, 0)
-                            }.timeInMillis
-                            
-                            val end = minOf(segmentEnd, nextHourStart)
-                            val d = end - current
-                            if (d > 0) {
-                                val pkgMap = hourlyAppUsage.getOrPut(hour) { mutableMapOf() }
-                                pkgMap[activePkg!!] = (pkgMap[activePkg!!] ?: 0L) + d
-                            }
-                            current = end
-                        }
-                    }
-                }
-            }
 
             if (isSelectedToday) {
-                // For today, ONLY use event-based totals to avoid any sticky aggregate stats
-                accurateAppTotals.forEach { (pkg, time) ->
+                // Use the unified helper to ensure consistency
+                val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true)
+                
+                detailedUsage.appUsageMap.forEach { (pkg, time) ->
                     if (pkg !in excludePackages && pkg in launcherApps) {
                         val cappedTime = time.coerceAtMost(timeSinceMidnight + 5000)
                         if (cappedTime > 0) appTotals[pkg] = cappedTime
                     }
                 }
+                
+                detailedUsage.sessionCounts.forEach { (pkg, count) ->
+                    appSessionCounts[pkg] = count
+                }
+                
+                detailedUsage.hourlyUsageMap.forEach { (hour, pkgMap) ->
+                    val filteredPkgMap = pkgMap.filter { it.key in launcherApps && it.key !in excludePackages }
+                    if (filteredPkgMap.isNotEmpty()) {
+                        hourlyAppUsage[hour] = filteredPkgMap.toMutableMap()
+                    }
+                }
+
                 totalToday = appTotals.values.sum().coerceAtMost(timeSinceMidnight)
             } else {
                 val dayStats = usm.queryAndAggregateUsageStats(dayStart, dayEnd)
@@ -1071,80 +907,13 @@ class HomeViewModel(
             shieldRepository.getLastNDaysUsageForPackage(packageName, 21).collect { historyFromDb ->
                 val currentNow = System.currentTimeMillis()
                 
-                // Fetch session count and hourly data for today
-                val events = usm.queryEvents(todayStart, currentNow)
-                val event = android.app.usage.UsageEvents.Event()
-                var sessionCount = 0
-                val appHourlyUsage = MutableList(24) { 0L }
-                val lastEventTime = mutableMapOf<String, Long>()
-                val cal = Calendar.getInstance()
-
-                while (events.hasNextEvent()) {
-                    events.getNextEvent(event)
-                    if (event.packageName != packageName) continue
-                    
-                    val time = event.timeStamp
-                    if (event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND || 
-                        event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED) {
-                        if (event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND) {
-                            sessionCount++
-                        }
-                        lastEventTime[packageName] = time
-                    } else if (event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_BACKGROUND ||
-                               event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED) {
-                        val startTime = lastEventTime.remove(packageName) ?: continue
-                        
-                        val segmentStart = maxOf(startTime, todayStart)
-                        val segmentEnd = minOf(time, currentNow)
-
-                        if (segmentStart < segmentEnd) {
-                            var current = segmentStart
-                            while (current < segmentEnd) {
-                                cal.timeInMillis = current
-                                val hour = cal.get(Calendar.HOUR_OF_DAY)
-                                val nextHourStart = (cal.clone() as Calendar).apply {
-                                    add(Calendar.HOUR_OF_DAY, 1)
-                                    set(Calendar.MINUTE, 0)
-                                    set(Calendar.SECOND, 0)
-                                    set(Calendar.MILLISECOND, 0)
-                                }.timeInMillis
-                                
-                                val end = minOf(segmentEnd, nextHourStart)
-                                if (end > current) {
-                                    appHourlyUsage[hour] += (end - current)
-                                }
-                                current = end
-                            }
-                        }
-                    }
+                // Use the unified helper to ensure consistency with Home screen
+                val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true)
+                val sessionCount = detailedUsage.sessionCounts[packageName] ?: 0
+                val appHourlyUsage = MutableList(24) { hour -> 
+                    detailedUsage.hourlyUsageMap[hour]?.get(packageName) ?: 0L 
                 }
-                
-                // Handle case where app is currently in foreground
-                lastEventTime[packageName]?.let { startTime ->
-                    val segmentStart = maxOf(startTime, todayStart)
-                    val segmentEnd = currentNow
-                    if (segmentStart < segmentEnd) {
-                        var current = segmentStart
-                        while (current < segmentEnd) {
-                            cal.timeInMillis = current
-                            val hour = cal.get(Calendar.HOUR_OF_DAY)
-                            val nextHourStart = (cal.clone() as Calendar).apply {
-                                add(Calendar.HOUR_OF_DAY, 1)
-                                set(Calendar.MINUTE, 0)
-                                set(Calendar.SECOND, 0)
-                                set(Calendar.MILLISECOND, 0)
-                            }.timeInMillis
-                            
-                            val end = minOf(segmentEnd, nextHourStart)
-                            if (end > current) {
-                                appHourlyUsage[hour] += (end - current)
-                            }
-                            current = end
-                        }
-                    }
-                }
-
-                val currentTodayUsage = appHourlyUsage.sum().coerceAtMost(currentNow - todayStart)
+                val currentTodayUsage = detailedUsage.appUsageMap[packageName] ?: 0L
                 val peakHour = appHourlyUsage.indices.maxByOrNull { appHourlyUsage[it] } ?: -1
 
 
