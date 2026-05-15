@@ -3,6 +3,7 @@ package com.etrisad.zenith.ui.widget
 import android.annotation.SuppressLint
 import android.content.Context
 import android.appwidget.AppWidgetManager
+import android.content.Intent
 import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
@@ -42,10 +43,14 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.glance.action.ActionParameters
-import androidx.glance.action.actionParametersOf
-import androidx.glance.action.actionStartActivity
+import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.action.clickable
 import com.etrisad.zenith.MainActivity
+import com.etrisad.zenith.data.local.entity.FocusType
+import java.util.Calendar
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 class AppStreakWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Exact
@@ -68,7 +73,19 @@ class AppStreakWidget : GlanceAppWidget() {
             val prefs = currentState<Preferences>()
             val selectedPackage = prefs[SELECTED_PACKAGE_KEY]
             
-            val shields by app.shieldRepository.allShields.collectAsState(initial = emptyList())
+            val shields by remember {
+                app.shieldRepository.allShields
+                    .distinctUntilChanged { old, new ->
+                        if (old.size != new.size) return@distinctUntilChanged false
+                        old.zip(new).all { (o, n) ->
+                            o.packageName == n.packageName &&
+                            o.currentStreak == n.currentStreak &&
+                            o.bestStreak == n.bestStreak &&
+                            o.lastStreakUpdateTimestamp == n.lastStreakUpdateTimestamp &&
+                            (o.remainingTimeMillis == 0L) == (n.remainingTimeMillis == 0L)
+                        }
+                    }
+            }.collectAsState(initial = emptyList())
 
             val packageToDisplay = if (!selectedPackage.isNullOrEmpty()) {
                 selectedPackage
@@ -90,32 +107,47 @@ class AppStreakWidget : GlanceAppWidget() {
             GlanceTheme {
                 val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
 
+                val isStreakAchieved = if (targetShield?.type == FocusType.GOAL) {
+                    targetShield.remainingTimeMillis == 0L && targetShield.timeLimitMinutes > 0
+                } else {
+                    isToday(targetShield?.lastStreakUpdateTimestamp ?: 0L)
+                }
+
+                val mainAction = if (!packageToDisplay.isNullOrEmpty()) {
+                    val intent = Intent(context, MainActivity::class.java).apply {
+                        putExtra("package_name", packageToDisplay)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    actionStartActivity(intent)
+                } else {
+                    val intent = Intent(context, AppStreakWidgetConfigurationActivity::class.java).apply {
+                        putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    actionStartActivity(intent)
+                }
+                
+                val appLaunchIntent = packageToDisplay?.let {
+                    context.packageManager.getLaunchIntentForPackage(it)
+                }
+                val appAction = appLaunchIntent?.let { actionStartActivity(it) }
+
                 Box(
                     modifier = GlanceModifier.fillMaxSize()
                         .cornerRadius(24.dp)
-                        .clickable(
-                            if (!packageToDisplay.isNullOrEmpty()) {
-                                actionStartActivity<MainActivity>(
-                                    actionParametersOf(PACKAGE_NAME_KEY.to(packageToDisplay))
-                                )
-                            } else {
-                                actionStartActivity<AppStreakWidgetConfigurationActivity>(
-                                    if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-                                        actionParametersOf(EXTRA_WIDGET_ID_KEY.to(appWidgetId))
-                                    } else actionParametersOf()
-                                )
-                            }
-                        )
+                        .clickable(mainAction)
                 ) {
                     if (!packageToDisplay.isNullOrEmpty()) {
                         AppStreakContent(
                             icon = iconBitmap,
                             currentStreak = targetShield?.currentStreak ?: 0,
                             bestStreak = targetShield?.bestStreak ?: 0,
+                            isStreakAchieved = isStreakAchieved,
                             sunnyBitmap = sunnyBitmap,
                             cookieBitmap = cookieBitmap,
                             pillBitmap = pillBitmap,
-                            circleBitmap = circleBitmap
+                            circleBitmap = circleBitmap,
+                            onAppIconClick = appAction
                         )
                     } else {
                         Box(
@@ -137,6 +169,15 @@ class AppStreakWidget : GlanceAppWidget() {
                 }
             }
         }
+    }
+
+    private fun isToday(timestamp: Long): Boolean {
+        if (timestamp == 0L) return false
+        val cal = Calendar.getInstance()
+        val todayDay = cal.get(Calendar.DAY_OF_YEAR)
+        val todayYear = cal.get(Calendar.YEAR)
+        cal.timeInMillis = timestamp
+        return cal.get(Calendar.DAY_OF_YEAR) == todayDay && cal.get(Calendar.YEAR) == todayYear
     }
 
     private fun createShapeBitmap(
@@ -178,10 +219,12 @@ class AppStreakWidget : GlanceAppWidget() {
         icon: Bitmap?,
         currentStreak: Int,
         bestStreak: Int,
+        isStreakAchieved: Boolean,
         sunnyBitmap: Bitmap,
         cookieBitmap: Bitmap,
         pillBitmap: Bitmap,
-        circleBitmap: Bitmap
+        circleBitmap: Bitmap,
+        onAppIconClick: androidx.glance.action.Action?
     ) {
         val size = LocalSize.current
         val squareSize = minOf(size.width, size.height)
@@ -216,6 +259,10 @@ class AppStreakWidget : GlanceAppWidget() {
             GlanceTheme.colors.secondaryContainer
         }
 
+        val sunnyContainerColor = if (isStreakAchieved) GlanceTheme.colors.tertiary else GlanceTheme.colors.primary
+        val sunnyContentColor = if (isStreakAchieved) GlanceTheme.colors.tertiaryContainer else GlanceTheme.colors.primaryContainer
+        val fireIcon = if (isStreakAchieved) R.drawable.ic_check else R.drawable.ic_fire_department_outlined
+
         Box(
             modifier = GlanceModifier.fillMaxSize(),
             contentAlignment = Alignment.Center
@@ -235,7 +282,10 @@ class AppStreakWidget : GlanceAppWidget() {
                     modifier = GlanceModifier.fillMaxSize().padding(contentPadding),
                     contentAlignment = Alignment.BottomStart
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = if (onAppIconClick != null) GlanceModifier.clickable(onAppIconClick) else GlanceModifier,
+                        contentAlignment = Alignment.Center
+                    ) {
                         Image(
                             provider = ImageProvider(cookieBitmap),
                             contentDescription = null,
@@ -261,7 +311,7 @@ class AppStreakWidget : GlanceAppWidget() {
                             provider = ImageProvider(sunnyBitmap),
                             contentDescription = null,
                             modifier = GlanceModifier.size(containerSize),
-                            colorFilter = ColorFilter.tint(GlanceTheme.colors.primary)
+                            colorFilter = ColorFilter.tint(sunnyContainerColor)
                         )
                         Column(
                             modifier = GlanceModifier.size(containerSize).padding(top = (4 * scaleFactor).dp),
@@ -269,19 +319,20 @@ class AppStreakWidget : GlanceAppWidget() {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Image(
-                                provider = ImageProvider(R.drawable.ic_fire_department_outlined),
+                                provider = ImageProvider(fireIcon),
                                 contentDescription = null,
                                 modifier = GlanceModifier.size(fireSize),
-                                colorFilter = ColorFilter.tint(GlanceTheme.colors.primaryContainer)
+                                colorFilter = ColorFilter.tint(sunnyContentColor)
                             )
                             Text(
                                 text = currentStreak.toString(),
                                 style = TextStyle(
                                     fontSize = mainFontSize,
                                     fontWeight = FontWeight.Medium,
-                                    color = GlanceTheme.colors.primaryContainer,
+                                    color = sunnyContentColor,
                                     textAlign = TextAlign.Center
-                                )
+                                ),
+                                modifier = GlanceModifier.padding(top = (-2 * scaleFactor).dp)
                             )
                         }
                     }
@@ -317,7 +368,8 @@ class AppStreakWidget : GlanceAppWidget() {
                                     fontWeight = FontWeight.Medium,
                                     color = GlanceTheme.colors.onTertiary,
                                     textAlign = TextAlign.Center
-                                )
+                                ),
+                                modifier = GlanceModifier.padding(top = (-2 * scaleFactor).dp)
                             )
                         }
                     }
