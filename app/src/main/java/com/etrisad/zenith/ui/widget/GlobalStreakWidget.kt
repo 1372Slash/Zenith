@@ -12,9 +12,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
 import androidx.glance.*
+import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.layout.*
 import androidx.glance.state.GlanceStateDefinition
@@ -25,6 +29,7 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.toPath
+import com.etrisad.zenith.MainActivity
 import com.etrisad.zenith.R
 import com.etrisad.zenith.ZenithApplication
 
@@ -48,14 +53,21 @@ class GlobalStreakWidget : GlanceAppWidget() {
             val bestStreak = prefs?.globalBestStreak ?: 0
 
             GlanceTheme {
+                val mainAction = actionStartActivity(Intent(context, MainActivity::class.java))
                 if (prefs != null) {
-                    GlobalStreakContent(
-                        currentStreak = currentStreak,
-                        bestStreak = bestStreak,
-                        sunnyBitmap = sunnyBitmap,
-                        backgroundBitmap = backgroundBitmap,
-                        circleBitmap = circleBitmap
-                    )
+                    Box(
+                        modifier = GlanceModifier.fillMaxSize()
+                            .cornerRadius(100.dp)
+                            .clickable(mainAction)
+                    ) {
+                        GlobalStreakContent(
+                            currentStreak = currentStreak,
+                            bestStreak = bestStreak,
+                            sunnyBitmap = sunnyBitmap,
+                            backgroundBitmap = backgroundBitmap,
+                            circleBitmap = circleBitmap
+                        )
+                    }
                 } else {
                     Box(modifier = GlanceModifier.fillMaxSize()) {}
                 }

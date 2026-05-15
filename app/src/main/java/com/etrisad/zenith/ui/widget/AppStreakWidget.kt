@@ -45,6 +45,7 @@ import androidx.compose.runtime.getValue
 import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.action.clickable
+import androidx.glance.background
 import com.etrisad.zenith.MainActivity
 import com.etrisad.zenith.data.local.entity.FocusType
 import java.util.Calendar
@@ -144,7 +145,7 @@ class AppStreakWidget : GlanceAppWidget() {
 
                 Box(
                     modifier = GlanceModifier.fillMaxSize()
-                        .cornerRadius(24.dp)
+                        .cornerRadius(100.dp)
                         .clickable(mainAction)
                 ) {
                     if (!packageToDisplay.isNullOrEmpty()) {
