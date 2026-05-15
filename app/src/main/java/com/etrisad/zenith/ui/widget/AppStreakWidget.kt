@@ -264,7 +264,7 @@ class AppStreakWidget : GlanceAppWidget() {
         }
         val bestIconSize = (10 * scaleFactor).dp
 
-        val pillColor = GlanceTheme.colors.secondaryContainer
+        val pillColor = GlanceTheme.colors.widgetBackground
 
         val sunnyContainerColor = if (isStreakAchieved) GlanceTheme.colors.tertiary else GlanceTheme.colors.primary
         val sunnyContentColor = if (isStreakAchieved) GlanceTheme.colors.tertiaryContainer else GlanceTheme.colors.primaryContainer

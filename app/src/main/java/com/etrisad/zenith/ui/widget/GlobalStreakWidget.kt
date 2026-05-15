@@ -123,7 +123,7 @@ class GlobalStreakWidget : GlanceAppWidget() {
         }
         val bestIconSize = (10 * scaleFactor).dp
 
-        val backgroundColor = GlanceTheme.colors.secondaryContainer
+        val backgroundColor = GlanceTheme.colors.widgetBackground
 
         Box(
             modifier = GlanceModifier.fillMaxSize(),
