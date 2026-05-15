@@ -100,7 +100,7 @@ class AppStreakWidget : GlanceAppWidget() {
                 packageToDisplay?.let {
                     try {
                         val original = context.packageManager.getApplicationIcon(it).toBitmap()
-                        createShapeBitmap(context, 48, MaterialShapes.Cookie12Sided, sourceBitmap = original)
+                        createShapeBitmap(context, 120, MaterialShapes.Cookie12Sided, sourceBitmap = original)
                     } catch (_: Exception) {
                         null
                     }
@@ -108,10 +108,10 @@ class AppStreakWidget : GlanceAppWidget() {
             }
 
             val uiMode = context.resources.configuration.uiMode
-            val sunnyBitmap = remember(uiMode) { createShapeBitmap(context, 48, MaterialShapes.Sunny) }
-            val cookieBitmap = remember(uiMode) { createShapeBitmap(context, 48, MaterialShapes.Cookie12Sided) }
-            val pillBitmap = remember(uiMode) { createShapeBitmap(context, 200, MaterialShapes.Pill) }
-            val circleBitmap = remember(uiMode) { createShapeBitmap(context, 100, MaterialShapes.Circle) }
+            val sunnyBitmap = remember(uiMode) { createShapeBitmap(context, 120, MaterialShapes.Sunny) }
+            val cookieBitmap = remember(uiMode) { createShapeBitmap(context, 120, MaterialShapes.Cookie12Sided) }
+            val pillBitmap = remember(uiMode) { createShapeBitmap(context, 400, MaterialShapes.Pill) }
+            val circleBitmap = remember(uiMode) { createShapeBitmap(context, 120, MaterialShapes.Circle) }
 
             GlanceTheme {
                 val appWidgetId = remember { GlanceAppWidgetManager(context).getAppWidgetId(id) }
@@ -211,6 +211,7 @@ class AppStreakWidget : GlanceAppWidget() {
             color = Color.WHITE
             this.alpha = alpha
             isAntiAlias = true
+            isFilterBitmap = true
             style = Paint.Style.FILL
         }
         canvas.drawPath(path, paint)
@@ -297,7 +298,7 @@ class AppStreakWidget : GlanceAppWidget() {
                             provider = ImageProvider(cookieBitmap),
                             contentDescription = null,
                             modifier = GlanceModifier.size(containerSize),
-                            colorFilter = ColorFilter.tint(GlanceTheme.colors.secondaryContainer)
+                            colorFilter = ColorFilter.tint(GlanceTheme.colors.widgetBackground)
                         )
                         if (icon != null) {
                             Image(
