@@ -41,57 +41,66 @@ fun MultiAppPickerBottomSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
-        dragHandle = null
+        dragHandle = null,
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = screenHeight * 0.9f)
-                .navigationBarsPadding()
+                .windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top))
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 24.dp)
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = "Select Apps for Schedule",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 24.dp)
+                ) {
+                    Text(
+                        text = "Select Apps for Schedule",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
 
-                SearchBar(
-                    inputField = {
-                        SearchBarDefaults.InputField(
-                            query = uiState.searchQuery,
-                            onQueryChange = onSearchQueryChange,
-                            onSearch = { },
-                            expanded = false,
-                            onExpandedChange = {},
-                            placeholder = { Text("Search apps...") },
-                            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                            trailingIcon = {
-                                if (uiState.searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { onSearchQueryChange("") }) {
-                                        Icon(Icons.Outlined.Close, contentDescription = "Clear")
+                    SearchBar(
+                        inputField = {
+                            SearchBarDefaults.InputField(
+                                query = uiState.searchQuery,
+                                onQueryChange = onSearchQueryChange,
+                                onSearch = { },
+                                expanded = false,
+                                onExpandedChange = {},
+                                placeholder = { Text("Search apps...") },
+                                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                                trailingIcon = {
+                                    if (uiState.searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { onSearchQueryChange("") }) {
+                                            Icon(Icons.Outlined.Close, contentDescription = "Clear")
+                                        }
                                     }
                                 }
-                            }
-                        )
-                    },
-                    expanded = false,
-                    onExpandedChange = {},
-                    modifier = Modifier.fillMaxWidth(),
-                    content = {}
-                )
+                            )
+                        },
+                        expanded = false,
+                        onExpandedChange = {},
+                        modifier = Modifier.fillMaxWidth(),
+                        content = {}
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 LazyColumn(
                     modifier = Modifier.weight(1f, fill = false),
-                    contentPadding = PaddingValues(bottom = 100.dp),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 100.dp
+                    ),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     val allApps = (uiState.topApps + uiState.installedApps).distinctBy { it.packageName }
@@ -153,6 +162,7 @@ fun MultiAppPickerBottomSheet(
                 },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
                     .padding(24.dp),
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
