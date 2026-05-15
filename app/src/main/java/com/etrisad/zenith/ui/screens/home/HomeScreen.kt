@@ -50,6 +50,7 @@ import androidx.graphics.shapes.toPath
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonType
+import com.etrisad.zenith.ui.components.ZenithGroupedButton
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.ui.components.ShieldSortHeader
 import com.etrisad.zenith.ui.components.UsageHistoryCard
@@ -491,7 +492,6 @@ fun ScreenTimeTargetBottomSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(24.dp)
-                .padding(bottom = 32.dp)
                 .navigationBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -555,29 +555,36 @@ fun ScreenTimeTargetBottomSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            ZenithButton(
-                onClick = {
-                    scope.launch {
-                        sheetState.hide()
-                        onSave(hours * 60 + minutes)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                text = "Save Target"
-            )
+            ZenithGroupedButton {
+                if (initialMinutes > 0) {
+                    ZenithButton(
+                        onClick = {
+                            scope.launch {
+                                sheetState.hide()
+                                onSave(0)
+                            }
+                        },
+                        text = "Remove",
+                        type = ZenithButtonType.Tonal,
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        weight = 1f,
+                        isFirst = true,
+                        isLast = false
+                    )
+                }
 
-            if (initialMinutes > 0) {
                 ZenithButton(
                     onClick = {
                         scope.launch {
                             sheetState.hide()
-                            onSave(0)
+                            onSave(hours * 60 + minutes)
                         }
                     },
-                    modifier = Modifier.padding(top = 8.dp).fillMaxWidth(),
-                    text = "Remove Target",
-                    type = ZenithButtonType.Text,
-                    contentColor = MaterialTheme.colorScheme.error
+                    text = "Save Target",
+                    weight = 1.5f,
+                    isFirst = initialMinutes <= 0,
+                    isLast = true
                 )
             }
         }
