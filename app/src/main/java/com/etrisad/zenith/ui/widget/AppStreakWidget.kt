@@ -96,7 +96,7 @@ class AppStreakWidget : GlanceAppWidget() {
                 shields.find { it.packageName == packageToDisplay }
             }
             
-            val iconBitmap = remember(packageToDisplay) {
+            val iconBitmap = remember(packageToDisplay, context.resources.configuration.uiMode) {
                 packageToDisplay?.let {
                     try {
                         val original = context.packageManager.getApplicationIcon(it).toBitmap()
@@ -107,10 +107,11 @@ class AppStreakWidget : GlanceAppWidget() {
                 }
             }
 
-            val sunnyBitmap = remember { createShapeBitmap(context, 48, MaterialShapes.Sunny) }
-            val cookieBitmap = remember { createShapeBitmap(context, 48, MaterialShapes.Cookie12Sided) }
-            val pillBitmap = remember { createShapeBitmap(context, 200, MaterialShapes.Pill) }
-            val circleBitmap = remember { createShapeBitmap(context, 100, MaterialShapes.Circle) }
+            val uiMode = context.resources.configuration.uiMode
+            val sunnyBitmap = remember(uiMode) { createShapeBitmap(context, 48, MaterialShapes.Sunny) }
+            val cookieBitmap = remember(uiMode) { createShapeBitmap(context, 48, MaterialShapes.Cookie12Sided) }
+            val pillBitmap = remember(uiMode) { createShapeBitmap(context, 200, MaterialShapes.Pill) }
+            val circleBitmap = remember(uiMode) { createShapeBitmap(context, 100, MaterialShapes.Circle) }
 
             GlanceTheme {
                 val appWidgetId = remember { GlanceAppWidgetManager(context).getAppWidgetId(id) }
@@ -263,11 +264,7 @@ class AppStreakWidget : GlanceAppWidget() {
         }
         val bestIconSize = (10 * scaleFactor).dp
 
-        val pillColor = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ColorProvider(resId = android.R.color.system_accent2_50)
-        } else {
-            GlanceTheme.colors.secondaryContainer
-        }
+        val pillColor = GlanceTheme.colors.secondaryContainer
 
         val sunnyContainerColor = if (isStreakAchieved) GlanceTheme.colors.tertiary else GlanceTheme.colors.primary
         val sunnyContentColor = if (isStreakAchieved) GlanceTheme.colors.tertiaryContainer else GlanceTheme.colors.primaryContainer

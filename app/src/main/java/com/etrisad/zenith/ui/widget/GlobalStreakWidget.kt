@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialShapes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.*
@@ -35,11 +36,12 @@ class GlobalStreakWidget : GlanceAppWidget() {
         val app = context.applicationContext as ZenithApplication
         val repository = app.userPreferencesRepository
 
-        val sunnyBitmap = createShapeBitmap(context, 64, MaterialShapes.Sunny)
-        val backgroundBitmap = createShapeBitmap(context, 200, MaterialShapes.Cookie12Sided)
-        val circleBitmap = createShapeBitmap(context, 100, MaterialShapes.Circle)
-
         provideContent {
+            val uiMode = context.resources.configuration.uiMode
+            val sunnyBitmap = remember(uiMode) { createShapeBitmap(context, 64, MaterialShapes.Sunny) }
+            val backgroundBitmap = remember(uiMode) { createShapeBitmap(context, 200, MaterialShapes.Cookie12Sided) }
+            val circleBitmap = remember(uiMode) { createShapeBitmap(context, 100, MaterialShapes.Circle) }
+
             val prefs by repository.userPreferencesFlow.collectAsState(initial = null)
             
             val currentStreak = prefs?.globalCurrentStreak ?: 0
@@ -121,11 +123,7 @@ class GlobalStreakWidget : GlanceAppWidget() {
         }
         val bestIconSize = (10 * scaleFactor).dp
 
-        val backgroundColor = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ColorProvider(resId = android.R.color.system_accent2_50)
-        } else {
-            GlanceTheme.colors.secondaryContainer
-        }
+        val backgroundColor = GlanceTheme.colors.secondaryContainer
 
         Box(
             modifier = GlanceModifier.fillMaxSize(),
