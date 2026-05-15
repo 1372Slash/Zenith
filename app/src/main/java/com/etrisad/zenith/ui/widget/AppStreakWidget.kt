@@ -108,10 +108,10 @@ class AppStreakWidget : GlanceAppWidget() {
             }
 
             val uiMode = context.resources.configuration.uiMode
-            val sunnyBitmap = remember(uiMode) { createShapeBitmap(context, 120, MaterialShapes.Sunny) }
-            val cookieBitmap = remember(uiMode) { createShapeBitmap(context, 120, MaterialShapes.Cookie12Sided) }
-            val pillBitmap = remember(uiMode) { createShapeBitmap(context, 400, MaterialShapes.Pill) }
-            val circleBitmap = remember(uiMode) { createShapeBitmap(context, 120, MaterialShapes.Circle) }
+            val sunnyBitmap = remember(uiMode) { createShapeBitmap(context, 100, MaterialShapes.Sunny) }
+            val cookieBitmap = remember(uiMode) { createShapeBitmap(context, 100, MaterialShapes.Cookie12Sided) }
+            val pillBitmap = remember(uiMode) { createShapeBitmap(context, 200, MaterialShapes.Pill) }
+            val circleBitmap = remember(uiMode) { createShapeBitmap(context, 100, MaterialShapes.Circle) }
 
             GlanceTheme {
                 val appWidgetId = remember { GlanceAppWidgetManager(context).getAppWidgetId(id) }
@@ -240,7 +240,7 @@ class AppStreakWidget : GlanceAppWidget() {
     ) {
         val size = LocalSize.current
         val squareSize = minOf(size.width, size.height)
-        
+
         val scaleFactor = squareSize.value / 100f
         val containerSize = (44 * scaleFactor).dp
         val iconSize = (44 * scaleFactor).dp

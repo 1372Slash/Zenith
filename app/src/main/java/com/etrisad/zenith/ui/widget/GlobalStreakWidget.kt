@@ -38,12 +38,12 @@ class GlobalStreakWidget : GlanceAppWidget() {
 
         provideContent {
             val uiMode = context.resources.configuration.uiMode
-            val sunnyBitmap = remember(uiMode) { createShapeBitmap(context, 120, MaterialShapes.Sunny) }
-            val backgroundBitmap = remember(uiMode) { createShapeBitmap(context, 400, MaterialShapes.Cookie12Sided) }
-            val circleBitmap = remember(uiMode) { createShapeBitmap(context, 120, MaterialShapes.Circle) }
+            val sunnyBitmap = remember(uiMode) { createShapeBitmap(context, 100, MaterialShapes.Sunny) }
+            val backgroundBitmap = remember(uiMode) { createShapeBitmap(context, 200, MaterialShapes.Cookie12Sided) }
+            val circleBitmap = remember(uiMode) { createShapeBitmap(context, 100, MaterialShapes.Circle) }
 
             val prefs by repository.userPreferencesFlow.collectAsState(initial = null)
-            
+
             val currentStreak = prefs?.globalCurrentStreak ?: 0
             val bestStreak = prefs?.globalBestStreak ?: 0
 
