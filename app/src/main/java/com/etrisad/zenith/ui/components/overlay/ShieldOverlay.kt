@@ -273,6 +273,25 @@ fun ShieldOverlay(
     val currentOnCloseApp by rememberUpdatedState(onCloseApp)
     val currentOnGoalDismiss by rememberUpdatedState(onGoalDismiss)
 
+    if (currentShield?.type == FocusType.GOAL) {
+        GoalOverlay(
+            packageName = packageName,
+            appName = appName,
+            shield = currentShield,
+            totalUsageToday = currentTotalUsageToday,
+            totalGlobalUsageToday = currentTotalGlobalUsageToday,
+            userPrefs = userPrefs,
+            onGoalDismiss = {
+                scope.launch {
+                    showContent = false
+                    delay(400)
+                    currentOnGoalDismiss()
+                }
+            }
+        )
+        return
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -350,13 +369,6 @@ fun ShieldOverlay(
                                 delay(400)
                                 currentOnCloseApp()
                             }
-                        },
-                        onGoalDismiss = {
-                            scope.launch {
-                                showContent = false
-                                delay(400)
-                                currentOnGoalDismiss()
-                            }
                         }
                     )
                 } else {
@@ -394,13 +406,6 @@ fun ShieldOverlay(
                                 delay(400)
                                 currentOnCloseApp()
                             }
-                        },
-                        onGoalDismiss = {
-                            scope.launch {
-                                showContent = false
-                                delay(400)
-                                currentOnGoalDismiss()
-                            }
                         }
                     )
                 }
@@ -433,8 +438,7 @@ fun PortraitInterceptLayout(
     onEmergencyClick: () -> Unit,
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
     onAllowUse: (Int) -> Unit,
-    onCloseApp: () -> Unit,
-    onGoalDismiss: () -> Unit
+    onCloseApp: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxWidth()) {
         if (shield != null && shield.type == FocusType.SHIELD) {
@@ -514,7 +518,7 @@ fun PortraitInterceptLayout(
                     )
                 } else {
                     Icon(
-                        if (shield?.type == FocusType.GOAL) Icons.Outlined.Flag else Icons.Outlined.Block,
+                        Icons.Outlined.Block,
                         contentDescription = null,
                         modifier = Modifier.size(48.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -525,7 +529,7 @@ fun PortraitInterceptLayout(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = if (shield?.type == FocusType.GOAL) "Goal Pursuit" else "Mindful Pause",
+                text = "Mindful Pause",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold
@@ -541,37 +545,31 @@ fun PortraitInterceptLayout(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = if (shield?.type == FocusType.GOAL)
-                    "You're working towards your usage goal."
-                    else "Zenith Shield is active for this app.",
+                text = "Zenith Shield is active for this app.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            if (shield != null && shield.type == FocusType.GOAL) {
-                GoalSection(shield, totalUsageToday, totalGlobalUsageToday, userPrefs, onGoalDismiss)
-            } else {
-                ShieldSection(
-                    shield = shield,
-                    remainingMinutes = remainingMinutes,
-                    totalUsageToday = totalUsageToday,
-                    totalGlobalUsageToday = totalGlobalUsageToday,
-                    userPrefs = userPrefs,
-                    isEmergencyUnlocked = isEmergencyUnlocked,
-                    isDelaying = isDelaying,
-                    randomMessage = randomMessage,
-                    delayProgressAnimatable = delayProgressAnimatable,
-                    delayDurationSeconds = delayDurationSeconds,
-                    isUsesExceeded = isUsesExceeded,
-                    isTimeLimitReached = isTimeLimitReached,
-                    refreshTimeLeftMillis = refreshTimeLeftMillis,
-                    autoKickProgress = autoKickProgress,
-                    onEmergencyClick = onEmergencyClick,
-                    onEmergencyHoldingChange = onEmergencyHoldingChange,
-                    onAllowUse = onAllowUse,
-                    onCloseApp = onCloseApp
-                )
-            }
+            ShieldSection(
+                shield = shield,
+                remainingMinutes = remainingMinutes,
+                totalUsageToday = totalUsageToday,
+                totalGlobalUsageToday = totalGlobalUsageToday,
+                userPrefs = userPrefs,
+                isEmergencyUnlocked = isEmergencyUnlocked,
+                isDelaying = isDelaying,
+                randomMessage = randomMessage,
+                delayProgressAnimatable = delayProgressAnimatable,
+                delayDurationSeconds = delayDurationSeconds,
+                isUsesExceeded = isUsesExceeded,
+                isTimeLimitReached = isTimeLimitReached,
+                refreshTimeLeftMillis = refreshTimeLeftMillis,
+                autoKickProgress = autoKickProgress,
+                onEmergencyClick = onEmergencyClick,
+                onEmergencyHoldingChange = onEmergencyHoldingChange,
+                onAllowUse = onAllowUse,
+                onCloseApp = onCloseApp
+            )
         }
     }
 }
@@ -601,8 +599,7 @@ fun LandscapeInterceptLayout(
     onEmergencyClick: () -> Unit,
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
     onAllowUse: (Int) -> Unit,
-    onCloseApp: () -> Unit,
-    onGoalDismiss: () -> Unit
+    onCloseApp: () -> Unit
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -680,7 +677,7 @@ fun LandscapeInterceptLayout(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = if (shield?.type == FocusType.GOAL) "Goal Pursuit" else "Mindful Pause",
+                    text = "Mindful Pause",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -689,9 +686,7 @@ fun LandscapeInterceptLayout(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = if (shield?.type == FocusType.GOAL)
-                        "You're working towards your usage goal."
-                    else "Zenith Shield is active for this app.",
+                    text = "Zenith Shield is active for this app.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -699,11 +694,7 @@ fun LandscapeInterceptLayout(
 
                 if (shield != null) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    if (shield.type == FocusType.GOAL) {
-                        GoalProgressMini(shield, totalUsageToday, totalGlobalUsageToday, userPrefs)
-                    } else {
-                        ShieldProgressMini(shield, totalUsageToday, totalGlobalUsageToday, userPrefs)
-                    }
+                    ShieldProgressMini(shield, totalUsageToday, totalGlobalUsageToday, userPrefs)
                 }
             }
 
@@ -714,154 +705,29 @@ fun LandscapeInterceptLayout(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                if (shield != null && shield.type == FocusType.GOAL) {
-                    GoalLandscapeContent(onGoalDismiss)
-                } else {
-                    ShieldLandscapeContent(
-                        shield = shield,
-                        remainingMinutes = remainingMinutes,
-                        totalUsageToday = totalUsageToday,
-                        isEmergencyUnlocked = isEmergencyUnlocked,
-                        isDelaying = isDelaying,
-                        randomMessage = randomMessage,
-                        delayProgressAnimatable = delayProgressAnimatable,
-                        delayDurationSeconds = delayDurationSeconds,
-                        isUsesExceeded = isUsesExceeded,
-                        isTimeLimitReached = isTimeLimitReached,
-                        refreshTimeLeftMillis = refreshTimeLeftMillis,
-                        autoKickProgress = autoKickProgress,
-                        onEmergencyClick = onEmergencyClick,
-                        onEmergencyHoldingChange = onEmergencyHoldingChange,
-                        onAllowUse = onAllowUse,
-                        onCloseApp = onCloseApp
-                    )
-                }
+                ShieldLandscapeContent(
+                    shield = shield,
+                    remainingMinutes = remainingMinutes,
+                    totalUsageToday = totalUsageToday,
+                    isEmergencyUnlocked = isEmergencyUnlocked,
+                    isDelaying = isDelaying,
+                    randomMessage = randomMessage,
+                    delayProgressAnimatable = delayProgressAnimatable,
+                    delayDurationSeconds = delayDurationSeconds,
+                    isUsesExceeded = isUsesExceeded,
+                    isTimeLimitReached = isTimeLimitReached,
+                    refreshTimeLeftMillis = refreshTimeLeftMillis,
+                    autoKickProgress = autoKickProgress,
+                    onEmergencyClick = onEmergencyClick,
+                    onEmergencyHoldingChange = onEmergencyHoldingChange,
+                    onAllowUse = onAllowUse,
+                    onCloseApp = onCloseApp
+                )
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-fun GoalSection(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageToday: Long, userPrefs: UserPreferences, onGoalDismiss: () -> Unit) {
-    val targetLimitMillis = shield.timeLimitMinutes * 60 * 1000L
-    val progress = if (targetLimitMillis > 0) totalUsageToday.toFloat() / targetLimitMillis else 0f
-    val remainingMillis = (targetLimitMillis - totalUsageToday).coerceAtLeast(0L)
-
-    val estimateTime = remember(remainingMillis) {
-        val finishTime = System.currentTimeMillis() + remainingMillis
-        SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(finishTime))
-    }
-
-    val motivationText = remember(progress) {
-        when {
-            progress < 0.3f -> "Great start! Keep going."
-            progress < 0.6f -> "You're halfway there! Stay focused."
-            progress < 0.9f -> "Almost finished! You can do it."
-            else -> "Just a little more to go!"
-        }
-    }
-
-    Spacer(modifier = Modifier.height(16.dp))
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "${(progress * 100).toInt()}% Done",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.align(Alignment.CenterStart)
-            )
-            TotalUsagePill(totalGlobalUsageToday, userPrefs)
-            Text(
-                text = "Target: ${shield.timeLimitMinutes}m",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.CenterEnd)
-            )
-        }
-
-        val animatedProgressState = animateFloatAsState(
-            targetValue = progress.coerceIn(0f, 1f),
-            animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
-            label = "goalProgress"
-        )
-        LinearWavyProgressIndicator(
-            progress = { animatedProgressState.value },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
-                .height(10.dp),
-            color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-            wavelength = 40.dp
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Outlined.Timer,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = "Estimated finish: $estimateTime",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-
-    Spacer(modifier = Modifier.height(24.dp))
-
-    Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Outlined.Lightbulb,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = motivationText,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-        }
-    }
-
-    Spacer(modifier = Modifier.height(24.dp))
-
-    Button(
-        onClick = onGoalDismiss,
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.CheckCircle, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Got it, let's continue", fontWeight = FontWeight.Bold)
-        }
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -974,44 +840,6 @@ fun ShieldSection(
     CloseAppTextButton(onCloseApp, autoKickProgress)
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-fun GoalProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageToday: Long, userPrefs: UserPreferences) {
-    val targetLimitMillis = shield.timeLimitMinutes * 60 * 1000L
-    val progress = if (targetLimitMillis > 0) totalUsageToday.toFloat() / targetLimitMillis else 0f
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "${(progress * 100).toInt()}%",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.align(Alignment.CenterStart)
-            )
-            TotalUsagePill(totalGlobalUsageToday, userPrefs)
-            Text(
-                text = "${shield.timeLimitMinutes}m",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.CenterEnd)
-            )
-        }
-        LinearWavyProgressIndicator(
-            progress = { progress.coerceIn(0f, 1f) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
-                .height(10.dp),
-            color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-            wavelength = 40.dp
-        )
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -1052,36 +880,6 @@ fun ShieldProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalU
     }
 }
 
-@Composable
-fun GoalLandscapeContent(onGoalDismiss: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxWidth().fillMaxHeight(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Spacer(modifier = Modifier.weight(1f))
-        Icon(
-            Icons.Outlined.CheckCircle,
-            contentDescription = null,
-            modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Keep it up!",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.weight(1f))
-        Button(
-            onClick = onGoalDismiss,
-            modifier = Modifier.fillMaxWidth(0.8f),
-            shape = MaterialTheme.shapes.large
-        ) {
-            Text("Continue", fontWeight = FontWeight.Bold)
-        }
-    }
-}
 
 @Composable
 fun ShieldLandscapeContent(
