@@ -860,8 +860,8 @@ class HomeViewModel(
         }
     }
 
-    fun loadAppDetail(packageName: String) {
-        if (_appDetailUiState.value.packageName == packageName && appDetailJob?.isActive == true) return
+    fun loadAppDetail(packageName: String, forceRefresh: Boolean = false) {
+        if (!forceRefresh && _appDetailUiState.value.packageName == packageName && appDetailJob?.isActive == true) return
         
         val isNewPackage = _appDetailUiState.value.packageName != packageName
         appDetailJob?.cancel()

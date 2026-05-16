@@ -14,6 +14,8 @@ import androidx.compose.material.icons.automirrored.outlined.TrendingDown
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +46,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.components.UsageHistoryCard
+import com.etrisad.zenith.ui.components.ZenithContainedLoadingIndicator
 import com.etrisad.zenith.ui.components.focus.GoalSettingsBottomSheet
 import com.etrisad.zenith.ui.components.focus.ShieldSettingsBottomSheet
 import com.etrisad.zenith.ui.viewmodel.AppInfo
@@ -53,6 +56,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppDetailScreen(
     packageName: String,
@@ -84,16 +88,57 @@ fun AppDetailScreen(
     val targetMillis = shield?.timeLimitMinutes?.let { it * 60 * 1000L } ?: 0L
 
     var selectedHour by remember { mutableStateOf<Int?>(null) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val pullToRefreshState = rememberPullToRefreshState()
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(
-            top = innerPadding.calculateTopPadding() + 16.dp,
-            bottom = innerPadding.calculateBottomPadding() + 32.dp
-        )
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            scope.launch {
+                isRefreshing = true
+                viewModel.loadAppDetail(packageName, forceRefresh = true)
+                delay(500)
+                isRefreshing = false
+            }
+        },
+        state = pullToRefreshState,
+        indicator = {
+            val scale by animateFloatAsState(
+                targetValue = if (isRefreshing) 1f else pullToRefreshState.distanceFraction.coerceIn(0f, 1f),
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessLow
+                ),
+                label = "LoadingIndicatorScale"
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = innerPadding.calculateTopPadding() + 16.dp),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                ZenithContainedLoadingIndicator(
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        alpha = scale.coerceIn(0f, 1f)
+                    }
+                )
+            }
+        },
+        modifier = Modifier.fillMaxSize()
     ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(
+                top = innerPadding.calculateTopPadding() + 16.dp,
+                bottom = innerPadding.calculateBottomPadding() + 32.dp
+            )
+        ) {
             item {
                 AppHeader(
                     appName = uiState.appName,
@@ -275,7 +320,8 @@ fun AppDetailScreen(
                     }
                 }
             }
-     }
+        }
+    }
 
     if (uiState.isSettingsSheetOpen) {
         val appInfo = AppInfo(uiState.packageName, uiState.appName, uiState.icon)
