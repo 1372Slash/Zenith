@@ -49,6 +49,7 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.graphics.shapes.toPath
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.ui.components.ZenithButton
+import com.etrisad.zenith.ui.components.ZenithButtonWeighted
 import com.etrisad.zenith.ui.components.ZenithButtonType
 import com.etrisad.zenith.ui.components.ZenithGroupedButton
 import com.etrisad.zenith.data.local.entity.ShieldEntity
@@ -559,7 +560,7 @@ fun ScreenTimeTargetBottomSheet(
 
             ZenithGroupedButton {
                 if (initialMinutes > 0) {
-                    ZenithButton(
+                    ZenithButtonWeighted(
                         onClick = {
                             scope.launch {
                                 sheetState.hide()
@@ -576,7 +577,7 @@ fun ScreenTimeTargetBottomSheet(
                     )
                 }
 
-                ZenithButton(
+                ZenithButtonWeighted(
                     onClick = {
                         scope.launch {
                             sheetState.hide()

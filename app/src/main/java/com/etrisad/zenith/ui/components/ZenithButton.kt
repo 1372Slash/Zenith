@@ -26,7 +26,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -87,7 +86,7 @@ fun ZenithButton(
     isLast: Boolean = true,
     content: @Composable (RowScope.() -> Unit)? = null
 ) {
-    ZenithButtonInternal(
+    ZenithButtonImpl(
         onClick = onClick,
         modifier = modifier,
         type = type,
@@ -118,7 +117,7 @@ fun ZenithButton(
 }
 
 @Composable
-fun RowScope.ZenithButton(
+fun RowScope.ZenithButtonWeighted(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     weight: Float = 1f,
@@ -157,7 +156,7 @@ fun RowScope.ZenithButton(
         label = "wAnim"
     )
 
-    ZenithButtonInternal(
+    ZenithButton(
         onClick = onClick,
         modifier = modifier.weight(animatedWeight),
         type = type,
@@ -172,15 +171,15 @@ fun RowScope.ZenithButton(
         fillMaxWidth = false,
         containerColor = containerColor,
         contentColor = contentColor,
-        pillCornerRadiusOverride = pillCornerRadius,
-        pressedCornerRadiusOverride = pressedCornerRadius,
-        heightOverride = height,
+        pillCornerRadius = pillCornerRadius,
+        pressedCornerRadius = pressedCornerRadius,
+        height = height,
         selected = selected,
         onHoldComplete = onHoldComplete,
         holdDuration = holdDuration,
         enableAfterDelayMillis = enableAfterDelayMillis,
         interactionSource = interactionSource,
-        customShape = shape,
+        shape = shape,
         isFirst = isFirst,
         isLast = isLast,
         content = content
@@ -189,7 +188,7 @@ fun RowScope.ZenithButton(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun ZenithButtonInternal(
+private fun ZenithButtonImpl(
     onClick: () -> Unit,
     modifier: Modifier,
     type: ZenithButtonType,
@@ -207,14 +206,14 @@ private fun ZenithButtonInternal(
     pillCornerRadiusOverride: Dp?,
     pressedCornerRadiusOverride: Dp?,
     heightOverride: Dp?,
-    selected: Boolean = false,
+    selected: Boolean,
     onHoldComplete: (() -> Unit)?,
     holdDuration: Long,
     enableAfterDelayMillis: Long,
     interactionSource: MutableInteractionSource,
-    isFirst: Boolean = true,
-    isLast: Boolean = true,
-    customShape: Shape? = null,
+    isFirst: Boolean,
+    isLast: Boolean,
+    customShape: Shape?,
     content: @Composable (RowScope.() -> Unit)?
 ) {
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -301,20 +300,19 @@ private fun ZenithButtonInternal(
     )
 
     LaunchedEffect(isPressed) {
-        if (isHoldAction && enabled && !isLoading && !isDelaying) {
-            if (isPressed) {
+        if (isPressed && enabled && !isLoading && !isDelaying) {
+            try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (e: Exception) { e.printStackTrace() }
+            if (isHoldAction) {
                 if (holdAnim.animateTo(1f, tween(holdDuration.toInt(), easing = LinearEasing)).endReason == AnimationEndReason.Finished && curPressed) {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (e: Exception) { e.printStackTrace() }
                     onHoldComplete?.invoke()
                     holdAnim.snapTo(0f)
                 }
-            } else { 
-                holdAnim.animateTo(0f, spring(stiffness = Spring.StiffnessMedium)) 
             }
+        } else if (!isPressed && isHoldAction) {
+            holdAnim.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
         }
     }
-
-    LaunchedEffect(isPressed) { if (isPressed) haptic.performHapticFeedback(HapticFeedbackType.LongPress) }
 
     val fShape = customShape ?: RoundedCornerShape(
         topStart = if (isFirst) animR else animInnerR,
@@ -461,14 +459,26 @@ fun ZenithToggleButtonGroup(
             val isSelected = selectedIndices.contains(index)
             val interactionSource = remember { MutableInteractionSource() }
             val isPressed by interactionSource.collectIsPressedAsState()
+            
+            val animatedWeight by animateFloatAsState(
+                targetValue = when {
+                    isPressed -> option.weight * 1.4f
+                    isSelected -> option.weight * 1.2f
+                    else -> option.weight
+                },
+                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
+                label = "wAnim_$index"
+            )
+
             val baseR = resH / 2
             val smallR = resH * 0.2f
             val startR by animateDpAsState(targetValue = if (isPressed) baseR * 0.6f else if (isSelected || index == 0) baseR else smallR)
             val endR by animateDpAsState(targetValue = if (isPressed) baseR * 0.6f else if (isSelected || index == options.size - 1) baseR else smallR)
             val currentType = if (isSelected) (option.selectedType ?: ZenithButtonType.Filled) else (option.type ?: ZenithButtonType.Tonal)
+            
             ZenithButton(
                 onClick = { onToggle(index) },
-                weight = option.weight,
+                modifier = Modifier.weight(animatedWeight),
                 type = currentType,
                 size = size,
                 text = option.text,
