@@ -359,15 +359,15 @@ fun UsageDashboard(
             modifier = Modifier.padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
+            Box(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                contentAlignment = Alignment.Center
             ) {
                 if (preferences.screenTimeTargetMinutes > 0) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
+                            .align(Alignment.CenterStart)
                             .background(
                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
                                 CircleShape
@@ -388,17 +388,19 @@ fun UsageDashboard(
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
-                } else {
-                    Spacer(modifier = Modifier.width(32.dp))
                 }
+
                 Text(
                     text = "Daily Screen Time",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+
                 IconButton(
                     onClick = { showTargetSheet = true },
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .size(32.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Edit,
