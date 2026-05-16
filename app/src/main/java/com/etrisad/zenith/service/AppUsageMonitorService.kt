@@ -99,6 +99,9 @@ class AppUsageMonitorService : Service() {
     private var usageStatsCache: List<android.app.usage.UsageStats>? = null
     private var lastUsageCacheTime = 0L
 
+    private var lastMonitoringError: String? = null
+    private var lastMonitoringErrorTime = 0L
+
     private val screenStateReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
             when (intent?.action) {
@@ -163,7 +166,6 @@ class AppUsageMonitorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d("ZenithAUMS", "AppUsageMonitorService created")
         val app = application as com.etrisad.zenith.ZenithApplication
         shieldRepository = app.shieldRepository
         preferencesRepository = UserPreferencesRepository(this)
@@ -605,7 +607,12 @@ class AppUsageMonitorService : Service() {
                     
                     lastForegroundApp = currentApp
                 } catch (e: Exception) {
-                    Log.e("ZenithAUMS", "Error in monitoring loop", e)
+                    val currentTime = System.currentTimeMillis()
+                    if (e.message != lastMonitoringError || currentTime - lastMonitoringErrorTime > 30000) {
+                        Log.e("ZenithAUMS", "Error in monitoring loop: ${e.message}", e)
+                        lastMonitoringError = e.message
+                        lastMonitoringErrorTime = currentTime
+                    }
                 }
 
                 val delayTime = if (currentPreferences?.customDelayEnabled == true) {

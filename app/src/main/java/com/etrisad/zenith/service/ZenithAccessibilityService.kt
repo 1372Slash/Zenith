@@ -71,6 +71,9 @@ class ZenithAccessibilityService : AccessibilityService() {
     private var lastCheckedDay = -1
     private var lastCheckedDayTimestamp = 0L
 
+    private var lastMonitoringError: String? = null
+    private var lastMonitoringErrorTime = 0L
+
     private var lastKickTime = 0L
     private var lastKickedPackage: String? = null
 
@@ -105,7 +108,6 @@ class ZenithAccessibilityService : AccessibilityService() {
         instance = this
         isServiceRunning = true
         lastEventTime = System.currentTimeMillis()
-        Log.d("ZenithAS", "Accessibility Service connected")
         
         val app = application as com.etrisad.zenith.ZenithApplication
         shieldRepository = app.shieldRepository
@@ -165,7 +167,12 @@ class ZenithAccessibilityService : AccessibilityService() {
                 try {
                     handlePackageChange(packageName)
                 } catch (e: Exception) {
-                    Log.e("ZenithAS", "Error in handlePackageChange", e)
+                    val currentTime = System.currentTimeMillis()
+                    if (e.message != lastMonitoringError || currentTime - lastMonitoringErrorTime > 30000) {
+                        Log.e("ZenithAS", "Error in handlePackageChange: ${e.message}", e)
+                        lastMonitoringError = e.message
+                        lastMonitoringErrorTime = currentTime
+                    }
                 }
             }
         }
@@ -210,7 +217,6 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun handlePackageChange(currentApp: String) {
-        Log.d("ZenithAS", "handlePackageChange: $currentApp")
         
         var localSessionStartTime = sessionStartTime
         var localBaseUsage = baseUsageAtSessionStart

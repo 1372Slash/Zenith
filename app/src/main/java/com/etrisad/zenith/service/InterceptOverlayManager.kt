@@ -365,6 +365,9 @@ class InterceptOverlayManager(
         setupAndAddView(composeView, lOwner)
     }
 
+    private var lastOverlayError: String? = null
+    private var lastOverlayErrorTime = 0L
+
     private fun setupAndAddView(composeView: ComposeView, lOwner: MyLifecycleOwner) {
         val vStore = viewModelStore ?: return
 
@@ -417,9 +420,13 @@ class InterceptOverlayManager(
 
             lOwner.handleLifecycleEvent(Lifecycle.Event.ON_START)
             lOwner.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
-            Log.d(TAG, "Overlay added to window for $currentPackage")
         } catch (e: Exception) {
-            Log.e(TAG, "Error adding overlay for $currentPackage", e)
+            val currentTime = System.currentTimeMillis()
+            if (e.message != lastOverlayError || currentTime - lastOverlayErrorTime > 30000) {
+                Log.e(TAG, "Error adding overlay for $currentPackage: ${e.message}", e)
+                lastOverlayError = e.message
+                lastOverlayErrorTime = currentTime
+            }
             isShowing = false
             currentPackage = null
         }
@@ -448,7 +455,6 @@ class InterceptOverlayManager(
         }
 
         val view = overlayView
-        Log.d(TAG, "Hiding overlay for $target")
         if (view != null) {
             try {
                 lifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
@@ -457,11 +463,15 @@ class InterceptOverlayManager(
                 
                 view.disposeComposition()
                 windowManager.removeViewImmediate(view)
-                Log.d(TAG, "Overlay removed for $target")
                 
                 viewModelStore?.clear()
             } catch (e: Exception) {
-                Log.e(TAG, "Error removing overlay for $target", e)
+                val currentTime = System.currentTimeMillis()
+                if (e.message != lastOverlayError || currentTime - lastOverlayErrorTime > 30000) {
+                    Log.e(TAG, "Error removing overlay for $target: ${e.message}", e)
+                    lastOverlayError = e.message
+                    lastOverlayErrorTime = currentTime
+                }
             } finally {
                 overlayView = null
                 lifecycleOwner = null
