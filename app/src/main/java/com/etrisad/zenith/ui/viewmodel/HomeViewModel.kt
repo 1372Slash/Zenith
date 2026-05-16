@@ -157,17 +157,20 @@ class HomeViewModel(
         
         val groups = mutableListOf<UsageHistoryGroup>()
         val cal = Calendar.getInstance()
+        
+        val dbRecordsByDate = dbList.groupBy { it.date }
+        val hourlyDatesSet = hourlyDates.toSet()
 
         while (!cal.before(earliestCal)) {
             val dateStr = dateFormat.format(cal.time)
             val isToday = dateStr == todayStr
             
-            val dbRecords = dbList.filter { it.date == dateStr }
+            val dbRecords = dbRecordsByDate[dateStr] ?: emptyList()
             val dbTotal = dbRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
             val systemRecords = if (preferSystemUsageHistory || isToday) globalFallbackMap[dateStr] ?: emptyList() else emptyList()
             val systemTotal = if (preferSystemUsageHistory || isToday) systemRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L else 0L
             
-            val hasHourly = hourlyDates.contains(dateStr)
+            val hasHourly = hourlyDatesSet.contains(dateStr)
             val hasSnap = dbRecords.any { it.packageName != "TOTAL" && it.packageName != "SHIELD_TOTAL" && it.packageName != "GOAL_TOTAL" && it.packageName != "OTHER_TOTAL" }
             val hasPiechart = dbRecords.any { it.packageName == "SHIELD_TOTAL" || it.packageName == "GOAL_TOTAL" || it.packageName == "OTHER_TOTAL" }
             
@@ -248,7 +251,7 @@ class HomeViewModel(
             cal.add(Calendar.DAY_OF_YEAR, -1)
         }
         groups
-    }
+    }.flowOn(kotlinx.coroutines.Dispatchers.Default)
 
     val repairableData: Flow<List<UsageHistoryGroup>> = fullUsageHistory.map { groups ->
         groups.filter { (it.isMissing || !it.hasDatabaseRecord) && it.hasSystemData && !it.isLive }
