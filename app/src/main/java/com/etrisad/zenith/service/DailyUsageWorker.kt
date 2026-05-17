@@ -65,7 +65,6 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val launcherPackage = pm.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
         val excludePackages = setOfNotNull(applicationContext.packageName, launcherPackage)
 
-        // Use system aggregate stats as baseline for accuracy
         val stats = usm.queryAndAggregateUsageStats(startTime, endTime)
         stats.forEach { (pkg, stat) ->
             if (pkg !in excludePackages && pkg in launcherApps) {
@@ -143,7 +142,6 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
             }
         }
 
-        // Also check shields but only to potentially INCREASE the value if our tracking was more aggressive
         if (isDateToday) {
             allShields.forEach { shield ->
                 val usageFromShield = (shield.timeLimitMinutes * 60 * 1000L - shield.remainingTimeMillis).coerceAtLeast(0L)

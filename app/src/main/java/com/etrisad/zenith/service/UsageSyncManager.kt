@@ -5,11 +5,12 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.PowerManager
 import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -18,19 +19,22 @@ class UsageSyncManager(
     private val repository: ShieldRepository,
     private val preferencesRepository: UserPreferencesRepository
 ) {
+    companion object {
+        private val syncMutex = Mutex()
+    }
+
     private val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
     private data class UsageChunk(val packageName: String, var duration: Long)
 
-    suspend fun syncUsageData() {
+    suspend fun syncUsageData() = syncMutex.withLock {
         val lastSyncTime = preferencesRepository.userPreferencesFlow.first().lastSyncTimestamp
         val currentTime = System.currentTimeMillis()
         
-        if (currentTime - lastSyncTime < 30000) return 
+        if (currentTime - lastSyncTime < 30000) return@withLock
 
         val pm = context.packageManager
-        val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         
         val startOfToday = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
@@ -39,7 +43,6 @@ class UsageSyncManager(
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
 
-        // Start query from 1 hour before lastSyncTime to catch the active session at that time
         val queryStart = maxOf(startOfToday, lastSyncTime - (60 * 60 * 1000L))
         val events = usageStatsManager.queryEvents(queryStart, currentTime)
         val event = UsageEvents.Event()
@@ -55,8 +58,6 @@ class UsageSyncManager(
         val activeSessions = mutableMapOf<String, Long>()
         val hourlyBuckets = mutableMapOf<String, MutableMap<Int, MutableList<UsageChunk>>>()
 
-        var isScreenOn = powerManager.isInteractive
-
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
             val pkg = event.packageName
@@ -64,9 +65,7 @@ class UsageSyncManager(
             val type = event.eventType
 
             when (type) {
-                UsageEvents.Event.SCREEN_INTERACTIVE -> isScreenOn = true
                 UsageEvents.Event.SCREEN_NON_INTERACTIVE -> {
-                    isScreenOn = false
                     activeSessions.forEach { (p, start) ->
                         val segmentStart = maxOf(start, lastSyncTime)
                         val segmentEnd = minOf(time, currentTime)
@@ -77,7 +76,7 @@ class UsageSyncManager(
                     activeSessions.clear()
                 }
                 UsageEvents.Event.MOVE_TO_FOREGROUND, UsageEvents.Event.ACTIVITY_RESUMED -> {
-                    if (isScreenOn && pkg !in excludePackages && pkg in launcherApps) {
+                    if (pkg !in excludePackages && pkg in launcherApps) {
                         val className = event.className ?: ""
                         if (!className.contains("Notification", ignoreCase = true) &&
                             !className.contains("Toast", ignoreCase = true)) {
@@ -131,12 +130,11 @@ class UsageSyncManager(
             val dateStr = dateFormat.format(cal.time)
             val hour = cal.get(Calendar.HOUR_OF_DAY)
             
-            val nextHourStart = (cal.clone() as Calendar).apply {
-                add(Calendar.HOUR_OF_DAY, 1)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
+            cal.add(Calendar.HOUR_OF_DAY, 1)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            val nextHourStart = cal.timeInMillis
 
             val chunkEnd = minOf(end, nextHourStart)
             val duration = chunkEnd - current
@@ -157,9 +155,10 @@ class UsageSyncManager(
         val limit = 3600000L
         val finalEntities = mutableListOf<HourlyUsageEntity>()
         val carryOver = mutableListOf<UsageChunk>()
-        val sortedDates = buckets.keys.sorted().toMutableList()
         
+        val sortedDates = buckets.keys.sorted().toMutableList()
         var dateIdx = 0
+        
         while (dateIdx < sortedDates.size || carryOver.isNotEmpty()) {
             val date = if (dateIdx < sortedDates.size) {
                 sortedDates[dateIdx]
@@ -175,10 +174,13 @@ class UsageSyncManager(
             dateIdx++
 
             val existingRecords = repository.getHourlyUsageForDate(date).first()
+            val existingMap = existingRecords.associateBy { it.hour to it.packageName }
             val dayBuckets = buckets[date] ?: mutableMapOf()
 
             for (hour in 0..23) {
                 val newChunks = dayBuckets[hour] ?: mutableListOf()
+                if (newChunks.isEmpty() && carryOver.isEmpty()) continue
+
                 val combined = mutableListOf<UsageChunk>()
                 combined.addAll(carryOver)
                 carryOver.clear()
@@ -214,7 +216,7 @@ class UsageSyncManager(
                 var hourTotalIncrement = 0L
                 appsToSave.forEach { (pkg, duration) ->
                     if (duration <= 0) return@forEach
-                    val existing = existingRecords.find { it.hour == hour && it.packageName == pkg }
+                    val existing = existingMap[hour to pkg]
                     val totalDuration = (existing?.usageTimeMillis ?: 0L) + duration
                     hourTotalIncrement += duration
 
@@ -231,7 +233,7 @@ class UsageSyncManager(
                 }
 
                 if (hourTotalIncrement > 0) {
-                    val existingTotalRec = existingRecords.find { it.hour == hour && it.packageName == "TOTAL" }
+                    val existingTotalRec = existingMap[hour to "TOTAL"]
                     val newTotal = (existingTotalRec?.usageTimeMillis ?: 0L) + hourTotalIncrement
                     finalEntities.add(
                         HourlyUsageEntity(
@@ -245,8 +247,7 @@ class UsageSyncManager(
                     )
                 }
             }
-            carryOver.clear()
-            if (dateIdx > 100) break 
+            if (dateIdx > 50) break
         }
 
         if (finalEntities.isNotEmpty()) {
