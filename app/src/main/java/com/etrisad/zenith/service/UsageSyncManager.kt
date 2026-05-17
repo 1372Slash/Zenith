@@ -156,6 +156,10 @@ class UsageSyncManager(
         buckets: MutableMap<String, MutableMap<Int, MutableList<UsageChunk>>>
     ) {
         val now = System.currentTimeMillis()
+        val calendarNow = Calendar.getInstance().apply { timeInMillis = now }
+        val currentHour = calendarNow.get(Calendar.HOUR_OF_DAY)
+        val currentDateStr = dateFormat.format(calendarNow.time)
+        
         val limit = 3600000L
         val finalEntities = mutableListOf<HourlyUsageEntity>()
         val carryOver = mutableListOf<UsageChunk>()
@@ -173,6 +177,12 @@ class UsageSyncManager(
                 cal.time = try { dateFormat.parse(lastDate) } catch (_: Exception) { null } ?: break
                 cal.add(Calendar.DAY_OF_YEAR, 1)
                 val nextDate = dateFormat.format(cal.time)
+                
+                if (nextDate > currentDateStr) {
+                    carryOver.clear()
+                    break
+                }
+                
                 sortedDates.add(nextDate)
                 nextDate
             }
@@ -183,6 +193,11 @@ class UsageSyncManager(
             val dayBuckets = buckets[date] ?: mutableMapOf()
 
             for (hour in 0..23) {
+                if (date == currentDateStr && hour > currentHour) {
+                    carryOver.clear()
+                    break
+                }
+
                 val newChunks = dayBuckets[hour] ?: mutableListOf()
                 if (newChunks.isEmpty() && carryOver.isEmpty()) continue
 
@@ -196,8 +211,9 @@ class UsageSyncManager(
                     .sumOf { it.usageTimeMillis }
                 
                 val currentNewTotal = combined.sumOf { it.duration }
+                val isPastHour = date < currentDateStr || (date == currentDateStr && hour < currentHour)
                 
-                if (existingHourTotal + currentNewTotal > limit) {
+                if (existingHourTotal + currentNewTotal > limit && isPastHour) {
                     val allowedNew = (limit - existingHourTotal).coerceAtLeast(0L)
                     if (allowedNew == 0L) {
                         carryOver.addAll(combined)
@@ -271,4 +287,5 @@ class UsageSyncManager(
             repository.insertHourlyUsage(finalEntities)
         }
     }
+
 }
