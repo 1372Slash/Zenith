@@ -90,9 +90,9 @@ fun UpdateBottomSheet(
     val currentScheme = MaterialTheme.colorScheme
     
     val dynamicColorScheme = remember(seedColor, isDark) {
-        seedColor?.let { seed ->
-            generateDynamicColorScheme(seed, isDark, currentScheme)
-        }
+        seedColor?.let {
+            generateDynamicColorScheme(it, isDark, currentScheme)
+        } ?: currentScheme
     }
 
     val hideAndDismiss = {
@@ -129,11 +129,7 @@ fun UpdateBottomSheet(
         }
     }
 
-    if (dynamicColorScheme != null) {
-        MaterialTheme(colorScheme = dynamicColorScheme) {
-            content()
-        }
-    } else {
+    MaterialTheme(colorScheme = dynamicColorScheme) {
         content()
     }
 }
@@ -234,7 +230,7 @@ fun ChangelogVersionCard(
                 .data(firstImageUrl)
                 .allowHardware(false)
                 .build()
-            val result = loader.execute(request)
+            val result = try { loader.execute(request) } catch (e: Exception) { null }
             if (result is coil.request.SuccessResult) {
                 val bitmap = result.drawable.toBitmap()
                 Palette.from(bitmap).generate { palette ->
@@ -246,20 +242,36 @@ fun ChangelogVersionCard(
     }
 
     val currentScheme = MaterialTheme.colorScheme
+    
     val dynamicColorScheme = remember(seedColor, isDark) {
-        seedColor?.let { seed ->
-            generateDynamicColorScheme(seed, isDark, currentScheme)
+        seedColor?.let {
+            generateDynamicColorScheme(it, isDark, currentScheme)
         } ?: currentScheme
     }
 
     MaterialTheme(colorScheme = dynamicColorScheme) {
-        val containerColor = if (useExpressiveColors) MaterialTheme.colorScheme.surfaceContainerHighest
+        val targetCardColor = MaterialTheme.colorScheme.surfaceContainerLow
+        val animatedCardColor by animateColorAsState(
+            targetValue = targetCardColor,
+            animationSpec = spring(stiffness = Spring.StiffnessLow),
+            label = "cardColor"
+        )
+        
+        val targetMarkdownColor = if (useExpressiveColors) MaterialTheme.colorScheme.surfaceContainerHighest
         else MaterialTheme.colorScheme.surfaceContainerHigh
+        
+        val animatedMarkdownColor by animateColorAsState(
+            targetValue = targetMarkdownColor,
+            animationSpec = spring(stiffness = Spring.StiffnessLow),
+            label = "markdownColor"
+        )
 
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp)),
             shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            colors = CardDefaults.cardColors(containerColor = animatedCardColor)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -291,7 +303,7 @@ fun ChangelogVersionCard(
                 
                 MarkdownBody(
                     content = release.body,
-                    containerColor = containerColor
+                    containerColor = animatedMarkdownColor
                 )
             }
         }
@@ -331,6 +343,8 @@ private fun generateDynamicColorScheme(seed: Color, isDark: Boolean, currentSche
 
     val surfaceV = if (isDark) 0.1f else 0.98f
     val surface = Color(android.graphics.Color.HSVToColor(floatArrayOf(hsl[0], hsl[1] * 0.1f, surfaceV)))
+    val surfaceContainerLowest = Color(android.graphics.Color.HSVToColor(floatArrayOf(hsl[0], hsl[1] * 0.05f, if (isDark) 0.04f else 1.0f)))
+    val surfaceContainerLow = Color(android.graphics.Color.HSVToColor(floatArrayOf(hsl[0], hsl[1] * 0.1f, if (isDark) 0.12f else 0.96f)))
     val surfaceContainer = Color(android.graphics.Color.HSVToColor(floatArrayOf(hsl[0], hsl[1] * 0.15f, if (isDark) 0.15f else 0.94f)))
     val surfaceContainerHigh = Color(android.graphics.Color.HSVToColor(floatArrayOf(hsl[0], hsl[1] * 0.2f, if (isDark) 0.2f else 0.9f)))
 
@@ -354,6 +368,8 @@ private fun generateDynamicColorScheme(seed: Color, isDark: Boolean, currentSche
         onSurface = if (isDark) Color.White else Color.Black,
         surfaceVariant = surfaceContainer,
         onSurfaceVariant = if (isDark) Color.LightGray else Color.DarkGray,
+        surfaceContainerLowest = surfaceContainerLowest,
+        surfaceContainerLow = surfaceContainerLow,
         surfaceContainer = surfaceContainer,
         surfaceContainerHigh = surfaceContainerHigh,
         surfaceContainerHighest = surfaceContainerHigh.copy(alpha = 0.9f)
