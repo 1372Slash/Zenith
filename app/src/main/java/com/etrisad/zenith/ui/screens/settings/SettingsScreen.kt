@@ -261,6 +261,11 @@ fun SettingsScreen(
                 preferencesRepository.setTotalUsagePillEnabled(enabled)
             }
         },
+        onMindfulGatewayEnabledChange = { enabled ->
+            coroutineScope.launch {
+                preferencesRepository.setMindfulGatewayEnabled(enabled)
+            }
+        },
         onEarlyKickEnabledChange = { enabled ->
             coroutineScope.launch {
                 preferencesRepository.setEarlyKickEnabled(enabled)
@@ -484,6 +489,7 @@ fun SettingsScreenContent(
     onFloatingTabBarEnabledChange: (Boolean) -> Unit,
     onExpressiveColorsChange: (Boolean) -> Unit,
     onTotalUsagePillEnabledChange: (Boolean) -> Unit,
+    onMindfulGatewayEnabledChange: (Boolean) -> Unit,
     onEarlyKickEnabledChange: (Boolean) -> Unit,
     onInterceptAudioFocusEnabledChange: (Boolean) -> Unit,
     onShowDatabaseIndicatorChange: (Boolean) -> Unit,
@@ -646,6 +652,18 @@ fun SettingsScreenContent(
                         )
                     }
                 }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                SettingsToggle(
+                    title = "Mindful Gateway",
+                    description = "Interrupt every non-whitelisted app with a mindful pause, even without a specific shield",
+                    checked = preferences.mindfulGatewayEnabled,
+                    onCheckedChange = onMindfulGatewayEnabledChange,
+                    icon = Icons.Outlined.AutoFixHigh,
+                    shape = RoundedCornerShape(8.dp)
+                )
             }
 
             item {

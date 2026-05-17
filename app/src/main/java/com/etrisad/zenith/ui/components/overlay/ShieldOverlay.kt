@@ -81,7 +81,9 @@ fun ShieldOverlay(
 
     val todayDate = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
     val combinedState by produceState<Triple<ShieldEntity?, Long, Long>>(
-        initialValue = Triple(shield, totalUsageToday, totalGlobalUsageToday)
+        initialValue = Triple(shield, totalUsageToday, totalGlobalUsageToday),
+        key1 = packageName,
+        key2 = shield
     ) {
         val s = shieldRepository.getShieldByPackageNameFlow(packageName).first()
         val appUsage = shieldRepository.getUsageByDateAndPackageFlow(todayDate, packageName).first()
@@ -545,7 +547,7 @@ fun PortraitInterceptLayout(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Zenith Shield is active for this app.",
+                text = if (shield != null) "Zenith Shield is active for this app." else "Mindful Gateway is guarding your focus.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -686,16 +688,14 @@ fun LandscapeInterceptLayout(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "Zenith Shield is active for this app.",
+                    text = if (shield != null) "Zenith Shield is active for this app." else "Mindful Gateway is guarding your focus.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
 
-                if (shield != null) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    ShieldProgressMini(shield, totalUsageToday, totalGlobalUsageToday, userPrefs)
-                }
+                Spacer(modifier = Modifier.height(16.dp))
+                ShieldProgressMini(shield, totalUsageToday, totalGlobalUsageToday, userPrefs)
             }
 
             Column(
@@ -753,6 +753,7 @@ fun ShieldSection(
 ) {
     val currentRemainingMinutes = remember(shield, totalUsageToday, remainingMinutes) {
         shield?.let {
+            if (it.timeLimitMinutes <= 0) return@let null
             val totalLimitMillis = it.timeLimitMinutes * 60 * 1000L
             val remainingMillis = (totalLimitMillis - totalUsageToday).coerceAtLeast(0L)
             (remainingMillis / 60000).toInt()
@@ -762,24 +763,24 @@ fun ShieldSection(
     val effectivelyTimeReached = isTimeLimitReached || (currentRemainingMinutes != null && currentRemainingMinutes <= 0)
     val isBlocked = (isUsesExceeded || effectivelyTimeReached) && !isEmergencyUnlocked
 
-    if (shield != null) {
-        Spacer(modifier = Modifier.height(16.dp))
-        val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
-        val remainingMillis = (totalLimitMillis - totalUsageToday).coerceAtLeast(0L)
-        val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
+    Spacer(modifier = Modifier.height(16.dp))
+    val totalLimitMillis = shield?.let { it.timeLimitMinutes * 60 * 1000L } ?: 0L
+    val remainingMillis = if (totalLimitMillis > 0) (totalLimitMillis - totalUsageToday).coerceAtLeast(0L) else 0L
+    val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
 
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = formatMillis(totalUsageToday),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.CenterStart)
-                )
-                TotalUsagePill(totalGlobalUsageToday, userPrefs)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = formatMillis(totalUsageToday),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.CenterStart)
+            )
+            TotalUsagePill(totalGlobalUsageToday, userPrefs)
+            if (totalLimitMillis > 0) {
                 Text(
                     text = "${formatMillis(remainingMillis)} left today",
                     style = MaterialTheme.typography.labelMedium,
@@ -787,6 +788,9 @@ fun ShieldSection(
                     modifier = Modifier.align(Alignment.CenterEnd)
                 )
             }
+        }
+        
+        if (totalLimitMillis > 0) {
             val animatedProgressState = animateFloatAsState(
                 targetValue = progress.coerceIn(0f, 1f),
                 animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
@@ -843,9 +847,9 @@ fun ShieldSection(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ShieldProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsageToday: Long, userPrefs: UserPreferences) {
-    val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
-    val remainingMillis = (totalLimitMillis - totalUsageToday).coerceAtLeast(0L)
+fun ShieldProgressMini(shield: ShieldEntity?, totalUsageToday: Long, totalGlobalUsageToday: Long, userPrefs: UserPreferences) {
+    val totalLimitMillis = shield?.let { it.timeLimitMinutes * 60 * 1000L } ?: 0L
+    val remainingMillis = if (totalLimitMillis > 0) (totalLimitMillis - totalUsageToday).coerceAtLeast(0L) else 0L
     val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
 
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -860,23 +864,27 @@ fun ShieldProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalU
                 modifier = Modifier.align(Alignment.CenterStart)
             )
             TotalUsagePill(totalGlobalUsageToday, userPrefs)
-            Text(
-                text = "${formatMillis(remainingMillis)} left",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.CenterEnd)
+            if (totalLimitMillis > 0) {
+                Text(
+                    text = "${formatMillis(remainingMillis)} left",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                )
+            }
+        }
+        if (totalLimitMillis > 0) {
+            LinearWavyProgressIndicator(
+                progress = { progress.coerceIn(0f, 1f) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+                    .height(10.dp),
+                color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                wavelength = 40.dp
             )
         }
-        LinearWavyProgressIndicator(
-            progress = { progress.coerceIn(0f, 1f) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
-                .height(10.dp),
-            color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-            wavelength = 40.dp
-        )
     }
 }
 

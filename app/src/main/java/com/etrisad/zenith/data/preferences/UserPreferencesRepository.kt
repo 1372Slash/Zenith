@@ -91,6 +91,7 @@ class UserPreferencesRepository(private val context: Context) {
         val DELAY_SHIELD_MID = longPreferencesKey("delay_shield_mid")
         val DELAY_SHIELD_NEAR = longPreferencesKey("delay_shield_near")
         val DELAY_DEFAULT = longPreferencesKey("delay_default")
+        val MINDFUL_GATEWAY_ENABLED = booleanPreferencesKey("mindful_gateway_enabled")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -161,6 +162,7 @@ class UserPreferencesRepository(private val context: Context) {
             val delayShieldMid = preferences[PreferencesKeys.DELAY_SHIELD_MID] ?: 1500L
             val delayShieldNear = preferences[PreferencesKeys.DELAY_SHIELD_NEAR] ?: 600L
             val delayDefault = preferences[PreferencesKeys.DELAY_DEFAULT] ?: 1200L
+            val mindfulGatewayEnabled = preferences[PreferencesKeys.MINDFUL_GATEWAY_ENABLED] ?: false
 
             UserPreferences(
                 themeConfig = themeConfig,
@@ -216,7 +218,8 @@ class UserPreferencesRepository(private val context: Context) {
                 delayShieldFar = delayShieldFar,
                 delayShieldMid = delayShieldMid,
                 delayShieldNear = delayShieldNear,
-                delayDefault = delayDefault
+                delayDefault = delayDefault,
+                mindfulGatewayEnabled = mindfulGatewayEnabled
             )
         }
 
@@ -621,6 +624,12 @@ class UserPreferencesRepository(private val context: Context) {
         }
     }
 
+    suspend fun setMindfulGatewayEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MINDFUL_GATEWAY_ENABLED] = enabled
+        }
+    }
+
     suspend fun resetCustomDelays() {
         context.dataStore.edit { preferences ->
             preferences.remove(PreferencesKeys.DELAY_POWER_SAVE)
@@ -691,5 +700,6 @@ data class UserPreferences(
     val delayShieldFar: Long = 3000L,
     val delayShieldMid: Long = 1500L,
     val delayShieldNear: Long = 600L,
-    val delayDefault: Long = 1200L
+    val delayDefault: Long = 1200L,
+    val mindfulGatewayEnabled: Boolean = false
 )

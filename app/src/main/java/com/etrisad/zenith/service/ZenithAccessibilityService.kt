@@ -335,8 +335,9 @@ class ZenithAccessibilityService : AccessibilityService() {
 
                 if (shouldCheckSchedules && !InterceptOverlayManager.isShowing) {
                     val isScheduled = checkSchedules(currentApp)
-                    if (!isScheduled && shield != null && System.currentTimeMillis() > allowedUntil) {
-                        if (shield.isAutoQuitEnabled && allowedUntil > 0) {
+                    val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
+                    if (!isScheduled && (shield != null || (prefs.mindfulGatewayEnabled && !shouldBypassBlocking(currentApp))) && System.currentTimeMillis() > allowedUntil) {
+                        if (shield?.isAutoQuitEnabled == true && allowedUntil > 0) {
                             goToHomeScreen()
                             allowedApps.remove(currentApp)
                         } else {
@@ -384,7 +385,8 @@ class ZenithAccessibilityService : AccessibilityService() {
 
             if (shouldCheckSchedules && !InterceptOverlayManager.isShowing) {
                 val isScheduled = checkSchedules(currentApp)
-                if (!isScheduled && shield != null && currentTime > allowedUntil) {
+                val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
+                if (!isScheduled && (shield != null || (prefs.mindfulGatewayEnabled && !shouldBypassBlocking(currentApp))) && currentTime > allowedUntil) {
                     checkIfAppIsShielded(currentApp)
                 }
             }
@@ -477,6 +479,53 @@ class ZenithAccessibilityService : AccessibilityService() {
         } catch (_: Exception) {}
     }
 
+    private val mindfulGatewayStates = mutableMapOf<String, ShieldEntity>()
+
+    private fun getMindfulShield(packageName: String, appName: String): ShieldEntity {
+        val existing = mindfulGatewayStates[packageName]
+        val currentTime = System.currentTimeMillis()
+        
+        if (existing == null) {
+            val newShield = ShieldEntity(
+                packageName = packageName,
+                appName = appName,
+                timeLimitMinutes = -1,
+                maxUsesPerPeriod = 5,
+                refreshPeriodMinutes = 60,
+                maxEmergencyUses = 3,
+                emergencyUseCount = 3,
+                lastPeriodResetTimestamp = currentTime,
+                lastEmergencyRechargeTimestamp = currentTime,
+                lastUsedTimestamp = currentTime
+            )
+            mindfulGatewayStates[packageName] = newShield
+            return newShield
+        }
+
+        var updated = existing
+        val rechargeDurationMillis = (currentPreferences?.emergencyRechargeDurationMinutes ?: 60) * 60 * 1000L
+        if (updated.emergencyUseCount < updated.maxEmergencyUses && rechargeDurationMillis > 0) {
+            val timeSinceLastRecharge = currentTime - updated.lastEmergencyRechargeTimestamp
+            if (timeSinceLastRecharge >= rechargeDurationMillis) {
+                val chargesToAdd = (timeSinceLastRecharge / rechargeDurationMillis).toInt()
+                updated = updated.copy(
+                    emergencyUseCount = (updated.emergencyUseCount + chargesToAdd).coerceAtMost(updated.maxEmergencyUses),
+                    lastEmergencyRechargeTimestamp = updated.lastEmergencyRechargeTimestamp + (chargesToAdd * rechargeDurationMillis)
+                )
+            }
+        }
+        
+        if (currentTime - updated.lastPeriodResetTimestamp > updated.refreshPeriodMinutes * 60 * 1000L) {
+            updated = updated.copy(
+                currentPeriodUses = 0,
+                lastPeriodResetTimestamp = currentTime
+            )
+        }
+        
+        mindfulGatewayStates[packageName] = updated
+        return updated
+    }
+
     private suspend fun checkIfAppIsShielded(targetPackageName: String) {
         if (targetPackageName != lastForegroundApp) return
         
@@ -485,38 +534,48 @@ class ZenithAccessibilityService : AccessibilityService() {
         }
 
         val shield = currentShieldCache ?: allShieldsCache.find { it.packageName == targetPackageName }
-        if (shield != null && !InterceptOverlayManager.isShowing) {
+        val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
+        val isMindfulGateway = shield == null && prefs.mindfulGatewayEnabled && !shouldBypassBlocking(targetPackageName)
+
+        val appName = shield?.appName ?: try {
+            packageManager.getApplicationLabel(packageManager.getApplicationInfo(targetPackageName, 0)).toString()
+        } catch (_: Exception) { targetPackageName }
+
+        val effectiveShield = if (isMindfulGateway) getMindfulShield(targetPackageName, appName) else shield
+
+        if (effectiveShield != null && !InterceptOverlayManager.isShowing) {
             val totalUsageToday = getTotalUsageToday(targetPackageName)
             val totalGlobalUsageToday = getTotalGlobalUsageToday()
-            val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
-            val delayDurationSeconds = prefs.delayAppDurationSeconds
+            val delayDurationSeconds = if (isMindfulGateway) 0 else prefs.delayAppDurationSeconds
 
             val currentTime = System.currentTimeMillis()
-            val lastAction = shield.lastDelayStartTimestamp
+            val lastAction = effectiveShield.lastDelayStartTimestamp
 
-            val lastSessionEnd = shield.lastSessionEndTimestamp
+            val lastSessionEnd = effectiveShield.lastSessionEndTimestamp
             val isGracePeriodActive = lastSessionEnd != 0L && (currentTime - lastSessionEnd < 5 * 60 * 1000L)
 
-            val shieldWithTimestamp = if (shield.isDelayAppEnabled) {
+            val shieldWithTimestamp = if (effectiveShield.isDelayAppEnabled) {
                 if (isGracePeriodActive) {
-                    val updated = shield.copy(lastDelayStartTimestamp = currentTime - (delayDurationSeconds * 1000L) - 1000)
-                    serviceScope.launch { shieldRepository.updateShield(updated) }
+                    val updated = effectiveShield.copy(lastDelayStartTimestamp = currentTime - (delayDurationSeconds * 1000L) - 1000)
+                    if (!isMindfulGateway) serviceScope.launch { shieldRepository.updateShield(updated) }
+                    else mindfulGatewayStates[targetPackageName] = updated
                     updated
                 } else if (lastAction == 0L) {
-                    val updated = shield.copy(lastDelayStartTimestamp = currentTime)
-                    serviceScope.launch { shieldRepository.updateShield(updated) }
+                    val updated = effectiveShield.copy(lastDelayStartTimestamp = currentTime)
+                    if (!isMindfulGateway) serviceScope.launch { shieldRepository.updateShield(updated) }
+                    else mindfulGatewayStates[targetPackageName] = updated
                     updated
                 } else {
-                    shield
+                    effectiveShield
                 }
             } else {
-                shield
+                effectiveShield
             }
 
             serviceScope.launch(Dispatchers.Main) {
                 overlayManager.showOverlay(
                     packageName = targetPackageName,
-                    appName = shield.appName,
+                    appName = appName,
                     shield = shieldWithTimestamp,
                     totalUsageToday = totalUsageToday,
                     totalGlobalUsageToday = totalGlobalUsageToday,
@@ -526,46 +585,63 @@ class ZenithAccessibilityService : AccessibilityService() {
                         allowedApps[targetPackageName] = currentTimeOnUnlock + (minutes * 60 * 1000L)
 
                         serviceScope.launch {
-                            val currentShield = shieldRepository.getShieldByPackageName(targetPackageName) ?: return@launch
-                            val updatedShield = if (isEmergency) {
-                                currentShield.copy(
-                                    emergencyUseCount = (currentShield.emergencyUseCount - 1).coerceAtLeast(0),
-                                    lastDelayStartTimestamp = 0L,
-                                    lastSessionEndTimestamp = currentTimeOnUnlock
-                                )
+                            if (isMindfulGateway) {
+                                val currentMindful = mindfulGatewayStates[targetPackageName] ?: shieldWithTimestamp
+                                val updatedMindful = if (isEmergency) {
+                                    currentMindful.copy(
+                                        emergencyUseCount = (currentMindful.emergencyUseCount - 1).coerceAtLeast(0),
+                                        lastSessionEndTimestamp = currentTimeOnUnlock
+                                    )
+                                } else {
+                                    val periodExpired = currentTimeOnUnlock - currentMindful.lastPeriodResetTimestamp > currentMindful.refreshPeriodMinutes * 60 * 1000L
+                                    currentMindful.copy(
+                                        currentPeriodUses = if (periodExpired) 1 else currentMindful.currentPeriodUses + 1,
+                                        lastPeriodResetTimestamp = if (periodExpired) currentTimeOnUnlock else currentMindful.lastPeriodResetTimestamp,
+                                        lastSessionEndTimestamp = currentTimeOnUnlock
+                                    )
+                                }
+                                mindfulGatewayStates[targetPackageName] = updatedMindful
                             } else {
-                                currentShield.copy(
-                                    currentPeriodUses = currentShield.currentPeriodUses + 1,
-                                    lastDelayStartTimestamp = 0L,
-                                    lastSessionEndTimestamp = currentTimeOnUnlock
-                                )
-                            }
-                            shieldRepository.updateShield(updatedShield)
-                            currentShieldCache = updatedShield
+                                val currentShield = shieldRepository.getShieldByPackageName(targetPackageName)
+                                val updatedShield = if (currentShield != null) {
+                                    if (isEmergency) {
+                                        currentShield.copy(
+                                            emergencyUseCount = (currentShield.emergencyUseCount - 1).coerceAtLeast(0),
+                                            lastDelayStartTimestamp = 0L,
+                                            lastSessionEndTimestamp = currentTimeOnUnlock
+                                        )
+                                    } else {
+                                        currentShield.copy(
+                                            currentPeriodUses = currentShield.currentPeriodUses + 1,
+                                            lastDelayStartTimestamp = 0L,
+                                            lastSessionEndTimestamp = currentTimeOnUnlock
+                                        )
+                                    }
+                                } else null
 
-                            val prefs = preferencesRepository.userPreferencesFlow.first()
-                            if (prefs.sessionUsageOverlayEnabled) {
+                                if (updatedShield != null) {
+                                    shieldRepository.updateShield(updatedShield)
+                                    currentShieldCache = updatedShield
+                                }
+                            }
+
+                            val currentPrefs = preferencesRepository.userPreferencesFlow.first()
+                            if (currentPrefs.sessionUsageOverlayEnabled) {
+                                val isGoal = shieldWithTimestamp.type == FocusType.GOAL
                                 serviceScope.launch(Dispatchers.Main) {
                                     sessionUsageOverlayManager.showHUD(
                                         targetPackageName,
                                         minutes,
-                                        prefs.sessionUsageOverlaySize,
-                                        prefs.sessionUsageOverlayOpacity,
-                                        initialSeconds = 0,
+                                        currentPrefs.sessionUsageOverlaySize,
+                                        currentPrefs.sessionUsageOverlayOpacity,
+                                        isGoal = isGoal,
+                                        initialSeconds = if (isGoal) (getTotalUsageToday(targetPackageName) / 1000).toInt() else 0,
                                         onSessionEnd = {
                                             allowedApps[targetPackageName] = 0L
                                             serviceScope.launch {
-                                                val shield = shieldRepository.getShieldByPackageName(targetPackageName)
-                                                if (shield != null) {
-                                                    val updated = shield.copy(lastSessionEndTimestamp = System.currentTimeMillis())
-                                                    shieldRepository.updateShield(updated)
-                                                    currentShieldCache = updated
-
-                                                    if (updated.isAutoQuitEnabled) {
-                                                        goToHomeScreen()
-                                                    } else {
-                                                        checkIfAppIsShielded(targetPackageName)
-                                                    }
+                                                val s = currentShieldCache ?: mindfulGatewayStates[targetPackageName] ?: shieldRepository.getShieldByPackageName(targetPackageName)
+                                                if (s?.isAutoQuitEnabled == true) {
+                                                    goToHomeScreen()
                                                 } else {
                                                     checkIfAppIsShielded(targetPackageName)
                                                 }
