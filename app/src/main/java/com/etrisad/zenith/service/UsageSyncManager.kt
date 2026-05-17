@@ -27,23 +27,31 @@ class UsageSyncManager(
         val lastSyncTime = preferencesRepository.userPreferencesFlow.first().lastSyncTimestamp
         val currentTime = System.currentTimeMillis()
         
-        if (currentTime - lastSyncTime < 60000) return 
+        if (currentTime - lastSyncTime < 30000) return 
 
         val pm = context.packageManager
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        
+        val startOfToday = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        // Start query from 1 hour before lastSyncTime to catch the active session at that time
+        val queryStart = maxOf(startOfToday, lastSyncTime - (60 * 60 * 1000L))
+        val events = usageStatsManager.queryEvents(queryStart, currentTime)
+        val event = UsageEvents.Event()
+        
         val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
         val launcherPackage = pm.resolveActivity(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY)
             ?.activityInfo?.packageName
-
         val launcherApps = pm.queryIntentActivities(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
         ).map { it.activityInfo.packageName }.toSet()
-
         val excludePackages = setOfNotNull(context.packageName, launcherPackage)
 
-        val events = usageStatsManager.queryEvents(lastSyncTime, currentTime)
-        val event = UsageEvents.Event()
-        
         val activeSessions = mutableMapOf<String, Long>()
         val hourlyBuckets = mutableMapOf<String, MutableMap<Int, MutableList<UsageChunk>>>()
 
@@ -60,7 +68,11 @@ class UsageSyncManager(
                 UsageEvents.Event.SCREEN_NON_INTERACTIVE -> {
                     isScreenOn = false
                     activeSessions.forEach { (p, start) ->
-                        processSession(p, start, time, hourlyBuckets)
+                        val segmentStart = maxOf(start, lastSyncTime)
+                        val segmentEnd = minOf(time, currentTime)
+                        if (segmentStart < segmentEnd) {
+                            processSession(p, segmentStart, segmentEnd, hourlyBuckets)
+                        }
                     }
                     activeSessions.clear()
                 }
@@ -72,7 +84,11 @@ class UsageSyncManager(
                             
                             val previousStart = activeSessions[pkg]
                             if (previousStart != null) {
-                                processSession(pkg, previousStart, time, hourlyBuckets)
+                                val segmentStart = maxOf(previousStart, lastSyncTime)
+                                val segmentEnd = minOf(time, currentTime)
+                                if (segmentStart < segmentEnd) {
+                                    processSession(pkg, segmentStart, segmentEnd, hourlyBuckets)
+                                }
                             }
                             activeSessions[pkg] = time
                         }
@@ -80,13 +96,21 @@ class UsageSyncManager(
                 }
                 UsageEvents.Event.MOVE_TO_BACKGROUND, UsageEvents.Event.ACTIVITY_PAUSED -> {
                     val startTime = activeSessions.remove(pkg) ?: continue
-                    processSession(pkg, startTime, time, hourlyBuckets)
+                    val segmentStart = maxOf(startTime, lastSyncTime)
+                    val segmentEnd = minOf(time, currentTime)
+                    if (segmentStart < segmentEnd) {
+                        processSession(pkg, segmentStart, segmentEnd, hourlyBuckets)
+                    }
                 }
             }
         }
 
         activeSessions.forEach { (pkg, startTime) ->
-            processSession(pkg, startTime, currentTime, hourlyBuckets)
+            val segmentStart = maxOf(startTime, lastSyncTime)
+            val segmentEnd = currentTime
+            if (segmentStart < segmentEnd) {
+                processSession(pkg, segmentStart, segmentEnd, hourlyBuckets)
+            }
         }
 
         saveBucketsToDatabase(hourlyBuckets)

@@ -65,14 +65,16 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val launcherPackage = pm.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
         val excludePackages = setOfNotNull(applicationContext.packageName, launcherPackage)
 
-        if (isDateToday) {
-            allShields.forEach { shield ->
-                val usage = (shield.timeLimitMinutes * 60 * 1000L - shield.remainingTimeMillis).coerceAtLeast(0L)
-                if (usage > 0) finalAppUsages[shield.packageName] = usage
+        // Use system aggregate stats as baseline for accuracy
+        val stats = usm.queryAndAggregateUsageStats(startTime, endTime)
+        stats.forEach { (pkg, stat) ->
+            if (pkg !in excludePackages && pkg in launcherApps) {
+                val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+                if (time > 0) finalAppUsages[pkg] = time
             }
         }
 
-        val events = usm.queryEvents(startTime, System.currentTimeMillis().coerceAtMost(endTime))
+        val events = usm.queryEvents(startTime - (60 * 60 * 1000L), System.currentTimeMillis().coerceAtMost(endTime))
         val event = android.app.usage.UsageEvents.Event()
         val androidTotals = mutableMapOf<String, Long>()
         var activePkg: String? = null
@@ -81,32 +83,73 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
 
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
+            val time = event.timeStamp
             when (event.eventType) {
                 android.app.usage.UsageEvents.Event.SCREEN_INTERACTIVE -> isScreenOn = true
                 android.app.usage.UsageEvents.Event.SCREEN_NON_INTERACTIVE -> {
                     isScreenOn = false
-                    activePkg?.let { p ->
-                        val duration = (minOf(event.timeStamp, endTime) - maxOf(activeStartTime, startTime))
-                        if (duration > 1500) androidTotals[p] = (androidTotals[p] ?: 0L) + duration
+                    activePkg?.let { pkg ->
+                        val segmentStart = maxOf(activeStartTime, startTime)
+                        val segmentEnd = minOf(time, endTime)
+                        if (segmentStart < segmentEnd) {
+                            val duration = segmentEnd - segmentStart
+                            if (duration > 1500) androidTotals[pkg] = (androidTotals[pkg] ?: 0L) + duration
+                        }
                     }
                     activePkg = null
                 }
                 android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED -> {
                     if (isScreenOn) {
-                        activePkg?.let { p ->
-                            val duration = (minOf(event.timeStamp, endTime) - maxOf(activeStartTime, startTime))
-                            if (duration > 1500) androidTotals[p] = (androidTotals[p] ?: 0L) + duration
+                        activePkg?.let { pkg ->
+                            val segmentStart = maxOf(activeStartTime, startTime)
+                            val segmentEnd = minOf(time, endTime)
+                            if (segmentStart < segmentEnd) {
+                                val duration = segmentEnd - segmentStart
+                                if (duration > 1500) androidTotals[pkg] = (androidTotals[pkg] ?: 0L) + duration
+                            }
                         }
                         activePkg = event.packageName
-                        activeStartTime = event.timeStamp
+                        activeStartTime = time
+                    }
+                }
+                android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED -> {
+                    activePkg?.let { pkg ->
+                        if (pkg == event.packageName) {
+                            val segmentStart = maxOf(activeStartTime, startTime)
+                            val segmentEnd = minOf(time, endTime)
+                            if (segmentStart < segmentEnd) {
+                                val duration = segmentEnd - segmentStart
+                                if (duration > 1500) androidTotals[pkg] = (androidTotals[pkg] ?: 0L) + duration
+                            }
+                            activePkg = null
+                        }
                     }
                 }
             }
         }
+        
+        activePkg?.let { pkg ->
+            val segmentStart = maxOf(activeStartTime, startTime)
+            val segmentEnd = minOf(System.currentTimeMillis(), endTime)
+            if (segmentStart < segmentEnd) {
+                val duration = segmentEnd - segmentStart
+                if (duration > 1500) androidTotals[pkg] = (androidTotals[pkg] ?: 0L) + duration
+            }
+        }
 
         androidTotals.forEach { (pkg, time) ->
-            if (pkg !in excludePackages && pkg in launcherApps && pkg !in finalAppUsages) {
-                finalAppUsages[pkg] = time
+            if (pkg !in excludePackages && pkg in launcherApps) {
+                finalAppUsages[pkg] = maxOf(finalAppUsages[pkg] ?: 0L, time)
+            }
+        }
+
+        // Also check shields but only to potentially INCREASE the value if our tracking was more aggressive
+        if (isDateToday) {
+            allShields.forEach { shield ->
+                val usageFromShield = (shield.timeLimitMinutes * 60 * 1000L - shield.remainingTimeMillis).coerceAtLeast(0L)
+                if (usageFromShield > 0) {
+                    finalAppUsages[shield.packageName] = maxOf(finalAppUsages[shield.packageName] ?: 0L, usageFromShield)
+                }
             }
         }
 
