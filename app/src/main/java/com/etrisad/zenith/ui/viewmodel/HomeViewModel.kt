@@ -137,8 +137,33 @@ class HomeViewModel(
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    private val appInfoCache = mutableMapOf<String, Pair<String, android.graphics.drawable.Drawable?>>()
+    private val appInfoCache = java.util.concurrent.ConcurrentHashMap<String, Pair<String, android.graphics.drawable.Drawable?>>()
     private var refreshJob: Job? = null
+
+    private var launcherAppsCache: Set<String>? = null
+    private var launcherPackageCache: String? = null
+    private var lastLauncherCheck = 0L
+
+    private suspend fun getLauncherInfo(): Pair<Set<String>, String?> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val cachedApps = launcherAppsCache
+        if (cachedApps != null && now - lastLauncherCheck < 120000) {
+            return@withContext cachedApps to launcherPackageCache
+        }
+        val pm = context.packageManager
+        val apps = pm.queryIntentActivities(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
+        ).map { it.activityInfo.packageName }.toSet()
+        
+        val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val lPkg = pm.resolveActivity(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY)
+            ?.activityInfo?.packageName
+            
+        launcherAppsCache = apps
+        launcherPackageCache = lPkg
+        lastLauncherCheck = now
+        apps to lPkg
+    }
 
     val allDatabaseUsage: Flow<List<DailyUsageEntity>> = shieldRepository.getAllUsage()
 
@@ -319,9 +344,26 @@ class HomeViewModel(
 
     init {
         viewModelScope.launch {
-            shieldRepository.allShields.collect { shields ->
+            combine(
+                shieldRepository.allShields,
+                shieldRepository.getAllUsage(),
+                shieldRepository.getLastNDaysGlobalUsage(60),
+                userPreferencesRepository.userPreferencesFlow
+            ) { shields, usage, global, prefs ->
                 allShields = shields
-                updateShieldedLists()
+                allHistory = usage
+                globalHistory = global
+                
+                currentTargetMinutes = prefs.screenTimeTargetMinutes
+                prefGlobalBestStreak = prefs.globalBestStreak
+                preferSystemUsageHistory = prefs.preferSystemUsageHistory
+                
+                _uiState.update { it.copy(
+                    bedtimeEnabled = prefs.bedtimeEnabled,
+                    bedtimeStartTime = prefs.bedtimeStartTime,
+                    bedtimeEndTime = prefs.bedtimeEndTime,
+                    bedtimeDays = prefs.bedtimeDays
+                ) }
 
                 val currentPkg = _appDetailUiState.value.packageName
                 if (currentPkg.isNotEmpty()) {
@@ -335,35 +377,9 @@ class HomeViewModel(
                         bestStreak = shield?.bestStreak ?: 0
                     ) }
                 }
-            }
-        }
-
-        viewModelScope.launch {
-            shieldRepository.getAllUsage().collect { history ->
-                allHistory = history
-                refreshUsageStats(showLoading = false)
-            }
-        }
-
-        viewModelScope.launch {
-            shieldRepository.getLastNDaysGlobalUsage(60).collect { history ->
-                globalHistory = history
+                Unit
+            }.debounce(250).collect {
                 updateGlobalFallback()
-                refreshUsageStats(showLoading = false)
-            }
-        }
-
-        viewModelScope.launch {
-            userPreferencesRepository.userPreferencesFlow.collect { prefs ->
-                currentTargetMinutes = prefs.screenTimeTargetMinutes
-                prefGlobalBestStreak = prefs.globalBestStreak
-                preferSystemUsageHistory = prefs.preferSystemUsageHistory
-                _uiState.update { it.copy(
-                    bedtimeEnabled = prefs.bedtimeEnabled,
-                    bedtimeStartTime = prefs.bedtimeStartTime,
-                    bedtimeEndTime = prefs.bedtimeEndTime,
-                    bedtimeDays = prefs.bedtimeDays
-                ) }
                 refreshUsageStats(showLoading = false)
             }
         }
@@ -435,25 +451,21 @@ class HomeViewModel(
         return cal.timeInMillis
     }
 
-    private fun updateGlobalFallback() {
+    private var lastFullFallbackRefresh = 0L
+    private suspend fun updateGlobalFallback(forceFull: Boolean = false) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val isFullNeeded = forceFull || globalFallbackMap.isEmpty() || (now - lastFullFallbackRefresh > 1800000)
+
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val pm = context.packageManager
-        val launcherApps = pm.queryIntentActivities(
-            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
-        ).map { it.activityInfo.packageName }.toSet()
-        
-        val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        val launcherPackage = pm.resolveActivity(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY)
-            ?.activityInfo?.packageName
+        val (launcherApps, launcherPackage) = getLauncherInfo()
         val excludePackages = setOfNotNull(context.packageName, launcherPackage)
 
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val resultMap = mutableMapOf<String, List<UsageRecord.Live>>()
+        val resultMap = globalFallbackMap.toMutableMap()
 
-        val now = System.currentTimeMillis()
-        val todayStart = getMidnight(0)
+        val daysToRefresh = if (isFullNeeded) 30 else 1
 
-        for (i in 0..30) {
+        for (i in 0..daysToRefresh) {
             val start = getMidnight(i)
             val end = if (i == 0) now else getMidnight(i - 1)
             
@@ -482,6 +494,7 @@ class HomeViewModel(
         }
 
         globalFallbackMap = resultMap
+        if (isFullNeeded) lastFullFallbackRefresh = now
     }
 
     private fun updatePackageFallback(packageName: String) {
@@ -529,14 +542,7 @@ class HomeViewModel(
             val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val pm = context.packageManager
 
-            val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-            val launcherPackage = pm.resolveActivity(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY)
-                ?.activityInfo?.packageName
-
-            val launcherApps = pm.queryIntentActivities(
-                Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
-            ).map { it.activityInfo.packageName }.toSet()
-
+            val (launcherApps, launcherPackage) = getLauncherInfo()
             val excludePackages = setOfNotNull(context.packageName, launcherPackage)
 
             val now = System.currentTimeMillis()
@@ -559,7 +565,9 @@ class HomeViewModel(
             
             val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
-            val todayDetailed = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = isSelectedToday)
+            val todayDetailed = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = isSelectedToday)
+            }
             val filteredTodayUsage = todayDetailed.appUsageMap.filter { (pkg, _) -> 
                 pkg !in excludePackages && pkg in launcherApps 
             }
@@ -600,7 +608,9 @@ class HomeViewModel(
                         appTotals[record.packageName] = record.usageTimeMillis
                     }
                 } else {
-                    val dayStats = usm.queryAndAggregateUsageStats(dayStart, dayEnd)
+                    val dayStats = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        usm.queryAndAggregateUsageStats(dayStart, dayEnd)
+                    }
                     dayStats.forEach { (pkg, stat) ->
                         if (pkg in excludePackages || pkg !in launcherApps) return@forEach
                         val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
@@ -806,7 +816,6 @@ class HomeViewModel(
 
             val snapshotStamps = (0..20).map { i ->
                 val dStart = getMidnight(i)
-                val dEnd = if (i == 0) now else dStart + (24 * 60 * 60 * 1000L)
                 val dateStr = dateFormat.format(Date(dStart))
                 
                 val dbDayApps = historyByDate[dateStr] ?: emptyList()
@@ -827,12 +836,9 @@ class HomeViewModel(
                     if (i == 0) {
                         filteredTodayUsage.maxByOrNull { it.value }?.let { it.key to it.value }
                     } else {
-                        val statsMap = usm.queryAndAggregateUsageStats(dStart, dEnd)
-                        statsMap.filter { (pkg, _) -> 
-                            pkg !in excludePackages && pkg in launcherApps 
-                        }.maxByOrNull { (_, stat) -> 
-                            stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground) 
-                        }?.let { it.key to it.value.totalTimeVisible.coerceAtLeast(it.value.totalTimeInForeground) }
+                        globalFallbackMap[dateStr]?.filter { it.packageName != "TOTAL" }
+                            ?.maxByOrNull { it.usageTimeMillis }
+                            ?.let { it.packageName to it.usageTimeMillis }
                     }
                 }
                 
@@ -928,7 +934,9 @@ class HomeViewModel(
             shieldRepository.getLastNDaysUsageForPackage(packageName, 21).collect { historyFromDb ->
                 val currentNow = System.currentTimeMillis()
 
-                val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true)
+                val detailedUsage = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true)
+                }
                 val sessionCount = detailedUsage.sessionCounts[packageName] ?: 0
                 val appHourlyUsage = MutableList(24) { hour -> 
                     detailedUsage.hourlyUsageMap[hour]?.get(packageName) ?: 0L 
@@ -1122,7 +1130,9 @@ class HomeViewModel(
             val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val todayStart = getMidnight(0)
             
-            val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true)
+            val detailedUsage = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true)
+            }
             val currentTodayUsage = detailedUsage.appUsageMap[packageName] ?: 0L
             
             val appHourlyUsage = MutableList(24) { hour -> 
