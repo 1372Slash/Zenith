@@ -218,16 +218,17 @@ class UsageSyncManager(
                 }
 
                 val totalInHour = currentHourAppState.values.sum()
-                
+
                 if (isPastHour && totalInHour > limit) {
                     var excess = totalInHour - limit
                     
-                    for (i in combined.indices.reversed()) {
+                    val sortedChunks = combined.sortedByDescending { it.duration }
+                    for (chunk in sortedChunks) {
                         if (excess <= 0) break
-                        val chunk = combined[i]
-                        val toMove = minOf(chunk.duration, excess)
+                        val currentPkgVal = currentHourAppState[chunk.packageName] ?: 0L
+                        val toMove = minOf(currentPkgVal, excess)
                         
-                        currentHourAppState[chunk.packageName] = (currentHourAppState[chunk.packageName] ?: 0L) - toMove
+                        currentHourAppState[chunk.packageName] = currentPkgVal - toMove
                         if (toMove > 0) {
                             carryOver.add(0, UsageChunk(chunk.packageName, toMove))
                         }

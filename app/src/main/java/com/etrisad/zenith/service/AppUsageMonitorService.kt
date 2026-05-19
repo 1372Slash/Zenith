@@ -1530,30 +1530,32 @@ class AppUsageMonitorService : Service() {
 
     private fun shouldBypassBlocking(packageName: String): Boolean {
         if (packageName == this.packageName) return true
-        if (packageName in CRITICAL_SYSTEM_PACKAGES) return true
-        if (launcherPackages.contains(packageName)) return true
 
-        if (packageName in restrictedPackages) return false
-
-        if (isBedtimeBlockingActive) {
+        val prefs = currentPreferences
+        val isBedtimeOrWindDown = isBedtimeActive || (isWindDownActive && prefs?.bedtimeWindDownEnabled == true)
+        
+        if (isBedtimeOrWindDown) {
             if (packageName in bedtimeWhitelistedPackages) return true
         } else {
             if (packageName in whitelistedPackages) return true
         }
 
+        if (packageName in CRITICAL_SYSTEM_PACKAGES) return true
+        if (launcherPackages.contains(packageName) || 
+            packageName.contains("launcher", ignoreCase = true) || 
+            packageName.contains("home", ignoreCase = true)) return true
+
+        if (packageName in restrictedPackages) return false
+
         val isSystem = systemAppCache.getOrPut(packageName) {
             try {
                 val appInfo = packageManager.getApplicationInfo(packageName, 0)
                 (appInfo.flags and (android.content.pm.ApplicationInfo.FLAG_SYSTEM or android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
-            } catch (_: Exception) { true }
+            } catch (_: Exception) { false }
         }
 
         if (isSystem) {
-            if (packageName.contains("launcher", ignoreCase = true) ||
-                packageName.contains("home", ignoreCase = true) ||
-                packageName.contains("car.mode", ignoreCase = true)) {
-                return true
-            }
+            if (packageName.contains("car.mode", ignoreCase = true)) return true
             return !(packageName in restrictedPackages || hasGlobalAllowSchedule)
         }
 
@@ -1637,7 +1639,8 @@ class AppUsageMonitorService : Service() {
 
                     val className = reusableEvent.className ?: ""
                     if (className.contains("Notification", ignoreCase = true) || 
-                        className.contains("Toast", ignoreCase = true)) continue
+                        className.contains("Toast", ignoreCase = true) ||
+                        className.contains("Tooltip", ignoreCase = true)) continue
                     
                     foundPackage = reusableEvent.packageName
                 }

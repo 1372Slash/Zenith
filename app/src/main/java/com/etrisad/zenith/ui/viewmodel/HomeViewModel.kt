@@ -653,7 +653,8 @@ class HomeViewModel(
             }
 
             val selectedDayTotal = if (isSelectedToday) {
-                totalToday
+                val dbTotalToday = selectedDayHistory.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
+                maxOf(totalToday, dbTotalToday)
             } else {
                 selectedDayHistory.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: appTotals.values.sum()
             }
@@ -678,42 +679,59 @@ class HomeViewModel(
             val dbHourly = shieldRepository.getHourlyUsageForDate(selectedDateStr).first()
             val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
             val newlyLocked = mutableListOf<HourlyUsageEntity>()
+            var carryOverFromLocked = 0L
+            val carryOverChunksByPkg = mutableMapOf<String, Long>()
 
             if (isSelectedToday) {
                 val dbHourlyMap = dbHourly.groupBy { it.hour }
+                val hourLimit = 3600000L
                 
                 for (h in 0 until currentHour) {
-                    val existingPkgInHour = dbHourlyMap[h]?.map { it.packageName }?.toSet() ?: emptySet()
+                    val existingHourRecs = dbHourlyMap[h] ?: emptyList()
+                    val hasExistingTotal = existingHourRecs.any { it.packageName == "TOTAL" }
                     
-                    appTotals.keys.forEach { pkg ->
-                        if (pkg !in existingPkgInHour) {
-                            val diff = hourlyAppUsage[h]?.get(pkg) ?: 0L
-                            
-                            if (diff > 0) {
+                    if (!hasExistingTotal) {
+                        val currentHourAppState = mutableMapOf<String, Long>()
+                        appTotals.keys.forEach { pkg ->
+                            val diff = (hourlyAppUsage[h]?.get(pkg) ?: 0L) + (carryOverChunksByPkg[pkg] ?: 0L)
+                            if (diff > 0) currentHourAppState[pkg] = diff
+                        }
+                        carryOverChunksByPkg.clear()
+
+                        var totalInHour = currentHourAppState.values.sum()
+                        if (totalInHour > hourLimit) {
+                            var excess = totalInHour - hourLimit
+                            val sortedPkgs = currentHourAppState.keys.sortedByDescending { currentHourAppState[it] }
+                            for (pkg in sortedPkgs) {
+                                if (excess <= 0) break
+                                val currentVal = currentHourAppState[pkg] ?: 0L
+                                val toMove = minOf(currentVal, excess)
+                                currentHourAppState[pkg] = currentVal - toMove
+                                if (toMove > 0) carryOverChunksByPkg[pkg] = toMove
+                                excess -= toMove
+                            }
+                            totalInHour = hourLimit
+                        }
+
+                        currentHourAppState.forEach { (pkg, duration) ->
+                            if (duration > 0) {
                                 newlyLocked.add(HourlyUsageEntity(
-                                    date = selectedDateStr,
-                                    hour = h,
-                                    packageName = pkg,
-                                    usageTimeMillis = diff,
-                                    lastUpdated = System.currentTimeMillis()
+                                    date = selectedDateStr, hour = h, packageName = pkg,
+                                    usageTimeMillis = duration, lastUpdated = System.currentTimeMillis()
                                 ))
                             }
                         }
-                    }
-
-                    if ("TOTAL" !in existingPkgInHour) {
-                        val hourTotal = hourlyAppUsage[h]?.values?.sum() ?: 0L
-                        if (hourTotal > 0) {
+                        if (totalInHour > 0) {
                             newlyLocked.add(HourlyUsageEntity(
-                                date = selectedDateStr,
-                                hour = h,
-                                packageName = "TOTAL",
-                                usageTimeMillis = hourTotal,
-                                lastUpdated = System.currentTimeMillis()
+                                date = selectedDateStr, hour = h, packageName = "TOTAL",
+                                usageTimeMillis = totalInHour, lastUpdated = System.currentTimeMillis()
                             ))
                         }
+                    } else {
+                        carryOverChunksByPkg.clear()
                     }
                 }
+                
                 if (newlyLocked.isNotEmpty()) {
                     shieldRepository.insertHourlyUsage(newlyLocked)
                     userPreferencesRepository.setLastSyncTimestamp(System.currentTimeMillis())
@@ -767,7 +785,7 @@ class HomeViewModel(
 
                 HourlyUsageInfo(
                     hour = hour,
-                    usageTimeMillis = hourUsageTotal,
+                    usageTimeMillis = minOf(hourUsageTotal, 3600000L),
                     apps = appsInHour,
                     hasDatabaseRecord = dbHourly.any { it.hour == hour },
                     hasSystemData = hourUsageTotal > 0,
@@ -1102,13 +1120,12 @@ class HomeViewModel(
         viewModelScope.launch {
             var lastUpdateDay = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
             while (true) {
-                refreshUsageStats(showLoading = false)
-                refreshCurrentAppDetailUsage()
-
-                delay(15000)
-
                 val currentDay = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
                 if (currentDay != lastUpdateDay) {
+                    appInfoCache.clear()
+                    globalFallbackMap = emptyMap()
+                    detailFallbackMap = emptyMap()
+                    
                     val today = getMidnight(0)
                     val yesterday = getMidnight(1)
                     if (_uiState.value.selectedDateMillis == yesterday) {
@@ -1116,6 +1133,11 @@ class HomeViewModel(
                     }
                     lastUpdateDay = currentDay
                 }
+                
+                refreshUsageStats(showLoading = false)
+                refreshCurrentAppDetailUsage()
+
+                delay(15000)
             }
         }
     }

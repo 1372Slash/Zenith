@@ -195,22 +195,19 @@ class ZenithAccessibilityService : AccessibilityService() {
         val packageName = event.packageName?.toString() ?: return
         if (packageName == this.packageName) return
 
-        if (shouldBypassBlocking(packageName)) {
-            serviceScope.launch(Dispatchers.Main) {
-                overlayManager.checkAndHide(packageName)
-                sessionUsageOverlayManager.updateForegroundApp(packageName)
-            }
-            return
-        }
-
         val className = event.className?.toString() ?: ""
         if (className.contains("Toast") || className.contains("Notification") || className.contains("Tooltip")) {
             return
         }
 
         serviceScope.launch(Dispatchers.Main) {
-            overlayManager.checkAndHide(packageName)
-            sessionUsageOverlayManager.updateForegroundApp(packageName)
+            if (shouldBypassBlocking(packageName)) {
+                overlayManager.checkAndHide(packageName)
+                sessionUsageOverlayManager.updateForegroundApp(packageName)
+            } else {
+                overlayManager.checkAndHide(packageName)
+                sessionUsageOverlayManager.updateForegroundApp(packageName)
+            }
 
             packageChangeFlow.tryEmit(packageName)
         }
@@ -267,6 +264,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                     currentShieldCache = null
                     notifiedGoals.clear()
                     earlyKickManager.reset()
+                    dailyUsageCache.clear()
 
                     localBaseUsage = 0L
                     localSessionStartTime = currentTime
