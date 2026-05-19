@@ -46,11 +46,16 @@ import androidx.core.graphics.drawable.toBitmap
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.ui.components.SnapshotSection
 import com.etrisad.zenith.ui.components.UsageHistoryCard
+import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithContainedLoadingIndicator
+import com.etrisad.zenith.ui.components.ZenithToggleButtonGroup
+import com.etrisad.zenith.ui.components.ZenithToggleOption
 import com.etrisad.zenith.ui.viewmodel.AppUsageInfo
 import com.etrisad.zenith.ui.viewmodel.DailyUsage
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
+import com.etrisad.zenith.ui.viewmodel.HourlySortType
 import com.etrisad.zenith.ui.viewmodel.HourlyUsageInfo
+import androidx.compose.material.icons.outlined.Sort
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.cos
@@ -290,7 +295,24 @@ fun UsageStatsScreen(
                                 text = "Apps used at ${String.format("%02d:00", currentTargetHour)}",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = hourlyAccentColor
+                                color = hourlyAccentColor,
+                                modifier = Modifier.weight(1f)
+                            )
+                            ZenithToggleButtonGroup(
+                                options = listOf(
+                                    ZenithToggleOption(text = "Usage", icon = Icons.Outlined.Sort),
+                                    ZenithToggleOption(text = "Recent", icon = Icons.Outlined.Schedule)
+                                ),
+                                selectedIndices = setOf(if (uiState.hourlySortType == HourlySortType.USAGE_TIME) 0 else 1),
+                                onToggle = { index ->
+                                    val newType = if (index == 0) HourlySortType.USAGE_TIME else HourlySortType.RECENTLY_USED
+                                    viewModel.onHourlySortTypeChange(newType)
+                                },
+                                modifier = Modifier.width(200.dp),
+                                size = ZenithButtonSize.Small,
+                                isScalingEnabled = false,
+                                isShowingCheck = false,
+                                showTextSelected = true
                             )
                         }
                     }

@@ -9,7 +9,8 @@ object ScreenUsageHelper {
     data class UsageResult(
         val appUsageMap: Map<String, Long>,
         val hourlyUsageMap: Map<Int, Map<String, Long>>,
-        val sessionCounts: Map<String, Int>
+        val sessionCounts: Map<String, Int>,
+        val lastUsedMap: Map<String, Long> = emptyMap()
     )
 
     private var lastResult: UsageResult? = null
@@ -38,11 +39,13 @@ object ScreenUsageHelper {
         val usageMap = mutableMapOf<String, Long>()
         val hourlyMap = mutableMapOf<Int, MutableMap<String, Long>>()
         val sessionCounts = mutableMapOf<String, Int>()
+        val lastUsedMap = mutableMapOf<String, Long>()
 
         val aggregatedStats = usageStatsManager.queryAndAggregateUsageStats(start, end)
         aggregatedStats?.forEach { (pkg, stats) ->
             if (stats.totalTimeInForeground > 0) {
                 usageMap[pkg] = stats.totalTimeInForeground
+                lastUsedMap[pkg] = stats.lastTimeUsed
             }
         }
 
@@ -168,7 +171,7 @@ object ScreenUsageHelper {
             }
         }
 
-        val result = UsageResult(usageMap, hourlyMap, sessionCounts)
+        val result = UsageResult(usageMap, hourlyMap, sessionCounts, lastUsedMap)
         lastResult = result
         lastQueryTime = currentTime
         return result

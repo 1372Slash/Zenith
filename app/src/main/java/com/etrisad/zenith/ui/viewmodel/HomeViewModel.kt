@@ -28,7 +28,8 @@ data class AppUsageInfo(
     val hasDatabaseRecord: Boolean = false,
     val hasSystemData: Boolean = false,
     val isLive: Boolean = false,
-    val sessionCount: Int = 0
+    val sessionCount: Int = 0,
+    val lastTimeUsed: Long = 0L
 )
 
 data class DailyUsage(
@@ -82,6 +83,7 @@ data class HomeUiState(
     val activeGoals: List<ShieldEntity> = emptyList(),
     val shieldSortType: ShieldSortType = ShieldSortType.ALPHABETICAL,
     val goalSortType: ShieldSortType = ShieldSortType.ALPHABETICAL,
+    val hourlySortType: HourlySortType = HourlySortType.USAGE_TIME,
     val globalCurrentStreak: Int = 0,
     val globalBestStreak: Int = 0,
     val targetMillis: Long = 0L,
@@ -576,6 +578,7 @@ class HomeViewModel(
             val appTotals = mutableMapOf<String, Long>()
             val appSessionCounts = mutableMapOf<String, Int>()
             val hourlyAppUsage = mutableMapOf<Int, MutableMap<String, Long>>()
+            val lastUsedMap = mutableMapOf<String, Long>()
 
             if (isSelectedToday) {
                 filteredTodayUsage.forEach { (pkg, time) ->
@@ -592,6 +595,7 @@ class HomeViewModel(
                         hourlyAppUsage[hour] = filteredPkgMap.toMutableMap()
                     }
                 }
+                lastUsedMap.putAll(todayDetailed.lastUsedMap)
             } else {
                 val selectedDateStr = dateFormat.format(Date(selectedDate))
                 val selectedDayHistory = allHistory.filter { it.date == selectedDateStr }
@@ -603,18 +607,23 @@ class HomeViewModel(
                     it.packageName != "OTHER_TOTAL" 
                 }
 
+                val dayStats = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    usm.queryAndAggregateUsageStats(dayStart, dayEnd)
+                }
+
                 if (dbAppRecords.isNotEmpty()) {
                     dbAppRecords.forEach { record ->
                         appTotals[record.packageName] = record.usageTimeMillis
+                        lastUsedMap[record.packageName] = dayStats[record.packageName]?.lastTimeUsed ?: 0L
                     }
                 } else {
-                    val dayStats = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        usm.queryAndAggregateUsageStats(dayStart, dayEnd)
-                    }
                     dayStats.forEach { (pkg, stat) ->
                         if (pkg in excludePackages || pkg !in launcherApps) return@forEach
                         val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
-                        if (time > 0) appTotals[pkg] = time
+                        if (time > 0) {
+                            appTotals[pkg] = time
+                            lastUsedMap[pkg] = stat.lastTimeUsed
+                        }
                     }
                 }
             }
@@ -622,16 +631,17 @@ class HomeViewModel(
 
             val appList = appTotals.mapNotNull { (pkg, time) ->
                 val sessions = appSessionCounts[pkg] ?: (if (time > 4000) 1 else 0)
+                val lastUsed = lastUsedMap[pkg] ?: 0L
                 val cached = appInfoCache[pkg]
                 if (cached != null) {
-                    AppUsageInfo(pkg, cached.first, time, cached.second, sessionCount = sessions)
+                    AppUsageInfo(pkg, cached.first, time, cached.second, sessionCount = sessions, lastTimeUsed = lastUsed)
                 } else {
                     try {
                         val appInfo = pm.getApplicationInfo(pkg, 0)
                         val label = pm.getApplicationLabel(appInfo).toString()
                         val icon = pm.getApplicationIcon(appInfo)
                         appInfoCache[pkg] = label to icon
-                        AppUsageInfo(pkg, label, time, icon, sessionCount = sessions)
+                        AppUsageInfo(pkg, label, time, icon, sessionCount = sessions, lastTimeUsed = lastUsed)
                     } catch (_: Exception) { null }
                 }
             }
@@ -765,20 +775,26 @@ class HomeViewModel(
                     }
 
                     if (durationForThisHour > 0) {
+                        val lastUsed = lastUsedMap[pkg] ?: 0L
                         val cached = appInfoCache[pkg]
                         if (cached != null) {
-                            AppUsageInfo(pkg, cached.first, durationForThisHour, cached.second)
+                            AppUsageInfo(pkg, cached.first, durationForThisHour, cached.second, lastTimeUsed = lastUsed)
                         } else {
                             try {
                                 val appInfo = pm.getApplicationInfo(pkg, 0)
                                 val label = pm.getApplicationLabel(appInfo).toString()
                                 val icon = pm.getApplicationIcon(appInfo)
                                 appInfoCache[pkg] = label to icon
-                                AppUsageInfo(pkg, label, durationForThisHour, icon)
+                                AppUsageInfo(pkg, label, durationForThisHour, icon, lastTimeUsed = lastUsed)
                             } catch (_: Exception) { null }
                         }
                     } else null
-                }.sortedByDescending { it.totalTimeVisible }
+                }.let { list ->
+                    when (_uiState.value.hourlySortType) {
+                        HourlySortType.USAGE_TIME -> list.sortedByDescending { it.totalTimeVisible }
+                        HourlySortType.RECENTLY_USED -> list.sortedByDescending { it.lastTimeUsed }
+                    }
+                }
 
                 val dbHourTotal = allHourlyData.find { it.hour == hour && it.packageName == "TOTAL" }?.usageTimeMillis
                 val hourUsageTotal = dbHourTotal ?: appsInHour.sumOf { it.totalTimeVisible }
@@ -1101,6 +1117,11 @@ class HomeViewModel(
                 activeGoals = sortShields(currentState.activeGoals, sortType)
             )
         }
+    }
+
+    fun onHourlySortTypeChange(sortType: HourlySortType) {
+        _uiState.update { it.copy(hourlySortType = sortType) }
+        refreshUsageStats(showLoading = false)
     }
 
     private fun updateShieldedLists() {

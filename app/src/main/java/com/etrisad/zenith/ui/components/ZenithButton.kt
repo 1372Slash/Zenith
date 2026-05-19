@@ -311,6 +311,7 @@ private fun ZenithButtonCore(
     
     val exPad by animateDpAsState(
         targetValue = when {
+            !contentScaleEnabled -> 0.dp
             visualPressed -> 16.dp
             selected -> 8.dp
             else -> 0.dp
@@ -460,26 +461,31 @@ private fun ZenithButtonCore(
                                 enter = fadeIn() + expandHorizontally(),
                                 exit = fadeOut() + shrinkHorizontally()
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    icon?.let {
-                                        Icon(
-                                            imageVector = it,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(resIconS)
-                                        )
-                                        if (text != null) {
-                                            Spacer(Modifier.width(resH * 0.15f))
-                                        }
-                                    }
+                                icon?.let {
+                                    Icon(
+                                        imageVector = it,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(resIconS)
+                                    )
                                 }
                             }
-                            if (text != null) {
-                                Text(
-                                    text = text, 
-                                    style = resTextS, 
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center
-                                )
+                            AnimatedVisibility(
+                                visible = text != null,
+                                enter = fadeIn() + expandHorizontally(),
+                                exit = fadeOut() + shrinkHorizontally()
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (icon != null) {
+                                        Spacer(Modifier.width(resH * 0.15f))
+                                    }
+                                    Text(
+                                        text = text ?: "",
+                                        style = resTextS,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1
+                                    )
+                                }
                             }
                         }
                     }
@@ -498,7 +504,9 @@ fun ZenithToggleButtonGroup(
     isMultiSelect: Boolean = false,
     size: ZenithButtonSize = ZenithButtonSize.Medium,
     isInsideContainer: Boolean = false,
-    isShowingCheck: Boolean = true
+    isShowingCheck: Boolean = true,
+    isScalingEnabled: Boolean = true,
+    showTextSelected: Boolean = false
 ) {
     val resH = when(size){ZenithButtonSize.Small->32.dp; ZenithButtonSize.Medium->40.dp; ZenithButtonSize.Large->48.dp; else->56.dp}
     Row(modifier = modifier.height(resH).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -512,9 +520,9 @@ fun ZenithToggleButtonGroup(
             
             val animatedWeight by animateFloatAsState(
                 targetValue = when {
-                    isPressed || isTapped -> option.weight * 1.5f
-                    isSelected -> option.weight * 1.2f
-                    else -> option.weight
+                    isPressed || isTapped -> if (isSelected) option.weight * 2.2f else option.weight * 1.2f
+                    isSelected -> if (showTextSelected) option.weight * 1.8f else option.weight * 1.2f
+                    else -> if (showTextSelected) option.weight * 1.5f else option.weight
                 },
                 animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
                 label = "wAnim_$index"
@@ -550,7 +558,7 @@ fun ZenithToggleButtonGroup(
                 modifier = Modifier.weight(animatedWeight),
                 type = currentType,
                 size = size,
-                text = option.text,
+                text = if (showTextSelected) (if (isSelected) option.text else null) else option.text,
                 icon = if (isSelected && isMultiSelect && isShowingCheck && option.icon == null) Icons.Default.Check else option.icon,
                 isLoading = option.isLoading,
                 loadingProgress = option.loadingProgress,
@@ -560,7 +568,7 @@ fun ZenithToggleButtonGroup(
                 enabled = option.enabled,
                 selected = isSelected,
                 interactionSource = interactionSource,
-                contentScaleEnabled = false,
+                contentScaleEnabled = isScalingEnabled,
                 shape = RoundedCornerShape(topStart = startR, bottomStart = startR, topEnd = endR, bottomEnd = endR)
             )
         }
