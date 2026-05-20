@@ -1520,6 +1520,7 @@ class AppUsageMonitorService : Service() {
                 showBedtimeOverlay(packageName)
                 return true
             }
+            return false
         }
 
         if (isWindDownActive && prefs?.bedtimeWindDownEnabled == true) {
@@ -1527,6 +1528,7 @@ class AppUsageMonitorService : Service() {
                 showWindDownOverlay(packageName)
                 return true
             }
+            return false
         }
 
         val now = System.currentTimeMillis()
@@ -1638,7 +1640,9 @@ class AppUsageMonitorService : Service() {
         val isBedtimeOrWindDown = isBedtimeActive || (isWindDownActive && prefs?.bedtimeWindDownEnabled == true)
         
         if (isBedtimeOrWindDown) {
-            if (packageName in bedtimeWhitelistedPackages) return true
+            if (packageName in bedtimeWhitelistedPackages && packageName !in restrictedPackages) {
+                return true
+            }
         } else {
             if (packageName in whitelistedPackages) return true
         }

@@ -871,6 +871,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                 showBedtimeOverlay(packageName)
                 return true
             }
+            return false
         }
 
         if (isWindDownActive && prefs.bedtimeWindDownEnabled) {
@@ -878,6 +879,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                 showWindDownOverlay(packageName)
                 return true
             }
+            return false
         }
 
         val now = System.currentTimeMillis()
@@ -974,7 +976,9 @@ class ZenithAccessibilityService : AccessibilityService() {
         val isBedtimeOrWindDown = isBedtimeActive || (isWindDownActive && prefs?.bedtimeWindDownEnabled == true)
         
         if (isBedtimeOrWindDown) {
-            if (packageName in bedtimeWhitelistedPackages) return true
+            if (packageName in bedtimeWhitelistedPackages && packageName !in restrictedPackages) {
+                return true
+            }
         } else {
             if (packageName in whitelistedPackages) return true
         }
