@@ -325,54 +325,57 @@ class AppUsageMonitorService : Service() {
     private fun startGoalReminderCheck() {
         serviceScope.launch {
             while (true) {
-                val currentTime = System.currentTimeMillis()
-                val goals = goalShieldsCache
-                val triggeredGoals = mutableListOf<ShieldEntity>()
+                try {
+                    val currentTime = System.currentTimeMillis()
+                    val goals = goalShieldsCache
+                    val triggeredGoals = mutableListOf<ShieldEntity>()
 
-                if (goals.isNotEmpty()) {
-                    goals.forEach { goal ->
-                        if (goal.packageName == lastForegroundApp) return@forEach
-                        if (isPaused(goal)) return@forEach
+                    if (goals.isNotEmpty()) {
+                        goals.forEach { goal ->
+                            if (goal.packageName == lastForegroundApp) return@forEach
+                            if (isPaused(goal)) return@forEach
 
-                        val usageToday = dailyUsageCache[goal.packageName] ?: getTotalUsageToday(goal.packageName)
-                        val limitMillis = goal.timeLimitMinutes * 60 * 1000L
-                        if (usageToday >= limitMillis) return@forEach
+                            val usageToday = dailyUsageCache[goal.packageName] ?: getTotalUsageToday(goal.packageName)
+                            val limitMillis = goal.timeLimitMinutes * 60 * 1000L
+                            if (usageToday >= limitMillis) return@forEach
 
-                        val periodMillis = goal.goalReminderPeriodMinutes * 60 * 1000L
-                        if (periodMillis > 0 && currentTime - goal.lastGoalReminderTimestamp >= periodMillis) {
-                            triggeredGoals.add(goal)
+                            val periodMillis = goal.goalReminderPeriodMinutes * 60 * 1000L
+                            if (periodMillis > 0 && currentTime - goal.lastGoalReminderTimestamp >= periodMillis) {
+                                triggeredGoals.add(goal)
+                            }
                         }
                     }
-                }
 
-                if (triggeredGoals.isNotEmpty()) {
-                    triggeredGoals.forEach { goal ->
-                        sendGoalSuggestionNotification(goal)
-                        shieldRepository.updateShield(goal.copy(lastGoalReminderTimestamp = currentTime))
-                    }
+                    if (triggeredGoals.isNotEmpty()) {
+                        triggeredGoals.forEach { goal ->
+                            sendGoalSuggestionNotification(goal)
+                            shieldRepository.updateShield(goal.copy(lastGoalReminderTimestamp = currentTime))
+                        }
 
-                    val overlayGoals = triggeredGoals.filter { it.isGoalCallerEnabled }
-                    if (overlayGoals.isNotEmpty()) {
-                        val calendar = Calendar.getInstance()
-                        val hour = calendar.get(Calendar.HOUR_OF_DAY)
-                        val isNightTime = hour >= 22 || hour < 5
+                        val overlayGoals = triggeredGoals.filter { it.isGoalCallerEnabled }
+                        if (overlayGoals.isNotEmpty()) {
+                            val calendar = Calendar.getInstance()
+                            val hour = calendar.get(Calendar.HOUR_OF_DAY)
+                            val isNightTime = hour >= 22 || hour < 5
 
-                        if ((!isBedtimeActive || hour >= 6) && !isNightTime) {
-                            try {
-                                val wakeLock = powerManager.newWakeLock(
-                                    android.os.PowerManager.FULL_WAKE_LOCK or
-                                            android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP or
-                                            android.os.PowerManager.ON_AFTER_RELEASE,
-                                    "Zenith:GoalWakeLock"
-                                )
-                                wakeLock.acquire(3000)
-                            } catch (_: Exception) {}
+                            if ((!isBedtimeActive || hour >= 6) && !isNightTime) {
+                                try {
+                                    val wakeLock = powerManager.newWakeLock(
+                                        android.os.PowerManager.FULL_WAKE_LOCK or
+                                                android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                                                android.os.PowerManager.ON_AFTER_RELEASE,
+                                        "Zenith:GoalWakeLock"
+                                    )
+                                    wakeLock.acquire(3000)
+                                } catch (_: Exception) {}
 
-                            AppGoalOverlayActivity.start(this@AppUsageMonitorService, overlayGoals.map { it.packageName })
+                                AppGoalOverlayActivity.start(this@AppUsageMonitorService, overlayGoals.map { it.packageName })
+                            }
                         }
                     }
+                } catch (e: Exception) {
+                    Log.e("ZenithAUMS", "Error in goal reminder check: ${e.message}")
                 }
-
                 delay(60000)
             }
         }
@@ -395,17 +398,18 @@ class AppUsageMonitorService : Service() {
             if (drawable is BitmapDrawable) {
                 drawable.bitmap
             } else {
-                val bitmap = Bitmap.createBitmap(
-                    drawable.intrinsicWidth.coerceAtLeast(1),
-                    drawable.intrinsicHeight.coerceAtLeast(1),
-                    Bitmap.Config.ARGB_8888
-                )
-                val canvas = Canvas(bitmap)
-                drawable.setBounds(0, 0, canvas.width, canvas.height)
-                drawable.draw(canvas)
-                bitmap
+                val width = drawable.intrinsicWidth.coerceAtLeast(1)
+                val height = drawable.intrinsicHeight.coerceAtLeast(1)
+                if (width > 2000 || height > 2000) null
+                else {
+                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    val canvas = Canvas(bitmap)
+                    drawable.setBounds(0, 0, canvas.width, canvas.height)
+                    drawable.draw(canvas)
+                    bitmap
+                }
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             null
         }
 
@@ -539,9 +543,11 @@ class AppUsageMonitorService : Service() {
                         
                         if (currentApp != lastForegroundApp || currentShieldCache?.packageName != currentApp) {
                             lastForegroundApp?.let { prevPkg ->
-                                allShieldsCache.find { it.packageName == prevPkg }?.let { prevShield ->
-                                    updateShieldInDatabase(prevShield, force = true)
-                                }
+                                try {
+                                    allShieldsCache.find { it.packageName == prevPkg }?.let { prevShield ->
+                                        updateShieldInDatabase(prevShield, force = true)
+                                    }
+                                } catch (_: Exception) {}
                             }
 
                             currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
@@ -578,7 +584,9 @@ class AppUsageMonitorService : Service() {
                         }
 
                         val allowedUntilVal = allowedApps[currentApp]
-                        updateUsageTime(currentApp)
+                        try {
+                            updateUsageTime(currentApp)
+                        } catch (_: Exception) {}
 
                         val shield = currentShieldCache
                         if (shield != null && shield.type != FocusType.GOAL && !isPaused(shield)) {
@@ -706,60 +714,62 @@ class AppUsageMonitorService : Service() {
                     }
                 }
 
-                val delayTime = if (currentPreferences?.customDelayEnabled == true) {
-                    val prefs = currentPreferences!!
-                    when {
-                        isPowerSaveMode -> prefs.delayPowerSave
-                        InterceptOverlayManager.isShowing -> prefs.delayOverlayShowing
-                        currentShieldCache != null -> {
-                            val shield = currentShieldCache!!
-                            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
-                            val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
+                val delayTime = try {
+                    if (currentPreferences?.customDelayEnabled == true) {
+                        val prefs = currentPreferences!!
+                        when {
+                            isPowerSaveMode -> prefs.delayPowerSave
+                            InterceptOverlayManager.isShowing -> prefs.delayOverlayShowing
+                            currentShieldCache != null -> {
+                                val shield = currentShieldCache!!
+                                val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+                                val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
 
-                            if (shield.type == FocusType.GOAL) {
-                                when {
-                                    remaining < 60000 -> prefs.delayGoalNear
-                                    remaining < 300000 -> prefs.delayGoalMid
-                                    else -> prefs.delayGoalFar
-                                }
-                            } else {
-                                when {
-                                    remaining > 3600000 -> prefs.delayShieldVeryFar
-                                    remaining > 600000 -> prefs.delayShieldFar
-                                    remaining > 60000 -> prefs.delayShieldMid
-                                    else -> prefs.delayShieldNear
+                                if (shield.type == FocusType.GOAL) {
+                                    when {
+                                        remaining < 60000 -> prefs.delayGoalNear
+                                        remaining < 300000 -> prefs.delayGoalMid
+                                        else -> prefs.delayGoalFar
+                                    }
+                                } else {
+                                    when {
+                                        remaining > 3600000 -> prefs.delayShieldVeryFar
+                                        remaining > 600000 -> prefs.delayShieldFar
+                                        remaining > 60000 -> prefs.delayShieldMid
+                                        else -> prefs.delayShieldNear
+                                    }
                                 }
                             }
+                            else -> prefs.delayDefault
                         }
-                        else -> prefs.delayDefault
-                    }
-                } else {
-                    when {
-                        isPowerSaveMode -> 5000L
-                        InterceptOverlayManager.isShowing -> 8000L
-                        currentShieldCache != null -> {
-                            val shield = currentShieldCache!!
-                            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
-                            val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
+                    } else {
+                        when {
+                            isPowerSaveMode -> 5000L
+                            InterceptOverlayManager.isShowing -> 8000L
+                            currentShieldCache != null -> {
+                                val shield = currentShieldCache!!
+                                val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+                                val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
 
-                            if (shield.type == FocusType.GOAL) {
-                                when {
-                                    remaining < 60000 -> 600L
-                                    remaining < 300000 -> 1200L
-                                    else -> 1800L
-                                }
-                            } else {
-                                when {
-                                    remaining > 3600000 -> 5000L
-                                    remaining > 600000 -> 3000L
-                                    remaining > 60000 -> 1500L
-                                    else -> 600L
+                                if (shield.type == FocusType.GOAL) {
+                                    when {
+                                        remaining < 60000 -> 600L
+                                        remaining < 300000 -> 1200L
+                                        else -> 1800L
+                                    }
+                                } else {
+                                    when {
+                                        remaining > 3600000 -> 5000L
+                                        remaining > 600000 -> 3000L
+                                        remaining > 60000 -> 1500L
+                                        else -> 600L
+                                    }
                                 }
                             }
+                            else -> 1200L
                         }
-                        else -> 1200L
                     }
-                }
+                } catch (_: Exception) { 2000L }
                 delay(delayTime)
             }
         }
@@ -1208,13 +1218,15 @@ class AppUsageMonitorService : Service() {
         calendar.set(Calendar.MILLISECOND, 999)
         val endTime = calendar.timeInMillis
 
-        val usageMap = usageStatsManager.queryAndAggregateUsageStats(startTime, endTime)
+        val usageMap = try {
+            usageStatsManager.queryAndAggregateUsageStats(startTime, endTime)
+        } catch (_: Exception) { null }
         
         val lastUpdateCalendar = Calendar.getInstance().apply { timeInMillis = prefs.globalLastStreakUpdateTimestamp }
         val isGlobalAlreadyUpdated = lastUpdateCalendar.get(Calendar.YEAR).toLong() == todayYear &&
                                    lastUpdateCalendar.get(Calendar.DAY_OF_YEAR).toLong() == todayDayOfYear
 
-        if (!isGlobalAlreadyUpdated && prefs.screenTimeTargetMinutes > 0) {
+        if (usageMap != null && !isGlobalAlreadyUpdated && prefs.screenTimeTargetMinutes > 0) {
             var totalUsageYesterday = 0L
             val excludePackages = launcherPackages + packageName
             
@@ -1241,7 +1253,7 @@ class AppUsageMonitorService : Service() {
             
             if (isAlreadyUpdatedToday) return@forEach
 
-            val stats = usageMap[shield.packageName]
+            val stats = usageMap?.get(shield.packageName)
             val totalUsageYesterday = stats?.let { 
                 it.totalTimeVisible.coerceAtLeast(it.totalTimeInForeground) 
             } ?: 0L

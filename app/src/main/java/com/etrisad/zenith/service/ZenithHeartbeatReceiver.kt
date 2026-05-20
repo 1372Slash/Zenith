@@ -8,19 +8,23 @@ class ZenithHeartbeatReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action
         if (action == "com.etrisad.zenith.action.HEARTBEAT" || action == "com.etrisad.zenith.action.REFRESH_SERVICES") {
-            val monitorIntent = Intent(context, AppUsageMonitorService::class.java).apply {
-                this.action = if (action == "com.etrisad.zenith.action.REFRESH_SERVICES") 
-                    "com.etrisad.zenith.action.REFRESH_DATA" 
-                else 
-                    "com.etrisad.zenith.action.HEARTBEAT"
-            }
-            context.startForegroundService(monitorIntent)
-
-            if (ZenithAccessibilityService.isServiceRunning) {
-                val accessIntent = Intent(context, ZenithAccessibilityService::class.java).apply {
-                    this.action = "com.etrisad.zenith.action.REFRESH_DATA"
+            try {
+                val monitorIntent = Intent(context, AppUsageMonitorService::class.java).apply {
+                    this.action = if (action == "com.etrisad.zenith.action.REFRESH_SERVICES") 
+                        "com.etrisad.zenith.action.REFRESH_DATA" 
+                    else 
+                        "com.etrisad.zenith.action.HEARTBEAT"
                 }
-                context.startService(accessIntent)
+                context.startForegroundService(monitorIntent)
+
+                if (ZenithAccessibilityService.isServiceRunning) {
+                    val accessIntent = Intent(context, ZenithAccessibilityService::class.java).apply {
+                        this.action = "com.etrisad.zenith.action.REFRESH_DATA"
+                    }
+                    context.startService(accessIntent)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ZenithHeartbeat", "Failed to start service: ${e.message}")
             }
         }
     }
