@@ -403,6 +403,7 @@ class HomeViewModel(
     }
 
     fun onRefresh() {
+        triggerServiceRefresh()
         viewModelScope.launch {
             val prefs = userPreferencesRepository.userPreferencesFlow.first()
             if (prefs.smartRepairOnRefresh) {
@@ -414,6 +415,7 @@ class HomeViewModel(
     }
 
     fun syncDataNow() {
+        triggerServiceRefresh()
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             
@@ -1300,6 +1302,13 @@ class HomeViewModel(
             shieldRepository.deleteShield(shield)
             _appDetailUiState.update { it.copy(type = null, shieldEntity = null) }
         }
+    }
+
+    private fun triggerServiceRefresh() {
+        val intent = Intent("com.etrisad.zenith.action.REFRESH_SERVICES").apply {
+            setPackage(context.packageName)
+        }
+        context.sendBroadcast(intent)
     }
 
     fun formatDuration(millis: Long): String {

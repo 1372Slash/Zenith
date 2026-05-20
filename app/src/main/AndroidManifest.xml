@@ -99,6 +99,7 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="com.etrisad.zenith.action.HEARTBEAT" />
+                <action android:name="com.etrisad.zenith.action.REFRESH_SERVICES" />
             </intent-filter>
         </receiver>
 

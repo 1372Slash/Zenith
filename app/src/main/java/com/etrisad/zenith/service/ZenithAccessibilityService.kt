@@ -103,6 +103,61 @@ class ZenithAccessibilityService : AccessibilityService() {
         private var instance: ZenithAccessibilityService? = null
     }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == "com.etrisad.zenith.action.REFRESH_DATA") {
+            refreshService()
+        }
+        return START_STICKY
+    }
+
+    private fun refreshService() {
+        serviceScope.launch {
+            try {
+                // Reload Preferences
+                val prefs = preferencesRepository.userPreferencesFlow.first()
+                currentPreferences = prefs
+                whitelistedPackages = prefs.whitelistedPackages
+                bedtimeWhitelistedPackages = prefs.bedtimeWhitelistedPackages
+                
+                // Reload Shields
+                allShieldsCache = shieldRepository.allShields.first()
+                
+                // Reload Schedules
+                val schedules = shieldRepository.allSchedules.first()
+                activeSchedules = schedules.filter { it.isActive }
+                parsedSchedulesCache = activeSchedules.map { s ->
+                    val startParts = s.startTime.split(":")
+                    val endParts = s.endTime.split(":")
+                    ParsedSchedule(
+                        id = s.id,
+                        startMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 0) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0),
+                        endMinutes = (endParts.getOrNull(0)?.toIntOrNull() ?: 0) * 60 + (endParts.getOrNull(1)?.toIntOrNull() ?: 0),
+                        mode = s.mode,
+                        packageNames = s.packageNames.toSet()
+                    )
+                }
+                
+                updateRestrictedPackages()
+                updateBedtimeStatus(prefs)
+                
+                // Reset usage caches
+                usageStatsCache = null
+                lastUsageCacheTime = 0L
+                lastUsageFetchTime = 0L
+                dailyUsageCache.clear()
+                
+                // Force check current package
+                lastForegroundApp?.let { pkg ->
+                    packageChangeFlow.tryEmit(pkg)
+                }
+                
+                Log.d("ZenithAS", "Service refreshed successfully via REFRESH_DATA")
+            } catch (e: Exception) {
+                Log.e("ZenithAS", "Error refreshing service: ${e.message}")
+            }
+        }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this

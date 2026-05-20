@@ -149,12 +149,56 @@ class AppUsageMonitorService : Service() {
             "com.etrisad.zenith.action.MIDNIGHT_RESET_SERVICE" -> onMidnightReset()
             "com.etrisad.zenith.action.HEARTBEAT" -> {
                 scheduleHeartbeatAlarm()
-                if (serviceJob.isCancelled || !monitoringLoopActive) {
+                if (!monitoringLoopActive) {
                     startMonitoring()
                 }
             }
+            "com.etrisad.zenith.action.REFRESH_DATA" -> {
+                refreshData()
+            }
         }
         return START_STICKY
+    }
+
+    private fun refreshData() {
+        serviceScope.launch {
+            // Reload preferences
+            currentPreferences = preferencesRepository.userPreferencesFlow.first()
+            whitelistedPackages = currentPreferences?.whitelistedPackages ?: emptySet()
+            bedtimeWhitelistedPackages = currentPreferences?.bedtimeWhitelistedPackages ?: emptySet()
+            
+            // Reload shields
+            allShieldsCache = shieldRepository.allShields.first()
+            
+            // Reload schedules
+            val schedules = shieldRepository.allSchedules.first()
+            activeSchedules = schedules.filter { it.isActive }
+            parsedSchedulesCache = activeSchedules.map { s ->
+                val startParts = s.startTime.split(":")
+                val endParts = s.endTime.split(":")
+                ParsedSchedule(
+                    id = s.id,
+                    startMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 0) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0),
+                    endMinutes = (endParts.getOrNull(0)?.toIntOrNull() ?: 0) * 60 + (endParts.getOrNull(1)?.toIntOrNull() ?: 0),
+                    mode = s.mode,
+                    packageNames = s.packageNames.toSet()
+                )
+            }
+            
+            updateRestrictedPackages()
+            currentPreferences?.let { updateBedtimeStatus(it) }
+            
+            // Clear transient caches to force re-fetch
+            dailyUsageCache.clear()
+            usageStatsCache = null
+            lastUsageCacheTime = 0L
+            lastUsageFetchTime = 0L
+            
+            // If loop is not active, start it
+            if (!monitoringLoopActive) {
+                startMonitoring()
+            }
+        }
     }
 
     private fun scheduleHeartbeatAlarm() {
@@ -402,6 +446,7 @@ class AppUsageMonitorService : Service() {
     private val notifiedGoals = mutableSetOf<String>()
 
     private fun startMonitoring() {
+        if (monitoringLoopActive) return
         monitoringLoopActive = true
         serviceScope.launch {
             checkDayChangeOnStartup()
