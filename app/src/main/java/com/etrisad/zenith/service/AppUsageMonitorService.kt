@@ -506,7 +506,8 @@ class AppUsageMonitorService : Service() {
 
                             currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
                             if (currentApp != lastForegroundApp) {
-                                lastUsageFetchTime = 0L 
+                                com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
+                                lastUsageFetchTime = 0L
                                 lastHUDUpdateTime = 0L
                                 sessionStartTime = currentTime
                                 currentSessionPackage = currentApp
@@ -773,6 +774,10 @@ class AppUsageMonitorService : Service() {
 
                 val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
                 val realUsage = (detailedUsage.appUsageMap[packageName] ?: 0L).coerceAtMost(currentTime - getStartOfDay())
+                
+                val systemGlobal = getFilteredGlobalUsage(detailedUsage.appUsageMap)
+                baseGlobalUsageAtSessionStart = systemGlobal
+                cachedTotalGlobalUsage = systemGlobal
 
                 baseUsageAtSessionStart = realUsage
                 sessionStartTime = currentTime

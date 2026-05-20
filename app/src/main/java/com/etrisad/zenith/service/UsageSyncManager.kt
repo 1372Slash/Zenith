@@ -76,11 +76,29 @@ class UsageSyncManager(
                     activeSessions.clear()
                 }
                 UsageEvents.Event.MOVE_TO_FOREGROUND, UsageEvents.Event.ACTIVITY_RESUMED -> {
-                    if (pkg !in excludePackages && pkg in launcherApps) {
+                    if (pkg in excludePackages || pkg !in launcherApps) {
+                        activeSessions.forEach { (p, start) ->
+                            val segmentStart = maxOf(start, lastSyncTime)
+                            val segmentEnd = minOf(time, currentTime)
+                            if (segmentStart < segmentEnd) {
+                                processSession(p, segmentStart, segmentEnd, hourlyBuckets)
+                            }
+                        }
+                        activeSessions.clear()
+                    } else {
                         val className = event.className ?: ""
                         if (!className.contains("Notification", ignoreCase = true) &&
                             !className.contains("Toast", ignoreCase = true)) {
-                            
+
+                            activeSessions.keys.filter { it != pkg }.forEach { p ->
+                                val start = activeSessions.remove(p) ?: return@forEach
+                                val segmentStart = maxOf(start, lastSyncTime)
+                                val segmentEnd = minOf(time, currentTime)
+                                if (segmentStart < segmentEnd) {
+                                    processSession(p, segmentStart, segmentEnd, hourlyBuckets)
+                                }
+                            }
+
                             val previousStart = activeSessions[pkg]
                             if (previousStart != null) {
                                 val segmentStart = maxOf(previousStart, lastSyncTime)
