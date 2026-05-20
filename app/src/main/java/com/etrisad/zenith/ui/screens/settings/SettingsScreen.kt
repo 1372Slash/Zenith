@@ -79,7 +79,8 @@ import java.text.SimpleDateFormat
 fun SettingsScreen(
     preferencesRepository: UserPreferencesRepository,
     innerPadding: PaddingValues,
-    navController: NavController
+    navController: NavController,
+    onOpenPermissions: () -> Unit
 ) {
     val preferences by preferencesRepository.userPreferencesFlow.collectAsState(
         initial = UserPreferences(
@@ -125,7 +126,6 @@ fun SettingsScreen(
         onResult = { uri ->
             uri?.let {
                 coroutineScope.launch {
-                    // Force sync before backup to ensure all current data is included
                     try {
                         UsageSyncManager(context, app.shieldRepository, app.userPreferencesRepository).syncUsageData()
                     } catch (_: Exception) {}
@@ -418,7 +418,8 @@ fun SettingsScreen(
                 }
             }
         },
-        isCheckingForUpdate = checkingForUpdate
+        isCheckingForUpdate = checkingForUpdate,
+        onOpenPermissions = onOpenPermissions
     )
 
     if (showUpdateSheet && latestRelease != null) {
@@ -535,7 +536,8 @@ fun SettingsScreenContent(
     onTestUpdateSheet: () -> Unit,
     onCheckForUpdate: () -> Unit,
     onViewChangelog: () -> Unit,
-    isCheckingForUpdate: Boolean
+    isCheckingForUpdate: Boolean,
+    onOpenPermissions: () -> Unit
 ) {
     var showTargetSheet by remember { mutableStateOf(false) }
     var showEmergencyRechargeSheet by remember { mutableStateOf(false) }
@@ -558,13 +560,24 @@ fun SettingsScreenContent(
             }
 
             item {
+                SettingsActionItem(
+                    title = "Permissions",
+                    summary = "Manage required and optional system permissions",
+                    onClick = onOpenPermissions,
+                    icon = Icons.Outlined.Security,
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
                 SettingsToggle(
                     title = "Disable Accessibility",
                     description = "Remove Accessibility requirements from permission checks",
                     checked = preferences.accessibilityDisabled,
                     onCheckedChange = onAccessibilityDisabledChange,
                     icon = Icons.Outlined.AccessibilityNew,
-                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                    shape = RoundedCornerShape(8.dp)
                 )
             }
 

@@ -2,10 +2,18 @@ package com.etrisad.zenith.ui.components
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -20,7 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -28,18 +36,20 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.etrisad.zenith.data.preferences.UserPreferences
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.service.AppUsageMonitorService
+import com.etrisad.zenith.util.canScheduleExactAlarms
+import com.etrisad.zenith.util.hasNotificationPermission
 import com.etrisad.zenith.util.hasUsageStatsPermission
 import com.etrisad.zenith.util.isAccessibilityServiceEnabled
-import com.etrisad.zenith.util.hasNotificationPermission
-import com.etrisad.zenith.service.AppUsageMonitorService
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-
-import com.etrisad.zenith.data.preferences.UserPreferencesRepository
-import com.etrisad.zenith.data.preferences.ThemeConfig
-import com.etrisad.zenith.data.preferences.UserPreferences
+import com.etrisad.zenith.util.isIgnoringBatteryOptimizations
+import com.etrisad.zenith.util.isNotificationListenerEnabled
 import kotlinx.coroutines.launch
+
+enum class GroupPosition {
+    Top, Middle, Bottom, Single
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +72,15 @@ fun PermissionBottomSheet(
     var hasAccessibility by remember { mutableStateOf(isAccessibilityServiceEnabled(context)) }
     var hasNotifications by remember { mutableStateOf(hasNotificationPermission(context)) }
     var hasNotificationPolicy by remember { mutableStateOf((context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted) }
+    var hasNotificationListener by remember { mutableStateOf(isNotificationListenerEnabled(context)) }
+    var isBatteryOptimized by remember { mutableStateOf(!isIgnoringBatteryOptimizations(context)) }
+    var canExactAlarm by remember { mutableStateOf(canScheduleExactAlarms(context)) }
+    
+    var stabilityExpanded by remember { mutableStateOf(false) }
+    var optionalExpanded by remember { mutableStateOf(false) }
+
+    val optionalAllGranted = hasAccessibility && hasNotificationListener
+    val stabilityAllGranted = !isBatteryOptimized && canExactAlarm
 
     val notificationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
@@ -85,10 +104,9 @@ fun PermissionBottomSheet(
                 hasAccessibility = isAccessibilityServiceEnabled(context)
                 hasNotifications = hasNotificationPermission(context)
                 hasNotificationPolicy = (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted
-                
-                if (hasUsageStats && hasOverlay && hasNotifications && hasNotificationPolicy && (hasAccessibility || preferences.accessibilityDisabled)) {
-                    onAllPermissionsGranted()
-                }
+                hasNotificationListener = isNotificationListenerEnabled(context)
+                isBatteryOptimized = !isIgnoringBatteryOptimizations(context)
+                canExactAlarm = canScheduleExactAlarms(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -101,13 +119,14 @@ fun PermissionBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
         dragHandle = { BottomSheetDefaults.DragHandle() },
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp)
+                .padding(horizontal = 20.dp)
+                .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -148,7 +167,7 @@ fun PermissionBottomSheet(
                     }
                 },
                 icon = Icons.Outlined.Notifications,
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                position = GroupPosition.Top
             )
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -158,27 +177,29 @@ fun PermissionBottomSheet(
                 description = "To track app usage time",
                 isGranted = hasUsageStats,
                 onClick = {
-                    context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                    val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    })
+                    }
+                    context.startActivity(intent)
                 },
                 icon = Icons.Outlined.BarChart,
-                shape = RoundedCornerShape(8.dp)
+                position = GroupPosition.Middle
             )
 
             Spacer(modifier = Modifier.height(4.dp))
 
             PermissionItemRow(
                 title = "Notification Policy",
-                description = "Required for Bedtime Do Not Disturb",
+                description = "Required for Bedtime DND",
                 isGranted = hasNotificationPolicy,
                 onClick = {
-                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).apply {
+                    val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    })
+                    }
+                    context.startActivity(intent)
                 },
                 icon = Icons.Outlined.DoNotDisturbOn,
-                shape = RoundedCornerShape(8.dp)
+                position = GroupPosition.Middle
             )
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -188,38 +209,109 @@ fun PermissionBottomSheet(
                 description = "To show the shield over apps",
                 isGranted = hasOverlay,
                 onClick = {
-                    context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                    val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
                         data = Uri.fromParts("package", context.packageName, null)
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    })
+                    }
+                    context.startActivity(intent)
                 },
                 icon = Icons.Outlined.Layers,
-                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                position = GroupPosition.Bottom
             )
 
-            if (!preferences.accessibilityDisabled) {
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                Text(
-                    text = "Optional",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                    textAlign = TextAlign.Start
-                )
+            Spacer(modifier = Modifier.height(16.dp))
 
-                PermissionItemRow(
-                    title = "Accessibility Service",
-                    description = "To detect app launches instantly",
-                    isGranted = hasAccessibility,
-                    onClick = {
-                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        })
-                    },
+            if (!preferences.accessibilityDisabled) {
+                CollapsibleSection(
+                    title = "Optional Service",
                     icon = Icons.Outlined.AccessibilityNew,
-                    shape = RoundedCornerShape(24.dp)
-                )
+                    expanded = optionalExpanded,
+                    onToggle = { optionalExpanded = !optionalExpanded },
+                    isAllGranted = optionalAllGranted
+                ) {
+                    Column {
+                        PermissionItemRow(
+                            title = "Accessibility Service",
+                            description = "To detect app launches instantly",
+                            isGranted = hasAccessibility,
+                            onClick = {
+                                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            },
+                            icon = Icons.Outlined.AccessibilityNew,
+                            position = GroupPosition.Top,
+                            isInsideCollapse = true
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        PermissionItemRow(
+                            title = "Intercept Service",
+                            description = "Required to block schedule notifications",
+                            isGranted = hasNotificationListener,
+                            onClick = {
+                                val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            },
+                            icon = Icons.Outlined.PhonelinkErase,
+                            position = GroupPosition.Bottom,
+                            isInsideCollapse = true
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            CollapsibleSection(
+                title = "App Stability",
+                icon = Icons.Outlined.AutoGraph,
+                expanded = stabilityExpanded,
+                onToggle = { stabilityExpanded = !stabilityExpanded },
+                isAllGranted = stabilityAllGranted
+            ) {
+                Column {
+                    PermissionItemRow(
+                        title = "Battery Optimization",
+                        description = "Prevent system from killing Zenith",
+                        isGranted = !isBatteryOptimized,
+                        icon = Icons.Outlined.BatteryStd,
+                        onClick = {
+                            try {
+                                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                    data = Uri.parse("package:${context.packageName}")
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            }
+                        },
+                        position = GroupPosition.Top,
+                        isInsideCollapse = true
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    PermissionItemRow(
+                        title = "Exact Alarms",
+                        description = "Required for precise reset tasks",
+                        isGranted = canExactAlarm,
+                        icon = Icons.Outlined.Alarm,
+                        onClick = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            }
+                        },
+                        position = GroupPosition.Bottom,
+                        isInsideCollapse = true
+                    )
+                }
             }
             
             if (allGranted) {
@@ -240,27 +332,121 @@ fun PermissionBottomSheet(
 }
 
 @Composable
+private fun CollapsibleSection(
+    title: String,
+    icon: ImageVector,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    isAllGranted: Boolean = false,
+    content: @Composable () -> Unit
+) {
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isAllGranted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                      else MaterialTheme.colorScheme.surfaceContainerHigh,
+        label = "sectionColor"
+    )
+
+    val contentColor = MaterialTheme.colorScheme.onSurface
+
+    val iconPillColor = if (isAllGranted) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        else MaterialTheme.colorScheme.secondaryContainer
+
+    val iconTint = if (isAllGranted) MaterialTheme.colorScheme.primary 
+                   else MaterialTheme.colorScheme.secondary
+
+    Surface(
+        onClick = onToggle,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = backgroundColor
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .height(28.dp)
+                            .width(48.dp)
+                            .background(iconPillColor, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = iconTint,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = contentColor
+                    )
+                }
+                
+                Box(
+                    modifier = Modifier
+                        .height(28.dp)
+                        .width(48.dp)
+                        .background(MaterialTheme.colorScheme.surface, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            AnimatedVisibility(
+                visible = expanded,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Box(modifier = Modifier.padding(6.dp)) {
+                    content()
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun PermissionItemRow(
     title: String,
     description: String,
     isGranted: Boolean,
     onClick: () -> Unit,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    shape: Shape = RoundedCornerShape(16.dp)
+    icon: ImageVector,
+    position: GroupPosition = GroupPosition.Middle,
+    isInsideCollapse: Boolean = false
 ) {
     val backgroundColor by animateColorAsState(
-        targetValue = if (isGranted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                      else MaterialTheme.colorScheme.surfaceContainer,
+        targetValue = when {
+            isGranted -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            isInsideCollapse -> MaterialTheme.colorScheme.surface
+            else -> MaterialTheme.colorScheme.surfaceContainerLow
+        },
         animationSpec = spring(stiffness = Spring.StiffnessLow),
         label = "bgColor"
     )
 
-    val contentColor by animateColorAsState(
-        targetValue = if (isGranted) MaterialTheme.colorScheme.primary 
-                      else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = spring(stiffness = Spring.StiffnessLow),
-        label = "contentColor"
-    )
+    val shape = when (position) {
+        GroupPosition.Top -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+        GroupPosition.Middle -> RoundedCornerShape(8.dp)
+        GroupPosition.Bottom -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+        GroupPosition.Single -> RoundedCornerShape(24.dp)
+    }
 
     Surface(
         onClick = if (!isGranted) onClick else ({}),
@@ -270,54 +456,83 @@ private fun PermissionItemRow(
         shape = shape,
         color = backgroundColor
     ) {
-        ListItem(
-            headlineContent = { 
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 64.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .align(Alignment.CenterVertically)
+                    .background(
+                        if (isGranted) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = if (isGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .align(Alignment.CenterVertically),
+                verticalArrangement = Arrangement.Center
+            ) {
                 Text(
-                    text = title, 
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = if (isGranted) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-                ) 
-            },
-            supportingContent = { 
+                )
                 Text(
-                    text = description, 
+                    text = description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (isGranted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f) 
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                ) 
-            },
-            leadingContent = {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(
-                            if (isGranted) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                            else MaterialTheme.colorScheme.primaryContainer,
-                            CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = if (isGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            },
-            trailingContent = {
+                    color = if (isGranted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Box(
+                modifier = Modifier.align(Alignment.CenterVertically),
+                contentAlignment = Alignment.Center
+            ) {
                 if (isGranted) {
-                    Icon(Icons.Outlined.CheckCircle, "Granted", tint = MaterialTheme.colorScheme.primary)
-                } else {
-                    Text(
-                        text = "Grant", 
-                        color = MaterialTheme.colorScheme.primary, 
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelLarge
+                    Icon(
+                        Icons.Outlined.CheckCircle,
+                        "Granted",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
                     )
+                } else {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            text = "Grant",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
                 }
-            },
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-        )
+            }
+        }
     }
 }
+

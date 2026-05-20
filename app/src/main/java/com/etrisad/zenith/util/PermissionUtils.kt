@@ -8,6 +8,8 @@ import android.provider.Settings
 
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.view.accessibility.AccessibilityManager
+import android.app.AlarmManager
+import android.os.PowerManager
 
 fun hasAllPermissions(context: Context): Boolean {
     val hasUsageStats = hasUsageStatsPermission(context)
@@ -58,4 +60,18 @@ fun isNotificationListenerEnabled(context: Context): Boolean {
         }
     }
     return false
+}
+
+fun isIgnoringBatteryOptimizations(context: Context): Boolean {
+    val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+    return powerManager.isIgnoringBatteryOptimizations(context.packageName)
+}
+
+fun canScheduleExactAlarms(context: Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager.canScheduleExactAlarms()
+    } else {
+        true
+    }
 }

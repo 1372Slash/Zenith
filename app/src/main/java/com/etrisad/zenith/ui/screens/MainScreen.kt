@@ -169,7 +169,7 @@ fun MainScreen(
     var showPermissionSheet by remember { mutableStateOf(false) }
     var showOnboardingStatsSheet by remember { mutableStateOf(false) }
     var showUserSheet by remember { mutableStateOf(false) }
-    
+
     val updateManager = remember { GitHubUpdateManager(context) }
     var latestRelease by remember { mutableStateOf<GitHubRelease?>(null) }
     var showUpdateSheet by remember { mutableStateOf(false) }
@@ -185,13 +185,18 @@ fun MainScreen(
     fun checkPermissions() {
         val hasUsageStats = com.etrisad.zenith.util.hasUsageStatsPermission(context)
         val hasOverlay = android.provider.Settings.canDrawOverlays(context)
+        val hasNotifications = com.etrisad.zenith.util.hasNotificationPermission(context)
+        val hasNotificationPolicy = (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted
         val hasAccessibility = com.etrisad.zenith.util.isAccessibilityServiceEnabled(context)
 
-        val allGranted =
-            hasUsageStats && hasOverlay && (hasAccessibility || preferences.accessibilityDisabled)
-        showPermissionSheet = !allGranted
+        val mainGranted = hasUsageStats && hasOverlay && hasNotifications && hasNotificationPolicy
+
+        if (!mainGranted) {
+            showPermissionSheet = true
+        }
         
-        if (allGranted && !preferences.onboardingStatsCompleted) {
+        val allOnboardingGranted = mainGranted && (hasAccessibility || preferences.accessibilityDisabled)
+        if (allOnboardingGranted && !preferences.onboardingStatsCompleted) {
             showOnboardingStatsSheet = true
         }
     }
@@ -664,7 +669,12 @@ fun MainScreen(
                         )
                     }
                     composable(Screen.Settings.route) {
-                        SettingsScreen(userPreferencesRepository, innerPadding, navController)
+                        SettingsScreen(
+                            preferencesRepository = userPreferencesRepository,
+                            innerPadding = innerPadding,
+                            navController = navController,
+                            onOpenPermissions = { showPermissionSheet = true }
+                        )
                     }
                     composable(Screen.Bedtime.route) {
                         BedtimeScreen(bedtimeViewModel, innerPadding)
