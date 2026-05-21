@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
@@ -86,6 +87,16 @@ fun MainScreen(
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    val currentDestination = navBackStackEntry?.destination
+
+    var activeTabRoute by rememberSaveable { mutableStateOf(Screen.Home.route) }
+    LaunchedEffect(currentDestination) {
+        navItems.find { item ->
+            currentDestination?.hierarchy?.any { it.route == item.route } == true
+        }?.let {
+            activeTabRoute = it.route
+        }
+    }
 
     LaunchedEffect(initialPackageName) {
         if (initialPackageName != null) {
@@ -272,7 +283,7 @@ fun MainScreen(
                 ) {
                     val currentDestination = navBackStackEntry?.destination
                     navItems.forEach { screen ->
-                        val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                        val selected = activeTabRoute == screen.route
                         NavigationRailItem(
                             icon = {
                                 Icon(
@@ -800,8 +811,7 @@ fun MainScreen(
                                         )
                                     ) {
                                         navItems.forEach { screen ->
-                                            val selected =
-                                                currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                                            val selected = activeTabRoute == screen.route
                                             ShortNavigationBarItem(
                                                 selected = selected,
                                                 onClick = {
@@ -878,10 +888,8 @@ fun MainScreen(
                                 NavigationBar(
                                     containerColor = MaterialTheme.colorScheme.surface
                                 ) {
-                                    val currentDestination = navBackStackEntry?.destination
                                     navItems.forEach { screen ->
-                                        val selected =
-                                            currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                                        val selected = activeTabRoute == screen.route
                                         NavigationBarItem(
                                             icon = {
                                                 Icon(
