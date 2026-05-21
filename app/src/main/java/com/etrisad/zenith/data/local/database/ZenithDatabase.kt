@@ -231,7 +231,7 @@ abstract class ZenithDatabase : RoomDatabase() {
                         MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
                         MIGRATION_21_22
                     )
-                    .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+                    .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                     .fallbackToDestructiveMigrationOnDowngrade()
                     .build()
                 INSTANCE = instance

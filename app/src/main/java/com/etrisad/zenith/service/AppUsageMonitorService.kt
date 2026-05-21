@@ -451,7 +451,11 @@ class AppUsageMonitorService : Service() {
         if (monitoringLoopActive && System.currentTimeMillis() - lastLoopTick < 30000) return
         monitoringLoopActive = true
         serviceScope.launch {
-            checkDayChangeOnStartup()
+            try {
+                checkDayChangeOnStartup()
+            } catch (t: Throwable) {
+                Log.e("ZenithAUMS", "Error in day change check: ${t.message}")
+            }
 
             while (true) {
                 try {
@@ -717,12 +721,18 @@ class AppUsageMonitorService : Service() {
                     }
                     
                     lastForegroundApp = currentApp
-                } catch (e: Exception) {
+                } catch (t: Throwable) {
                     val currentTime = System.currentTimeMillis()
-                    if (e.message != lastMonitoringError || currentTime - lastMonitoringErrorTime > 30000) {
-                        Log.e("ZenithAUMS", "Error in monitoring loop: ${e.message}", e)
-                        lastMonitoringError = e.message
+                    if (t.message != lastMonitoringError || currentTime - lastMonitoringErrorTime > 30000) {
+                        Log.e("ZenithAUMS", "Critical error in monitoring loop: ${t.message}", t)
+                        lastMonitoringError = t.message
                         lastMonitoringErrorTime = currentTime
+                    }
+                    if (t is OutOfMemoryError) {
+                        System.gc()
+                        delay(10000)
+                    } else {
+                        delay(2000)
                     }
                 }
 
@@ -864,7 +874,7 @@ class AppUsageMonitorService : Service() {
         updateShieldInDatabase(shield)
     }
 
-    private suspend fun updateShieldInDatabase(shield: ShieldEntity, force: Boolean = false) {
+    private fun updateShieldInDatabase(shield: ShieldEntity, force: Boolean = false) {
         val currentTime = System.currentTimeMillis()
         val prefs = currentPreferences ?: return
         val rechargeDurationMillis = prefs.emergencyRechargeDurationMinutes * 60 * 1000L
@@ -895,9 +905,17 @@ class AppUsageMonitorService : Service() {
                 lastUsedTimestamp = currentTime,
                 lastGoalReminderTimestamp = if (shield.type == FocusType.GOAL) currentTime else shield.lastGoalReminderTimestamp
             )
-            shieldRepository.updateShield(finalShield)
+
             if (shield.packageName == currentSessionPackage) {
                 currentShieldCache = finalShield
+            }
+
+            serviceScope.launch {
+                try {
+                    shieldRepository.updateShield(finalShield)
+                } catch (t: Throwable) {
+                    Log.e("ZenithAUMS", "Failed background DB update for ${shield.packageName}: ${t.message}")
+                }
             }
 
             if (shield.type == FocusType.GOAL && !isPaused(shield)) {
