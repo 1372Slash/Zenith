@@ -170,6 +170,7 @@ fun AppDetailScreen(
 
             item {
                 UsageTrendsRow(
+                    yesterdayUsage = uiState.yesterdayUsage,
                     yesterdayTime = viewModel.formatDuration(uiState.yesterdayUsage),
                     percentageChange = uiState.percentageChange,
                     focusType = uiState.type
@@ -707,6 +708,7 @@ fun UsageCard(
 
 @Composable
 fun UsageTrendsRow(
+    yesterdayUsage: Long,
     yesterdayTime: String,
     percentageChange: Float,
     focusType: FocusType?
@@ -730,7 +732,7 @@ fun UsageTrendsRow(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    yesterdayTime,
+                    if (yesterdayUsage > 0) yesterdayTime else "-",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -752,23 +754,32 @@ fun UsageTrendsRow(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    val isUp = percentageChange >= 0
-                    val isPositiveTrend = if (focusType == FocusType.GOAL) isUp else !isUp
-                    val trendColor = if (isPositiveTrend) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
+                    if (yesterdayUsage > 0) {
+                        val isUp = percentageChange >= 0
+                        val isPositiveTrend = if (focusType == FocusType.GOAL) isUp else !isUp
+                        val trendColor = if (isPositiveTrend) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
 
-                    Icon(
-                        imageVector = if (isUp) Icons.AutoMirrored.Outlined.TrendingUp else Icons.AutoMirrored.Outlined.TrendingDown,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = trendColor
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        "${kotlin.math.abs(percentageChange).toInt()}%",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = trendColor
-                    )
+                        Icon(
+                            imageVector = if (isUp) Icons.AutoMirrored.Outlined.TrendingUp else Icons.AutoMirrored.Outlined.TrendingDown,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = trendColor
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            "${kotlin.math.abs(percentageChange).toInt()}%",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = trendColor
+                        )
+                    } else {
+                        Text(
+                            "-",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }

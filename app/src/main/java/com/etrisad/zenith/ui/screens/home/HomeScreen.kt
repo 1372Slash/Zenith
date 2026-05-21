@@ -625,7 +625,7 @@ fun UsageTrendsRow(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    formatDuration(uiState.yesterdayScreenTime),
+                    if (uiState.yesterdayScreenTime > 0) formatDuration(uiState.yesterdayScreenTime) else "-",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -647,19 +647,28 @@ fun UsageTrendsRow(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = if (uiState.percentageChange >= 0) Icons.AutoMirrored.Outlined.TrendingUp else Icons.AutoMirrored.Outlined.TrendingDown,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = if (uiState.percentageChange >= 0) MaterialTheme.colorScheme.error else Color(0xFF4CAF50)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        "${abs(uiState.percentageChange).toInt()}%",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (uiState.percentageChange >= 0) MaterialTheme.colorScheme.error else Color(0xFF4CAF50)
-                    )
+                    if (uiState.yesterdayScreenTime > 0) {
+                        Icon(
+                            imageVector = if (uiState.percentageChange >= 0) Icons.AutoMirrored.Outlined.TrendingUp else Icons.AutoMirrored.Outlined.TrendingDown,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (uiState.percentageChange >= 0) MaterialTheme.colorScheme.error else Color(0xFF4CAF50)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            "${abs(uiState.percentageChange).toInt()}%",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (uiState.percentageChange >= 0) MaterialTheme.colorScheme.error else Color(0xFF4CAF50)
+                        )
+                    } else {
+                        Text(
+                            "-",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
