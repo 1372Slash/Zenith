@@ -420,20 +420,17 @@ class HomeViewModel(
             try {
                 val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
                 com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
-                
-                // Ensure we have latest system data before repair
+
                 updateGlobalFallback()
                 repairData(todayStr)
 
                 val syncManager = UsageSyncManager(context!!, shieldRepository, userPreferencesRepository)
-                // Add a timeout to sync to prevent UI hang if mutex is held
                 kotlinx.coroutines.withTimeoutOrNull(10000) {
                     syncManager.syncUsageData()
                 }
             } catch (e: Exception) {
                 android.util.Log.e("HomeVM", "Sync failed: ${e.message}")
             } finally {
-                // Ensure loading is stopped and UI is refreshed even on failure
                 refreshUsageStats(showLoading = false)
                 _uiState.update { it.copy(isLoading = false) }
             }
@@ -452,7 +449,6 @@ class HomeViewModel(
                 shieldRepository.deleteHourlyUsageForDate(today)
                 
                 val syncManager = UsageSyncManager(context, shieldRepository, userPreferencesRepository)
-                // Add timeout to prevent hang
                 kotlinx.coroutines.withTimeoutOrNull(10000) {
                     syncManager.syncUsageData()
                 }
