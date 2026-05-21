@@ -30,6 +30,7 @@ import com.etrisad.zenith.ui.viewmodel.HomeViewModel
 import com.etrisad.zenith.ui.viewmodel.UsageHistoryGroup
 import com.etrisad.zenith.ui.viewmodel.UsageRecord
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -41,6 +42,7 @@ fun DataRepairmentScreen(
 ) {
     val repairableData by viewModel.repairableData.collectAsState(initial = emptyList())
     val isRepairing by viewModel.isRepairing.collectAsState()
+    val scope = rememberCoroutineScope()
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (repairableData.isEmpty()) {
@@ -85,7 +87,7 @@ fun DataRepairmentScreen(
                     RepairableGroupCard(
                         group = group,
                         formatDuration = { viewModel.formatDuration(it) },
-                        onRepair = { date -> viewModel.repairData(date) },
+                        onRepair = { date -> scope.launch { viewModel.repairData(date) } },
                         isFirst = isFirst,
                         isLast = isLast,
                         enabled = !isRepairing

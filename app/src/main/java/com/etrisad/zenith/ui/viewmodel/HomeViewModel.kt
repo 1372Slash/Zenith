@@ -287,45 +287,44 @@ class HomeViewModel(
     private val _isRepairing = MutableStateFlow(false)
     val isRepairing = _isRepairing.asStateFlow()
 
-    fun repairData(date: String) {
+    suspend fun repairData(date: String) {
         val systemRecords = globalFallbackMap[date] ?: return
-        viewModelScope.launch {
-            _isRepairing.value = true
-            try {
-                val shieldPkgs = allShields.filter { it.type == FocusType.SHIELD }.map { it.packageName }.toSet()
-                val goalPkgs = allShields.filter { it.type == FocusType.GOAL }.map { it.packageName }.toSet()
-                
-                var sUsage = 0L
-                var gUsage = 0L
-                var total = 0L
+        _isRepairing.value = true
+        try {
+            val shieldPkgs = allShields.filter { it.type == FocusType.SHIELD }.map { it.packageName }.toSet()
+            val goalPkgs = allShields.filter { it.type == FocusType.GOAL }.map { it.packageName }.toSet()
+            
+            var sUsage = 0L
+            var gUsage = 0L
+            var total = 0L
 
-                systemRecords.forEach { record ->
-                    shieldRepository.insertDailyUsage(
-                        DailyUsageEntity(
-                            date = date,
-                            packageName = record.packageName,
-                            usageTimeMillis = record.usageTimeMillis
-                        )
+            systemRecords.forEach { record ->
+                shieldRepository.insertDailyUsage(
+                    DailyUsageEntity(
+                        date = date,
+                        packageName = record.packageName,
+                        usageTimeMillis = record.usageTimeMillis
                     )
-                    
-                    if (record.packageName == "TOTAL") {
-                        total = record.usageTimeMillis
-                    } else if (record.packageName in shieldPkgs) {
-                        sUsage += record.usageTimeMillis
-                    } else if (record.packageName in goalPkgs) {
-                        gUsage += record.usageTimeMillis
-                    }
-                }
+                )
                 
-                val oUsage = (total - (sUsage + gUsage)).coerceAtLeast(0L)
-                shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "SHIELD_TOTAL", usageTimeMillis = sUsage))
-                shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "GOAL_TOTAL", usageTimeMillis = gUsage))
-                shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "OTHER_TOTAL", usageTimeMillis = oUsage))
-                userPreferencesRepository.refreshGlobalStreak(shieldRepository)
-            } finally {
-                delay(500)
-                _isRepairing.value = false
+                if (record.packageName == "TOTAL") {
+                    total = record.usageTimeMillis
+                } else if (record.packageName in shieldPkgs) {
+                    sUsage += record.usageTimeMillis
+                } else if (record.packageName in goalPkgs) {
+                    gUsage += record.usageTimeMillis
+                }
             }
+            
+            val oUsage = (total - (sUsage + gUsage)).coerceAtLeast(0L)
+            shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "SHIELD_TOTAL", usageTimeMillis = sUsage))
+            shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "GOAL_TOTAL", usageTimeMillis = gUsage))
+            shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "OTHER_TOTAL", usageTimeMillis = oUsage))
+            userPreferencesRepository.refreshGlobalStreak(shieldRepository)
+        } catch (e: Exception) {
+            android.util.Log.e("HomeVM", "Error repairing data: ${e.message}")
+        } finally {
+            _isRepairing.value = false
         }
     }
 
@@ -418,14 +417,26 @@ class HomeViewModel(
         triggerServiceRefresh()
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            
-            val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-            com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
-            repairData(todayStr)
+            try {
+                val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
+                
+                // Ensure we have latest system data before repair
+                updateGlobalFallback()
+                repairData(todayStr)
 
-            val syncManager = UsageSyncManager(context!!, shieldRepository, userPreferencesRepository)
-            syncManager.syncUsageData()
-            refreshUsageStats(showLoading = false)
+                val syncManager = UsageSyncManager(context!!, shieldRepository, userPreferencesRepository)
+                // Add a timeout to sync to prevent UI hang if mutex is held
+                kotlinx.coroutines.withTimeoutOrNull(10000) {
+                    syncManager.syncUsageData()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("HomeVM", "Sync failed: ${e.message}")
+            } finally {
+                // Ensure loading is stopped and UI is refreshed even on failure
+                refreshUsageStats(showLoading = false)
+                _uiState.update { it.copy(isLoading = false) }
+            }
         }
     }
 
@@ -433,16 +444,24 @@ class HomeViewModel(
         triggerServiceRefresh()
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-            
-            userPreferencesRepository.setLastSyncTimestamp(getMidnight(0))
-            
-            shieldRepository.deleteHourlyUsageForDate(today)
-            
-            val syncManager = UsageSyncManager(context, shieldRepository, userPreferencesRepository)
-            syncManager.syncUsageData()
-
-            refreshUsageStats()
+            try {
+                val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                
+                userPreferencesRepository.setLastSyncTimestamp(getMidnight(0))
+                
+                shieldRepository.deleteHourlyUsageForDate(today)
+                
+                val syncManager = UsageSyncManager(context, shieldRepository, userPreferencesRepository)
+                // Add timeout to prevent hang
+                kotlinx.coroutines.withTimeoutOrNull(10000) {
+                    syncManager.syncUsageData()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("HomeVM", "Reset carryover failed: ${e.message}")
+            } finally {
+                refreshUsageStats(showLoading = false)
+                _uiState.update { it.copy(isLoading = false) }
+            }
         }
     }
 
