@@ -105,6 +105,7 @@ class AppUsageMonitorService : Service() {
 
     private var monitoringWakeLock: android.os.PowerManager.WakeLock? = null
     private var monitoringLoopActive = false
+    private var lastLoopTick = 0L
 
     private val screenStateReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
@@ -112,6 +113,8 @@ class AppUsageMonitorService : Service() {
                 Intent.ACTION_SCREEN_ON -> {
                     isScreenOn = true
                     monitoringWakeLock?.let { if (it.isHeld) it.release() }
+                    currentSessionPackage = null
+                    lastForegroundApp = null
                 }
                 Intent.ACTION_SCREEN_OFF -> {
                     isScreenOn = false
@@ -445,13 +448,14 @@ class AppUsageMonitorService : Service() {
     private val notifiedGoals = mutableSetOf<String>()
 
     private fun startMonitoring() {
-        if (monitoringLoopActive) return
+        if (monitoringLoopActive && System.currentTimeMillis() - lastLoopTick < 30000) return
         monitoringLoopActive = true
         serviceScope.launch {
             checkDayChangeOnStartup()
 
             while (true) {
                 try {
+                    lastLoopTick = System.currentTimeMillis()
                     val currentTime = System.currentTimeMillis()
 
                     val calendar = java.util.Calendar.getInstance()
@@ -504,12 +508,19 @@ class AppUsageMonitorService : Service() {
                     val isAccessibilityActive = try {
                         ZenithAccessibilityService.isServiceRunning
                     } catch (_: Exception) { false }
+                    
+                    val accessibilityLastEvent = try {
+                        ZenithAccessibilityService.lastEventTime
+                    } catch (_: Exception) { 0L }
 
-                    if (isAccessibilityActive) {
+                    val isAccessibilityResponding = isAccessibilityActive &&
+                        (currentTime - accessibilityLastEvent < 15000)
+
+                    if (isAccessibilityResponding) {
                         currentShieldCache = null
                         usageStatsCache = null
                         lastUsageFetchTime = 0L
-                        delay(3000)
+                        delay(5000)
                         continue
                     }
 
@@ -541,7 +552,9 @@ class AppUsageMonitorService : Service() {
                     if (currentApp != null && currentApp != packageName) {
                         sessionUsageOverlayManager.updateForegroundApp(currentApp)
                         
-                        if (currentApp != lastForegroundApp || currentShieldCache?.packageName != currentApp) {
+                        val isNewSession = currentApp != lastForegroundApp || currentShieldCache?.packageName != currentApp || currentSessionPackage == null
+                        
+                        if (isNewSession) {
                             lastForegroundApp?.let { prevPkg ->
                                 try {
                                     allShieldsCache.find { it.packageName == prevPkg }?.let { prevShield ->
@@ -551,28 +564,27 @@ class AppUsageMonitorService : Service() {
                             }
 
                             currentShieldCache = allShieldsCache.find { it.packageName == currentApp }
-                            if (currentApp != lastForegroundApp) {
-                                com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
-                                lastUsageFetchTime = 0L
-                                lastHUDUpdateTime = 0L
-                                sessionStartTime = currentTime
-                                currentSessionPackage = currentApp
+                            
+                            com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
+                            lastUsageFetchTime = 0L
+                            lastHUDUpdateTime = 0L
+                            sessionStartTime = currentTime
+                            currentSessionPackage = currentApp
 
-                                val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
-                                val systemUsage = detailedUsage.appUsageMap[currentApp] ?: 0L
-                                val systemGlobal = getFilteredGlobalUsage(detailedUsage.appUsageMap)
+                            val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
+                            val systemUsage = detailedUsage.appUsageMap[currentApp] ?: 0L
+                            val systemGlobal = getFilteredGlobalUsage(detailedUsage.appUsageMap)
 
-                                val startOfDay = getStartOfDay()
-                                val timeSinceMidnight = (currentTime - startOfDay).coerceAtLeast(0L)
-                                
-                                baseUsageAtSessionStart = systemUsage.coerceAtMost(timeSinceMidnight)
-                                cachedTotalUsage = baseUsageAtSessionStart
-                                baseGlobalUsageAtSessionStart = systemGlobal.coerceAtMost(timeSinceMidnight)
-                                cachedTotalGlobalUsage = baseGlobalUsageAtSessionStart
+                            val startOfDay = getStartOfDay()
+                            val timeSinceMidnight = (currentTime - startOfDay).coerceAtLeast(0L)
+                            
+                            baseUsageAtSessionStart = systemUsage.coerceAtMost(timeSinceMidnight)
+                            cachedTotalUsage = baseUsageAtSessionStart
+                            baseGlobalUsageAtSessionStart = systemGlobal.coerceAtMost(timeSinceMidnight)
+                            cachedTotalGlobalUsage = baseGlobalUsageAtSessionStart
 
-                                if (!shouldBypassBlocking(currentApp)) {
-                                    checkBlockingInstant(currentApp, currentShieldCache)
-                                }
+                            if (!shouldBypassBlocking(currentApp)) {
+                                checkBlockingInstant(currentApp, currentShieldCache)
                             }
                         }
 
