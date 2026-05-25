@@ -335,15 +335,19 @@ class InterceptOverlayManager(
                     expressiveColors = userPrefs?.expressiveColors ?: false,
                     gsFlexSettings = userPrefs?.gsFlexSettings ?: GSFlexSettings()
                 ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        BedtimeOverlayContent(
-                            packageName = packageName,
-                            appName = appName,
-                            onCloseApp = {
-                                onCloseApp()
-                                hideOverlay()
-                            }
-                        )
+                    val prefs = userPrefs
+                    if (prefs != null) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            BedtimeOverlayContent(
+                                packageName = packageName,
+                                appName = appName,
+                                userPreferences = prefs,
+                                onCloseApp = {
+                                    onCloseApp()
+                                    hideOverlay()
+                                }
+                            )
+                        }
                     }
                 }
             }

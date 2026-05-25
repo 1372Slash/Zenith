@@ -39,6 +39,7 @@ import java.util.*
 fun BedtimeOverlayContent(
     packageName: String,
     appName: String,
+    userPreferences: UserPreferences,
     onCloseApp: () -> Unit
 ) {
     val context = LocalContext.current
@@ -54,11 +55,6 @@ fun BedtimeOverlayContent(
     var showContent by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     
-    val userPrefsRepo = remember { UserPreferencesRepository(context) }
-    val userPrefs by produceState(initialValue = UserPreferences()) {
-        value = userPrefsRepo.userPreferencesFlow.first()
-    }
-
     var startExitTimer by remember { mutableStateOf(false) }
     val exitProgress by animateFloatAsState(
         targetValue = if (startExitTimer) 1f else 0f,
@@ -67,40 +63,44 @@ fun BedtimeOverlayContent(
     )
 
     val bedtimeUiState by produceState(
-        initialValue = Triple(0f, "0m", "")
+        initialValue = Triple(0f, "0m", ""),
+        key1 = userPreferences
     ) {
-        val now = Calendar.getInstance()
-        val currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-        
-        val startParts = userPrefs.bedtimeStartTime.split(":")
-        val endParts = userPrefs.bedtimeEndTime.split(":")
-        val startMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 22) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0)
-        val endMinutes = (endParts.getOrNull(0)?.toIntOrNull() ?: 7) * 60 + (endParts.getOrNull(1)?.toIntOrNull() ?: 0)
+        while (true) {
+            val now = Calendar.getInstance()
+            val currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
+            
+            val startParts = userPreferences.bedtimeStartTime.split(":")
+            val endParts = userPreferences.bedtimeEndTime.split(":")
+            val startMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 22) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0)
+            val endMinutes = (endParts.getOrNull(0)?.toIntOrNull() ?: 7) * 60 + (endParts.getOrNull(1)?.toIntOrNull() ?: 0)
 
-        val totalDuration = if (endMinutes > startMinutes) {
-            endMinutes - startMinutes
-        } else {
-            (1440 - startMinutes) + endMinutes
-        }
-
-        val elapsed = if (startMinutes <= endMinutes) {
-            (currentMinutes - startMinutes).coerceAtLeast(0)
-        } else {
-            if (currentMinutes >= startMinutes) {
-                currentMinutes - startMinutes
+            val totalDuration = if (endMinutes > startMinutes) {
+                endMinutes - startMinutes
             } else {
-                (1440 - startMinutes) + currentMinutes
+                (1440 - startMinutes) + endMinutes
             }
-        }
 
-        val progress = (elapsed.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
-        val remaining = (totalDuration - elapsed).coerceAtLeast(0)
-        val h = remaining / 60
-        val m = remaining % 60
-        
-        val formattedTime = if (h > 0) "${h}h ${m}m" else "${m}m"
-        
-        value = Triple(progress, formattedTime, userPrefs.bedtimeEndTime)
+            val elapsed = if (startMinutes <= endMinutes) {
+                (currentMinutes - startMinutes).coerceAtLeast(0)
+            } else {
+                if (currentMinutes >= startMinutes) {
+                    currentMinutes - startMinutes
+                } else {
+                    (1440 - startMinutes) + currentMinutes
+                }
+            }
+
+            val progress = (elapsed.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
+            val remaining = (totalDuration - elapsed).coerceAtLeast(0)
+            val h = remaining / 60
+            val m = remaining % 60
+            
+            val formattedTime = if (h > 0) "${h}h ${m}m" else "${m}m"
+            
+            value = Triple(progress, formattedTime, userPreferences.bedtimeEndTime)
+            delay(30000)
+        }
     }
 
     val backgroundAlphaState = animateFloatAsState(
