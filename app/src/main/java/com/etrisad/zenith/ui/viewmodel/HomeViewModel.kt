@@ -675,8 +675,7 @@ class HomeViewModel(
                             val segmentStart = maxOf(activeStartTime, start)
                             val segmentEnd = minOf(time, end)
                             if (segmentStart < segmentEnd) {
-                                val duration = segmentEnd - segmentStart
-                                if (duration > 100) usageMap[pkg] = (usageMap[pkg] ?: 0L) + duration
+                                usageMap[p] = (usageMap[p] ?: 0L) + (segmentEnd - segmentStart)
                             }
                         }
                         activePkg = null
@@ -689,8 +688,7 @@ class HomeViewModel(
                                 val segmentStart = maxOf(activeStartTime, start)
                                 val segmentEnd = minOf(time, end)
                                 if (segmentStart < segmentEnd) {
-                                    val duration = segmentEnd - segmentStart
-                                    if (duration > 100) usageMap[activePkg!!] = (usageMap[activePkg!!] ?: 0L) + duration
+                                    usageMap[activePkg!!] = (usageMap[activePkg!!] ?: 0L) + (segmentEnd - segmentStart)
                                 }
                             }
                             activePkg = pkg
@@ -703,8 +701,7 @@ class HomeViewModel(
                             val segmentStart = maxOf(activeStartTime, start)
                             val segmentEnd = minOf(time, end)
                             if (segmentStart < segmentEnd) {
-                                val duration = segmentEnd - segmentStart
-                                if (duration > 100) usageMap[pkg] = (usageMap[pkg] ?: 0L) + duration
+                                usageMap[pkg] = (usageMap[pkg] ?: 0L) + (segmentEnd - segmentStart)
                             }
                             activePkg = null
                             activeStartTime = 0L
@@ -742,28 +739,92 @@ class HomeViewModel(
         if (isFullNeeded) lastFullFallbackRefresh = now
     }
 
-    private fun updatePackageFallback(packageName: String) {
+    private suspend fun updatePackageFallback(packageName: String) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val fallbackStart = getMidnight(30)
-        val now = System.currentTimeMillis()
-        
-        val stats = try {
-            usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, fallbackStart, now)
-        } catch (_: Exception) { emptyList<UsageStats>() }
-        
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val result = mutableMapOf<String, Long>()
+        val now = System.currentTimeMillis()
 
-        stats.forEach { stat ->
-            if (stat.packageName != packageName) return@forEach
-            val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
-            if (time <= 0) return@forEach
+        for (i in 0..30) {
+            val start = getMidnight(i)
+            val end = if (i == 0) now else getMidnight(i - 1)
+            val dateStr = dateFormat.format(Date(start))
 
-            val dateStr = dateFormat.format(Date(stat.firstTimeStamp))
-            result[dateStr] = maxOf(result[dateStr] ?: 0L, time)
+            val events = usm.queryEvents(start - (12 * 60 * 60 * 1000L), end)
+            val event = UsageEvents.Event()
+            
+            var activePkg: String? = null
+            var activeStartTime = 0L
+            var isScreenOn = true
+            var dayUsage = 0L
+
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                val pkg = event.packageName
+                val time = event.timeStamp
+                
+                when (event.eventType) {
+                    UsageEvents.Event.SCREEN_INTERACTIVE -> isScreenOn = true
+                    UsageEvents.Event.SCREEN_NON_INTERACTIVE -> {
+                        isScreenOn = false
+                        activePkg?.let { p ->
+                            if (p == packageName) {
+                                val segmentStart = maxOf(activeStartTime, start)
+                                val segmentEnd = minOf(time, end)
+                                if (segmentStart < segmentEnd) {
+                                    dayUsage += (segmentEnd - segmentStart)
+                                }
+                            }
+                        }
+                        activePkg = null
+                        activeStartTime = 0L
+                    }
+                    UsageEvents.Event.ACTIVITY_RESUMED,
+                    UsageEvents.Event.MOVE_TO_FOREGROUND -> {
+                        if (isScreenOn) {
+                            if (activePkg == packageName) {
+                                val segmentStart = maxOf(activeStartTime, start)
+                                val segmentEnd = minOf(time, end)
+                                if (segmentStart < segmentEnd) {
+                                    dayUsage += (segmentEnd - segmentStart)
+                                }
+                            }
+                            activePkg = pkg
+                            activeStartTime = time
+                        }
+                    }
+                    UsageEvents.Event.ACTIVITY_PAUSED,
+                    UsageEvents.Event.MOVE_TO_BACKGROUND -> {
+                        if (activePkg == pkg) {
+                            if (pkg == packageName) {
+                                val segmentStart = maxOf(activeStartTime, start)
+                                val segmentEnd = minOf(time, end)
+                                if (segmentStart < segmentEnd) {
+                                    dayUsage += (segmentEnd - segmentStart)
+                                }
+                            }
+                            activePkg = null
+                            activeStartTime = 0L
+                        }
+                    }
+                }
+            }
+            
+            if (activePkg == packageName && isScreenOn) {
+                val segmentStart = maxOf(activeStartTime, start)
+                val segmentEnd = minOf(now, end)
+                if (segmentStart < segmentEnd) {
+                    dayUsage += (segmentEnd - segmentStart)
+                }
+            }
+
+            if (dayUsage > 0) {
+                result[dateStr] = dayUsage
+            }
         }
         detailFallbackMap = result
     }
+
 
     fun selectDate(dateMillis: Long?) {
         val cal = Calendar.getInstance()
