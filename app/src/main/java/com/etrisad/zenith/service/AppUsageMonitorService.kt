@@ -1873,6 +1873,10 @@ class AppUsageMonitorService : Service() {
         super.onDestroy()
         monitoringLoopActive = false
         try {
+            overlayManager.hideOverlay()
+            sessionUsageOverlayManager.destroyAllHUDs()
+        } catch (_: Exception) {}
+        try {
             unregisterReceiver(screenStateReceiver)
         } catch (_: Exception) {}
         serviceJob.cancel()

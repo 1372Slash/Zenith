@@ -3,6 +3,8 @@ package com.etrisad.zenith.service
 import android.content.Context
 import android.graphics.PixelFormat
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.animation.animateColorAsState
@@ -46,6 +48,7 @@ class SessionUsageOverlayManager(private val context: Context) {
     private val preferencesRepository = UserPreferencesRepository(context)
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private val SYSTEM_UI_PACKAGES = setOf(
         "com.android.systemui",
@@ -179,6 +182,10 @@ class SessionUsageOverlayManager(private val context: Context) {
     }
 
     fun destroyAllHUDs() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { destroyAllHUDs() }
+            return
+        }
         synchronized(activeSessions) {
             activeSessions.forEach { session ->
                 session.hudInstance?.let { destroyHUDInstance(it) }
@@ -280,6 +287,10 @@ class SessionUsageOverlayManager(private val context: Context) {
     }
 
     private fun destroyHUDInstance(hud: HUDInstance) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { destroyHUDInstance(hud) }
+            return
+        }
         try {
             hud.lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
             hud.lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
@@ -293,6 +304,10 @@ class SessionUsageOverlayManager(private val context: Context) {
     }
 
     fun hideHUD(packageName: String? = null) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { hideHUD(packageName) }
+            return
+        }
         synchronized(activeSessions) {
             val iterator = activeSessions.iterator()
             while (iterator.hasNext()) {

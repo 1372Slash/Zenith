@@ -942,6 +942,10 @@ class ZenithAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         isServiceRunning = false
+        try {
+            overlayManager.hideOverlay()
+            sessionUsageOverlayManager.destroyAllHUDs()
+        } catch (_: Exception) {}
         serviceJob.cancel()
     }
 }
