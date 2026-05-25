@@ -4,7 +4,10 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -25,6 +28,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.etrisad.zenith.ui.components.ZenithContainedLoadingIndicator
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
 import com.etrisad.zenith.data.preferences.UserPreferences
@@ -466,58 +470,56 @@ fun HoldToAcceptButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
-    var progress by remember { mutableFloatStateOf(0f) }
     var isHolding by remember { mutableStateOf(false) }
-
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = if (isHolding) tween(2000, easing = LinearEasing) else spring()
-    )
-
-    val scale by animateFloatAsState(
-        targetValue = if (isHolding && enabled) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-    )
+    val scope = rememberCoroutineScope()
+    
+    val progress = remember { Animatable(0f) }
 
     LaunchedEffect(isHolding, enabled) {
         if (isHolding && enabled) {
-            progress = 1f
-            delay(2000)
-            if (isHolding) {
+            val result = progress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(1500, easing = LinearEasing)
+            )
+            
+            if (result.endReason == AnimationEndReason.Finished && isHolding) {
                 onAccept()
                 isHolding = false
-                progress = 0f
+                progress.snapTo(0f)
             }
         } else {
-            progress = 0f
+            progress.animateTo(0f, spring())
         }
     }
 
+    val scale by animateFloatAsState(
+        targetValue = if (isHolding && enabled) 0.96f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+    )
+
     Box(
         modifier = modifier
-            .height(56.dp)
+            .height(58.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
-                alpha = if (enabled) 1f else 0.5f
+                alpha = if (enabled) 1f else 0.6f
             }
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
             .pointerInput(enabled) {
                 if (!enabled) return@pointerInput
-                detectTapGestures(
-                    onPress = {
-                        isHolding = true
-                        try {
-                            awaitRelease()
-                        } finally {
-                            isHolding = false
-                        }
-                    }
-                )
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    isHolding = true
+                    
+                    waitForUpOrCancellation()
+                    isHolding = false
+                }
             },
         contentAlignment = Alignment.Center
     ) {
+        // Progress background
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -526,23 +528,28 @@ fun HoldToAcceptButton(
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .fillMaxWidth(animatedProgress)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                    .fillMaxWidth(progress.value)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
             )
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 24.dp)
+        ) {
             Icon(
-                imageVector = if (animatedProgress >= 1f) Icons.Outlined.Check else Icons.Outlined.TouchApp,
+                imageVector = if (progress.value >= 1f) Icons.Outlined.Check else Icons.Outlined.TouchApp,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Text(
-                text = if (isHolding) "Hold to accept..." else "Hold to repair data",
+                text = if (isHolding) "Hold steady..." else "Hold to repair records",
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 0.5.sp
             )
         }
     }

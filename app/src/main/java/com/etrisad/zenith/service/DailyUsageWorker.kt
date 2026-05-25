@@ -162,13 +162,24 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
 
         val userPrefsRepo = UserPreferencesRepository(applicationContext)
         val prefs = userPrefsRepo.userPreferencesFlow.first()
+
+        val calculatedSum = finalAppUsages.values.sum()
+        
         var totalUsage = if (isDateToday && prefs.lastKnownDailyUsageDate == dateString) {
-            prefs.lastKnownDailyUsage
+            if (prefs.lastKnownDailyUsage > calculatedSum && (prefs.lastKnownDailyUsage - calculatedSum) < 1800000L) {
+                prefs.lastKnownDailyUsage
+            } else {
+                calculatedSum
+            }
         } else {
-            finalAppUsages.values.sum().coerceAtMost(System.currentTimeMillis() - startTime)
+            calculatedSum
         }
 
-        totalUsage = maxOf(totalUsage, existingTotalVal)
+        totalUsage = totalUsage.coerceAtMost(timeSinceMidnight)
+
+        if (existingTotalVal > 0 && existingTotalVal < (timeSinceMidnight + 60000L)) {
+            totalUsage = maxOf(totalUsage, existingTotalVal)
+        }
 
         val usagesToInsert = mutableListOf<DailyUsageEntity>()
         finalAppUsages.forEach { (pkg, time) ->

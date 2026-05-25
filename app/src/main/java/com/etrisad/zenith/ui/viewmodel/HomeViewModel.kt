@@ -316,22 +316,25 @@ class HomeViewModel(
 
     suspend fun repairData(date: String) {
         val prefs = userPreferencesRepository.userPreferencesFlow.first()
-        val dbRecords = allHistory.filter { it.date == date && it.packageName !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL") }
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val todayStr = dateFormat.format(Date())
         
-        val systemRecords = if (prefs.allowRepairNonUnavailable && dbRecords.isNotEmpty()) {
-            dbRecords.map { UsageRecord.Live(it.packageName, it.usageTimeMillis) }
-        } else {
-            globalFallbackMap[date] ?: return
-        }
+        val dbRecords = allHistory.filter { it.date == date && it.packageName !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL") }
+        val systemRecords = globalFallbackMap[date] ?: (if (prefs.allowRepairNonUnavailable) dbRecords.map { UsageRecord.Live(it.packageName, it.usageTimeMillis) } else null)
+        
+        if (systemRecords == null) return
 
         _isRepairing.value = true
         try {
+            delay(800)
+            
+            val allShields = shieldRepository.allShields.first()
             val shieldPkgs = allShields.filter { it.type == FocusType.SHIELD }.map { it.packageName }.toSet()
             val goalPkgs = allShields.filter { it.type == FocusType.GOAL }.map { it.packageName }.toSet()
             
             var sUsage = 0L
             var gUsage = 0L
-            var total = 0L
+            var appSum = 0L
 
             systemRecords.forEach { record ->
                 if (record.packageName != "TOTAL") {
@@ -339,33 +342,35 @@ class HomeViewModel(
                         DailyUsageEntity(
                             date = date,
                             packageName = record.packageName,
-                            usageTimeMillis = record.usageTimeMillis
+                            usageTimeMillis = record.usageTimeMillis,
+                            lastUpdated = System.currentTimeMillis()
                         )
                     )
-                }
-                
-                if (record.packageName == "TOTAL") {
-                    total = record.usageTimeMillis
-                } else if (record.packageName in shieldPkgs) {
-                    sUsage += record.usageTimeMillis
-                } else if (record.packageName in goalPkgs) {
-                    gUsage += record.usageTimeMillis
+                    appSum += record.usageTimeMillis
+                    if (record.packageName in shieldPkgs) sUsage += record.usageTimeMillis
+                    else if (record.packageName in goalPkgs) gUsage += record.usageTimeMillis
                 }
             }
-            
-            if (total == 0L) {
-                total = if (prefs.allowRepairNonUnavailable && dbRecords.isNotEmpty()) {
-                    allHistory.find { it.date == date && it.packageName == "TOTAL" }?.usageTimeMillis ?: systemRecords.sumOf { it.usageTimeMillis }
-                } else {
-                    systemRecords.sumOf { it.usageTimeMillis }
-                }
+
+            val systemTotal = systemRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: appSum
+            var finalTotal = maxOf(systemTotal, appSum)
+
+            if (date == todayStr) {
+                val cal = Calendar.getInstance()
+                val timeSinceMidnight = (cal.get(Calendar.HOUR_OF_DAY) * 3600000L) + 
+                                       (cal.get(Calendar.MINUTE) * 60000L) + 120000L
+                finalTotal = finalTotal.coerceAtMost(timeSinceMidnight)
+            } else {
+                finalTotal = finalTotal.coerceAtMost(86400000L)
             }
             
-            val oUsage = (total - (sUsage + gUsage)).coerceAtLeast(0L)
-            shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "TOTAL", usageTimeMillis = total))
+            val oUsage = (finalTotal - (sUsage + gUsage)).coerceAtLeast(0L)
+            
+            shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "TOTAL", usageTimeMillis = finalTotal))
             shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "SHIELD_TOTAL", usageTimeMillis = sUsage))
             shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "GOAL_TOTAL", usageTimeMillis = gUsage))
             shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "OTHER_TOTAL", usageTimeMillis = oUsage))
+
             userPreferencesRepository.refreshGlobalStreak(shieldRepository)
         } catch (e: Exception) {
             android.util.Log.e("HomeVM", "Error repairing data: ${e.message}")
@@ -989,7 +994,8 @@ class HomeViewModel(
 
             val todayDateStr = dateFormat.format(Date(todayStart))
             val actualTodayDbTotal = allHistory.find { it.date == todayDateStr && it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
-            val actualTodayTotal = maxOf(totalToday, actualTodayDbTotal)
+
+            val actualTodayTotal = maxOf(totalToday, actualTodayDbTotal).coerceAtMost(timeSinceMidnight)
 
             val history = (0 until 21).map { i ->
                 val dStart = getMidnight(i)

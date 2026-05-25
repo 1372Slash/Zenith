@@ -236,6 +236,7 @@ class UsageSyncManager(
                 }
 
                 val totalInHour = currentHourAppState.values.sum()
+                val isToday = date == currentDateStr
 
                 if (isPastHour && totalInHour > limit) {
                     var excess = totalInHour - limit
@@ -252,6 +253,17 @@ class UsageSyncManager(
                             carryOver.add(UsageChunk(pkg, toMove))
                         }
                         excess -= toMove
+                    }
+                } else if (isToday && totalInHour > limit) {
+                    var excess = totalInHour - limit
+                    val sortedEntries = currentHourAppState.entries.sortedByDescending { it.value }
+                    for (entry in sortedEntries) {
+                        if (excess <= 0) break
+                        val pkg = entry.key
+                        val currentValue = currentHourAppState[pkg] ?: 0L
+                        val toRemove = minOf(currentValue, excess)
+                        currentHourAppState[pkg] = currentValue - toRemove
+                        excess -= toRemove
                     }
                 }
 
@@ -315,17 +327,18 @@ class UsageSyncManager(
                 .groupBy { it.packageName }
                 .mapValues { it.value.sumOf { h -> h.usageTimeMillis } }
 
-            val prefs = preferencesRepository.userPreferencesFlow.first()
             val todayDateStr = dateFormat.format(Date(now))
             var totalTime = appTotals.values.sum()
 
-            if (date == todayDateStr) {
-                val lastKnownDailyUsage = prefs.lastKnownDailyUsage
-                val lastKnownDailyUsageDate = prefs.lastKnownDailyUsageDate
-                if (lastKnownDailyUsageDate == todayDateStr && lastKnownDailyUsage > totalTime) {
-                    totalTime = lastKnownDailyUsage
-                }
-            }
+            val timeSinceMidnight = if (date == todayDateStr) {
+                val cal = Calendar.getInstance().apply { timeInMillis = now }
+                (cal.get(Calendar.HOUR_OF_DAY) * 3600000L) + 
+                (cal.get(Calendar.MINUTE) * 60000L) + 
+                (cal.get(Calendar.SECOND) * 1000L) + 
+                cal.get(Calendar.MILLISECOND)
+            } else 86400000L
+
+            totalTime = totalTime.coerceAtMost(timeSinceMidnight)
 
             var shieldTime = 0L
             var goalTime = 0L
