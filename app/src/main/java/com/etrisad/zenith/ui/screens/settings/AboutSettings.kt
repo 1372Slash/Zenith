@@ -38,6 +38,8 @@ import com.etrisad.zenith.R
 fun AboutSettings(
     developerModeEnabled: Boolean,
     onDeveloperModeChange: (Boolean) -> Unit,
+    checkUpdateOnStart: Boolean,
+    onCheckUpdateOnStartChange: (Boolean) -> Unit,
     isCheckingForUpdate: Boolean,
     onCheckForUpdate: () -> Unit,
     onViewChangelog: () -> Unit
@@ -55,21 +57,33 @@ fun AboutSettings(
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
         )
 
-        Spacer(modifier = Modifier.height(4.dp))
-        AboutActionCard(
-            title = if (isCheckingForUpdate) "Checking for update..." else "Check for Update",
-            icon = Icons.Outlined.Update,
-            shape = RoundedCornerShape(8.dp),
-            onClick = onCheckForUpdate
-        )
+        if (BuildConfig.SHOW_UPDATES) {
+            Spacer(modifier = Modifier.height(4.dp))
+            AboutActionCard(
+                title = if (isCheckingForUpdate) "Checking for update..." else "Check for Update",
+                icon = Icons.Outlined.Update,
+                shape = RoundedCornerShape(8.dp),
+                onClick = onCheckForUpdate
+            )
 
-        Spacer(modifier = Modifier.height(4.dp))
-        AboutActionCard(
-            title = "View Changelog",
-            icon = Icons.Outlined.History,
-            shape = RoundedCornerShape(8.dp),
-            onClick = onViewChangelog
-        )
+            Spacer(modifier = Modifier.height(4.dp))
+            SettingsToggle(
+                title = "Check update on start",
+                description = "Automatically check for updates when the app starts",
+                checked = checkUpdateOnStart,
+                onCheckedChange = onCheckUpdateOnStartChange,
+                icon = Icons.Outlined.SystemUpdate,
+                shape = RoundedCornerShape(8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+            AboutActionCard(
+                title = "View Changelog",
+                icon = Icons.Outlined.History,
+                shape = RoundedCornerShape(8.dp),
+                onClick = onViewChangelog
+            )
+        }
 
         Spacer(modifier = Modifier.height(4.dp))
         DeveloperCard(

@@ -144,6 +144,8 @@ fun SettingsScreen(
                 AboutSettings(
                     developerModeEnabled = preferences.developerModeEnabled,
                     onDeveloperModeChange = { enabled -> coroutineScope.launch { preferencesRepository.setDeveloperModeEnabled(enabled) } },
+                    checkUpdateOnStart = preferences.checkUpdateOnStart,
+                    onCheckUpdateOnStartChange = { enabled -> coroutineScope.launch { preferencesRepository.setCheckUpdateOnStart(enabled) } },
                     isCheckingForUpdate = checkingForUpdate,
                     onCheckForUpdate = onCheckForUpdate,
                     onViewChangelog = onViewChangelog

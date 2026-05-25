@@ -17,18 +17,26 @@ android {
         minSdk = 30
         targetSdk = 36
         versionCode = 5
-        versionName = "1.5"
+        versionName = "1.5.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-            isUniversalApk = true
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("full") {
+            dimension = "distribution"
+            buildConfigField("Boolean", "SHOW_UPDATES", "true")
         }
+        create("store") {
+            dimension = "distribution"
+            buildConfigField("Boolean", "SHOW_UPDATES", "false")
+        }
+    }
+
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
     }
 
     buildTypes {
@@ -86,7 +94,6 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.accompanist.permissions)
     implementation(libs.accompanist.drawablepainter)
-    implementation(libs.play.services.location)
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)

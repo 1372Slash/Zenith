@@ -186,11 +186,13 @@ fun MainScreen(
     var latestRelease by remember { mutableStateOf<GitHubRelease?>(null) }
     var showUpdateSheet by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        val result = updateManager.checkForUpdates()
-        if (result is GitHubUpdateManager.UpdateResult.NewUpdate) {
-            latestRelease = result.release
-            showUpdateSheet = true
+    LaunchedEffect(preferences.checkUpdateOnStart) {
+        if (com.etrisad.zenith.BuildConfig.SHOW_UPDATES && preferences.checkUpdateOnStart) {
+            val result = updateManager.checkForUpdates()
+            if (result is GitHubUpdateManager.UpdateResult.NewUpdate) {
+                latestRelease = result.release
+                showUpdateSheet = true
+            }
         }
     }
 

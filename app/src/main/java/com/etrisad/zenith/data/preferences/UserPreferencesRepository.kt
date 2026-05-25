@@ -101,6 +101,7 @@ class UserPreferencesRepository(private val context: Context) {
         val DELAY_DEFAULT = longPreferencesKey("delay_default")
         val MINDFUL_GATEWAY_ENABLED = booleanPreferencesKey("mindful_gateway_enabled")
         val REFRESH_ON_OPEN_USAGE_STATS = booleanPreferencesKey("refresh_on_open_usage_stats")
+        val CHECK_UPDATE_ON_START = booleanPreferencesKey("check_update_on_start")
         
         val GS_FLEX_PRESET = stringPreferencesKey("gs_flex_preset")
         val GS_D_WGHT = floatPreferencesKey("gs_d_wght")
@@ -187,6 +188,7 @@ class UserPreferencesRepository(private val context: Context) {
                 delayDefault = preferences[PreferencesKeys.DELAY_DEFAULT] ?: 1200L,
                 mindfulGatewayEnabled = preferences[PreferencesKeys.MINDFUL_GATEWAY_ENABLED] ?: false,
                 refreshOnOpenUsageStats = preferences[PreferencesKeys.REFRESH_ON_OPEN_USAGE_STATS] ?: false,
+                checkUpdateOnStart = preferences[PreferencesKeys.CHECK_UPDATE_ON_START] ?: false,
                 gsFlexSettings = GSFlexSettings(
                     preset = GSFlexPreset.valueOf(preferences[PreferencesKeys.GS_FLEX_PRESET] ?: GSFlexPreset.ZENITH.name),
                     display = FontAxes(
@@ -502,6 +504,10 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.REFRESH_ON_OPEN_USAGE_STATS] = enabled }
     }
 
+    suspend fun setCheckUpdateOnStart(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.CHECK_UPDATE_ON_START] = enabled }
+    }
+
     suspend fun setGSFlexSettings(settings: GSFlexSettings) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.GS_FLEX_PRESET] = settings.preset.name
@@ -595,5 +601,6 @@ data class UserPreferences(
     val delayDefault: Long = 1200L,
     val mindfulGatewayEnabled: Boolean = false,
     val refreshOnOpenUsageStats: Boolean = false,
+    val checkUpdateOnStart: Boolean = false,
     val gsFlexSettings: GSFlexSettings = GSFlexSettings()
 )

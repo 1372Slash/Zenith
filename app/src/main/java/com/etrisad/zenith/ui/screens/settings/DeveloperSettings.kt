@@ -89,14 +89,16 @@ fun DeveloperSettings(
                 shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
-            SettingsActionItem(
-                title = "Test Update Sheet",
-                summary = "Immediately trigger the new update bottom sheet",
-                onClick = onTestUpdateSheet,
-                icon = Icons.Outlined.NewReleases,
-                shape = RoundedCornerShape(8.dp)
-            )
+            if (com.etrisad.zenith.BuildConfig.SHOW_UPDATES) {
+                Spacer(modifier = Modifier.height(4.dp))
+                SettingsActionItem(
+                    title = "Test Update Sheet",
+                    summary = "Immediately trigger the new update bottom sheet",
+                    onClick = onTestUpdateSheet,
+                    icon = Icons.Outlined.NewReleases,
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.height(4.dp))
             SettingsActionItem(

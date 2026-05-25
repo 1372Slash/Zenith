@@ -63,13 +63,26 @@
 
 ## Required Permissions
 
-To function optimally, Zenith requires:
-1. **Accessibility Service (Optional)**: To instantly detect foreground application changes and manage app interventions.
-2. **Usage Access (PACKAGE_USAGE_STATS)**: To accurately calculate daily application usage statistics.
-3. **Overlay Permission (SYSTEM_ALERT_WINDOW)**: To display Shield intervention screens and the Session HUD over other applications.
-4. **Notification Permission & Listener (Optional)**: To provide focus updates and manage device notifications during Bedtime/Focus modes.
-5. **Battery Optimization Exemption**: To ensure consistent background monitoring and prevent system-level termination.
-6. **Exact Alarms**: To precisely trigger resets, bedtime schedules, and mindful reminders.
+To help you stay focused and break mindless habits, Zenith needs a few permissions.
+
+### Required
+Without these, Zenith won't be able to track your usage or help you stay mindful.
+
+1. **Usage Stats (`PACKAGE_USAGE_STATS`)**: This lets Zenith see how much time you spend in your apps so it can help you stick to your limits.
+2. **System Overlay (`SYSTEM_ALERT_WINDOW`)**: This allows Zenith to show a "Shield" or a timer over other apps when you've reached your limit or need a mindful pause.
+3. **App List (`QUERY_ALL_PACKAGES`)**: Zenith needs this to show you a list of your apps so you can choose which ones you want to track or block.
+4. **Notifications (`POST_NOTIFICATIONS`)**: Used to send you goal reminders and keep you updated on your focus progress throughout the day.
+5. **Do Not Disturb (`ACCESS_NOTIFICATION_POLICY`)**: This allows Bedtime Mode to automatically silence your phone so you can get a better night's sleep.
+
+### Optional
+These are optional, but they make Zenith much more reliable and powerful.
+
+6. **Accessibility Service (`BIND_ACCESSIBILITY_SERVICE`)**: An optional service that helps Zenith catch when you open a restricted app instantly, making your "Shields" feel much more responsive.
+7. **Notification Intercept (`BIND_NOTIFICATION_LISTENER_SERVICE`)**: This lets Zenith hide distracting notifications during your scheduled Focus sessions or Bedtime.
+8. **Battery Optimization**: This tells Android not to close Zenith in the background, ensuring your focus time is always tracked accurately.
+9. **Precise Timing (`SCHEDULE_EXACT_ALARM`)**: Makes sure your daily resets, bedtime schedules, and reminders happen exactly when they're supposed to.
+10. **Storage Access (`READ_EXTERNAL_STORAGE`)**: Only used if you want to use the Backup & Restore feature to save or load your settings.
+11. **Internet Access (`INTERNET`)**: Used to check for app updates (depending on where you downloaded the app) and to let you visit our GitHub or community pages from the settings.
 
 ## Special Thanks
 
