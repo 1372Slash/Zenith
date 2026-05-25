@@ -1,4 +1,4 @@
-package com.etrisad.zenith.service
+package com.etrisad.zenith.ui.components.overlay
 
 import android.content.Context
 import android.graphics.PixelFormat
@@ -34,12 +34,14 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.etrisad.zenith.data.preferences.FontOption
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.TooltipArrowPosition
 import com.etrisad.zenith.ui.components.ZenithTooltipBox
 import com.etrisad.zenith.ui.theme.GSFlexSettings
 import com.etrisad.zenith.ui.theme.ZenithTheme
 import kotlinx.coroutines.*
+import java.util.Collections
 import kotlin.math.roundToInt
 
 class SessionUsageOverlayManager(private val context: Context) {
@@ -95,7 +97,7 @@ class SessionUsageOverlayManager(private val context: Context) {
         var lastReportedUsageSeconds: Int = initialSeconds
     }
 
-    private val activeSessions = java.util.Collections.synchronizedList(mutableListOf<Session>())
+    private val activeSessions = Collections.synchronizedList(mutableListOf<Session>())
     private val MaxHuds = 4
 
     fun showHUD(
@@ -220,7 +222,7 @@ class SessionUsageOverlayManager(private val context: Context) {
                 val userPrefs by preferencesRepository.userPreferencesFlow.collectAsState(initial = null)
                 
                 ZenithTheme(
-                    fontOption = userPrefs?.fontOption ?: com.etrisad.zenith.data.preferences.FontOption.SYSTEM,
+                    fontOption = userPrefs?.fontOption ?: FontOption.SYSTEM,
                     dynamicColor = userPrefs?.dynamicColor ?: true,
                     expressiveColors = userPrefs?.expressiveColors ?: false,
                     gsFlexSettings = userPrefs?.gsFlexSettings ?: GSFlexSettings()

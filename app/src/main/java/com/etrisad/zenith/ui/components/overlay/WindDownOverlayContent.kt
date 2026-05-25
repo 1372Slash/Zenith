@@ -1,4 +1,4 @@
-package com.etrisad.zenith.service
+package com.etrisad.zenith.ui.components.overlay
 
 import android.content.res.Configuration
 import androidx.compose.animation.*
@@ -26,14 +26,11 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
-import com.etrisad.zenith.ui.components.overlay.CloseAppTextButton
-import com.etrisad.zenith.ui.components.overlay.OverlayDragHandleWithIndicators
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.ceil
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -318,7 +315,7 @@ fun WindDownDelaySection(
                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
             )
             val secondsLeft by remember(durationSeconds) {
-                derivedStateOf { kotlin.math.ceil((1f - progressAnimatable.value) * durationSeconds).toInt() }
+                derivedStateOf { ceil((1f - progressAnimatable.value) * durationSeconds).toInt() }
             }
             Text(
                 text = "${secondsLeft}s",

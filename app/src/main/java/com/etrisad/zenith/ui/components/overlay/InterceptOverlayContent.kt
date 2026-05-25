@@ -1,10 +1,8 @@
-package com.etrisad.zenith.service
+package com.etrisad.zenith.ui.components.overlay
 
 import androidx.compose.runtime.Composable
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ShieldEntity
-import com.etrisad.zenith.ui.components.overlay.ShieldOverlay
-import com.etrisad.zenith.ui.components.overlay.ScheduleOverlay
 
 @Composable
 fun InterceptOverlayContent(
