@@ -38,6 +38,7 @@ fun WindDownOverlayContent(
     packageName: String,
     appName: String,
     sessionUsed: Boolean,
+    userPreferences: com.etrisad.zenith.data.preferences.UserPreferences,
     onAllowUse: (Int) -> Unit,
     onCloseApp: () -> Unit
 ) {
@@ -147,20 +148,31 @@ fun WindDownOverlayContent(
             ) + fadeOut(),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Card(
+            Column(
                 modifier = Modifier
                     .let { 
                         if (isLandscape) it.widthIn(max = 640.dp).wrapContentHeight() 
                         else it.fillMaxWidth().wrapContentHeight() 
                     }
-                    .align(Alignment.BottomCenter)
-                    .imePadding(),
-                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+                    .align(Alignment.BottomCenter),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                BedtimeAlertPill(
+                    userPreferences = userPreferences,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding(),
+                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+                ) {
                 Column(
                     modifier = Modifier
                         .let { if (isLandscape) it.displayCutoutPadding() else it }
@@ -283,6 +295,7 @@ fun WindDownOverlayContent(
             }
         }
     }
+}
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

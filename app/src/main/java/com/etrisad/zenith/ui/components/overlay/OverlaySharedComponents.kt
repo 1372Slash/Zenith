@@ -27,13 +27,117 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithButtonType
 import kotlinx.coroutines.delay
+import java.util.Calendar
 import java.util.Locale
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun BedtimeAlertPill(
+    userPreferences: UserPreferences,
+    modifier: Modifier = Modifier
+) {
+    val bedtimeInfo = remember(userPreferences) {
+        val now = Calendar.getInstance()
+        val currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
+        
+        val startParts = userPreferences.bedtimeStartTime.split(":")
+        val endParts = userPreferences.bedtimeEndTime.split(":")
+        val startMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 22) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0)
+        val endMinutes = (endParts.getOrNull(0)?.toIntOrNull() ?: 7) * 60 + (endParts.getOrNull(1)?.toIntOrNull() ?: 0)
+
+        val totalDuration = if (endMinutes > startMinutes) {
+            endMinutes - startMinutes
+        } else {
+            (1440 - startMinutes) + endMinutes
+        }
+
+        val elapsed = if (startMinutes <= endMinutes) {
+            (currentMinutes - startMinutes).coerceAtLeast(0)
+        } else {
+            if (currentMinutes >= startMinutes) {
+                currentMinutes - startMinutes
+            } else {
+                (1440 - startMinutes) + currentMinutes
+            }
+        }
+
+        val progress = (elapsed.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
+        val remaining = (totalDuration - elapsed).coerceAtLeast(0)
+        val h = remaining / 60
+        val m = remaining % 60
+        
+        val formattedTime = if (h > 0) "${h}h ${m}m" else "${m}m"
+        
+        // Determine if it's currently bedtime
+        val isBedtime = if (startMinutes <= endMinutes) {
+            currentMinutes in startMinutes until endMinutes
+        } else {
+            currentMinutes >= startMinutes || currentMinutes < endMinutes
+        }
+
+        Triple(progress, formattedTime, isBedtime)
+    }
+
+    if (!bedtimeInfo.third) return
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        tonalElevation = 1.dp,
+        shadowElevation = 6.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "It's Bedtime!",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                Text(
+                    text = "Finish up soon and continue tomorrow.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
+                    lineHeight = 14.sp
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Text(
+                text = bedtimeInfo.second,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.tertiary
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            CircularWavyProgressIndicator(
+                progress = { bedtimeInfo.first },
+                modifier = Modifier.size(36.dp),
+                color = MaterialTheme.colorScheme.tertiary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                stroke = Stroke(width = 6.dp.value),
+                trackStroke = Stroke(width = 6.dp.value),
+                wavelength = 12.dp
+            )
+        }
+    }
+}
 
 @Composable
 fun OverlayDragHandleWithIndicators(

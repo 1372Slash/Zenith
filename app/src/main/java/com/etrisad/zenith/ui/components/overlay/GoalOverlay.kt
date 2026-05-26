@@ -152,20 +152,31 @@ fun GoalOverlay(
             ) + fadeOut(),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Card(
+            Column(
                 modifier = Modifier
                     .let { 
                         if (isLandscape) it.widthIn(max = 640.dp).wrapContentHeight() 
                         else it.fillMaxWidth().wrapContentHeight() 
                     }
-                    .align(Alignment.BottomCenter)
-                    .imePadding(),
-                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+                    .align(Alignment.BottomCenter),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                BedtimeAlertPill(
+                    userPreferences = userPrefs,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding(),
+                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+                ) {
                 if (isLandscape) {
                     LandscapeGoalLayout(
                         modifier = Modifier.displayCutoutPadding(),
@@ -203,6 +214,7 @@ fun GoalOverlay(
             }
         }
     }
+}
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)

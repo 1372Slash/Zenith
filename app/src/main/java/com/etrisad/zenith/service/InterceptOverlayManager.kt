@@ -405,6 +405,7 @@ class InterceptOverlayManager(
                             packageName = packageName,
                             appName = appName,
                             sessionUsed = sessionUsed,
+                            userPreferences = userPrefs ?: com.etrisad.zenith.data.preferences.UserPreferences(),
                             onAllowUse = { minutes ->
                                 onAllowUse(minutes)
                                 hideOverlay()
