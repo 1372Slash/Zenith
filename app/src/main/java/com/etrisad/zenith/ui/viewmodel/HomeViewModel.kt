@@ -418,8 +418,9 @@ class HomeViewModel(
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val todayStr = dateFormat.format(Date())
         
-        val dbRecords = allHistory.filter { it.date == date && it.packageName !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL") }
-        val systemRecords = globalFallbackMap[date] ?: (if (prefs.allowRepairNonUnavailable) dbRecords.map { UsageRecord.Live(it.packageName, it.usageTimeMillis) } else null)
+        val dbRecords = shieldRepository.getDailyUsagesForDateSync(date)
+        val dbAppRecords = dbRecords.filter { it.packageName !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL") }
+        val systemRecords = globalFallbackMap[date] ?: (if (prefs.allowRepairNonUnavailable) dbAppRecords.map { UsageRecord.Live(it.packageName, it.usageTimeMillis) } else null)
         
         if (systemRecords == null) return
 
@@ -437,37 +438,47 @@ class HomeViewModel(
 
             systemRecords.forEach { record ->
                 if (record.packageName != "TOTAL") {
+                    val existing = dbAppRecords.find { it.packageName == record.packageName }?.usageTimeMillis ?: 0L
+                    val finalUsage = maxOf(record.usageTimeMillis, existing)
+                    
                     shieldRepository.insertDailyUsage(
                         DailyUsageEntity(
                             date = date,
                             packageName = record.packageName,
-                            usageTimeMillis = record.usageTimeMillis,
+                            usageTimeMillis = finalUsage,
                             lastUpdated = System.currentTimeMillis()
                         )
                     )
-                    appSum += record.usageTimeMillis
-                    if (record.packageName in shieldPkgs) sUsage += record.usageTimeMillis
-                    else if (record.packageName in goalPkgs) gUsage += record.usageTimeMillis
+                    appSum += finalUsage
+                    if (record.packageName in shieldPkgs) sUsage += finalUsage
+                    else if (record.packageName in goalPkgs) gUsage += finalUsage
                 }
             }
 
             val systemTotal = systemRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: appSum
-            var finalTotal = maxOf(systemTotal, appSum)
+            val existingTotal = dbRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
+            var finalTotal = maxOf(systemTotal, appSum, existingTotal)
 
             if (date == todayStr) {
                 val cal = Calendar.getInstance()
                 val timeSinceMidnight = (cal.get(Calendar.HOUR_OF_DAY) * 3600000L) + 
-                                       (cal.get(Calendar.MINUTE) * 60000L) + 120000L
+                                       (cal.get(Calendar.MINUTE) * 60000L) + 
+                                       (cal.get(Calendar.SECOND) * 1000L) + 120000L
                 finalTotal = finalTotal.coerceAtMost(timeSinceMidnight)
             } else {
                 finalTotal = finalTotal.coerceAtMost(86400000L)
             }
             
-            val oUsage = (finalTotal - (sUsage + gUsage)).coerceAtLeast(0L)
+            val existingShieldTotal = dbRecords.find { it.packageName == "SHIELD_TOTAL" }?.usageTimeMillis ?: 0L
+            val existingGoalTotal = dbRecords.find { it.packageName == "GOAL_TOTAL" }?.usageTimeMillis ?: 0L
+            
+            val finalShieldTotal = maxOf(sUsage, existingShieldTotal)
+            val finalGoalTotal = maxOf(gUsage, existingGoalTotal)
+            val oUsage = (finalTotal - (finalShieldTotal + finalGoalTotal)).coerceAtLeast(0L)
             
             shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "TOTAL", usageTimeMillis = finalTotal))
-            shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "SHIELD_TOTAL", usageTimeMillis = sUsage))
-            shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "GOAL_TOTAL", usageTimeMillis = gUsage))
+            shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "SHIELD_TOTAL", usageTimeMillis = finalShieldTotal))
+            shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "GOAL_TOTAL", usageTimeMillis = finalGoalTotal))
             shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "OTHER_TOTAL", usageTimeMillis = oUsage))
 
             userPreferencesRepository.refreshGlobalStreak(shieldRepository)
@@ -882,7 +893,6 @@ class HomeViewModel(
             }.mapValues { (_, usage) -> 
                 usage.coerceAtMost(timeSinceMidnight)
             }
-            val totalToday = filteredTodayUsage.values.sum().coerceAtMost(timeSinceMidnight)
 
             val appTotals = mutableMapOf<String, Long>()
             val appSessionCounts = mutableMapOf<String, Int>()
@@ -890,8 +900,18 @@ class HomeViewModel(
             val lastUsedMap = mutableMapOf<String, Long>()
 
             if (isSelectedToday) {
+                val selectedDayHistory = allHistory.filter { it.date == dateFormat.format(Date(todayStart)) }
+                
                 filteredTodayUsage.forEach { (pkg, time) ->
-                    appTotals[pkg] = time
+                    val dbTime = selectedDayHistory.find { it.packageName == pkg }?.usageTimeMillis ?: 0L
+                    appTotals[pkg] = maxOf(time, dbTime)
+                }
+                
+                selectedDayHistory.forEach { record ->
+                    if (record.packageName !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL") && 
+                        !appTotals.containsKey(record.packageName)) {
+                        appTotals[record.packageName] = record.usageTimeMillis
+                    }
                 }
                 
                 todayDetailed.sessionCounts.forEach { (pkg, count) ->
@@ -937,6 +957,11 @@ class HomeViewModel(
                 }
             }
 
+            val totalToday = if (isSelectedToday) {
+                appTotals.values.sum().coerceAtMost(timeSinceMidnight)
+            } else {
+                0L
+            }
 
             val appList = appTotals.mapNotNull { (pkg, time) ->
                 val sessions = appSessionCounts[pkg] ?: (if (time > 4000) 1 else 0)
