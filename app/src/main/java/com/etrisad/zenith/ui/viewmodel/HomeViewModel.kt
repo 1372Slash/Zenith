@@ -62,7 +62,8 @@ data class AppDetailUiState(
     val shieldEntity: ShieldEntity? = null,
     val isPaused: Boolean = false,
     val pauseEndTimestamp: Long = 0L,
-    val isSettingsSheetOpen: Boolean = false
+    val isSettingsSheetOpen: Boolean = false,
+    val isLoading: Boolean = false
 )
 
 data class HourlyUsageInfo(
@@ -1311,7 +1312,9 @@ class HomeViewModel(
         appDetailJob?.cancel()
         
         if (isNewPackage) {
-            _appDetailUiState.value = AppDetailUiState(packageName = packageName)
+            _appDetailUiState.value = AppDetailUiState(packageName = packageName, isLoading = true)
+        } else {
+            _appDetailUiState.update { it.copy(isLoading = true) }
         }
 
         appDetailJob = viewModelScope.launch {
@@ -1330,7 +1333,9 @@ class HomeViewModel(
             _appDetailUiState.update { it.copy(appName = appName, icon = icon) }
             
             withContext(kotlinx.coroutines.Dispatchers.IO) {
-                updatePackageFallback(packageName)
+                if (detailFallbackMap.isEmpty() || forceRefresh || isNewPackage) {
+                    updatePackageFallback(packageName)
+                }
             }
 
             combine(
@@ -1410,7 +1415,8 @@ class HomeViewModel(
                     bestStreak       = shield?.bestStreak ?: 0,
                     shieldEntity     = shield,
                     isPaused         = shield?.isPaused ?: false,
-                    pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L
+                    pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L,
+                    isLoading        = false
                 ) }
             }.collect()
         }

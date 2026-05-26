@@ -79,250 +79,273 @@ fun AppDetailScreen(
         viewModel.loadAppDetail(packageName)
     }
 
-
     val shield = uiState.shieldEntity
-    val isFocusActive = shield != null
-    val isEffectivelyPaused = shield?.let {
-        it.isPaused && (it.pauseEndTimestamp == 0L || nowMillis < it.pauseEndTimestamp)
-    } ?: false
-    val targetMillis = shield?.timeLimitMinutes?.let { it * 60 * 1000L } ?: 0L
+    val isFocusActive = remember(shield) { shield != null }
+    val isEffectivelyPaused = remember(shield, nowMillis) {
+        shield?.let {
+            it.isPaused && (it.pauseEndTimestamp == 0L || nowMillis < it.pauseEndTimestamp)
+        } ?: false
+    }
+    val targetMillis = remember(shield) { shield?.timeLimitMinutes?.let { it * 60 * 1000L } ?: 0L }
+
+    val formatDuration = remember(viewModel) { { millis: Long -> viewModel.formatDuration(millis) } }
 
     var selectedHour by remember { mutableStateOf<Int?>(null) }
     var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val pullToRefreshState = rememberPullToRefreshState()
 
-    PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = {
+    val onRefresh = remember(packageName, viewModel) {
+        {
             scope.launch {
                 isRefreshing = true
                 viewModel.loadAppDetail(packageName, forceRefresh = true)
                 delay(500)
                 isRefreshing = false
             }
-        },
-        state = pullToRefreshState,
-        indicator = {
-            val scale by animateFloatAsState(
-                targetValue = if (isRefreshing) 1f else pullToRefreshState.distanceFraction.coerceIn(0f, 1f),
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessLow
-                ),
-                label = "LoadingIndicatorScale"
-            )
+        }
+    }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = innerPadding.calculateTopPadding() + 16.dp),
-                contentAlignment = Alignment.TopCenter
-            ) {
-                ZenithContainedLoadingIndicator(
-                    modifier = Modifier.graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        alpha = scale.coerceIn(0f, 1f)
+    AnimatedContent(
+        targetState = uiState.isLoading && !isRefreshing,
+        transitionSpec = {
+            (fadeIn(animationSpec = tween(400, delayMillis = 100)) + scaleIn(initialScale = 0.92f, animationSpec = tween(400, delayMillis = 100)))
+                .togetherWith(fadeOut(animationSpec = tween(300)))
+        },
+        label = "LoadingToContentTransition"
+    ) { loading ->
+        if (loading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                ZenithContainedLoadingIndicator()
+            }
+        } else {
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { onRefresh() },
+                state = pullToRefreshState,
+                indicator = {
+                    val scale by animateFloatAsState(
+                        targetValue = if (isRefreshing) 1f else pullToRefreshState.distanceFraction.coerceIn(0f, 1f),
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessLow
+                        ),
+                        label = "LoadingIndicatorScale"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = innerPadding.calculateTopPadding() + 16.dp),
+                        contentAlignment = Alignment.TopCenter
+                    ) {
+                        ZenithContainedLoadingIndicator(
+                            modifier = Modifier.graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                                alpha = scale.coerceIn(0f, 1f)
+                            }
+                        )
                     }
-                )
-            }
-        },
-        modifier = Modifier.fillMaxSize()
-    ) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(
-                top = innerPadding.calculateTopPadding() + 16.dp,
-                bottom = innerPadding.calculateBottomPadding() + 32.dp
-            )
-        ) {
-            item {
-                AppHeader(
-                    appName = uiState.appName,
-                    packageName = uiState.packageName,
-                    icon = uiState.icon,
-                    focusType = uiState.type,
-                    isActive = isFocusActive,
-                    isPaused = isEffectivelyPaused,
-                    pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L,
-                    nowMillis = nowMillis,
-                    shield = shield
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-
-            item {
-                UsageCard(
-                    title = "Today's Usage",
-                    time = viewModel.formatDuration(uiState.todayUsage),
-                    targetMillis = targetMillis,
-                    currentUsage = uiState.todayUsage,
-                    focusType = uiState.type,
-                    formatDuration = { viewModel.formatDuration(it) },
-                    isActive = isFocusActive,
-                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-            }
-
-            item {
-                UsageTrendsRow(
-                    yesterdayUsage = uiState.yesterdayUsage,
-                    yesterdayTime = viewModel.formatDuration(uiState.yesterdayUsage),
-                    percentageChange = uiState.percentageChange,
-                    focusType = uiState.type
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-            }
-
-            item {
-                AnimatedVisibility(
-                    visible = isFocusActive,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
+                },
+                modifier = Modifier.fillMaxSize()
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    contentPadding = PaddingValues(
+                        top = innerPadding.calculateTopPadding() + 16.dp,
+                        bottom = innerPadding.calculateBottomPadding() + 32.dp
+                    )
                 ) {
-                    Column {
-                        StreakCard(
-                            currentStreak = uiState.currentStreak,
-                            bestStreak = uiState.bestStreak,
+                    item {
+                        AppHeader(
+                            appName = uiState.appName,
+                            packageName = uiState.packageName,
+                            icon = uiState.icon,
+                            focusType = uiState.type,
+                            isActive = isFocusActive,
+                            isPaused = isEffectivelyPaused,
+                            pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L,
+                            nowMillis = nowMillis,
+                            shield = shield
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
+
+                    item {
+                        UsageCard(
+                            title = "Today's Usage",
+                            time = formatDuration(uiState.todayUsage),
+                            targetMillis = targetMillis,
+                            currentUsage = uiState.todayUsage,
+                            focusType = uiState.type,
+                            formatDuration = formatDuration,
+                            isActive = isFocusActive,
+                            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+
+                    item {
+                        UsageTrendsRow(
+                            yesterdayUsage = uiState.yesterdayUsage,
+                            yesterdayTime = formatDuration(uiState.yesterdayUsage),
+                            percentageChange = uiState.percentageChange,
+                            focusType = uiState.type
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+
+                    item {
+                        AnimatedVisibility(
+                            visible = isFocusActive,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
+                            Column {
+                                StreakCard(
+                                    currentStreak = uiState.currentStreak,
+                                    bestStreak = uiState.bestStreak,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+                        }
+                    }
+
+                    item {
+                        UsageHistoryCard(
+                            history = uiState.usageHistory,
+                            targetMillis = targetMillis,
+                            focusType = uiState.type,
+                            showDatabaseIndicator = preferences.showDatabaseIndicator,
+                            formatDuration = formatDuration,
+                            onDaySelected = { },
+                            title = "History (21 Days)",
                             shape = RoundedCornerShape(8.dp)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                     }
-                }
-            }
 
-            item {
-                UsageHistoryCard(
-                    history = uiState.usageHistory,
-                    targetMillis = targetMillis,
-                    focusType = uiState.type,
-                    showDatabaseIndicator = preferences.showDatabaseIndicator,
-                    formatDuration = { viewModel.formatDuration(it) },
-                    onDaySelected = { },
-                    title = "History (21 Days)",
-                    shape = RoundedCornerShape(8.dp)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-            }
+                    item {
+                        if (uiState.hourlyUsage.any { it > 0 }) {
+                            HourlyUsageChart(
+                                hourlyUsage = uiState.hourlyUsage,
+                                selectedHour = selectedHour,
+                                onHourClick = { selectedHour = if (selectedHour == it) null else it },
+                                focusType = uiState.type,
+                                formatDuration = formatDuration,
+                                bedtimeEnabled = preferences.bedtimeEnabled,
+                                bedtimeStartTime = preferences.bedtimeStartTime,
+                                bedtimeEndTime = preferences.bedtimeEndTime,
+                                bedtimeDays = preferences.bedtimeDays
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                    }
 
-            item {
-                if (uiState.hourlyUsage.any { it > 0 }) {
-                    HourlyUsageChart(
-                        hourlyUsage = uiState.hourlyUsage,
-                        selectedHour = selectedHour,
-                        onHourClick = { selectedHour = if (selectedHour == it) null else it },
-                        focusType = uiState.type,
-                        formatDuration = { viewModel.formatDuration(it) },
-                        bedtimeEnabled = preferences.bedtimeEnabled,
-                        bedtimeStartTime = preferences.bedtimeStartTime,
-                        bedtimeEndTime = preferences.bedtimeEndTime,
-                        bedtimeDays = preferences.bedtimeDays
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-            }
+                    item {
+                        SecondaryStatsRow(
+                            averageUsage = formatDuration(uiState.averageUsage),
+                            totalSessions = uiState.totalSessions,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
 
-            item {
-                SecondaryStatsRow(
-                    averageUsage = viewModel.formatDuration(uiState.averageUsage),
-                    totalSessions = uiState.totalSessions,
-                    shape = RoundedCornerShape(8.dp)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-            }
+                    item {
+                        PeakHourCard(
+                            peakHour = uiState.peakHour,
+                            shape = RoundedCornerShape(
+                                topStart = 8.dp,
+                                topEnd = 8.dp,
+                                bottomStart = if (!isFocusActive) 24.dp else 8.dp,
+                                bottomEnd = if (!isFocusActive) 24.dp else 8.dp
+                            )
+                        )
+                        if (isFocusActive) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                    }
 
-            item {
-                PeakHourCard(
-                    peakHour = uiState.peakHour,
-                    shape = RoundedCornerShape(
-                        topStart = 8.dp,
-                        topEnd = 8.dp,
-                        bottomStart = if (!isFocusActive) 24.dp else 8.dp,
-                        bottomEnd = if (!isFocusActive) 24.dp else 8.dp
-                    )
-                )
-                if (isFocusActive) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-            }
+                    item {
+                        AnimatedVisibility(
+                            visible = isFocusActive,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
+                            if (shield != null) {
+                                var showPauseSheet by remember { mutableStateOf(false) }
+                                var showDeleteSheet by remember { mutableStateOf(false) }
 
-            item {
-                AnimatedVisibility(
-                    visible = isFocusActive,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
-                ) {
-                    if (shield != null) {
-                        var showPauseSheet by remember { mutableStateOf(false) }
-                        var showDeleteSheet by remember { mutableStateOf(false) }
+                                Column {
+                                    AnimatedContent(
+                                        targetState = isEffectivelyPaused,
+                                        transitionSpec = {
+                                            (fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f))
+                                                .togetherWith(fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.95f))
+                                        },
+                                        label = "PauseResumeTransition"
+                                    ) { isPaused ->
+                                        if (isPaused) {
+                                            ResumeCard(
+                                                pauseEndTimestamp = shield.pauseEndTimestamp,
+                                                onResume = { viewModel.resumeShield() },
+                                                formatDuration = formatDuration,
+                                                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp),
+                                                nowMillis = nowMillis
+                                            )
+                                        } else {
+                                            PauseShieldCard(
+                                                onPauseClick = { showPauseSheet = true },
+                                                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+                                            )
+                                        }
+                                    }
+                                    
+                                    Spacer(modifier = Modifier.height(4.dp))
 
-                        Column {
-                            AnimatedContent(
-                                targetState = isEffectivelyPaused,
-                                transitionSpec = {
-                                    (fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f))
-                                        .togetherWith(fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.95f))
-                                },
-                                label = "PauseResumeTransition"
-                            ) { isPaused ->
-                                if (isPaused) {
-                                    ResumeCard(
-                                        pauseEndTimestamp = shield.pauseEndTimestamp,
-                                        onResume = { viewModel.resumeShield() },
-                                        formatDuration = { viewModel.formatDuration(it) },
-                                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp),
-                                        nowMillis = nowMillis
+                                    DeleteShieldCard(
+                                        onDelete = {
+                                            showDeleteSheet = true
+                                        },
+                                        shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                                     )
-                                } else {
-                                    PauseShieldCard(
-                                        onPauseClick = { showPauseSheet = true },
-                                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+                                }
+
+                                if (showDeleteSheet) {
+                                    ConfirmBottomSheet(
+                                        onDismiss = { showDeleteSheet = false },
+                                        onConfirm = {
+                                            viewModel.deleteShieldFromDetail()
+                                            showDeleteSheet = false
+                                        },
+                                        leverCount = 3,
+                                        showTimeSelection = false
+                                    )
+                                }
+
+                                if (showPauseSheet) {
+                                    ConfirmBottomSheet(
+                                        onDismiss = { showPauseSheet = false },
+                                        onConfirm = { duration ->
+                                            viewModel.pauseShield(duration)
+                                            showPauseSheet = false
+                                        },
+                                        leverCount = 5,
+                                        showTimeSelection = true
                                     )
                                 }
                             }
-                            
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            DeleteShieldCard(
-                                onDelete = {
-                                    showDeleteSheet = true
-                                },
-                                shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                            )
-                        }
-
-                        if (showDeleteSheet) {
-                            ConfirmBottomSheet(
-                                onDismiss = { showDeleteSheet = false },
-                                onConfirm = {
-                                    viewModel.deleteShieldFromDetail()
-                                    showDeleteSheet = false
-                                },
-                                leverCount = 3,
-                                showTimeSelection = false
-                            )
-                        }
-
-                        if (showPauseSheet) {
-                            ConfirmBottomSheet(
-                                onDismiss = { showPauseSheet = false },
-                                onConfirm = { duration ->
-                                    viewModel.pauseShield(duration)
-                                    showPauseSheet = false
-                                },
-                                leverCount = 5,
-                                showTimeSelection = true
-                            )
                         }
                     }
                 }
             }
         }
     }
+
 
     if (uiState.isSettingsSheetOpen) {
         val appInfo = AppInfo(uiState.packageName, uiState.appName, uiState.icon)
@@ -929,7 +952,12 @@ fun ResumeCard(
 
     val resumeTimeStr = remember(pauseEndTimestamp) {
         if (pauseEndTimestamp == 0L) "Manually"
-        else SimpleDateFormat("HH:mm", Locale.getDefault()).format(java.util.Date(pauseEndTimestamp))
+        else {
+            val instant = java.time.Instant.ofEpochMilli(pauseEndTimestamp)
+            val formatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+                .withZone(java.time.ZoneId.systemDefault())
+            formatter.format(instant)
+        }
     }
 
     Card(
