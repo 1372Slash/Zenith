@@ -2,7 +2,6 @@ package com.etrisad.zenith.util
 
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
-import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -18,17 +17,25 @@ object ScreenUsageHelper {
     private var lastResult: UsageResult? = null
     private var lastQueryTime = 0L
     private const val CACHE_DURATION = 5000L
+    
+    private const val MIDNIGHT_LOOKBACK_MS = 1800000L
+    private const val SESSION_MIN_DURATION = 4000L
+    private const val MIN_SEGMENT_DURATION = 100L
+    private const val SESSION_TIMEOUT_MS = 60000L
 
     fun fetchDetailedUsageToday(
         usageStatsManager: UsageStatsManager,
         includeHourly: Boolean = false
     ): UsageResult {
         val currentTime = System.currentTimeMillis()
-        if (lastResult != null && currentTime - lastQueryTime < CACHE_DURATION && (!includeHourly || lastResult!!.hourlyUsageMap.isNotEmpty())) {
-            return lastResult!!
+        val cached = lastResult
+        if (cached != null && currentTime - lastQueryTime < CACHE_DURATION && 
+            (!includeHourly || cached.hourlyUsageMap.isNotEmpty())) {
+            return cached
         }
 
-        val start = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val zoneId = ZoneId.systemDefault()
+        val start = LocalDate.now(zoneId).atStartOfDay(zoneId).toInstant().toEpochMilli()
         val end = currentTime
 
         val usageMap = mutableMapOf<String, Long>()
@@ -44,7 +51,7 @@ object ScreenUsageHelper {
         var activePkg: String? = null
         var activeStartTime = 0L
 
-        val events = usageStatsManager.queryEvents(start - (24 * 60 * 60 * 1000L), end)
+        val events = usageStatsManager.queryEvents(start - MIDNIGHT_LOOKBACK_MS, end)
         val event = UsageEvents.Event()
         
         var isScreenOn = true 
@@ -59,18 +66,18 @@ object ScreenUsageHelper {
                 UsageEvents.Event.SCREEN_NON_INTERACTIVE -> {
                     isScreenOn = false
                     activePkg?.let { p ->
-                        val segmentStart = maxOf(activeStartTime, start)
-                        val segmentEnd = minOf(time, end)
+                        val segmentStart = if (activeStartTime > start) activeStartTime else start
+                        val segmentEnd = if (time < end) time else end
                         if (segmentStart < segmentEnd) {
                             val duration = segmentEnd - segmentStart
-                            if (duration > 100) {
+                            if (duration > MIN_SEGMENT_DURATION) {
                                 usageMap[p] = (usageMap[p] ?: 0L) + duration
-                                if (duration > 4000) {
+                                if (duration > SESSION_MIN_DURATION) {
                                     sessionCounts[p] = (sessionCounts[p] ?: 0) + 1
                                 }
 
                                 if (includeHourly) {
-                                    addHourlyUsage(hourlyMap, p, segmentStart, segmentEnd)
+                                    addHourlyUsage(hourlyMap, p, segmentStart, segmentEnd, zoneId)
                                 }
                             }
                         }
@@ -81,24 +88,26 @@ object ScreenUsageHelper {
                 UsageEvents.Event.ACTIVITY_RESUMED,
                 UsageEvents.Event.MOVE_TO_FOREGROUND -> {
                     if (isScreenOn) {
-                        val className = event.className ?: ""
-                        if (className.contains("Notification", ignoreCase = true) || 
-                            className.contains("Toast", ignoreCase = true)) {
+                        val className = event.className
+                        if (className != null && (className.contains("Notification") ||
+                            className.contains("notification") ||
+                            className.contains("Toast") || 
+                            className.contains("toast"))) {
                             continue
                         }
 
                         if (activePkg != null) {
-                            val segmentStart = maxOf(activeStartTime, start)
-                            val segmentEnd = minOf(time, end)
+                            val segmentStart = if (activeStartTime > start) activeStartTime else start
+                            val segmentEnd = if (time < end) time else end
                             if (segmentStart < segmentEnd) {
                                 val duration = segmentEnd - segmentStart
                                 if (duration > 0) {
                                     usageMap[activePkg!!] = (usageMap[activePkg!!] ?: 0L) + duration
-                                    if (duration > 4000) {
+                                    if (duration > SESSION_MIN_DURATION) {
                                         sessionCounts[activePkg!!] = (sessionCounts[activePkg!!] ?: 0) + 1
                                     }
                                     if (includeHourly) {
-                                        addHourlyUsage(hourlyMap, activePkg!!, segmentStart, segmentEnd)
+                                        addHourlyUsage(hourlyMap, activePkg!!, segmentStart, segmentEnd, zoneId)
                                     }
                                 }
                             }
@@ -110,17 +119,17 @@ object ScreenUsageHelper {
                 UsageEvents.Event.ACTIVITY_PAUSED,
                 UsageEvents.Event.MOVE_TO_BACKGROUND -> {
                     if (activePkg == pkg) {
-                        val segmentStart = maxOf(activeStartTime, start)
-                        val segmentEnd = minOf(time, end)
+                        val segmentStart = if (activeStartTime > start) activeStartTime else start
+                        val segmentEnd = if (time < end) time else end
                         if (segmentStart < segmentEnd) {
                             val duration = segmentEnd - segmentStart
-                            if (duration > 100) {
+                            if (duration > MIN_SEGMENT_DURATION) {
                                 usageMap[pkg] = (usageMap[pkg] ?: 0L) + duration
-                                if (duration > 4000) {
+                                if (duration > SESSION_MIN_DURATION) {
                                     sessionCounts[pkg] = (sessionCounts[pkg] ?: 0) + 1
                                 }
                                 if (includeHourly) {
-                                    addHourlyUsage(hourlyMap, pkg, segmentStart, segmentEnd)
+                                    addHourlyUsage(hourlyMap, pkg, segmentStart, segmentEnd, zoneId)
                                 }
                             }
                         }
@@ -130,28 +139,28 @@ object ScreenUsageHelper {
                 }
             }
         }
-        
+
         if (isScreenOn && activePkg != null) {
-            val segmentStart = maxOf(activeStartTime, start)
+            val segmentStart = if (activeStartTime > start) activeStartTime else start
             var segmentEnd = end
             
             val stats = aggregatedStats?.get(activePkg)
             if (stats != null) {
-                val lastActivity = maxOf(stats.lastTimeUsed, stats.lastTimeVisible)
-                if (lastActivity in (segmentStart + 1) until segmentEnd && (currentTime - lastActivity) > 60000) {
+                val lastActivity = if (stats.lastTimeUsed > stats.lastTimeVisible) stats.lastTimeUsed else stats.lastTimeVisible
+                if (lastActivity in (segmentStart + 1) until segmentEnd && (currentTime - lastActivity) > SESSION_TIMEOUT_MS) {
                     segmentEnd = lastActivity
                 }
             }
 
             if (segmentStart < segmentEnd) {
                 val duration = segmentEnd - segmentStart
-                if (duration > 100) {
+                if (duration > MIN_SEGMENT_DURATION) {
                     usageMap[activePkg!!] = (usageMap[activePkg!!] ?: 0L) + duration
-                    if (duration > 4000) {
+                    if (duration > SESSION_MIN_DURATION) {
                         sessionCounts[activePkg!!] = (sessionCounts[activePkg!!] ?: 0) + 1
                     }
                     if (includeHourly) {
-                        addHourlyUsage(hourlyMap, activePkg!!, segmentStart, segmentEnd)
+                        addHourlyUsage(hourlyMap, activePkg!!, segmentStart, segmentEnd, zoneId)
                     }
                 }
             }
@@ -167,23 +176,31 @@ object ScreenUsageHelper {
         hourlyMap: MutableMap<Int, MutableMap<String, Long>>,
         packageName: String,
         start: Long,
-        end: Long
+        end: Long,
+        zoneId: ZoneId
     ) {
-        val zoneId = ZoneId.systemDefault()
-        var current = Instant.ofEpochMilli(start).atZone(zoneId)
-        val endTime = Instant.ofEpochMilli(end).atZone(zoneId)
-        
-        while (current.isBefore(endTime)) {
-            val hour = current.hour
-            val nextHour = current.plusHours(1).withMinute(0).withSecond(0).withNano(0)
-            val segmentEnd = if (nextHour.isBefore(endTime)) nextHour else endTime
+        var currentMillis = start
+        var currentZdt = Instant.ofEpochMilli(currentMillis).atZone(zoneId)
+
+        var nextHourZdt = currentZdt.plusHours(1).withMinute(0).withSecond(0).withNano(0)
+        var nextHourMillis = nextHourZdt.toInstant().toEpochMilli()
+
+        while (currentMillis < end) {
+            val hour = currentZdt.hour
+            val segmentEnd = if (nextHourMillis < end) nextHourMillis else end
+            val duration = segmentEnd - currentMillis
             
-            val duration = Duration.between(current, segmentEnd).toMillis()
             if (duration > 0) {
                 val pkgMap = hourlyMap.getOrPut(hour) { mutableMapOf() }
                 pkgMap[packageName] = (pkgMap[packageName] ?: 0L) + duration
             }
-            current = segmentEnd
+            
+            currentMillis = segmentEnd
+            if (currentMillis < end) {
+                currentZdt = nextHourZdt
+                nextHourZdt = currentZdt.plusHours(1)
+                nextHourMillis = nextHourZdt.toInstant().toEpochMilli()
+            }
         }
     }
 
