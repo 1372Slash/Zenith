@@ -327,7 +327,7 @@ class HomeViewModel(
                 val start = getMidnight(i)
                 val end = if (i == 0) now else getMidnight(i - 1)
                 
-                val events = usm.queryEvents(start - (12 * 60 * 60 * 1000L), end)
+                val events = usm.queryEvents(start - 1800000L, end)
                 val event = UsageEvents.Event()
                 
                 val usageMap = mutableMapOf<String, Long>()
@@ -667,7 +667,7 @@ class HomeViewModel(
             val dateStr = dateFormat.format(Date(start))
             
             val usageMap = mutableMapOf<String, Long>()
-            val events = usm.queryEvents(start - (12 * 60 * 60 * 1000L), end)
+            val events = usm.queryEvents(start - 1800000L, end)
             val event = UsageEvents.Event()
             
             var activePkg: String? = null
@@ -762,7 +762,7 @@ class HomeViewModel(
             val end = if (i == 0) now else getMidnight(i - 1)
             val dateStr = dateFormat.format(Date(start))
 
-            val events = usm.queryEvents(start - (12 * 60 * 60 * 1000L), end)
+            val events = usm.queryEvents(start - 1800000L, end)
             val event = UsageEvents.Event()
             
             var activePkg: String? = null

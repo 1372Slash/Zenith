@@ -43,7 +43,7 @@ class UsageSyncManager(
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
 
-        val queryStart = maxOf(startOfToday, lastSyncTime - (24 * 60 * 60 * 1000L))
+        val queryStart = maxOf(startOfToday, lastSyncTime - 1800000L)
         val events = usageStatsManager.queryEvents(queryStart, currentTime)
         val event = UsageEvents.Event()
         

@@ -20,7 +20,7 @@ object ScreenUsageHelper {
         var activePkg: String? = null
         var activeStartTime: Long = 0L
 
-        val events = usageStatsManager.queryEvents(start - (24 * 60 * 60 * 1000L), end)
+        val events = usageStatsManager.queryEvents(start - 1800000L, end)
         val event = UsageEvents.Event()
         
         var isScreenOn = true 

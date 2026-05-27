@@ -82,7 +82,7 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
             }
         }
 
-        val events = usm.queryEvents(startTime - (60 * 60 * 1000L), System.currentTimeMillis().coerceAtMost(endTime))
+        val events = usm.queryEvents(startTime - 1800000L, System.currentTimeMillis().coerceAtMost(endTime))
         val event = android.app.usage.UsageEvents.Event()
         val androidTotals = mutableMapOf<String, Long>()
         var activePkg: String? = null
