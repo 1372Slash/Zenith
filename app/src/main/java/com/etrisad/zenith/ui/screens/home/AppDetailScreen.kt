@@ -79,6 +79,12 @@ fun AppDetailScreen(
         viewModel.loadAppDetail(packageName)
     }
 
+    DisposableEffect(packageName) {
+        onDispose {
+            viewModel.clearAppDetail(packageName)
+        }
+    }
+
     val shield = uiState.shieldEntity
     val isFocusActive = remember(shield) { shield != null }
     val isEffectivelyPaused = remember(shield, nowMillis) {
@@ -106,11 +112,20 @@ fun AppDetailScreen(
         }
     }
 
+    val isPackageMatch = uiState.packageName == packageName
+    val showLoadingIndicator = (uiState.isLoading || !isPackageMatch) && !isRefreshing
+
     AnimatedContent(
-        targetState = uiState.isLoading && !isRefreshing,
+        targetState = showLoadingIndicator,
         transitionSpec = {
-            (fadeIn(animationSpec = tween(400, delayMillis = 100)) + scaleIn(initialScale = 0.92f, animationSpec = tween(400, delayMillis = 100)))
-                .togetherWith(fadeOut(animationSpec = tween(300)))
+            if (targetState) {
+                fadeIn(animationSpec = tween(200)) togetherWith
+                        fadeOut(animationSpec = tween(200))
+            } else {
+                (fadeIn(animationSpec = tween(400, delayMillis = 50)) +
+                 scaleIn(initialScale = 0.92f, animationSpec = tween(400, delayMillis = 50)))
+                    .togetherWith(fadeOut(animationSpec = tween(300)))
+            }
         },
         label = "LoadingToContentTransition"
     ) { loading ->

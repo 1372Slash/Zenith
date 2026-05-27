@@ -63,7 +63,7 @@ data class AppDetailUiState(
     val isPaused: Boolean = false,
     val pauseEndTimestamp: Long = 0L,
     val isSettingsSheetOpen: Boolean = false,
-    val isLoading: Boolean = false
+    val isLoading: Boolean = true
 )
 
 data class HourlyUsageInfo(
@@ -1583,6 +1583,7 @@ class HomeViewModel(
     fun clearAppDetail(packageName: String) {
         if (_appDetailUiState.value.packageName == packageName) {
             appDetailJob?.cancel()
+            _appDetailUiState.value = AppDetailUiState()
         }
     }
 
