@@ -275,17 +275,16 @@ class ZenithAccessibilityService : AccessibilityService() {
         
         val currentTime = System.currentTimeMillis()
         val isAppPaused = shield != null && isPaused(shield)
-        
-        if (!isAppPaused) {
-            val allowedUntil = allowedApps[currentApp] ?: 0L
-            val isSessionActive = currentTime < allowedUntil
-            val isBedtimeBlocking = isBedtimeActive || (isWindDownActive && (currentPreferences?.bedtimeWindDownEnabled == true))
-            val shouldCheckSchedules = !isSessionActive && ((isBedtimeBlocking && currentApp !in bedtimeWhitelistedPackages) || currentTime > allowedUntil)
+        val allowedUntil = allowedApps[currentApp] ?: 0L
+        val isSessionActive = currentTime < allowedUntil
 
-            if (shouldCheckSchedules && !InterceptOverlayManager.isShowing) {
-                val isScheduled = checkSchedules(currentApp)
+        if (!isSessionActive && !InterceptOverlayManager.isShowing) {
+            val isScheduled = checkSchedules(currentApp)
+            if (isScheduled) return
+
+            if (!isAppPaused && currentTime > allowedUntil) {
                 val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
-                if (!isScheduled && (shield != null || (prefs.mindfulGatewayEnabled && !shouldBypassBlocking(currentApp))) && currentTime > allowedUntil) {
+                if (shield != null || (prefs.mindfulGatewayEnabled && !shouldBypassBlocking(currentApp))) {
                     checkIfAppIsShielded(currentApp)
                 }
             }
@@ -730,13 +729,6 @@ class ZenithAccessibilityService : AccessibilityService() {
 
         if (isBedtimeActive) {
             if (packageName !in bedtimeWhitelistedPackages) {
-                val shield = allShieldsCache.find { it.packageName == packageName }
-                val isMindfulGateway = shield == null && prefs.mindfulGatewayEnabled && !shouldBypassBlocking(packageName)
-
-                if (shield != null || isMindfulGateway) {
-                    return false
-                }
-
                 showBedtimeOverlay(packageName)
                 return true
             }
@@ -745,13 +737,6 @@ class ZenithAccessibilityService : AccessibilityService() {
 
         if (isWindDownActive && prefs.bedtimeWindDownEnabled) {
             if (packageName !in bedtimeWhitelistedPackages) {
-                val shield = allShieldsCache.find { it.packageName == packageName }
-                val isMindfulGateway = shield == null && prefs.mindfulGatewayEnabled && !shouldBypassBlocking(packageName)
-
-                if (shield != null || isMindfulGateway) {
-                    return false
-                }
-
                 showWindDownOverlay(packageName)
                 return true
             }
@@ -871,6 +856,7 @@ class ZenithAccessibilityService : AccessibilityService() {
 
         if (isSystem) {
             if (packageName.contains("car.mode", ignoreCase = true)) return true
+            if (isBedtimeOrWindDown) return false
             val isMindfulActive = prefs?.mindfulGatewayEnabled == true
             return !(packageName in restrictedPackages || hasGlobalAllowSchedule || isMindfulActive)
         }

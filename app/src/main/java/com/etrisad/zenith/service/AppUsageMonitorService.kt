@@ -709,16 +709,15 @@ class AppUsageMonitorService : Service() {
 
                         val isBedtimeBlocking = isBedtimeActive || (isWindDownActive && currentPreferences?.bedtimeWindDownEnabled == true)
                         val isSessionActive = allowedUntilVal?.let { it > currentTime } ?: false
-                        val shouldCheckSchedules = !isSessionActive && ((isBedtimeBlocking && currentApp !in bedtimeWhitelistedPackages) || allowedUntilVal == null || currentTime > allowedUntilVal)
 
-                        if (!isAppPaused && shouldCheckSchedules && !InterceptOverlayManager.isShowing) {
+                        if (!isSessionActive && !InterceptOverlayManager.isShowing) {
                             if (checkSchedules(currentApp)) {
                                 lastForegroundApp = currentApp
                                 delay(1000)
                                 continue
                             }
 
-                            if (allowedUntilVal == null || currentTime > allowedUntilVal) {
+                            if (!isAppPaused && (allowedUntilVal == null || currentTime > allowedUntilVal)) {
                                 val shield = currentShieldCache
                                 val prefs = currentPreferences
                                 if (shield != null || (prefs?.mindfulGatewayEnabled == true && !shouldBypassBlocking(currentApp))) {
@@ -827,21 +826,16 @@ class AppUsageMonitorService : Service() {
     private suspend fun checkBlockingInstant(currentApp: String, shield: ShieldEntity?) {
         val currentTime = System.currentTimeMillis()
         val isAppPaused = shield != null && isPaused(shield)
-        
-        if (!isAppPaused) {
-            val allowedUntil = allowedApps[currentApp]
-            val isSessionActive = allowedUntil?.let { it > currentTime } ?: false
-            val isBedtimeBlocking = isBedtimeActive || (isWindDownActive && currentPreferences?.bedtimeWindDownEnabled == true)
-            val shouldCheckSchedules = !isSessionActive && ((isBedtimeBlocking && currentApp !in bedtimeWhitelistedPackages) || (allowedUntil == null || currentTime > allowedUntil))
+        val allowedUntil = allowedApps[currentApp]
+        val isSessionActive = allowedUntil?.let { it > currentTime } ?: false
 
-            if (shouldCheckSchedules && !InterceptOverlayManager.isShowing) {
-                if (checkSchedules(currentApp)) return
+        if (!isSessionActive && !InterceptOverlayManager.isShowing) {
+            if (checkSchedules(currentApp)) return
 
-                if (allowedUntil == null || currentTime > allowedUntil) {
-                    val prefs = currentPreferences
-                    if (shield != null || (prefs?.mindfulGatewayEnabled == true && !shouldBypassBlocking(currentApp))) {
-                        checkIfAppIsShielded(currentApp)
-                    }
+            if (!isAppPaused && (allowedUntil == null || currentTime > allowedUntil)) {
+                val prefs = currentPreferences
+                if (shield != null || (prefs?.mindfulGatewayEnabled == true && !shouldBypassBlocking(currentApp))) {
+                    checkIfAppIsShielded(currentApp)
                 }
             }
         }
@@ -1564,13 +1558,6 @@ class AppUsageMonitorService : Service() {
 
         if (isBedtimeActive) {
             if (packageName !in bedtimeWhitelistedPackages) {
-                val shield = allShieldsCache[packageName]
-                val isMindfulGateway = shield == null && (prefs?.mindfulGatewayEnabled == true) && !shouldBypassBlocking(packageName)
-
-                if (shield != null || isMindfulGateway) {
-                    return false
-                }
-
                 showBedtimeOverlay(packageName)
                 return true
             }
@@ -1579,13 +1566,6 @@ class AppUsageMonitorService : Service() {
 
         if (isWindDownActive && prefs?.bedtimeWindDownEnabled == true) {
             if (packageName !in bedtimeWhitelistedPackages) {
-                val shield = allShieldsCache[packageName]
-                val isMindfulGateway = shield == null && (prefs?.mindfulGatewayEnabled == true) && !shouldBypassBlocking(packageName)
-
-                if (shield != null || isMindfulGateway) {
-                    return false
-                }
-
                 showWindDownOverlay(packageName)
                 return true
             }
@@ -1724,6 +1704,7 @@ class AppUsageMonitorService : Service() {
 
         if (isSystem) {
             if (packageName.contains("car.mode", ignoreCase = true)) return true
+            if (isBedtimeOrWindDown) return false
             val isMindfulActive = prefs?.mindfulGatewayEnabled == true
             return !(packageName in restrictedPackages || hasGlobalAllowSchedule || isMindfulActive)
         }
