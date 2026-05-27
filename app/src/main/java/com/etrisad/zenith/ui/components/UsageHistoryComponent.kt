@@ -32,6 +32,7 @@ import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.ui.viewmodel.DailyUsage
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.math.ceil
 
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.launch
@@ -217,15 +218,29 @@ fun UsageGraph(
                     val raw = (pageData.maxOfOrNull { it.totalTime } ?: 0L)
                         .coerceAtLeast(targetMillis)
                         .coerceAtLeast(60 * 1000L)
-                    if (raw < 3600000L) {
-                        ((raw / 60000L).coerceAtLeast(1) + 3) * 60000L
+                    
+                    if (raw >= 3600000L) {
+                        val hours = raw.toFloat() / 3600000f
+                        val rawStep = (hours * 1.05f) / 3f
+                        val step = when {
+                            rawStep <= 0.2f -> 0.2f
+                            rawStep <= 0.5f -> 0.5f
+                            rawStep <= 1.0f -> ceil(rawStep * 5f) / 5f
+                            else -> ceil(rawStep)
+                        }
+                        (step * 3 * 3600000L).toLong()
                     } else {
-                        ((raw / 3600000L).coerceAtLeast(1) + 1) * 3600000L
+                        val minutes = raw.toFloat() / 60000f
+                        val rawStep = (minutes * 1.05f) / 3f
+                        val step = when {
+                            rawStep <= 5f -> 5f
+                            rawStep <= 10f -> 10f
+                            rawStep <= 15f -> 15f
+                            else -> ceil(rawStep / 5f) * 5f
+                        }
+                        (step * 3 * 60000L).toLong()
                     }
                 }
-
-                val maxDisplay = if (pageMax < 3600000L) (pageMax / 60000L) else (pageMax / 3600000L)
-                val unit = if (pageMax < 3600000L) "m" else "h"
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     Column(
@@ -235,16 +250,27 @@ fun UsageGraph(
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
                         repeat(4) { i ->
-                            val labelValue = (maxDisplay * (3 - i) / 3)
+                            val currentMillis = (pageMax * (3 - i) / 3)
+                            val labelText = when {
+                                currentMillis == 0L -> "0"
+                                currentMillis >= 3600000L -> {
+                                    val hours = currentMillis.toFloat() / 3600000f
+                                    if (hours % 1f == 0f) "${hours.toInt()}h"
+                                    else String.format(Locale.getDefault(), "%.1fh", hours)
+                                }
+                                else -> "${currentMillis / 60000L}m"
+                            }
+
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "${labelValue}$unit",
+                                    text = labelText,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                    modifier = Modifier.width(28.dp)
+                                    modifier = Modifier.width(36.dp),
+                                    textAlign = TextAlign.End
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 HorizontalDivider(
@@ -267,7 +293,7 @@ fun UsageGraph(
                         androidx.compose.foundation.Canvas(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(bottom = 32.dp, start = 32.dp)
+                                .padding(bottom = 32.dp, start = 44.dp)
                         ) {
                             val y = size.height * (1f - animatedGoalRatio)
                             drawLine(
@@ -282,7 +308,7 @@ fun UsageGraph(
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(bottom = 32.dp, start = 32.dp),
+                            .padding(bottom = 32.dp, start = 44.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.Bottom
                     ) {
