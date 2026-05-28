@@ -92,9 +92,9 @@ fun BedtimeScreen(
             val (_, regular, lowData) = hourlyAppsData
             val (low, totalLowTime, _) = lowData
             val appsListSize = regular.size + (if (totalLowTime > 0) (if (isOtherHourAppsExpanded) 1 + low.size else 1) else 0)
-            1 + appsListSize // Label + Apps
+            1 + appsListSize
         } else 0
-        2 + appsCount // Chart (1) + Efficiency Card (1) + AppsCount
+        2 + appsCount
     }
     
     var currentTime by remember { mutableStateOf(LocalTime.now()) }

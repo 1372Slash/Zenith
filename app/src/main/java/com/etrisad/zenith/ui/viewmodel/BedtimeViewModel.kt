@@ -100,7 +100,6 @@ class BedtimeViewModel(
                 if (currentHour < startH && startH > endH) {
                     add(Calendar.DAY_OF_YEAR, -1)
                 } else if (currentHour >= startH) {
-                    // started today
                 } else {
                     add(Calendar.DAY_OF_YEAR, -1)
                 }
