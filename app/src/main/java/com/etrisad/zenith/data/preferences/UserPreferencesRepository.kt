@@ -134,7 +134,7 @@ class UserPreferencesRepository(private val context: Context) {
         .map { preferences ->
             UserPreferences(
                 themeConfig = ThemeConfig.valueOf(preferences[PreferencesKeys.THEME_CONFIG] ?: ThemeConfig.FOLLOW_SYSTEM.name),
-                fontOption = FontOption.valueOf(preferences[PreferencesKeys.FONT_OPTION] ?: FontOption.NUNITO.name),
+                fontOption = FontOption.valueOf(preferences[PreferencesKeys.FONT_OPTION] ?: FontOption.GOOGLE_SANS_FLEX.name),
                 dynamicColor = preferences[PreferencesKeys.DYNAMIC_COLOR] ?: true,
                 accessibilityDisabled = preferences[PreferencesKeys.ACCESSIBILITY_DISABLED] ?: false,
                 screenTimeTargetMinutes = preferences[PreferencesKeys.SCREEN_TIME_TARGET] ?: 0,
@@ -716,7 +716,7 @@ class UserPreferencesRepository(private val context: Context) {
 
 data class UserPreferences(
     val themeConfig: ThemeConfig = ThemeConfig.FOLLOW_SYSTEM,
-    val fontOption: FontOption = FontOption.NUNITO,
+    val fontOption: FontOption = FontOption.GOOGLE_SANS_FLEX,
     val dynamicColor: Boolean = true,
     val accessibilityDisabled: Boolean = false,
     val screenTimeTargetMinutes: Int = 0,

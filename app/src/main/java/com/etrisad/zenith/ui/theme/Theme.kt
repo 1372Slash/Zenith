@@ -62,7 +62,7 @@ private val LightColorScheme = lightColorScheme(
 fun ZenithTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
-    fontOption: FontOption = FontOption.SYSTEM,
+    fontOption: FontOption = FontOption.GOOGLE_SANS_FLEX,
     expressiveColors: Boolean = false,
     gsFlexSettings: GSFlexSettings = GSFlexSettings(),
     content: @Composable () -> Unit
