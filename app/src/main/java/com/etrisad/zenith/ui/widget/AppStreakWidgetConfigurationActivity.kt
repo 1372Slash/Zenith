@@ -66,7 +66,8 @@ class AppStreakWidgetConfigurationActivity : ComponentActivity() {
                 darkTheme = androidx.compose.foundation.isSystemInDarkTheme(),
                 dynamicColor = userPreferences.dynamicColor,
                 fontOption = userPreferences.fontOption,
-                expressiveColors = userPreferences.expressiveColors
+                expressiveColors = userPreferences.expressiveColors,
+                gsFlexSettings = userPreferences.gsFlexSettings
             ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     AppPickerBottomSheet(
