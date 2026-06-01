@@ -215,7 +215,7 @@ fun MainScreen(
         val allOnboardingGranted = mainGranted && (hasAccessibility || preferences.accessibilityDisabled)
         if (allOnboardingGranted && !preferences.onboardingStatsCompleted) {
             showOnboardingStatsSheet = true
-        } else if (allOnboardingGranted && !preferences.onboardingUpdateCompleted) {
+        } else if (allOnboardingGranted && !preferences.onboardingUpdateCompleted && com.etrisad.zenith.BuildConfig.SHOW_UPDATES) {
             showOnboardingUpdateSheet = true
         }
     }
@@ -249,7 +249,7 @@ fun MainScreen(
                 showPermissionSheet = false
                 if (!preferences.onboardingStatsCompleted) {
                     showOnboardingStatsSheet = true
-                } else if (!preferences.onboardingUpdateCompleted) {
+                } else if (!preferences.onboardingUpdateCompleted && com.etrisad.zenith.BuildConfig.SHOW_UPDATES) {
                     showOnboardingUpdateSheet = true
                 }
             },
@@ -257,7 +257,7 @@ fun MainScreen(
                 showPermissionSheet = false
                 if (!preferences.onboardingStatsCompleted) {
                     showOnboardingStatsSheet = true
-                } else if (!preferences.onboardingUpdateCompleted) {
+                } else if (!preferences.onboardingUpdateCompleted && com.etrisad.zenith.BuildConfig.SHOW_UPDATES) {
                     showOnboardingUpdateSheet = true
                 }
             }
@@ -269,7 +269,7 @@ fun MainScreen(
             repository = userPreferencesRepository,
             onDismiss = {
                 showOnboardingStatsSheet = false
-                if (!preferences.onboardingUpdateCompleted) {
+                if (!preferences.onboardingUpdateCompleted && com.etrisad.zenith.BuildConfig.SHOW_UPDATES) {
                     showOnboardingUpdateSheet = true
                 }
             }

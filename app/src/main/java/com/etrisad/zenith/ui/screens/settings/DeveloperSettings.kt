@@ -111,14 +111,16 @@ fun DeveloperSettings(
                 shape = RoundedCornerShape(8.dp)
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
-            SettingsActionItem(
-                title = "Reset & Trigger Update Onboarding",
-                summary = "Reset flag and show update preference choice",
-                onClick = onTriggerOnboardingUpdate,
-                icon = Icons.Outlined.Update,
-                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-            )
+            if (com.etrisad.zenith.BuildConfig.SHOW_UPDATES) {
+                Spacer(modifier = Modifier.height(4.dp))
+                SettingsActionItem(
+                    title = "Reset & Trigger Update Onboarding",
+                    summary = "Reset flag and show update preference choice",
+                    onClick = onTriggerOnboardingUpdate,
+                    icon = Icons.Outlined.Update,
+                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
             PreferenceCategory(title = "UI & Functional Testing")
