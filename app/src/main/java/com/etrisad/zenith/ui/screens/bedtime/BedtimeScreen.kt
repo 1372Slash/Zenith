@@ -267,11 +267,12 @@ fun BedtimeScreen(
                                     onToggle = { index ->
                                         hourlySortType = if (index == 0) HourlySortType.USAGE_TIME else HourlySortType.RECENTLY_USED
                                     },
-                                    modifier = Modifier.width(200.dp),
+                                    modifier = Modifier.widthIn(min = 160.dp, max = 220.dp),
                                     size = ZenithButtonSize.Small,
                                     isScalingEnabled = false,
                                     isShowingCheck = false,
-                                    showTextSelected = true
+                                    showTextSelected = true,
+                                    isFillMaxWidth = false
                                 )
                             }
                         }
@@ -962,7 +963,7 @@ fun TimeSelectionRow(
                 containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
             )
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
@@ -985,12 +986,14 @@ fun TimeSelectionRow(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = startTime, 
-                    style = MaterialTheme.typography.displayMedium, 
+                    style = MaterialTheme.typography.displaySmall, 
                     fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }
@@ -1002,7 +1005,7 @@ fun TimeSelectionRow(
                 containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
             )
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
@@ -1025,12 +1028,14 @@ fun TimeSelectionRow(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = endTime, 
-                    style = MaterialTheme.typography.displayMedium, 
+                    style = MaterialTheme.typography.displaySmall, 
                     fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }

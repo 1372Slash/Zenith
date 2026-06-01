@@ -169,8 +169,8 @@ fun RowScope.ZenithButtonWeighted(
 
     val animatedWeight by animateFloatAsState(
         targetValue = when {
-            visualPressed -> weight * 1.5f
-            selected -> weight * 1.2f
+            visualPressed -> weight * 1.25f
+            selected -> weight * 1.1f
             else -> weight
         },
         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
@@ -285,7 +285,7 @@ private fun ZenithButtonCore(
     val resPressR = pressedCornerRadiusOverride ?: when(size){ZenithButtonSize.Small->8.dp; ZenithButtonSize.Medium->12.dp; ZenithButtonSize.Large->16.dp; else->24.dp}
     val resTextS = when(size){ZenithButtonSize.Small->MaterialTheme.typography.labelSmall; ZenithButtonSize.Medium->MaterialTheme.typography.labelMedium; ZenithButtonSize.Large->MaterialTheme.typography.labelLarge; else->MaterialTheme.typography.titleMedium}
     val resIconS = when(size){ZenithButtonSize.Small->16.dp; ZenithButtonSize.Medium->18.dp; ZenithButtonSize.Large->20.dp; else->24.dp}
-    val resPadH = when(size){ZenithButtonSize.Small->12.dp; ZenithButtonSize.Medium->16.dp; ZenithButtonSize.Large->24.dp; else->32.dp}
+    val resPadH = when(size){ZenithButtonSize.Small->8.dp; ZenithButtonSize.Medium->12.dp; ZenithButtonSize.Large->20.dp; else->24.dp}
     val resInnerR = when(size){ZenithButtonSize.Small->4.dp; ZenithButtonSize.Medium->6.dp; ZenithButtonSize.Large->8.dp; else->12.dp}
 
     val animInnerR by animateDpAsState(
@@ -321,11 +321,18 @@ private fun ZenithButtonCore(
         label = "animR"
     )
     
+    val resExPad = when(size) {
+        ZenithButtonSize.Small -> 4.dp
+        ZenithButtonSize.Medium -> 8.dp
+        ZenithButtonSize.Large -> 12.dp
+        ZenithButtonSize.ExtraLarge -> 16.dp
+    }
+    
     val exPad by animateDpAsState(
         targetValue = when {
             isDisableExpand || !contentScaleEnabled -> 0.dp
-            visualPressed -> 16.dp
-            selected -> 8.dp
+            visualPressed -> resExPad
+            selected -> resExPad / 2
             else -> 0.dp
         },
         label = "exPad"
@@ -527,10 +534,16 @@ fun ZenithToggleButtonGroup(
     isInsideContainer: Boolean = false,
     isShowingCheck: Boolean = true,
     isScalingEnabled: Boolean = true,
-    showTextSelected: Boolean = false
+    showTextSelected: Boolean = false,
+    isFillMaxWidth: Boolean = true
 ) {
     val resH = when(size){ZenithButtonSize.Small->32.dp; ZenithButtonSize.Medium->40.dp; ZenithButtonSize.Large->48.dp; else->56.dp}
-    Row(modifier = modifier.height(resH).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(
+        modifier = modifier
+            .height(resH)
+            .then(if (isFillMaxWidth) Modifier.fillMaxWidth() else Modifier),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
         options.forEachIndexed { index, option ->
             val isSelected = selectedIndices.contains(index)
             val interactionSource = remember { MutableInteractionSource() }
@@ -541,9 +554,9 @@ fun ZenithToggleButtonGroup(
             
             val animatedWeight by animateFloatAsState(
                 targetValue = when {
-                    isPressed || isTapped -> if (isSelected) option.weight * 2.2f else option.weight * 1.2f
-                    isSelected -> if (showTextSelected) option.weight * 1.8f else option.weight * 1.2f
-                    else -> if (showTextSelected) option.weight * 1.5f else option.weight
+                    isPressed || isTapped -> if (showTextSelected) option.weight * 1.8f else option.weight * 1.4f
+                    isSelected -> if (showTextSelected) option.weight * 1.6f else option.weight * 1.2f
+                    else -> if (showTextSelected) option.weight * 0.85f else option.weight
                 },
                 animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
                 label = "wAnim_$index"
@@ -579,7 +592,9 @@ fun ZenithToggleButtonGroup(
                 modifier = Modifier.weight(animatedWeight),
                 type = currentType,
                 size = size,
-                text = if (showTextSelected) (if (isSelected) option.text else null) else option.text,
+                text = if (showTextSelected) {
+                    if (isSelected || isPressed || isTapped) option.text else null
+                } else option.text,
                 icon = if (isSelected && isMultiSelect && isShowingCheck && option.icon == null) Icons.Default.Check else option.icon,
                 isLoading = option.isLoading,
                 loadingProgress = option.loadingProgress,
