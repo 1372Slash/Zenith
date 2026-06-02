@@ -16,6 +16,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -1013,7 +1015,49 @@ fun BedtimeToggleCard(enabled: Boolean, onToggle: (Boolean) -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Switch(checked = enabled, onCheckedChange = onToggle)
+            Switch(
+                checked = enabled,
+                onCheckedChange = onToggle,
+                thumbContent = {
+                    val thumbSize by animateDpAsState(
+                        targetValue = if (enabled) 28.dp else 24.dp,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        ),
+                        label = "thumb_size"
+                    )
+
+                    val iconColor by animateColorAsState(
+                        targetValue = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                        label = "switch_icon_color"
+                    )
+
+                    Box(
+                        modifier = Modifier.size(thumbSize),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AnimatedContent(
+                            targetState = enabled,
+                            transitionSpec = {
+                                (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                        scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
+                                    .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                            scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
+                            },
+                            label = "switch_icon_anim"
+                        ) { isChecked ->
+                            Icon(
+                                imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
+                                contentDescription = null,
+                                modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
+                                tint = iconColor
+                            )
+                        }
+                    }
+                }
+            )
         }
     }
 }
@@ -1448,7 +1492,49 @@ fun FeatureCard(
                 Text(text = title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Switch(checked = enabled, onCheckedChange = onToggle)
+            Switch(
+                checked = enabled,
+                onCheckedChange = onToggle,
+                thumbContent = {
+                    val thumbSize by animateDpAsState(
+                        targetValue = if (enabled) 28.dp else 24.dp,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        ),
+                        label = "thumb_size"
+                    )
+
+                    val iconColor by animateColorAsState(
+                        targetValue = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                        label = "switch_icon_color"
+                    )
+
+                    Box(
+                        modifier = Modifier.size(thumbSize),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AnimatedContent(
+                            targetState = enabled,
+                            transitionSpec = {
+                                (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                        scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
+                                    .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                            scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
+                            },
+                            label = "switch_icon_anim"
+                        ) { isChecked ->
+                            Icon(
+                                imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
+                                contentDescription = null,
+                                modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
+                                tint = iconColor
+                            )
+                        }
+                    }
+                }
+            )
         }
     }
 }

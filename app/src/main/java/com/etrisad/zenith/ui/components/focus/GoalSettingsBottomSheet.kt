@@ -22,15 +22,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.core.net.toUri
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.viewmodel.AppInfo
 import kotlinx.coroutines.launch
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -311,18 +313,57 @@ fun GoalSettingsBottomSheet(
                                     )
                                     Switch(
                                         checked = isGoalCallerSoundEnabled,
-                                        onCheckedChange = { isGoalCallerSoundEnabled = it }
+                                        onCheckedChange = { isGoalCallerSoundEnabled = it },
+                                        thumbContent = {
+                                            val thumbSize by animateDpAsState(
+                                                targetValue = if (isGoalCallerSoundEnabled) 28.dp else 24.dp,
+                                                animationSpec = spring(
+                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                    stiffness = Spring.StiffnessMediumLow
+                                                ),
+                                                label = "thumb_size"
+                                            )
+
+                                            val iconColor by animateColorAsState(
+                                                targetValue = if (isGoalCallerSoundEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                                                label = "switch_icon_color"
+                                            )
+
+                                            Box(
+                                                modifier = Modifier.size(thumbSize),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                AnimatedContent(
+                                                    targetState = isGoalCallerSoundEnabled,
+                                                    transitionSpec = {
+                                                        (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                                scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
+                                                            .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                                    scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
+                                                    },
+                                                    label = "switch_icon_anim"
+                                                ) { isChecked ->
+                                                    Icon(
+                                                        imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
+                                                        tint = iconColor
+                                                    )
+                                                }
+                                            }
+                                        }
                                     )
                                 }
                                 
-                                androidx.compose.animation.AnimatedVisibility(
+                                AnimatedVisibility(
                                     visible = isGoalCallerSoundEnabled,
-                                    enter = androidx.compose.animation.expandVertically(
+                                    enter = expandVertically(
                                         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
-                                    ) + androidx.compose.animation.fadeIn(),
-                                    exit = androidx.compose.animation.shrinkVertically(
+                                    ) + fadeIn(),
+                                    exit = shrinkVertically(
                                         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
-                                    ) + androidx.compose.animation.fadeOut()
+                                    ) + fadeOut()
                                 ) {
                                     Column {
                                         Spacer(modifier = Modifier.height(16.dp))

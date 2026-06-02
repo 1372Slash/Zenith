@@ -29,6 +29,8 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
@@ -501,11 +503,43 @@ fun MainScreen(
                                                 }
                                             },
                                             thumbContent = {
-                                                Icon(
-                                                    imageVector = Icons.Default.Bedtime,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(SwitchDefaults.IconSize)
+                                                val thumbSize by animateDpAsState(
+                                                    targetValue = if (preferences.bedtimeEnabled) 28.dp else 24.dp,
+                                                    animationSpec = spring(
+                                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                        stiffness = Spring.StiffnessMediumLow
+                                                    ),
+                                                    label = "thumb_size"
                                                 )
+
+                                                val iconColor by animateColorAsState(
+                                                    targetValue = if (preferences.bedtimeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                                                    label = "switch_icon_color"
+                                                )
+
+                                                Box(
+                                                    modifier = Modifier.size(thumbSize),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    AnimatedContent(
+                                                        targetState = preferences.bedtimeEnabled,
+                                                        transitionSpec = {
+                                                            (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                                    scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
+                                                                .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                                        scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
+                                                        },
+                                                        label = "switch_icon_anim"
+                                                    ) { isChecked ->
+                                                        Icon(
+                                                            imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
+                                                            tint = iconColor
+                                                        )
+                                                    }
+                                                }
                                             }
                                         )
                                     }
