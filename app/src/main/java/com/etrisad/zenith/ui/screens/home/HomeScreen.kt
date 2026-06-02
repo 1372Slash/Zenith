@@ -784,33 +784,15 @@ fun UsageTrendsRow(
                         val percentageText = if (absPercentage > 100) "100" else absPercentage.toString()
                         val suffix = if (absPercentage > 100) "%+" else "%"
                         
-                        Row(
-                            modifier = Modifier.animateContentSize(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            percentageText.forEachIndexed { index, char ->
-                                val key = "trend_${percentageText.length - index}"
-                                AnimatedContent(
-                                    targetState = char,
-                                    transitionSpec = {
-                                        if (targetState > (initialState.takeIf { it.isDigit() } ?: '0')) {
-                                            (slideInVertically { it / 2 } + fadeIn()) togetherWith (slideOutVertically { -it / 2 } + fadeOut())
-                                        } else {
-                                            (slideInVertically { -it / 2 } + fadeIn()) togetherWith (slideOutVertically { it / 2 } + fadeOut())
-                                        }
-                                    },
-                                    label = key
-                                ) { targetChar ->
-                                    Text(
-                                        text = targetChar.toString(),
-                                        style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (percentageChange >= 0) MaterialTheme.colorScheme.error else Color(0xFF4CAF50)
-                                    )
-                                }
-                            }
+                        AnimatedContent(
+                            targetState = "$percentageText$suffix",
+                            transitionSpec = {
+                                (slideInVertically { it / 2 } + fadeIn()) togetherWith (slideOutVertically { -it / 2 } + fadeOut())
+                            },
+                            label = "TrendAnimation"
+                        ) { targetText ->
                             Text(
-                                text = suffix,
+                                text = targetText,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = if (percentageChange >= 0) MaterialTheme.colorScheme.error else Color(0xFF4CAF50)
