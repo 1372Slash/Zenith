@@ -79,6 +79,8 @@ import java.util.Locale
 import java.util.Calendar
 import kotlin.math.abs
 
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
@@ -448,12 +450,21 @@ fun UsageDashboard(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "${uiState.globalCurrentStreak}",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        AnimatedContent(
+                            targetState = uiState.globalCurrentStreak,
+                            transitionSpec = {
+                                (slideInVertically { height -> height } + fadeIn()).togetherWith(
+                                    slideOutVertically { height -> -height } + fadeOut())
+                            },
+                            label = "StreakAnimation"
+                        ) { targetStreak ->
+                            Text(
+                                text = "$targetStreak",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
 
@@ -478,28 +489,78 @@ fun UsageDashboard(
                 }
             }
 
-            Text(
-                text = formatDuration(uiState.totalScreenTime),
-                style = MaterialTheme.typography.displayLarge,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            val hours = uiState.totalScreenTime / (1000 * 60 * 60)
+            val minutes = (uiState.totalScreenTime / (1000 * 60)) % 60
+            val seconds = (uiState.totalScreenTime / 1000) % 60
+
+            Row(
+                modifier = Modifier.animateContentSize(
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy, 
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                ),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                AnimatedVisibility(
+                    visible = hours > 0,
+                    enter = fadeIn() + expandHorizontally(),
+                    exit = fadeOut() + shrinkHorizontally()
+                ) {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        DigitTicker(hours.toString(), MaterialTheme.typography.displayLarge, MaterialTheme.colorScheme.onSurface, prefix = "h")
+                        TickerUnit("h")
+                        Spacer(modifier = Modifier.width(12.dp))
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = minutes > 0 || hours > 0,
+                    enter = fadeIn() + expandHorizontally(),
+                    exit = fadeOut() + shrinkHorizontally()
+                ) {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        DigitTicker(minutes.toString(), MaterialTheme.typography.displayLarge, MaterialTheme.colorScheme.onSurface, prefix = "m")
+                        TickerUnit("m")
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = hours == 0L && minutes == 0L,
+                    enter = fadeIn() + expandHorizontally(),
+                    exit = fadeOut() + shrinkHorizontally()
+                ) {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        DigitTicker(seconds.toString(), MaterialTheme.typography.displayLarge, MaterialTheme.colorScheme.onSurface, prefix = "s")
+                        TickerUnit("s")
+                    }
+                }
+            }
 
             val targetMillis = preferences.screenTimeTargetMinutes * 60 * 1000L
             val isTargetSet = preferences.screenTimeTargetMinutes > 0
             val isExceeded = isTargetSet && uiState.totalScreenTime > targetMillis
 
             if (isTargetSet) {
-                Text(
-                    text = if (isExceeded)
-                        "Limit exceeded! Time to rest and reset for tomorrow."
-                    else
-                        "Target: ${formatDuration(targetMillis)} (${formatDuration(targetMillis - uiState.totalScreenTime)} left)",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (isExceeded) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+                AnimatedContent(
+                    targetState = isExceeded to (targetMillis - uiState.totalScreenTime),
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(300)).togetherWith(fadeOut(animationSpec = tween(300)))
+                    },
+                    label = "TargetStatusAnimation"
+                ) { (exceeded, remaining) ->
+                    Text(
+                        text = if (exceeded)
+                            "Limit exceeded! Time to rest and reset for tomorrow."
+                        else
+                            "Target: ${formatDuration(targetMillis)} (${formatDuration(remaining)} left)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (exceeded) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -714,13 +775,43 @@ fun UsageTrendsRow(
                             tint = if (uiState.percentageChange >= 0) MaterialTheme.colorScheme.error else Color(0xFF4CAF50)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
+                        
                         val absPercentage = abs(uiState.percentageChange).toInt()
-                        Text(
-                            text = if (absPercentage > 100) "100%+" else "$absPercentage%",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (uiState.percentageChange >= 0) MaterialTheme.colorScheme.error else Color(0xFF4CAF50)
-                        )
+                        val percentageText = if (absPercentage > 100) "100" else absPercentage.toString()
+                        val suffix = if (absPercentage > 100) "%+" else "%"
+                        
+                        Row(
+                            modifier = Modifier.animateContentSize(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            percentageText.forEachIndexed { index, char ->
+                                val key = "trend_${percentageText.length - index}"
+                                AnimatedContent(
+                                    targetState = char,
+                                    transitionSpec = {
+                                        if (targetState > (initialState.takeIf { it.isDigit() } ?: '0')) {
+                                            (slideInVertically { it / 2 } + fadeIn()) togetherWith (slideOutVertically { -it / 2 } + fadeOut())
+                                        } else {
+                                            (slideInVertically { -it / 2 } + fadeIn()) togetherWith (slideOutVertically { it / 2 } + fadeOut())
+                                        }
+                                    },
+                                    label = key
+                                ) { targetChar ->
+                                    Text(
+                                        text = targetChar.toString(),
+                                        style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (uiState.percentageChange >= 0) MaterialTheme.colorScheme.error else Color(0xFF4CAF50)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = suffix,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (uiState.percentageChange >= 0) MaterialTheme.colorScheme.error else Color(0xFF4CAF50)
+                            )
+                        }
                     } else {
                         Text(
                             "-",
@@ -1262,22 +1353,31 @@ fun ShieldItem(
                 },
                 supportingContent = {
                     val timeLabel = if (shield.type == FocusType.GOAL) "To Go" else "Left"
-                    val mainText = if (usesExhausted && remainingResetMillis > 0) {
-                        "Uses Exhausted • Reset in ${formatDuration(remainingResetMillis)}"
-                    } else {
-                        "${formatDuration(remainingMillis)} $timeLabel"
-                    }
-                    Text(
-                        text = mainText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (usesExhausted && remainingResetMillis > 0) {
-                            MaterialTheme.colorScheme.error
-                        } else if (shield.type == FocusType.GOAL) {
-                            MaterialTheme.colorScheme.primary
+                    
+                    AnimatedContent(
+                        targetState = Triple(usesExhausted, remainingMillis, remainingResetMillis),
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(200)).togetherWith(fadeOut(animationSpec = tween(200)))
+                        },
+                        label = "ShieldRemainingTimeAnimation"
+                    ) { (isExhausted, remaining, resetMillis) ->
+                        val mainText = if (isExhausted && resetMillis > 0) {
+                            "Uses Exhausted • Reset in ${formatDuration(resetMillis)}"
                         } else {
-                            if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            "${formatDuration(remaining)} $timeLabel"
                         }
-                    )
+                        Text(
+                            text = mainText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (isExhausted && resetMillis > 0) {
+                                MaterialTheme.colorScheme.error
+                            } else if (shield.type == FocusType.GOAL) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            }
+                        )
+                    }
                 },
                 leadingContent = {
                     Box(
@@ -1477,6 +1577,72 @@ fun EmptyShieldsMessage(message: String) {
             }
         }
     }
+}
+
+@Composable
+fun DigitTicker(
+    text: String,
+    style: androidx.compose.ui.text.TextStyle,
+    color: Color,
+    modifier: Modifier = Modifier,
+    prefix: String = ""
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.Bottom
+    ) {
+        text.forEachIndexed { index, char ->
+            val key = "${prefix}_${text.length - index}"
+            AnimatedContent(
+                targetState = char,
+                transitionSpec = {
+                    if (targetState.isDigit() && initialState.isDigit()) {
+                        if (targetState > initialState) {
+                            (slideInVertically { it / 2 } + fadeIn()) togetherWith (slideOutVertically { -it / 2 } + fadeOut())
+                        } else {
+                            (slideInVertically { -it / 2 } + fadeIn()) togetherWith (slideOutVertically { it / 2 } + fadeOut())
+                        }
+                    } else {
+                        fadeIn() togetherWith fadeOut()
+                    }
+                },
+                label = "DigitTicker_$key",
+                contentAlignment = Alignment.BottomStart
+            ) { targetChar ->
+                Text(
+                    text = targetChar.toString(),
+                    style = style.copy(
+                        letterSpacing = (-2).sp,
+                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                        lineHeightStyle = LineHeightStyle(
+                            alignment = LineHeightStyle.Alignment.Bottom,
+                            trim = LineHeightStyle.Trim.Both
+                        )
+                    ),
+                    fontWeight = FontWeight.Bold,
+                    color = color,
+                    softWrap = false
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun TickerUnit(unit: String) {
+    Text(
+        text = unit,
+        style = MaterialTheme.typography.displayLarge.copy(
+            letterSpacing = (-2).sp,
+            platformStyle = PlatformTextStyle(includeFontPadding = false),
+            lineHeightStyle = LineHeightStyle(
+                alignment = LineHeightStyle.Alignment.Bottom,
+                trim = LineHeightStyle.Trim.Both
+            )
+        ),
+        fontWeight = FontWeight.ExtraBold,
+        color = MaterialTheme.colorScheme.onSurface
+    )
 }
 
 @Composable
