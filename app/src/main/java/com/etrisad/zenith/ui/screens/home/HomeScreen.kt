@@ -229,7 +229,7 @@ fun HomeScreenContent(
                     uiState.dailyUsageHistory.find { it.date == uiState.selectedDateMillis }
                 }
                 val isFreshInstall = remember(uiState.dailyUsageHistory) {
-                    uiState.dailyUsageHistory.none { it.hasDatabaseRecord }
+                    uiState.dailyUsageHistory.none { !it.isLive && it.hasDatabaseRecord }
                 }
 
                 val showSystemWarning = selectedUsage != null && 
