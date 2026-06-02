@@ -168,10 +168,16 @@ fun AppDetailScreen(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
+                        .animateContentSize(
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        )
                         .padding(horizontal = 16.dp),
                     contentPadding = PaddingValues(
                         top = innerPadding.calculateTopPadding() + 16.dp,
-                        bottom = innerPadding.calculateBottomPadding() + 32.dp
+                        bottom = innerPadding.calculateBottomPadding() + 80.dp
                     )
                 ) {
                     item {

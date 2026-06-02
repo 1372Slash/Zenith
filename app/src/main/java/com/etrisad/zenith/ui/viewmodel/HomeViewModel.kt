@@ -1662,6 +1662,7 @@ class HomeViewModel(
                 goalCallerSoundUri = goalCallerSoundUri
             )
             shieldRepository.insertShield(shield)
+            triggerServiceRefresh()
             closeSettingsSheet()
         }
     }
@@ -1671,6 +1672,7 @@ class HomeViewModel(
         viewModelScope.launch {
             shieldRepository.deleteShield(shield)
             _appDetailUiState.update { it.copy(type = null, shieldEntity = null) }
+            triggerServiceRefresh()
         }
     }
 

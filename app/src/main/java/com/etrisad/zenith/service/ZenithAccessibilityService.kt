@@ -383,7 +383,18 @@ class ZenithAccessibilityService : AccessibilityService() {
                 lastGoalReminderTimestamp = if (shield.type == FocusType.GOAL) currentTime else shield.lastGoalReminderTimestamp
             )
             serviceScope.launch {
-                shieldRepository.updateShield(updatedShield)
+                try {
+                    val exists = shieldRepository.getShieldByPackageName(updatedShield.packageName)
+                    if (exists != null) {
+                        shieldRepository.updateShield(updatedShield)
+                    } else {
+                        if (lastForegroundApp == updatedShield.packageName) {
+                            currentShieldCache = null
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("ZenithAS", "Failed background DB update: ${e.message}")
+                }
             }
             if (currentShieldCache?.packageName == packageName) {
                 currentShieldCache = updatedShield

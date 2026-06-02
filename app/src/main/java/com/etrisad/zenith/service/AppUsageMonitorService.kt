@@ -990,7 +990,14 @@ class AppUsageMonitorService : Service() {
 
             serviceScope.launch {
                 try {
-                    shieldRepository.updateShield(finalShield)
+                    val exists = shieldRepository.getShieldByPackageName(finalShield.packageName)
+                    if (exists != null) {
+                        shieldRepository.updateShield(finalShield)
+                    } else {
+                        if (currentSessionPackage == finalShield.packageName) {
+                            currentShieldCache = null
+                        }
+                    }
                 } catch (t: Throwable) {
                     Log.e("ZenithAUMS", "Failed background DB update for ${shield.packageName}: ${t.message}")
                 }
