@@ -340,7 +340,7 @@ fun UsageGraph(
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(RoundedCornerShape(4.dp))
                                     .clickable {
                                         onDaySelected(if (isSelected) null else usage)
                                     }
