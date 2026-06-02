@@ -39,7 +39,8 @@ fun DeveloperSettings(
     onNavigateToSystemUsageDebug: () -> Unit,
     onTriggerOnboardingPermissions: () -> Unit,
     onTriggerOnboardingStats: () -> Unit,
-    onTriggerOnboardingUpdate: () -> Unit
+    onTriggerOnboardingUpdate: () -> Unit,
+    onResetBedtimeStreak: () -> Unit
 ) {
     if (preferences.developerModeEnabled) {
         Column {
@@ -118,9 +119,18 @@ fun DeveloperSettings(
                     summary = "Reset flag and show update preference choice",
                     onClick = onTriggerOnboardingUpdate,
                     icon = Icons.Outlined.Update,
-                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                    shape = RoundedCornerShape(8.dp)
                 )
             }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            SettingsActionItem(
+                title = "Reset Bedtime Streak",
+                summary = "Reset current and best bedtime streaks to 0",
+                onClick = onResetBedtimeStreak,
+                icon = Icons.Outlined.Bedtime,
+                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
             PreferenceCategory(title = "UI & Functional Testing")

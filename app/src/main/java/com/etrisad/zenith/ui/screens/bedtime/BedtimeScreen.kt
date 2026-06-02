@@ -1268,7 +1268,7 @@ fun BedtimeStreakCard(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "nights today",
+                    text = "night streak",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

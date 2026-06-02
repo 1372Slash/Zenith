@@ -226,6 +226,12 @@ fun SettingsCategoryScreen(
                                 Toast.makeText(context, "Update onboarding triggered", Toast.LENGTH_SHORT).show()
                                 navController.popBackStack(Screen.Settings.route, false)
                             }
+                        },
+                        onResetBedtimeStreak = {
+                            coroutineScope.launch {
+                                preferencesRepository.resetBedtimeStreak()
+                                Toast.makeText(context, "Bedtime streak reset to 0", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     )
                 }

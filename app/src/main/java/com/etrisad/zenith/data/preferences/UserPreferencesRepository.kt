@@ -449,6 +449,11 @@ class UserPreferencesRepository(private val context: Context) {
         val launcherPackage = try {
             context.packageManager.resolveActivity(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
         } catch (_: Exception) { null }
+
+        val launcherApps = context.packageManager.queryIntentActivities(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
+        ).map { it.activityInfo.packageName }.toSet()
+
         val excludePackages = setOfNotNull(context.packageName, launcherPackage) + prefs.whitelistedPackages + prefs.bedtimeWhitelistedPackages
 
         var liveStreak = 0
@@ -491,12 +496,62 @@ class UserPreferencesRepository(private val context: Context) {
             
             val totalDuration = endTime - startTime
             val targetMillis = (totalDuration * 0.1).toLong()
-            
-            val stats = usageStatsManager.queryAndAggregateUsageStats(startTime, actualEnd)
+
+            val events = usageStatsManager.queryEvents(startTime - 30 * 60 * 1000L, actualEnd)
+            val event = android.app.usage.UsageEvents.Event()
+            val usageMap = mutableMapOf<String, Long>()
+            var activePkg: String? = null
+            var activeStartTime = startTime
+
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                val pkg = event.packageName
+                val time = event.timeStamp
+
+                if (time < startTime) {
+                    when (event.eventType) {
+                        android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED,
+                        android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND -> {
+                            activePkg = pkg
+                            activeStartTime = startTime
+                        }
+                        android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED,
+                        android.app.usage.UsageEvents.Event.MOVE_TO_BACKGROUND -> {
+                            activePkg = null
+                        }
+                    }
+                    continue
+                }
+
+                when (event.eventType) {
+                    android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED,
+                    android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND -> {
+                        if (activePkg != null) {
+                            val duration = time - activeStartTime
+                            if (duration > 0) usageMap[activePkg!!] = (usageMap[activePkg!!] ?: 0L) + duration
+                        }
+                        activePkg = pkg
+                        activeStartTime = time
+                    }
+                    android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED,
+                    android.app.usage.UsageEvents.Event.MOVE_TO_BACKGROUND -> {
+                        if (activePkg == pkg) {
+                            val duration = time - activeStartTime
+                            if (duration > 0) usageMap[pkg] = (usageMap[pkg] ?: 0L) + duration
+                            activePkg = null
+                        }
+                    }
+                }
+            }
+            activePkg?.let { pkg ->
+                val duration = actualEnd - activeStartTime
+                if (duration > 0) usageMap[pkg] = (usageMap[pkg] ?: 0L) + duration
+            }
+
             var usage = 0L
-            stats.forEach { (pkg, stat) ->
-                if (pkg !in excludePackages) {
-                    usage += stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+            usageMap.forEach { (pkg, time) ->
+                if (pkg !in excludePackages && pkg in launcherApps) {
+                    usage += time
                 }
             }
             
@@ -580,6 +635,13 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.BEDTIME_CURRENT_STREAK] = current
             preferences[PreferencesKeys.BEDTIME_BEST_STREAK] = best
+        }
+    }
+
+    suspend fun resetBedtimeStreak() {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.BEDTIME_CURRENT_STREAK] = 0
+            preferences[PreferencesKeys.BEDTIME_BEST_STREAK] = 0
         }
     }
 
