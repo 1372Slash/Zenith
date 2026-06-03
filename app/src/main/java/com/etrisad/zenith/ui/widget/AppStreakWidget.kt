@@ -74,6 +74,7 @@ class AppStreakWidget : GlanceAppWidget() {
 
             val shields by remember(app) {
                 app.shieldRepository.allShields
+                    .map { it ?: emptyList() }
                     .distinctUntilChanged { old, new ->
                         if (old.size != new.size) return@distinctUntilChanged false
                         old.zip(new).all { (o, n) ->

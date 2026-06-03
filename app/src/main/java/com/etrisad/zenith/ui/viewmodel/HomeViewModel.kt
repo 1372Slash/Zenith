@@ -436,7 +436,7 @@ class HomeViewModel(
         try {
             shieldRepository.isShieldsLoaded.first { it }
             
-            val allShields = shieldRepository.allShields.first()
+            val allShields = shieldRepository.allShields.first() ?: emptyList()
             val shieldPkgs = allShields.filter { it.type == FocusType.SHIELD }.map { it.packageName }.toSet()
             val goalPkgs = allShields.filter { it.type == FocusType.GOAL }.map { it.packageName }.toSet()
             
@@ -521,7 +521,7 @@ class HomeViewModel(
                 shieldRepository.getLastNDaysGlobalUsage(60),
                 userPreferencesRepository.userPreferencesFlow
             ) { shields, usage, global, prefs ->
-                allShields = shields
+                allShields = shields ?: emptyList()
                 allHistory = usage
                 globalHistory = global
                 
@@ -538,7 +538,7 @@ class HomeViewModel(
 
                 val currentPkg = _appDetailUiState.value.packageName
                 if (currentPkg.isNotEmpty()) {
-                    val shield = shields.find { it.packageName == currentPkg }
+                    val shield = shields?.find { it.packageName == currentPkg }
                     _appDetailUiState.update { it.copy(
                         shieldEntity = shield,
                         type = shield?.type,

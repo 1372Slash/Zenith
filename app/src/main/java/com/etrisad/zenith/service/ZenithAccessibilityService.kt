@@ -116,7 +116,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                 bedtimeWhitelistedPackages = prefs.bedtimeWhitelistedPackages
 
                 shieldRepository.isShieldsLoaded.first { it }
-                allShieldsCache = shieldRepository.allShields.first()
+                allShieldsCache = shieldRepository.allShields.first() ?: emptyList()
 
                 val schedules = shieldRepository.allSchedules.first()
                 activeSchedules = schedules.filter { it.isActive }
@@ -170,9 +170,10 @@ class ZenithAccessibilityService : AccessibilityService() {
         serviceScope.launch {
             shieldRepository.isShieldsLoaded.first { it }
             shieldRepository.allShields.collect { shields ->
-                allShieldsCache = shields
+                val safeShields = shields ?: emptyList()
+                allShieldsCache = safeShields
                 lastForegroundApp?.let { currentPkg ->
-                    currentShieldCache = shields.find { it.packageName == currentPkg }
+                    currentShieldCache = safeShields.find { it.packageName == currentPkg }
                 }
                 updateRestrictedPackages()
             }

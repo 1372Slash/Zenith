@@ -31,16 +31,20 @@ class ShieldRepository(private val context: Context) {
     private val dailyUsageDao get() = database.dailyUsageDao()
     private val hourlyUsageDao get() = database.hourlyUsageDao()
 
-    val allShields: StateFlow<List<ShieldEntity>> = shieldDao.getAllShields()
+    val allShields: StateFlow<List<ShieldEntity>?> = shieldDao.getAllShields()
         .distinctUntilChanged()
+        .catch { e ->
+            android.util.Log.e("ShieldRepo", "Error in allShields flow: ${e.message}")
+            emit(emptyList())
+        }
         .stateIn(
             scope = repositoryScope,
             started = SharingStarted.Eagerly,
-            initialValue = emptyList()
+            initialValue = null
         )
 
     val isShieldsLoaded: StateFlow<Boolean> = allShields
-        .map { true }
+        .map { it != null }
         .stateIn(
             scope = repositoryScope,
             started = SharingStarted.Eagerly,
@@ -130,7 +134,7 @@ class ShieldRepository(private val context: Context) {
     }
 
     suspend fun getShieldByPackageName(packageName: String): ShieldEntity? {
-        val cached = allShields.value.find { it.packageName == packageName }
+        val cached = allShields.value?.find { it.packageName == packageName }
         if (cached != null) return cached
 
         return try {

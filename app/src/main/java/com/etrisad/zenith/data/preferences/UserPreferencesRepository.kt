@@ -413,7 +413,7 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun refreshAllAppStreaks(shieldRepository: ShieldRepository) {
         shieldRepository.isShieldsLoaded.first { it }
-        val shields = shieldRepository.allShields.first()
+        val shields = shieldRepository.allShields.first() ?: emptyList()
         val allUsage = shieldRepository.getAllUsage().first().groupBy { it.packageName }
         val now = System.currentTimeMillis()
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())

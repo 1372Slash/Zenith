@@ -295,11 +295,12 @@ class AppUsageMonitorService : Service() {
         serviceScope.launch {
             shieldRepository.isShieldsLoaded.first { it }
             shieldRepository.allShields.collect { shields ->
-                allShieldsCache = shields.associateBy { it.packageName }
+                val safeShields = shields ?: emptyList()
+                allShieldsCache = safeShields.associateBy { it.packageName }
                 lastForegroundApp?.let { currentPkg ->
                     currentShieldCache = allShieldsCache[currentPkg]
                 }
-                goalShieldsCache = shields.filter { 
+                goalShieldsCache = safeShields.filter {
                     it.type == FocusType.GOAL && it.goalReminderPeriodMinutes > 0 
                 }
                 updateRestrictedPackages()
