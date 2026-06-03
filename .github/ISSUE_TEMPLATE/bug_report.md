@@ -8,29 +8,36 @@ assignees: ''
 ---
 
 ### Description
-> A clear and concise description of what the bug is.
+> A short summary of what is not working as expected.
 
 ### Steps to Reproduce
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
+1. Open Zenith
+2. Go to '...'
+3. Perform '...'
 4. See error
 
-### Expected Behavior
-> A clear and concise description of what you expected to happen.
+### Expected vs Actual
+- **Expected:** (e.g., "The goal should be saved and visible in the list")
+- **Actual:** (e.g., "The screen closes but the list remains empty")
 
-### Screenshots
-> If applicable, add screenshots to help explain your problem.
+### What I've tried so far
+> Did you try anything to fix it? (e.g., restarted the app, toggled permissions, cleared cache)
+
+### Screenshots / Videos
+> Drag and drop images or videos here to help us see what's happening.
 
 ### Device Information
-- **Device:** [e.g. Pixel 6]
-- **OS:** [e.g. Android 13]
-- **App Version:** [e.g. v1.0.0]
+- **Device:** [e.g. Pixel 7]
+- **OS:** [e.g. Android 14]
+- **App Version:** [e.g. v1.5.2]
 
-### Additional Context
-> Add any other context about the problem here (e.g., logs from Logcat).
+### Optional: Technical Info
+> If you have any error logs or specific details (like specific apps affected), paste them here.
 
 ---
 ### Checklist
-- [ ] I have searched existing issues to ensure this bug has not been reported yet.
 - [ ] I am using the latest version of the app.
+- [ ] I have checked that necessary permissions (Usage Access, Overlay) are granted.
+- [ ] I have searched existing issues for a similar report.
+- [ ] I have tried basic troubleshooting (restart app/device or clear cache).
+- [ ] I have verified this isn't caused by battery optimization or system restrictions.
