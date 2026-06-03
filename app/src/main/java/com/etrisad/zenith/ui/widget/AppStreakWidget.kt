@@ -117,12 +117,14 @@ class AppStreakWidget : GlanceAppWidget() {
 
             GlanceTheme {
                 val appWidgetId = remember { GlanceAppWidgetManager(context).getAppWidgetId(id) }
+                val today = LocalDate.now()
 
-                val isStreakAchieved = remember(targetShield) {
+                val isStreakAchieved = remember(targetShield, today) {
+                    val timestamp = targetShield?.lastStreakUpdateTimestamp ?: 0L
                     if (targetShield?.type == FocusType.GOAL) {
-                        targetShield.remainingTimeMillis <= 0 && targetShield.timeLimitMinutes > 0
+                        isToday(timestamp) && (targetShield.remainingTimeMillis <= 0) && targetShield.timeLimitMinutes > 0
                     } else {
-                        isToday(targetShield?.lastStreakUpdateTimestamp ?: 0L)
+                        isToday(timestamp)
                     }
                 }
 

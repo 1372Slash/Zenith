@@ -257,6 +257,7 @@ class AppUsageMonitorService : Service() {
 
     private fun onMidnightReset() {
         serviceScope.launch {
+            com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
             updateStreaks()
             preferencesRepository.refreshGlobalStreak(shieldRepository)
             preferencesRepository.refreshAllAppStreaks(shieldRepository)
@@ -264,7 +265,6 @@ class AppUsageMonitorService : Service() {
             notifiedGoals.clear()
             earlyKickManager.reset()
             dailyUsageCache.clear()
-            com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
             lastAllowedRemainingTime.clear()
             usageStatsCache = null
             lastUsageCacheTime = 0L
@@ -504,6 +504,7 @@ class AppUsageMonitorService : Service() {
 
                     if (lastCheckedDayDate != null && today != lastCheckedDayDate) {
                         withContext(Dispatchers.IO) {
+                            com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
                             updateStreaks()
                             shieldRepository.resetAllRemainingTimes()
                         }
@@ -511,7 +512,6 @@ class AppUsageMonitorService : Service() {
                         notifiedGoals.clear()
                         earlyKickManager.reset()
                         dailyUsageCache.clear()
-                        com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
                         lastAllowedRemainingTime.clear()
                         usageStatsCache = null
                         lastUsageCacheTime = 0L

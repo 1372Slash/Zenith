@@ -321,10 +321,10 @@ class UserPreferencesRepository(private val context: Context) {
         val calendar = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
         val todayStart = calendar.timeInMillis
 
-        val stats = usageStatsManager.queryAndAggregateUsageStats(todayStart, now)
+        val stats = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager).appUsageMap
         var totalToday = 0L
-        stats.forEach { (pkg, stat) ->
-            if (pkg !in excludePackages && pkg in launcherApps) totalToday += stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+        stats.forEach { (pkg, time) ->
+            if (pkg !in excludePackages && pkg in launcherApps) totalToday += time
         }
 
         val globalHistory = dbUsage.filter { it.packageName == "TOTAL" }
@@ -370,10 +370,7 @@ class UserPreferencesRepository(private val context: Context) {
         val todayStr = dateFormat.format(Date(now))
         
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val todayStart = Calendar.getInstance().apply { 
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) 
-        }.timeInMillis
-        val todayStats = usageStatsManager.queryAndAggregateUsageStats(todayStart, now)
+        val todayUsageMap = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager).appUsageMap
 
         shields.forEach { shield ->
             val pkg = shield.packageName
@@ -385,9 +382,13 @@ class UserPreferencesRepository(private val context: Context) {
                 return@forEach
             }
 
-            val todayUsage = todayStats[pkg]?.let { it.totalTimeVisible.coerceAtLeast(it.totalTimeInForeground) } ?: 0L
+            val todayUsage = todayUsageMap[pkg] ?: 0L
 
             var pastStreak = 0
+            val todayStart = Calendar.getInstance().apply { 
+                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) 
+            }.timeInMillis
+            
             val c = Calendar.getInstance()
             for (i in 1..365) {
                 c.timeInMillis = todayStart; c.add(Calendar.DAY_OF_YEAR, -i)
@@ -428,6 +429,7 @@ class UserPreferencesRepository(private val context: Context) {
             shieldRepository.updateShield(shield.copy(
                 currentStreak = currentStreak,
                 bestStreak = bestStreak,
+                remainingTimeMillis = if (shield.type == FocusType.GOAL) (limitMillis - todayUsage).coerceAtLeast(0L) else shield.remainingTimeMillis,
                 lastStreakUpdateTimestamp = if (isSuccessToday && (shield.type == FocusType.GOAL || todayUsage > 0)) now else shield.lastStreakUpdateTimestamp
             ))
         }

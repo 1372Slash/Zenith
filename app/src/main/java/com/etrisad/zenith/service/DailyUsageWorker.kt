@@ -41,7 +41,15 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
         val isProcessingYesterday = (!isBackup && currentHour < 9) || (isBackup && currentHour == 0)
-        if (isProcessingYesterday) calendar.add(Calendar.DAY_OF_YEAR, -1)
+        if (isProcessingYesterday) {
+            calendar.add(Calendar.DAY_OF_YEAR, -1)
+        }
+
+        if (currentHour == 0 && currentMinute < 15) {
+            try {
+                database.shieldDao().resetAllRemainingTimes()
+            } catch (_: Exception) {}
+        }
         val dateString = dateFormat.format(calendar.time)
         val isDateToday = dateString == dateFormat.format(nowCal.time)
 
@@ -152,10 +160,13 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         }
 
         if (isDateToday) {
+            val todayStart = calendar.timeInMillis
             allShields.forEach { shield ->
-                val usageFromShield = (shield.timeLimitMinutes * 60 * 1000L - shield.remainingTimeMillis).coerceAtLeast(0L)
-                if (usageFromShield > 0) {
-                    finalAppUsages[shield.packageName] = maxOf(finalAppUsages[shield.packageName] ?: 0L, usageFromShield)
+                if (shield.lastUsedTimestamp >= todayStart) {
+                    val usageFromShield = (shield.timeLimitMinutes * 60 * 1000L - shield.remainingTimeMillis).coerceAtLeast(0L)
+                    if (usageFromShield > 0) {
+                        finalAppUsages[shield.packageName] = maxOf(finalAppUsages[shield.packageName] ?: 0L, usageFromShield)
+                    }
                 }
             }
         }
