@@ -151,7 +151,22 @@ class ShieldRepository(private val context: Context) {
     }
 
     suspend fun insertShield(shield: ShieldEntity) {
-        shieldDao.insertShield(shield)
+        val currentList = _allShieldsCache.value.toMutableList()
+        val index = currentList.indexOfFirst { it.packageName == shield.packageName }
+        if (index != -1) {
+            currentList[index] = shield
+        } else {
+            currentList.add(shield)
+        }
+        _allShieldsCache.value = currentList
+
+        repositoryScope.launch {
+            try {
+                shieldDao.insertShield(shield)
+            } catch (e: Exception) {
+                android.util.Log.e("ShieldRepo", "Gagal insert ke database: ${e.message}")
+            }
+        }
     }
 
     suspend fun updateShield(shield: ShieldEntity) {

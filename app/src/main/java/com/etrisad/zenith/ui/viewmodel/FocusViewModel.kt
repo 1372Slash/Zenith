@@ -374,50 +374,55 @@ class FocusViewModel(
         val selectedApp = _uiState.value.selectedAppForFocus ?: return
         val type = _uiState.value.selectedFocusType
         viewModelScope.launch {
-            val existing = allShields.find { it.packageName == selectedApp.packageName }
-            
-            val shouldResetStreak = existing?.let { 
-                if (it.type == type) {
-                    when (type) {
-                        FocusType.SHIELD -> timeLimitMinutes > it.timeLimitMinutes
-                        FocusType.GOAL -> timeLimitMinutes < it.timeLimitMinutes
-                    }
-                } else true
-            } ?: false
+            try {
+                val existing = allShields.find { it.packageName == selectedApp.packageName }
+                
+                val shouldResetStreak = existing?.let { 
+                    if (it.type == type) {
+                        when (type) {
+                            FocusType.SHIELD -> timeLimitMinutes > it.timeLimitMinutes
+                            FocusType.GOAL -> timeLimitMinutes < it.timeLimitMinutes
+                        }
+                    } else true
+                } ?: false
 
-            val shield = ShieldEntity(
-                packageName = selectedApp.packageName,
-                appName = selectedApp.appName,
-                type = type,
-                timeLimitMinutes = timeLimitMinutes,
-                emergencyUseCount = existing?.emergencyUseCount ?: (if (type == FocusType.SHIELD) maxEmergencyUses else 0),
-                maxEmergencyUses = if (type == FocusType.SHIELD) maxEmergencyUses else 0,
-                isRemindersEnabled = isRemindersEnabled,
-                isStrictModeEnabled = if (type == FocusType.SHIELD) isStrictModeEnabled else false,
-                isAutoQuitEnabled = if (type == FocusType.SHIELD) isAutoQuitEnabled else false,
-                remainingTimeMillis = existing?.remainingTimeMillis ?: (timeLimitMinutes * 60 * 1000L),
-                lastUsedTimestamp = System.currentTimeMillis(),
-                maxUsesPerPeriod = if (type == FocusType.SHIELD) maxUsesPerPeriod else 0,
-                refreshPeriodMinutes = if (type == FocusType.SHIELD) refreshPeriodMinutes else 0,
-                currentPeriodUses = existing?.currentPeriodUses ?: 0,
-                lastPeriodResetTimestamp = existing?.lastPeriodResetTimestamp ?: System.currentTimeMillis(),
-                lastEmergencyRechargeTimestamp = existing?.lastEmergencyRechargeTimestamp ?: System.currentTimeMillis(),
-                goalReminderPeriodMinutes = goalReminderPeriodMinutes,
-                lastGoalReminderTimestamp = existing?.lastGoalReminderTimestamp ?: 0L,
-                isDelayAppEnabled = if (type == FocusType.SHIELD) isDelayAppEnabled else false,
-                isGoalCallerEnabled = isGoalCallerEnabled,
-                isGoalCallerSoundEnabled = isGoalCallerSoundEnabled,
-                goalCallerSoundUri = goalCallerSoundUri,
-                currentStreak = if (shouldResetStreak) 0 else (existing?.currentStreak ?: 0),
-                bestStreak = existing?.bestStreak ?: 0,
-                lastStreakUpdateTimestamp = existing?.lastStreakUpdateTimestamp ?: 0L,
-                lastSessionEndTimestamp = existing?.lastSessionEndTimestamp ?: 0L,
-                isPaused = existing?.isPaused ?: false,
-                pauseEndTimestamp = existing?.pauseEndTimestamp ?: 0L,
-                lastDelayStartTimestamp = existing?.lastDelayStartTimestamp ?: 0L
-            )
-            shieldRepository.insertShield(shield)
-            closeSettingsSheet()
+                val shield = ShieldEntity(
+                    packageName = selectedApp.packageName,
+                    appName = selectedApp.appName,
+                    type = type,
+                    timeLimitMinutes = timeLimitMinutes,
+                    emergencyUseCount = existing?.emergencyUseCount ?: (if (type == FocusType.SHIELD) maxEmergencyUses else 0),
+                    maxEmergencyUses = if (type == FocusType.SHIELD) maxEmergencyUses else 0,
+                    isRemindersEnabled = isRemindersEnabled,
+                    isStrictModeEnabled = if (type == FocusType.SHIELD) isStrictModeEnabled else false,
+                    isAutoQuitEnabled = if (type == FocusType.SHIELD) isAutoQuitEnabled else false,
+                    remainingTimeMillis = existing?.remainingTimeMillis ?: (timeLimitMinutes * 60 * 1000L),
+                    lastUsedTimestamp = System.currentTimeMillis(),
+                    maxUsesPerPeriod = if (type == FocusType.SHIELD) maxUsesPerPeriod else 0,
+                    refreshPeriodMinutes = if (type == FocusType.SHIELD) refreshPeriodMinutes else 0,
+                    currentPeriodUses = existing?.currentPeriodUses ?: 0,
+                    lastPeriodResetTimestamp = existing?.lastPeriodResetTimestamp ?: System.currentTimeMillis(),
+                    lastEmergencyRechargeTimestamp = existing?.lastEmergencyRechargeTimestamp ?: System.currentTimeMillis(),
+                    goalReminderPeriodMinutes = goalReminderPeriodMinutes,
+                    lastGoalReminderTimestamp = existing?.lastGoalReminderTimestamp ?: 0L,
+                    isDelayAppEnabled = if (type == FocusType.SHIELD) isDelayAppEnabled else false,
+                    isGoalCallerEnabled = isGoalCallerEnabled,
+                    isGoalCallerSoundEnabled = isGoalCallerSoundEnabled,
+                    goalCallerSoundUri = goalCallerSoundUri,
+                    currentStreak = if (shouldResetStreak) 0 else (existing?.currentStreak ?: 0),
+                    bestStreak = existing?.bestStreak ?: 0,
+                    lastStreakUpdateTimestamp = existing?.lastStreakUpdateTimestamp ?: 0L,
+                    lastSessionEndTimestamp = existing?.lastSessionEndTimestamp ?: 0L,
+                    isPaused = existing?.isPaused ?: false,
+                    pauseEndTimestamp = existing?.pauseEndTimestamp ?: 0L,
+                    lastDelayStartTimestamp = existing?.lastDelayStartTimestamp ?: 0L
+                )
+                shieldRepository.insertShield(shield)
+            } catch (e: Exception) {
+                android.util.Log.e("FocusViewModel", "Error saving focus: ${e.message}")
+            } finally {
+                closeSettingsSheet()
+            }
         }
     }
 

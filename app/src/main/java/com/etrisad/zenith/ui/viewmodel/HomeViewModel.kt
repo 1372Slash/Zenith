@@ -1638,40 +1638,45 @@ class HomeViewModel(
         val type = state.type ?: com.etrisad.zenith.data.local.entity.FocusType.SHIELD
 
         viewModelScope.launch {
-            val existingShield = shieldRepository.getShieldByPackageName(packageName)
-            val shield = existingShield?.copy(
-                timeLimitMinutes = timeLimitMinutes,
-                maxEmergencyUses = maxEmergencyUses,
-                isRemindersEnabled = isRemindersEnabled,
-                isStrictModeEnabled = isStrictModeEnabled,
-                isAutoQuitEnabled = isAutoQuitEnabled,
-                maxUsesPerPeriod = maxUsesPerPeriod,
-                refreshPeriodMinutes = refreshPeriodMinutes,
-                goalReminderPeriodMinutes = goalReminderPeriodMinutes,
-                isDelayAppEnabled = isDelayAppEnabled,
-                isGoalCallerEnabled = isGoalCallerEnabled,
-                isGoalCallerSoundEnabled = isGoalCallerSoundEnabled,
-                goalCallerSoundUri = goalCallerSoundUri
-            ) ?: ShieldEntity(
-                packageName = packageName,
-                appName = appName,
-                type = type,
-                timeLimitMinutes = timeLimitMinutes,
-                maxEmergencyUses = maxEmergencyUses,
-                isRemindersEnabled = isRemindersEnabled,
-                isStrictModeEnabled = isStrictModeEnabled,
-                isAutoQuitEnabled = isAutoQuitEnabled,
-                maxUsesPerPeriod = maxUsesPerPeriod,
-                refreshPeriodMinutes = refreshPeriodMinutes,
-                goalReminderPeriodMinutes = goalReminderPeriodMinutes,
-                isDelayAppEnabled = isDelayAppEnabled,
-                isGoalCallerEnabled = isGoalCallerEnabled,
-                isGoalCallerSoundEnabled = isGoalCallerSoundEnabled,
-                goalCallerSoundUri = goalCallerSoundUri
-            )
-            shieldRepository.insertShield(shield)
-            triggerServiceRefresh()
-            closeSettingsSheet()
+            try {
+                val existingShield = shieldRepository.getShieldByPackageName(packageName)
+                val shield = existingShield?.copy(
+                    timeLimitMinutes = timeLimitMinutes,
+                    maxEmergencyUses = maxEmergencyUses,
+                    isRemindersEnabled = isRemindersEnabled,
+                    isStrictModeEnabled = isStrictModeEnabled,
+                    isAutoQuitEnabled = isAutoQuitEnabled,
+                    maxUsesPerPeriod = maxUsesPerPeriod,
+                    refreshPeriodMinutes = refreshPeriodMinutes,
+                    goalReminderPeriodMinutes = goalReminderPeriodMinutes,
+                    isDelayAppEnabled = isDelayAppEnabled,
+                    isGoalCallerEnabled = isGoalCallerEnabled,
+                    isGoalCallerSoundEnabled = isGoalCallerSoundEnabled,
+                    goalCallerSoundUri = goalCallerSoundUri
+                ) ?: ShieldEntity(
+                    packageName = packageName,
+                    appName = appName,
+                    type = type,
+                    timeLimitMinutes = timeLimitMinutes,
+                    maxEmergencyUses = maxEmergencyUses,
+                    isRemindersEnabled = isRemindersEnabled,
+                    isStrictModeEnabled = isStrictModeEnabled,
+                    isAutoQuitEnabled = isAutoQuitEnabled,
+                    maxUsesPerPeriod = maxUsesPerPeriod,
+                    refreshPeriodMinutes = refreshPeriodMinutes,
+                    goalReminderPeriodMinutes = goalReminderPeriodMinutes,
+                    isDelayAppEnabled = isDelayAppEnabled,
+                    isGoalCallerEnabled = isGoalCallerEnabled,
+                    isGoalCallerSoundEnabled = isGoalCallerSoundEnabled,
+                    goalCallerSoundUri = goalCallerSoundUri
+                )
+                shieldRepository.insertShield(shield)
+                triggerServiceRefresh()
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "Error saving focus: ${e.message}")
+            } finally {
+                closeSettingsSheet()
+            }
         }
     }
 
