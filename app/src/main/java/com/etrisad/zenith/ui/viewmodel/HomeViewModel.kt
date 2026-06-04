@@ -213,8 +213,7 @@ class HomeViewModel(
 
             val dbRecords = dbRecordsByDate[dateStr] ?: emptyList()
             val dbTotal = dbRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
-            
-            // Always include system records in the group data for debug/repair purposes
+
             val systemRecords = fallbackMap[dateStr] ?: emptyList()
             val systemTotal = systemRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
 

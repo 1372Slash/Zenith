@@ -161,7 +161,7 @@ fun WindDownOverlayContent(
             Column(
                 modifier = Modifier
                     .let { 
-                        if (isLandscape) it.widthIn(max = 640.dp).wrapContentHeight() 
+                        if (isLandscape) it.widthIn(max = 720.dp).wrapContentHeight() 
                         else it.fillMaxWidth().wrapContentHeight() 
                     }
                     .align(Alignment.BottomCenter),
@@ -183,130 +183,275 @@ fun WindDownOverlayContent(
                     ),
                     elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
                 ) {
-                Column(
-                    modifier = Modifier
-                        .let { if (isLandscape) it.displayCutoutPadding() else it }
-                        .padding(bottom = 24.dp, start = 24.dp, end = 24.dp, top = 0.dp)
-                        .fillMaxWidth()
-                        .navigationBarsPadding(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    OverlayDragHandleWithIndicators()
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Box(
-                        modifier = Modifier
-                            .size(80.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (appIcon != null) {
-                            Image(
-                                bitmap = appIcon,
-                                contentDescription = null,
-                                modifier = Modifier.size(60.dp).clip(CircleShape),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            Icon(
-                                Icons.Outlined.Bedtime,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = "Wind Down",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Text(
-                        text = appName,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = if (sessionUsed) 
-                            "You've used your Wind Down session for this app. It's time to rest." 
-                            else "Bedtime is approaching. Take a final look before we lock things down.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    if (!sessionUsed) {
-                        AnimatedContent(
-                            targetState = isDelaying,
-                            transitionSpec = {
-                                (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
-                                 scaleIn(initialScale = 0.92f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)))
-                                    .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)))
+                    if (isLandscape) {
+                        LandscapeWindDownLayout(
+                            appName = appName,
+                            appIcon = appIcon,
+                            sessionUsed = sessionUsed,
+                            isDelaying = isDelaying,
+                            randomMessage = randomMessage,
+                            delayProgressAnimatable = delayProgressAnimatable,
+                            delayDurationSeconds = delayDurationSeconds,
+                            autoKickProgress = autoKickProgress.value,
+                            onAllowUse = { minutes ->
+                                scope.launch {
+                                    showContent = false
+                                    delay(400)
+                                    onAllowUse(minutes)
+                                }
                             },
-                            label = "delayContent"
-                        ) { delaying ->
-                            if (delaying) {
-                                WindDownDelaySection(randomMessage, delayProgressAnimatable, delayDurationSeconds)
-                            } else {
-                                WindDownDurationSection(onAllowUse = { minutes ->
-                                    scope.launch {
-                                        showContent = false
-                                        delay(400)
-                                        onAllowUse(minutes)
-                                    }
-                                })
+                            onCloseApp = {
+                                scope.launch {
+                                    showContent = false
+                                    delay(400)
+                                    onCloseApp()
+                                }
                             }
-                        }
+                        )
                     } else {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                Icons.Outlined.Bedtime,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "No more sessions available tonight.",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.error,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    CloseAppTextButton(
-                        onCloseApp = {
-                            scope.launch {
-                                showContent = false
-                                delay(400)
-                                onCloseApp()
+                        PortraitWindDownLayout(
+                            appName = appName,
+                            appIcon = appIcon,
+                            sessionUsed = sessionUsed,
+                            isDelaying = isDelaying,
+                            randomMessage = randomMessage,
+                            delayProgressAnimatable = delayProgressAnimatable,
+                            delayDurationSeconds = delayDurationSeconds,
+                            autoKickProgress = autoKickProgress.value,
+                            onAllowUse = { minutes ->
+                                scope.launch {
+                                    showContent = false
+                                    delay(400)
+                                    onAllowUse(minutes)
+                                }
+                            },
+                            onCloseApp = {
+                                scope.launch {
+                                    showContent = false
+                                    delay(400)
+                                    onCloseApp()
+                                }
                             }
-                        },
-                        autoKickProgress = { autoKickProgress.value },
-                        size = if (isLandscape) ZenithButtonSize.Large else ZenithButtonSize.ExtraLarge
-                    )
+                        )
+                    }
                 }
             }
         }
     }
 }
+
+@Composable
+fun PortraitWindDownLayout(
+    appName: String,
+    appIcon: androidx.compose.ui.graphics.ImageBitmap?,
+    sessionUsed: Boolean,
+    isDelaying: Boolean,
+    randomMessage: String,
+    delayProgressAnimatable: Animatable<Float, AnimationVector1D>,
+    delayDurationSeconds: Int,
+    autoKickProgress: Float,
+    onAllowUse: (Int) -> Unit,
+    onCloseApp: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .padding(bottom = 24.dp, start = 24.dp, end = 24.dp, top = 0.dp)
+            .fillMaxWidth()
+            .navigationBarsPadding(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        OverlayDragHandleWithIndicators()
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        WindDownHeader(appName, appIcon, sessionUsed)
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        WindDownActionSection(
+            sessionUsed = sessionUsed,
+            isDelaying = isDelaying,
+            randomMessage = randomMessage,
+            delayProgressAnimatable = delayProgressAnimatable,
+            delayDurationSeconds = delayDurationSeconds,
+            onAllowUse = onAllowUse
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        CloseAppTextButton(
+            onCloseApp = onCloseApp,
+            autoKickProgress = { autoKickProgress },
+            size = ZenithButtonSize.ExtraLarge
+        )
+    }
+}
+
+@Composable
+fun LandscapeWindDownLayout(
+    appName: String,
+    appIcon: androidx.compose.ui.graphics.ImageBitmap?,
+    sessionUsed: Boolean,
+    isDelaying: Boolean,
+    randomMessage: String,
+    delayProgressAnimatable: Animatable<Float, AnimationVector1D>,
+    delayDurationSeconds: Int,
+    autoKickProgress: Float,
+    onAllowUse: (Int) -> Unit,
+    onCloseApp: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        OverlayDragHandleWithIndicators()
+
+        Row(
+            modifier = Modifier
+                .displayCutoutPadding()
+                .padding(start = 24.dp, end = 24.dp, bottom = 24.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                WindDownHeader(appName, appIcon, sessionUsed, isSmall = true)
+            }
+
+            Column(
+                modifier = Modifier.weight(1.2f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                WindDownActionSection(
+                    sessionUsed = sessionUsed,
+                    isDelaying = isDelaying,
+                    randomMessage = randomMessage,
+                    delayProgressAnimatable = delayProgressAnimatable,
+                    delayDurationSeconds = delayDurationSeconds,
+                    onAllowUse = onAllowUse,
+                    isSmall = true
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                CloseAppTextButton(
+                    onCloseApp = onCloseApp,
+                    autoKickProgress = { autoKickProgress },
+                    size = ZenithButtonSize.Large
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WindDownHeader(
+    appName: String,
+    appIcon: androidx.compose.ui.graphics.ImageBitmap?,
+    sessionUsed: Boolean,
+    isSmall: Boolean = false
+) {
+    Box(
+        modifier = Modifier
+            .size(if (isSmall) 64.dp else 80.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center
+    ) {
+        if (appIcon != null) {
+            Image(
+                bitmap = appIcon,
+                contentDescription = null,
+                modifier = Modifier.size(if (isSmall) 48.dp else 60.dp).clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Icon(
+                Icons.Outlined.Bedtime,
+                contentDescription = null,
+                modifier = Modifier.size(if (isSmall) 36.dp else 48.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    Text(
+        text = "Wind Down",
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.Bold
+    )
+
+    Text(
+        text = appName,
+        style = if (isSmall) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    Text(
+        text = if (sessionUsed) 
+            "You've used your Wind Down session for this app. It's time to rest." 
+            else "Bedtime is approaching. Take a final look before we lock things down.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center
+    )
+}
+
+@Composable
+private fun WindDownActionSection(
+    sessionUsed: Boolean,
+    isDelaying: Boolean,
+    randomMessage: String,
+    delayProgressAnimatable: Animatable<Float, AnimationVector1D>,
+    delayDurationSeconds: Int,
+    onAllowUse: (Int) -> Unit,
+    isSmall: Boolean = false
+) {
+    if (!sessionUsed) {
+        AnimatedContent(
+            targetState = isDelaying,
+            transitionSpec = {
+                (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                 scaleIn(initialScale = 0.92f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)))
+                    .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)))
+            },
+            label = "delayContent"
+        ) { delaying ->
+            if (delaying) {
+                WindDownDelaySection(randomMessage, delayProgressAnimatable, delayDurationSeconds)
+            } else {
+                WindDownDurationSection(onAllowUse = onAllowUse)
+            }
+        }
+    } else {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Icons.Outlined.Bedtime,
+                contentDescription = null,
+                modifier = Modifier.size(if (isSmall) 36.dp else 48.dp),
+                tint = MaterialTheme.colorScheme.error
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "No more sessions available tonight.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.error,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

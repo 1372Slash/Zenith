@@ -156,7 +156,7 @@ fun BedtimeOverlayContent(
             Card(
                 modifier = Modifier
                     .let { 
-                        if (isLandscape) it.widthIn(max = 640.dp).fillMaxHeight(0.9f) 
+                        if (isLandscape) it.widthIn(max = 720.dp).fillMaxHeight(0.95f) 
                         else it.fillMaxWidth().fillMaxHeight(0.9f) 
                     }
                     .align(Alignment.BottomCenter)
@@ -167,118 +167,212 @@ fun BedtimeOverlayContent(
                 ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .let { if (isLandscape) it.displayCutoutPadding() else it }
-                        .padding(bottom = 24.dp, start = 24.dp, end = 24.dp, top = 0.dp)
-                        .navigationBarsPadding(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    OverlayDragHandleWithIndicators()
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(80.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (appIcon != null) {
-                                    Image(
-                                        bitmap = appIcon,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(60.dp).clip(CircleShape),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else {
-                                    Icon(
-                                        Icons.Outlined.Bedtime,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(48.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Text(
-                                text = "Bedtime Mode",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-
-                            Text(
-                                text = appName,
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-
-                            Spacer(modifier = Modifier.height(40.dp))
-
-                            Box(contentAlignment = Alignment.Center) {
-                                CircularWavyProgressIndicator(
-                                    progress = { bedtimeUiState.first },
-                                    modifier = Modifier.size(220.dp),
-                                    color = MaterialTheme.colorScheme.tertiary,
-                                    amplitude = { 1f },
-                                    wavelength = 58.dp,
-                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                )
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = bedtimeUiState.second,
-                                        style = MaterialTheme.typography.displaySmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.tertiary
-                                    )
-                                    Text(
-                                        text = "Until ${bedtimeUiState.third}",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(40.dp))
-
-                            Text(
-                                text = "Rest is productive too. This app is restricted until your bedtime ends.",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(horizontal = 24.dp)
-                            )
-                        }
-                    }
-
-                    CloseAppTextButton(
+                if (isLandscape) {
+                    LandscapeBedtimeLayout(
+                        appName = appName,
+                        appIcon = appIcon,
+                        bedtimeUiState = bedtimeUiState,
+                        exitProgress = exitProgress,
                         onCloseApp = {
                             scope.launch {
                                 showContent = false
                                 delay(400)
                                 onCloseApp()
                             }
-                        },
-                        autoKickProgress = { exitProgress },
-                        size = if (isLandscape) ZenithButtonSize.Large else ZenithButtonSize.ExtraLarge
+                        }
+                    )
+                } else {
+                    PortraitBedtimeLayout(
+                        appName = appName,
+                        appIcon = appIcon,
+                        bedtimeUiState = bedtimeUiState,
+                        exitProgress = exitProgress,
+                        onCloseApp = {
+                            scope.launch {
+                                showContent = false
+                                delay(400)
+                                onCloseApp()
+                            }
+                        }
                     )
                 }
             }
         }
     }
 }
+
+@Composable
+fun PortraitBedtimeLayout(
+    appName: String,
+    appIcon: androidx.compose.ui.graphics.ImageBitmap?,
+    bedtimeUiState: Triple<Float, String, String>,
+    exitProgress: Float,
+    onCloseApp: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = 24.dp, start = 24.dp, end = 24.dp, top = 0.dp)
+            .navigationBarsPadding(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        OverlayDragHandleWithIndicators()
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            BedtimeHeader(appName, appIcon)
+
+            Spacer(modifier = Modifier.height(40.dp))
+
+            BedtimeProgress(bedtimeUiState)
+
+            Spacer(modifier = Modifier.height(40.dp))
+
+            BedtimeDescription()
+        }
+
+        CloseAppTextButton(
+            onCloseApp = onCloseApp,
+            autoKickProgress = { exitProgress },
+            size = ZenithButtonSize.ExtraLarge
+        )
+    }
+}
+
+@Composable
+fun LandscapeBedtimeLayout(
+    appName: String,
+    appIcon: androidx.compose.ui.graphics.ImageBitmap?,
+    bedtimeUiState: Triple<Float, String, String>,
+    exitProgress: Float,
+    onCloseApp: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        OverlayDragHandleWithIndicators()
+        
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .displayCutoutPadding()
+                .padding(start = 24.dp, end = 24.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(32.dp)
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                BedtimeHeader(appName, appIcon, isSmall = true)
+                Spacer(modifier = Modifier.height(20.dp))
+                BedtimeDescription()
+            }
+
+            Column(
+                modifier = Modifier.weight(1.2f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                BedtimeProgress(bedtimeUiState, isSmall = true)
+                Spacer(modifier = Modifier.height(24.dp))
+                CloseAppTextButton(
+                    onCloseApp = onCloseApp,
+                    autoKickProgress = { exitProgress },
+                    size = ZenithButtonSize.Large
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BedtimeHeader(appName: String, appIcon: androidx.compose.ui.graphics.ImageBitmap?, isSmall: Boolean = false) {
+    Box(
+        modifier = Modifier
+            .size(if (isSmall) 64.dp else 80.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center
+    ) {
+        if (appIcon != null) {
+            Image(
+                bitmap = appIcon,
+                contentDescription = null,
+                modifier = Modifier.size(if (isSmall) 48.dp else 60.dp).clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Icon(
+                Icons.Outlined.Bedtime,
+                contentDescription = null,
+                modifier = Modifier.size(if (isSmall) 36.dp else 48.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    Text(
+        text = "Bedtime Mode",
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.Bold
+    )
+
+    Text(
+        text = appName,
+        style = if (isSmall) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun BedtimeProgress(bedtimeUiState: Triple<Float, String, String>, isSmall: Boolean = false) {
+    Box(contentAlignment = Alignment.Center) {
+        CircularWavyProgressIndicator(
+            progress = { bedtimeUiState.first },
+            modifier = Modifier.size(if (isSmall) 160.dp else 220.dp),
+            color = MaterialTheme.colorScheme.tertiary,
+            amplitude = { 1f },
+            wavelength = if (isSmall) 40.dp else 58.dp,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = bedtimeUiState.second,
+                style = if (isSmall) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.tertiary
+            )
+            Text(
+                text = "Until ${bedtimeUiState.third}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun BedtimeDescription() {
+    Text(
+        text = "Rest is productive too. This app is restricted until your bedtime ends.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.padding(horizontal = 16.dp)
+    )
+}
+
