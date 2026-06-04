@@ -59,6 +59,16 @@ android {
     }
 }
 
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            val flavor = variant.flavorName ?: ""
+            val versionName = android.defaultConfig.versionName
+            output.outputFileName.set("Zenith-${flavor}-${versionName}.apk")
+        }
+    }
+}
+
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
