@@ -3,7 +3,6 @@ package com.etrisad.zenith.ui.screens.settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
@@ -11,12 +10,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.etrisad.zenith.ZenithApplication
 import com.etrisad.zenith.data.manager.GitHubUpdateManager
-import com.etrisad.zenith.data.local.entity.DailyUsageEntity
-import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.remote.model.GitHubRelease
@@ -26,11 +24,7 @@ import com.etrisad.zenith.ui.viewmodel.FocusViewModel
 import com.etrisad.zenith.ui.viewmodel.FocusViewModelFactory
 import com.etrisad.zenith.util.BackupUtils
 import com.etrisad.zenith.worker.BackupManager
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 @Composable
 fun SettingsCategoryScreen(
@@ -42,10 +36,10 @@ fun SettingsCategoryScreen(
     onTriggerOnboardingStats: () -> Unit,
     onTriggerOnboardingUpdate: () -> Unit
 ) {
-    val context = LocalContext.current
-    val app = context.applicationContext as ZenithApplication
     val preferences by preferencesRepository.userPreferencesFlow.collectAsState(initial = UserPreferences())
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val app = context.applicationContext as ZenithApplication
 
     val backupManager = remember { BackupManager(context) }
     val updateManager = remember { GitHubUpdateManager(context) }
@@ -64,27 +58,22 @@ fun SettingsCategoryScreen(
             preferencesRepository = preferencesRepository
         )
     )
-    
+
+    val focusUiState by focusViewModel.uiState.collectAsState()
+
     val backupLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/zip"),
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
         onResult = { uri ->
             uri?.let {
                 coroutineScope.launch {
-                    val progressToast = Toast.makeText(context, "Creating backup...", Toast.LENGTH_SHORT)
-                    progressToast.show()
-                    
                     try {
-                        withTimeout(15000) {
-                            UsageSyncManager(context, app.shieldRepository, app.userPreferencesRepository).syncUsageData()
-                        }
+                        UsageSyncManager(context, app.shieldRepository, app.userPreferencesRepository).syncUsageData()
                     } catch (_: Exception) {}
 
                     BackupUtils.backupDatabase(context, it).onSuccess {
                         preferencesRepository.setLastBackupTimestamp(System.currentTimeMillis())
-                        progressToast.cancel()
                         Toast.makeText(context, "Backup successful!", Toast.LENGTH_SHORT).show()
                     }.onFailure { e ->
-                        progressToast.cancel()
                         Toast.makeText(context, "Backup failed: ${e.message}", Toast.LENGTH_LONG).show()
                     }
                 }
@@ -193,7 +182,7 @@ fun SettingsCategoryScreen(
                     )
                     "developer" -> DeveloperSettings(
                         preferences = preferences,
-                        focusUiState = focusViewModel.uiState.collectAsState().value,
+                        focusUiState = focusUiState,
                         onSearchQueryChange = { focusViewModel.onSearchQueryChange(it) },
                         onShowDatabaseIndicatorChange = { enabled -> coroutineScope.launch { preferencesRepository.setShowDatabaseIndicator(enabled) } },
                         onSmartRepairOnRefreshChange = { enabled -> coroutineScope.launch { preferencesRepository.setSmartRepairOnRefresh(enabled) } },
@@ -242,92 +231,26 @@ fun SettingsCategoryScreen(
                                 navController.popBackStack(Screen.Settings.route, false)
                             }
                         },
-                        onResetBedtimeStreak = {
-                            coroutineScope.launch {
-                                preferencesRepository.resetBedtimeStreak()
-                                Toast.makeText(context, "Bedtime streak reset to 0", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        onResetStreakRecovery = {
-                            coroutineScope.launch {
-                                preferencesRepository.setStreakRecoveryPerformed(false)
-                                Toast.makeText(context, "Recovery flag reset. It will run on next refresh.", Toast.LENGTH_SHORT).show()
-                            }
-                        },
+                        onResetBedtimeStreak = { coroutineScope.launch { preferencesRepository.resetBedtimeStreak() } },
+                        onResetStreakRecovery = { coroutineScope.launch { preferencesRepository.setLastStreakCheckDate("") } },
                         onUpdateAppStreak = { pkg, streak ->
                             coroutineScope.launch {
                                 val shield = app.shieldRepository.getShieldByPackageName(pkg)
                                 if (shield != null) {
-                                    val limitMillis = shield.timeLimitMinutes * 60 * 1000L
-                                    val targetUsage = if (shield.type == FocusType.GOAL) limitMillis + 60000 else (limitMillis - 60000).coerceAtLeast(0)
-                                    
-                                    val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-                                    val today = LocalDate.now()
-
-                                    for (i in 0 until streak) {
-                                        val date = today.minusDays(i.toLong()).format(dateFormat)
-                                        val existing = app.shieldRepository.getUsageByDateAndPackage(date, pkg)
-                                        
-                                        val isAlreadySuccessful = if (existing != null) {
-                                            if (shield.type == FocusType.GOAL) {
-                                                existing.usageTimeMillis >= limitMillis
-                                            } else {
-                                                existing.usageTimeMillis <= limitMillis
-                                            }
-                                        } else {
-                                            false
-                                        }
-
-                                        if (!isAlreadySuccessful) {
-                                            app.shieldRepository.insertDailyUsage(
-                                                DailyUsageEntity(
-                                                    date = date,
-                                                    packageName = pkg,
-                                                    usageTimeMillis = targetUsage,
-                                                    lastUpdated = System.currentTimeMillis()
-                                                )
-                                            )
-                                        }
-                                    }
-                                    
-                                    app.shieldRepository.updateShield(shield.copy(
-                                        currentStreak = streak, 
-                                        bestStreak = maxOf(shield.bestStreak, streak),
-                                        lastStreakUpdateTimestamp = System.currentTimeMillis()
-                                    ))
-                                    Toast.makeText(context, "Streak updated for $pkg (preserved valid history)", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    Toast.makeText(context, "App not found in database", Toast.LENGTH_SHORT).show()
+                                    app.shieldRepository.updateShield(shield.copy(currentStreak = streak, bestStreak = maxOf(shield.bestStreak, streak)))
                                 }
                             }
                         },
-                        onUpdateGlobalScreenTime = { usageMillis ->
+                        onUpdateGlobalScreenTime = { time ->
                             coroutineScope.launch {
-                                val date = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
-                                preferencesRepository.setLastKnownDailyUsage(usageMillis, date)
-                                app.shieldRepository.insertDailyUsage(
-                                    DailyUsageEntity(
-                                        date = date,
-                                        packageName = "TOTAL",
-                                        usageTimeMillis = usageMillis,
-                                        lastUpdated = System.currentTimeMillis()
-                                    )
-                                )
-                                Toast.makeText(context, "Global usage updated", Toast.LENGTH_SHORT).show()
+                                val todayStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                                preferencesRepository.setLastKnownDailyUsage(time, todayStr)
                             }
                         },
-                        onUpdateAppScreenTime = { pkg, usageMillis ->
+                        onUpdateAppScreenTime = { pkg, time ->
                             coroutineScope.launch {
-                                val date = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
-                                app.shieldRepository.insertDailyUsage(
-                                    DailyUsageEntity(
-                                        date = date,
-                                        packageName = pkg,
-                                        usageTimeMillis = usageMillis,
-                                        lastUpdated = System.currentTimeMillis()
-                                    )
-                                )
-                                Toast.makeText(context, "Usage updated for $pkg", Toast.LENGTH_SHORT).show()
+                                val todayStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                                app.shieldRepository.insertDailyUsage(com.etrisad.zenith.data.local.entity.DailyUsageEntity(packageName = pkg, date = todayStr, usageTimeMillis = time))
                             }
                         }
                     )
@@ -354,7 +277,7 @@ fun SettingsCategoryScreen(
                 isDark = isDark,
                 onDismiss = { showUpdateSheet = false },
                 onUpdate = {
-                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(latestRelease!!.htmlUrl))
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, latestRelease!!.htmlUrl.toUri())
                     context.startActivity(intent)
                     showUpdateSheet = false
                 }
@@ -386,7 +309,6 @@ fun SettingsCategoryScreen(
                             }
 
                             Toast.makeText(context, "Restore successful! Restarting app...", Toast.LENGTH_LONG).show()
-                            delay(1500)
                             BackupUtils.restartApp(context)
                         }.onFailure { e ->
                             Toast.makeText(context, "Restore failed: ${e.message}", Toast.LENGTH_LONG).show()

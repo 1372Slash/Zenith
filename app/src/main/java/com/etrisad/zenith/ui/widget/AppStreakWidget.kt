@@ -74,15 +74,14 @@ class AppStreakWidget : GlanceAppWidget() {
 
             val shields by remember(app) {
                 app.shieldRepository.allShields
-                    .map { it ?: emptyList() }
                     .distinctUntilChanged { old, new ->
                         if (old.size != new.size) return@distinctUntilChanged false
                         old.zip(new).all { (o, n) ->
                             o.packageName == n.packageName &&
-                            o.currentStreak == n.currentStreak &&
-                            o.bestStreak == n.bestStreak &&
-                            o.lastStreakUpdateTimestamp == n.lastStreakUpdateTimestamp &&
-                            (o.remainingTimeMillis <= 0) == (n.remainingTimeMillis <= 0)
+                                    o.currentStreak == n.currentStreak &&
+                                    o.bestStreak == n.bestStreak &&
+                                    o.lastStreakUpdateTimestamp == n.lastStreakUpdateTimestamp &&
+                                    (o.remainingTimeMillis <= 0) == (n.remainingTimeMillis <= 0)
                         }
                     }
             }.collectAsState(initial = emptyList())
@@ -94,11 +93,11 @@ class AppStreakWidget : GlanceAppWidget() {
                     shields.filter { it.currentStreak > 0 }.maxByOrNull { it.currentStreak }?.packageName
                 }
             }
-            
+
             val targetShield = remember(packageToDisplay, shields) {
                 shields.find { it.packageName == packageToDisplay }
             }
-            
+
             val iconBitmap = remember(packageToDisplay, context.resources.configuration.uiMode) {
                 packageToDisplay?.let {
                     try {
@@ -142,7 +141,7 @@ class AppStreakWidget : GlanceAppWidget() {
                     }
                     actionStartActivity(intent)
                 }
-                
+
                 val appLaunchIntent = packageToDisplay?.let {
                     context.packageManager.getLaunchIntentForPackage(it)
                 }
@@ -246,7 +245,7 @@ class AppStreakWidget : GlanceAppWidget() {
         val scaleFactor = squareSize.value / 100f
         val containerSize = (44 * scaleFactor).dp
         val iconSize = (44 * scaleFactor).dp
-        
+
         val currentStreakStr = currentStreak.toString()
         val mainFontSize = when {
             currentStreakStr.length >= 4 -> (8 * scaleFactor).sp

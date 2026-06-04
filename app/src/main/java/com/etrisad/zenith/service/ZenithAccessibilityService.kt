@@ -116,7 +116,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                 bedtimeWhitelistedPackages = prefs.bedtimeWhitelistedPackages
 
                 shieldRepository.isShieldsLoaded.first { it }
-                allShieldsCache = shieldRepository.allShields.first() ?: emptyList()
+                allShieldsCache = shieldRepository.allShields.first()
 
                 val schedules = shieldRepository.allSchedules.first()
                 activeSchedules = schedules.filter { it.isActive }
@@ -131,7 +131,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                         packageNames = s.packageNames.toSet()
                     )
                 }
-                
+
                 updateRestrictedPackages()
                 updateBedtimeStatus(prefs)
 
@@ -143,7 +143,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                 lastForegroundApp?.let { pkg ->
                     packageChangeFlow.tryEmit(pkg)
                 }
-                
+
                 Log.d("ZenithAS", "Service refreshed successfully via REFRESH_DATA")
             } catch (e: Exception) {
                 Log.e("ZenithAS", "Error refreshing service: ${e.message}")
@@ -156,7 +156,7 @@ class ZenithAccessibilityService : AccessibilityService() {
         instance = this
         isServiceRunning = true
         lastEventTime = System.currentTimeMillis()
-        
+
         val app = application as com.etrisad.zenith.ZenithApplication
         shieldRepository = app.shieldRepository
         preferencesRepository = app.userPreferencesRepository
@@ -170,10 +170,9 @@ class ZenithAccessibilityService : AccessibilityService() {
         serviceScope.launch {
             shieldRepository.isShieldsLoaded.first { it }
             shieldRepository.allShields.collect { shields ->
-                val safeShields = shields ?: emptyList()
-                allShieldsCache = safeShields
+                allShieldsCache = shields
                 lastForegroundApp?.let { currentPkg ->
-                    currentShieldCache = safeShields.find { it.packageName == currentPkg }
+                    currentShieldCache = shields.find { it.packageName == currentPkg }
                 }
                 updateRestrictedPackages()
             }
@@ -208,7 +207,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                 val endParts = preferences.bedtimeEndTime.split(":")
                 cachedBedtimeStartMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 22) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0)
                 cachedBedtimeEndMinutes = (endParts.getOrNull(0)?.toIntOrNull() ?: 7) * 60 + (endParts.getOrNull(1)?.toIntOrNull() ?: 0)
-                
+
                 updateBedtimeStatus(preferences)
             }
         }
@@ -240,7 +239,7 @@ class ZenithAccessibilityService : AccessibilityService() {
             while (true) {
                 val currentTime = System.currentTimeMillis()
                 val currentPkg = lastForegroundApp
-                
+
                 if (currentPkg != null && !InterceptOverlayManager.isShowing && !shouldBypassBlocking(currentPkg)) {
                     val allowedUntil = allowedApps[currentPkg]
                     if (allowedUntil != null && allowedUntil != 0L && currentTime > allowedUntil) {
@@ -288,10 +287,10 @@ class ZenithAccessibilityService : AccessibilityService() {
 
     private suspend fun handlePackageChange(currentApp: String) {
         if (currentApp == lastForegroundApp && currentShieldCache != null) return
-        
+
         val previousApp = lastForegroundApp
         lastForegroundApp = currentApp
-        
+
         if (shouldBypassBlocking(currentApp)) {
             previousApp?.let { prevPkg ->
                 allShieldsCache.find { it.packageName == prevPkg }?.let { shield ->
@@ -413,7 +412,7 @@ class ZenithAccessibilityService : AccessibilityService() {
     private fun sendGoalReachedNotification(appName: String, packageName: String) {
         val channelId = "zenith_goal_channel"
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        
+
         if (manager.getNotificationChannel(channelId) == null) {
             val channel = NotificationChannel(
                 channelId, "Goal Reminders", NotificationManager.IMPORTANCE_DEFAULT
@@ -439,7 +438,7 @@ class ZenithAccessibilityService : AccessibilityService() {
     private fun getMindfulShield(packageName: String, appName: String): ShieldEntity {
         val existing = mindfulGatewayStates[packageName]
         val currentTime = System.currentTimeMillis()
-        
+
         if (existing == null) {
             val newShield = ShieldEntity(
                 packageName = packageName,
@@ -469,21 +468,21 @@ class ZenithAccessibilityService : AccessibilityService() {
                 )
             }
         }
-        
+
         if (currentTime - updated.lastPeriodResetTimestamp > updated.refreshPeriodMinutes * 60 * 1000L) {
             updated = updated.copy(
                 currentPeriodUses = 0,
                 lastPeriodResetTimestamp = currentTime
             )
         }
-        
+
         mindfulGatewayStates[packageName] = updated
         return updated
     }
 
     private suspend fun checkIfAppIsShielded(targetPackageName: String) {
         if (targetPackageName != lastForegroundApp) return
-        
+
         if (targetPackageName == lastKickedPackage && System.currentTimeMillis() - lastKickTime < 3000) {
             return
         }
@@ -589,8 +588,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                                 val limitMillis = (shieldWithTimestamp.timeLimitMinutes) * 60 * 1000L
                                 val currentUsage = getTotalUsageToday(targetPackageName)
 
-                                if (isGoal && (currentUsage >= limitMillis || notifiedGoals.contains(targetPackageName)) && limitMillis > 0) {
-                                } else {
+                                if (!(isGoal && (currentUsage >= limitMillis || notifiedGoals.contains(targetPackageName)) && limitMillis > 0)) {
                                     serviceScope.launch(Dispatchers.Main) {
                                         sessionUsageOverlayManager.showHUD(
                                             targetPackageName,
@@ -618,7 +616,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                             }
                         }
                     },
-                    onCloseApp = { 
+                    onCloseApp = {
                         serviceScope.launch {
                             val s = currentShieldCache ?: allShieldsCache.find { it.packageName == targetPackageName } ?: shieldRepository.getShieldByPackageName(targetPackageName)
                             if (s != null && s.isDelayAppEnabled) {
@@ -629,7 +627,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                         }
                         lastKickTime = System.currentTimeMillis()
                         lastKickedPackage = targetPackageName
-                        goToHomeScreen() 
+                        goToHomeScreen()
                     },
                     onGoalDismiss = {
                         allowedApps[targetPackageName] = System.currentTimeMillis() + (60 * 60 * 1000L)
@@ -651,11 +649,11 @@ class ZenithAccessibilityService : AccessibilityService() {
             launcherAppsCache = pm.queryIntentActivities(
                 Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
             ).map { it.activityInfo.packageName }.toSet()
-            
+
             val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
             defaultLauncherPackage = pm.resolveActivity(launcherIntent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
                 ?.activityInfo?.packageName
-            
+
             lastLauncherAppsRefreshTime = System.currentTimeMillis()
         } catch (_: Exception) {}
     }
@@ -690,7 +688,7 @@ class ZenithAccessibilityService : AccessibilityService() {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
-        
+
         cachedTotalGlobalUsage = totalToday.coerceAtMost(currentTime - todayStart)
         lastGlobalUsageCacheTime = currentTime
         return cachedTotalGlobalUsage
@@ -702,7 +700,7 @@ class ZenithAccessibilityService : AccessibilityService() {
         if (currentTime - lastUsageCacheTime > 10000) {
             val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
             val tempMap = detailedUsage.appUsageMap
-            
+
             dailyUsageCache.clear()
             val todayStart = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, 0)
@@ -718,7 +716,7 @@ class ZenithAccessibilityService : AccessibilityService() {
             }
             lastUsageCacheTime = currentTime
         }
-        
+
         return dailyUsageCache[packageName] ?: 0L
     }
 
@@ -730,7 +728,7 @@ class ZenithAccessibilityService : AccessibilityService() {
         val currentTime = System.currentTimeMillis()
         val currentDay: Int
         val currentMinutes: Int
-        
+
         val yesterdayCalendar = Calendar.getInstance().apply {
             timeInMillis = currentTime
             add(Calendar.DAY_OF_YEAR, -1)
@@ -789,7 +787,7 @@ class ZenithAccessibilityService : AccessibilityService() {
 
     private fun checkSchedules(packageName: String): Boolean {
         if (shouldBypassBlocking(packageName)) return false
-        
+
         val allowedUntil = allowedApps[packageName] ?: 0L
         if (System.currentTimeMillis() < allowedUntil) return false
 
@@ -816,7 +814,7 @@ class ZenithAccessibilityService : AccessibilityService() {
             reusableCalendar.timeInMillis = now
             reusableCalendar.get(java.util.Calendar.HOUR_OF_DAY) * 60 + reusableCalendar.get(java.util.Calendar.MINUTE)
         }
-        
+
         for (ps in parsedSchedulesCache) {
             val isInInterval = if (ps.startMinutes <= ps.endMinutes) {
                 currentTotalMinutes in ps.startMinutes..ps.endMinutes
@@ -849,14 +847,14 @@ class ZenithAccessibilityService : AccessibilityService() {
             val appName = try {
                 packageManager.getApplicationLabel(packageManager.getApplicationInfo(packageName, 0)).toString()
             } catch (_: Exception) { packageName }
-            
+
             overlayManager.showBedtimeOverlay(
                 packageName = packageName,
                 appName = appName,
-                onCloseApp = { 
+                onCloseApp = {
                     lastKickTime = System.currentTimeMillis()
                     lastKickedPackage = packageName
-                    goToHomeScreen() 
+                    goToHomeScreen()
                 }
             )
         }
@@ -868,7 +866,7 @@ class ZenithAccessibilityService : AccessibilityService() {
             val appName = try {
                 packageManager.getApplicationLabel(packageManager.getApplicationInfo(packageName, 0)).toString()
             } catch (_: Exception) { packageName }
-            
+
             overlayManager.showWindDownOverlay(
                 packageName = packageName,
                 appName = appName,
@@ -877,10 +875,10 @@ class ZenithAccessibilityService : AccessibilityService() {
                     allowedApps[packageName] = System.currentTimeMillis() + (minutes * 60 * 1000L)
                     windDownUsedPackages[packageName] = true
                 },
-                onCloseApp = { 
+                onCloseApp = {
                     lastKickTime = System.currentTimeMillis()
                     lastKickedPackage = packageName
-                    goToHomeScreen() 
+                    goToHomeScreen()
                 }
             )
         }
@@ -903,7 +901,7 @@ class ZenithAccessibilityService : AccessibilityService() {
 
         val prefs = currentPreferences
         val isBedtimeOrWindDown = isBedtimeActive || (isWindDownActive && prefs?.bedtimeWindDownEnabled == true)
-        
+
         if (isBedtimeOrWindDown) {
             if (packageName in bedtimeWhitelistedPackages && packageName !in restrictedPackages) {
                 if (prefs?.mindfulGatewayEnabled != true) return true
@@ -955,7 +953,7 @@ class ZenithAccessibilityService : AccessibilityService() {
         serviceScope.launch(Dispatchers.Main) {
             overlayManager.showScheduleOverlay(
                 packageName = packageName,
-                appName = packageName, 
+                appName = packageName,
                 schedule = schedule,
                 totalGlobalUsageToday = totalGlobalUsageToday,
                 onAllowUse = { minutes, isEmergency ->
@@ -1001,10 +999,10 @@ class ZenithAccessibilityService : AccessibilityService() {
                         }
                     }
                 },
-                onCloseApp = { 
+                onCloseApp = {
                     lastKickTime = System.currentTimeMillis()
                     lastKickedPackage = packageName
-                    goToHomeScreen() 
+                    goToHomeScreen()
                 }
             )
         }

@@ -71,9 +71,8 @@ class FocusViewModel(
             shieldRepository.allShields
                 .collect { shields ->
                     try {
-                        val safeShields = shields ?: emptyList()
-                        allShields = safeShields
-                        updateShieldedLists(safeShields)
+                        allShields = shields
+                        updateShieldedLists(shields)
                         updateInstalledAppsFilter()
                     } catch (e: Exception) {
                         android.util.Log.e("FocusViewModel", "Error in allShields collector: ${e.message}")
@@ -97,12 +96,12 @@ class FocusViewModel(
     }
 
     fun onShieldSortTypeChange(sortType: ShieldSortType) {
-        _uiState.update { it.copy(shieldSortType = sortType) }
+        _uiState.value = _uiState.value.copy(shieldSortType = sortType)
         updateShieldedLists(allShields)
     }
 
     fun onGoalSortTypeChange(sortType: ShieldSortType) {
-        _uiState.update { it.copy(goalSortType = sortType) }
+        _uiState.value = _uiState.value.copy(goalSortType = sortType)
         updateShieldedLists(allShields)
     }
 
@@ -173,8 +172,8 @@ class FocusViewModel(
     private fun sortShields(shields: List<ShieldEntity>, sortType: ShieldSortType): List<ShieldEntity> {
         return when (sortType) {
             ShieldSortType.ALPHABETICAL -> shields.sortedBy { it.appName.lowercase() }
-            ShieldSortType.REMAINING_TIME -> shields.sortedBy { 
-                if (it.timeLimitMinutes > 0) it.remainingTimeMillis.toDouble() / (it.timeLimitMinutes * 60 * 1000L) else 0.0 
+            ShieldSortType.REMAINING_TIME -> shields.sortedBy {
+                if (it.timeLimitMinutes > 0) it.remainingTimeMillis.toDouble() / (it.timeLimitMinutes * 60 * 1000L) else 0.0
             }
         }
     }
@@ -182,8 +181,8 @@ class FocusViewModel(
     private fun loadInstalledApps() {
         loadAppsJob?.cancel()
         loadAppsJob = viewModelScope.launch {
-            if (_uiState.value.installedApps.isEmpty()) {
-                _uiState.update { it.copy(isLoadingApps = true) }
+            if (_allInstalledApps.value.isEmpty()) {
+                _uiState.value = _uiState.value.copy(isLoadingApps = true)
             }
 
             try {
@@ -214,7 +213,7 @@ class FocusViewModel(
                 _allInstalledApps.value = apps
                 updateInstalledAppsFilter()
             } finally {
-                _uiState.update { it.copy(isLoadingApps = false) }
+                _uiState.value = _uiState.value.copy(isLoadingApps = false)
             }
         }
     }
@@ -267,7 +266,7 @@ class FocusViewModel(
     }
 
     fun onSearchQueryChange(query: String) {
-        _uiState.update { it.copy(searchQuery = query) }
+        _uiState.value = _uiState.value.copy(searchQuery = query)
         updateInstalledAppsFilter()
     }
 
@@ -293,56 +292,48 @@ class FocusViewModel(
     }
 
     fun openSchedulePicker(resetSelection: Boolean = true) {
-        _uiState.update {
-            it.copy(
-                isSchedulePickerOpen = true,
-                selectedAppsForSchedule = if (resetSelection) emptySet() else it.selectedAppsForSchedule,
-                isSettingsSheetOpen = false,
-                editingSchedule = if (resetSelection) null else it.editingSchedule
-            )
-        }
+        _uiState.value = _uiState.value.copy(
+            isSchedulePickerOpen = true,
+            selectedAppsForSchedule = if (resetSelection) emptySet() else _uiState.value.selectedAppsForSchedule,
+            isSettingsSheetOpen = false,
+            editingSchedule = if (resetSelection) null else _uiState.value.editingSchedule
+        )
     }
 
     fun toggleAppSelectionForSchedule(packageName: String) {
-        _uiState.update { currentState ->
-            val current = currentState.selectedAppsForSchedule
-            val newSelection = if (packageName in current) {
-                current - packageName
-            } else {
-                current + packageName
-            }
-            currentState.copy(selectedAppsForSchedule = newSelection)
+        val current = _uiState.value.selectedAppsForSchedule
+        val newSelection = if (packageName in current) {
+            current - packageName
+        } else {
+            current + packageName
         }
+        _uiState.value = _uiState.value.copy(selectedAppsForSchedule = newSelection)
     }
 
     fun proceedToScheduleSettings() {
         if (_uiState.value.selectedAppsForSchedule.isEmpty()) return
-        _uiState.update {
-            it.copy(
-                isSchedulePickerOpen = false,
-                isScheduleSettingsOpen = true
-            )
-        }
+        _uiState.value = _uiState.value.copy(
+            isSchedulePickerOpen = false,
+            isScheduleSettingsOpen = true
+        )
     }
 
     fun closeSchedulePicker() {
-        _uiState.update { it.copy(isSchedulePickerOpen = false) }
+        _uiState.value = _uiState.value.copy(isSchedulePickerOpen = false)
     }
 
     fun closeScheduleSettings() {
-        _uiState.update { it.copy(isScheduleSettingsOpen = false, editingSchedule = null) }
+        _uiState.value = _uiState.value.copy(isScheduleSettingsOpen = false, editingSchedule = null)
     }
 
     fun editSchedule(schedule: ScheduleEntity) {
-        _uiState.update {
-            it.copy(
-                isScheduleSettingsOpen = true,
-                editingSchedule = schedule,
-                selectedAppsForSchedule = schedule.packageNames.toSet(),
-                isSchedulePickerOpen = false,
-                isSettingsSheetOpen = false
-            )
-        }
+        _uiState.value = _uiState.value.copy(
+            isScheduleSettingsOpen = true,
+            editingSchedule = schedule,
+            selectedAppsForSchedule = schedule.packageNames.toSet(),
+            isSchedulePickerOpen = false,
+            isSettingsSheetOpen = false
+        )
     }
 
     fun saveSchedule(
@@ -381,7 +372,7 @@ class FocusViewModel(
                     maxEmergencyUses = maxEmergencyUses
                 )
             }
-            
+
             if (editing != null) {
                 shieldRepository.updateSchedule(schedule)
             } else {
@@ -426,13 +417,12 @@ class FocusViewModel(
         isGoalCallerSoundEnabled: Boolean = true,
         goalCallerSoundUri: String? = null
     ) {
-        android.util.Log.d("FocusViewModel", "Attempting to save focus for: $packageName, type: ${_uiState.value.selectedFocusType}")
         val type = _uiState.value.selectedFocusType
         viewModelScope.launch {
             try {
                 val existing = allShields.find { it.packageName == packageName }
-                
-                val shouldResetStreak = existing?.let { 
+
+                val shouldResetStreak = existing?.let {
                     if (it.type == type) {
                         when (type) {
                             FocusType.SHIELD -> timeLimitMinutes > it.timeLimitMinutes
@@ -473,9 +463,8 @@ class FocusViewModel(
                     lastDelayStartTimestamp = existing?.lastDelayStartTimestamp ?: 0L
                 )
                 shieldRepository.insertShield(shield)
-                android.util.Log.d("FocusViewModel", "Focus saved successfully for: $packageName, with type: $type")
             } catch (e: Exception) {
-                android.util.Log.e("FocusViewModel", "Critical error saving focus for $packageName: ${e.message}", e)
+                android.util.Log.e("FocusViewModel", "Error saving focus: ${e.message}")
             } finally {
                 closeSettingsSheet()
             }
@@ -514,45 +503,39 @@ class FocusViewModel(
     }
 
     fun toggleSelectionMode() {
-        _uiState.update {
-            it.copy(
-                isSelectionMode = !it.isSelectionMode,
-                selectedShields = emptySet(),
-                selectedSchedules = emptySet()
-            )
-        }
+        _uiState.value = _uiState.value.copy(
+            isSelectionMode = !_uiState.value.isSelectionMode,
+            selectedShields = emptySet(),
+            selectedSchedules = emptySet()
+        )
     }
 
     fun toggleShieldSelection(packageName: String) {
-        _uiState.update { currentState ->
-            val current = currentState.selectedShields
-            val newSelection = if (packageName in current) {
-                current - packageName
-            } else {
-                current + packageName
-            }
-            val isSelectionStillActive = newSelection.isNotEmpty() || currentState.selectedSchedules.isNotEmpty()
-            currentState.copy(
-                selectedShields = newSelection,
-                isSelectionMode = if (currentState.isSelectionMode) isSelectionStillActive else currentState.isSelectionMode
-            )
+        val current = _uiState.value.selectedShields
+        val newSelection = if (packageName in current) {
+            current - packageName
+        } else {
+            current + packageName
         }
+        val isSelectionStillActive = newSelection.isNotEmpty() || _uiState.value.selectedSchedules.isNotEmpty()
+        _uiState.value = _uiState.value.copy(
+            selectedShields = newSelection,
+            isSelectionMode = if (_uiState.value.isSelectionMode) isSelectionStillActive else _uiState.value.isSelectionMode
+        )
     }
 
     fun toggleScheduleSelection(id: Long) {
-        _uiState.update { currentState ->
-            val current = currentState.selectedSchedules
-            val newSelection = if (id in current) {
-                current - id
-            } else {
-                current + id
-            }
-            val isSelectionStillActive = currentState.selectedShields.isNotEmpty() || newSelection.isNotEmpty()
-            currentState.copy(
-                selectedSchedules = newSelection,
-                isSelectionMode = if (currentState.isSelectionMode) isSelectionStillActive else currentState.isSelectionMode
-            )
+        val current = _uiState.value.selectedSchedules
+        val newSelection = if (id in current) {
+            current - id
+        } else {
+            current + id
         }
+        val isSelectionStillActive = _uiState.value.selectedShields.isNotEmpty() || newSelection.isNotEmpty()
+        _uiState.value = _uiState.value.copy(
+            selectedSchedules = newSelection,
+            isSelectionMode = if (_uiState.value.isSelectionMode) isSelectionStillActive else _uiState.value.isSelectionMode
+        )
     }
 
     fun deleteSelected() {

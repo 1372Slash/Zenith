@@ -21,9 +21,9 @@ import com.etrisad.zenith.data.local.Converters
 
 @Database(
     entities = [
-        ShieldEntity::class, 
-        ScheduleEntity::class, 
-        DailyUsageEntity::class, 
+        ShieldEntity::class,
+        ScheduleEntity::class,
+        DailyUsageEntity::class,
         HourlyUsageEntity::class,
         InterceptedNotificationEntity::class
     ],
@@ -48,9 +48,6 @@ abstract class ZenithDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var INSTANCE: ZenithDatabase? = null
-
-        @Volatile
-        private var isMaintenanceMode: Boolean = false
 
         private val MIGRATION_21_22 = object : Migration(21, 22) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -192,11 +189,21 @@ abstract class ZenithDatabase : RoomDatabase() {
 
                 db.execSQL("CREATE TABLE IF NOT EXISTS `hourly_usage` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `date` TEXT NOT NULL, `hour` INTEGER NOT NULL, `packageName` TEXT NOT NULL, `usageTimeMillis` INTEGER NOT NULL, `lastUpdated` INTEGER NOT NULL)")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_hourly_usage_date_hour_packageName` ON `hourly_usage` (`date`, `hour`, `packageName`)")
+
+                try { db.execSQL("ALTER TABLE shields ADD COLUMN isPaused INTEGER NOT NULL DEFAULT 0") } catch (_: Exception) {}
+                try { db.execSQL("ALTER TABLE shields ADD COLUMN pauseEndTimestamp INTEGER NOT NULL DEFAULT 0") } catch (_: Exception) {}
             }
         }
 
         private val MIGRATION_19_20 = object : Migration(19, 20) {
             override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `daily_usage` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `date` TEXT NOT NULL, `packageName` TEXT NOT NULL, `usageTimeMillis` INTEGER NOT NULL, `lastUpdated` INTEGER NOT NULL)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_daily_usage_date_packageName` ON `daily_usage` (`date`, `packageName`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `hourly_usage` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `date` TEXT NOT NULL, `hour` INTEGER NOT NULL, `packageName` TEXT NOT NULL, `usageTimeMillis` INTEGER NOT NULL, `lastUpdated` INTEGER NOT NULL)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_hourly_usage_date_hour_packageName` ON `hourly_usage` (`date`, `hour`, `packageName`)")
+
+                try { db.execSQL("ALTER TABLE shields ADD COLUMN isPaused INTEGER NOT NULL DEFAULT 0") } catch (_: Exception) {}
+                try { db.execSQL("ALTER TABLE shields ADD COLUMN pauseEndTimestamp INTEGER NOT NULL DEFAULT 0") } catch (_: Exception) {}
             }
         }
 
@@ -210,66 +217,32 @@ abstract class ZenithDatabase : RoomDatabase() {
         }
 
         fun getDatabase(context: Context): ZenithDatabase {
-            val current = INSTANCE
-            if (current != null && !isMaintenanceMode) {
-                return current
-            }
-
-            if (isMaintenanceMode) {
-                var retryCount = 0
-                while (isMaintenanceMode && retryCount < 50) {
-                    try { Thread.sleep(100) } catch (_: Exception) {}
-                    retryCount++
-                }
-            }
-
-            return synchronized(this) {
-                val current2 = INSTANCE
-                if (current2 != null) {
-                    current2
-                } else {
-                    val instance = Room.databaseBuilder(
-                        context.applicationContext,
-                        ZenithDatabase::class.java,
-                        "zenith_database"
+            return INSTANCE ?: synchronized(this) {
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    ZenithDatabase::class.java,
+                    "zenith_database"
+                )
+                    .addMigrations(
+                        MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+                        MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+                        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
+                        MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18,
+                        MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
+                        MIGRATION_21_22
                     )
-                        .addMigrations(
-                            MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, 
-                            MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, 
-                            MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
-                            MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18,
-                            MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
-                            MIGRATION_21_22
-                        )
-                        .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-                        .fallbackToDestructiveMigrationOnDowngrade()
-                        .build()
-                    INSTANCE = instance
-                    instance
-                }
+                    .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+                    .fallbackToDestructiveMigrationOnDowngrade()
+                    .build()
+                INSTANCE = instance
+                instance
             }
         }
 
 
         fun closeDatabase() {
-            synchronized(this) {
-                INSTANCE?.close()
-                INSTANCE = null
-            }
-        }
-
-        fun enterMaintenanceMode() {
-            synchronized(this) {
-                isMaintenanceMode = true
-                INSTANCE?.close()
-                INSTANCE = null
-            }
-        }
-
-        fun exitMaintenanceMode() {
-            synchronized(this) {
-                isMaintenanceMode = false
-            }
+            INSTANCE?.close()
+            INSTANCE = null
         }
     }
 }

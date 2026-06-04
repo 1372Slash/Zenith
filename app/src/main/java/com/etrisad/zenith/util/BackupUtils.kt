@@ -49,6 +49,8 @@ object BackupUtils {
             val dbShm = File("${dbFile.path}-shm")
             val prefsFile = File(context.filesDir, "datastore/$PREFS_FILE_NAME")
 
+            ZenithDatabase.closeDatabase()
+
             context.contentResolver.openOutputStream(targetUri)?.use { outputStream ->
                 ZipOutputStream(outputStream).use { zipOut ->
                     if (dbFile.exists()) {
@@ -73,33 +75,29 @@ object BackupUtils {
 
     suspend fun restoreDatabase(context: Context, sourceUri: Uri): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            ZenithDatabase.enterMaintenanceMode()
-
-            val dbFile = context.getDatabasePath(DATABASE_NAME)
-            val dbPath = dbFile.path
-            var hasWalInZip = false
+            ZenithDatabase.closeDatabase()
 
             context.contentResolver.openInputStream(sourceUri)?.use { inputStream ->
                 ZipInputStream(inputStream).use { zipIn ->
                     var entry: ZipEntry? = zipIn.nextEntry
                     while (entry != null) {
-                        when (entry.name) {
-                            DATABASE_NAME -> {
+                        when {
+                            entry.name == DATABASE_NAME -> {
+                                val dbFile = context.getDatabasePath(DATABASE_NAME)
                                 dbFile.parentFile?.mkdirs()
                                 FileOutputStream(dbFile).use { zipIn.copyTo(it) }
                             }
-                            "$DATABASE_NAME-wal" -> {
-                                hasWalInZip = true
-                                val walFile = File("$dbPath-wal")
+                            entry.name == "$DATABASE_NAME-wal" -> {
+                                val walFile = File("${context.getDatabasePath(DATABASE_NAME).path}-wal")
                                 walFile.parentFile?.mkdirs()
                                 FileOutputStream(walFile).use { zipIn.copyTo(it) }
                             }
-                            "$DATABASE_NAME-shm" -> {
-                                val shmFile = File("$dbPath-shm")
+                            entry.name == "$DATABASE_NAME-shm" -> {
+                                val shmFile = File("${context.getDatabasePath(DATABASE_NAME).path}-shm")
                                 shmFile.parentFile?.mkdirs()
                                 FileOutputStream(shmFile).use { zipIn.copyTo(it) }
                             }
-                            PREFS_FILE_NAME -> {
+                            entry.name == PREFS_FILE_NAME -> {
                                 val prefsFile = File(context.filesDir, "datastore/$PREFS_FILE_NAME")
                                 prefsFile.parentFile?.mkdirs()
                                 FileOutputStream(prefsFile).use { zipIn.copyTo(it) }
@@ -110,16 +108,24 @@ object BackupUtils {
                     }
                 }
             }
-
-            if (!hasWalInZip) {
-                File("$dbPath-wal").delete()
-                File("$dbPath-shm").delete()
+            val dbPath = context.getDatabasePath(DATABASE_NAME).path
+            context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                ZipInputStream(input).use { zipIn ->
+                    var hasWal = false
+                    var entry = zipIn.nextEntry
+                    while (entry != null) {
+                        if (entry.name.endsWith("-wal")) hasWal = true
+                        entry = zipIn.nextEntry
+                    }
+                    if (!hasWal) {
+                        File("$dbPath-wal").delete()
+                        File("$dbPath-shm").delete()
+                    }
+                }
             }
 
-            ZenithDatabase.exitMaintenanceMode()
             Result.success(Unit)
         } catch (e: Exception) {
-            ZenithDatabase.exitMaintenanceMode()
             Result.failure(e)
         }
     }
@@ -177,7 +183,7 @@ object BackupUtils {
                         val tempDbFile = File(context.cacheDir, "temp_restore.db")
                         val tempWalFile = File(context.cacheDir, "temp_restore.db-wal")
                         val tempShmFile = File(context.cacheDir, "temp_restore.db-shm")
-                        
+
                         context.contentResolver.openInputStream(uri)?.use { input ->
                             ZipInputStream(input).use { zipIn ->
                                 var entry = zipIn.nextEntry
@@ -203,9 +209,9 @@ object BackupUtils {
                             val db = android.database.sqlite.SQLiteDatabase.openDatabase(
                                 tempDbFile.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY
                             )
-                            
-                            val maxDate: String? = db.rawQuery("SELECT MAX(date) FROM daily_usage", null).use { 
-                                if (it.moveToFirst()) it.getString(0) else null 
+
+                            val maxDate: String? = db.rawQuery("SELECT MAX(date) FROM daily_usage", null).use {
+                                if (it.moveToFirst()) it.getString(0) else null
                             }
                             latestDate = maxDate
 
@@ -219,8 +225,8 @@ object BackupUtils {
                             }
 
                             try {
-                                db.rawQuery("SELECT 1 FROM hourly_usage LIMIT 1", null).use { 
-                                    hasHourly = it.moveToFirst() 
+                                db.rawQuery("SELECT 1 FROM hourly_usage LIMIT 1", null).use {
+                                    hasHourly = it.moveToFirst()
                                 }
                             } catch (_: Exception) {}
 

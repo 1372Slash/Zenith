@@ -26,15 +26,12 @@ interface ShieldDao {
     @Update
     suspend fun updateShield(shield: ShieldEntity)
 
-    @Update
-    suspend fun updateAllShields(shields: List<ShieldEntity>)
-
     @Query("UPDATE shields SET remainingTimeMillis = timeLimitMinutes * 60 * 1000")
     suspend fun resetAllRemainingTimes()
 
     @Delete
     suspend fun deleteShield(shield: ShieldEntity)
-    
+
     @Query("SELECT EXISTS(SELECT 1 FROM shields WHERE packageName = :packageName LIMIT 1)")
     fun isAppShielded(packageName: String): Flow<Boolean>
 }

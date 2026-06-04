@@ -31,11 +31,11 @@ class UsageSyncManager(
     suspend fun syncUsageData() = syncMutex.withLock {
         val lastSyncTime = preferencesRepository.userPreferencesFlow.first().lastSyncTimestamp
         val currentTime = System.currentTimeMillis()
-        
+
         if (currentTime - lastSyncTime < 30000) return@withLock
 
         val pm = context.packageManager
-        
+
         val startOfToday = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -46,7 +46,7 @@ class UsageSyncManager(
         val queryStart = maxOf(startOfToday, lastSyncTime - 1800000L)
         val events = usageStatsManager.queryEvents(queryStart, currentTime)
         val event = UsageEvents.Event()
-        
+
         val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
         val launcherPackage = pm.resolveActivity(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY)
             ?.activityInfo?.packageName
@@ -147,7 +147,7 @@ class UsageSyncManager(
             cal.timeInMillis = current
             val dateStr = dateFormat.format(cal.time)
             val hour = cal.get(Calendar.HOUR_OF_DAY)
-            
+
             val nextHourStartCal = (cal.clone() as Calendar).apply {
                 add(Calendar.HOUR_OF_DAY, 1)
                 set(Calendar.MINUTE, 0)
@@ -164,7 +164,7 @@ class UsageSyncManager(
                     .getOrPut(hour) { mutableListOf() }
                     .add(UsageChunk(pkg, duration))
             }
-            
+
             if (chunkEnd <= current) break
             current = chunkEnd
         }
@@ -177,14 +177,14 @@ class UsageSyncManager(
         val calendarNow = Calendar.getInstance().apply { timeInMillis = now }
         val currentHour = calendarNow.get(Calendar.HOUR_OF_DAY)
         val currentDateStr = dateFormat.format(calendarNow.time)
-        
+
         val limit = 3600000L
         val finalEntities = mutableListOf<HourlyUsageEntity>()
         val carryOver = mutableListOf<UsageChunk>()
-        
+
         val sortedDates = buckets.keys.sorted().toMutableList()
         if (sortedDates.isEmpty() && carryOver.isEmpty()) return
-        
+
         var dateIdx = 0
         while (dateIdx < sortedDates.size || (carryOver.isNotEmpty() && dateIdx < 3)) {
             val date = if (dateIdx < sortedDates.size) {
@@ -195,12 +195,12 @@ class UsageSyncManager(
                 cal.time = try { dateFormat.parse(lastDate) } catch (_: Exception) { null } ?: break
                 cal.add(Calendar.DAY_OF_YEAR, 1)
                 val nextDate = dateFormat.format(cal.time)
-                
+
                 if (nextDate > currentDateStr) {
                     carryOver.clear()
                     break
                 }
-                
+
                 sortedDates.add(nextDate)
                 nextDate
             }
@@ -230,7 +230,7 @@ class UsageSyncManager(
 
                 val existingHourRecords = existingRecords.filter { it.hour == hour && it.packageName != "TOTAL" }
                 val currentHourAppState = existingHourRecords.associate { it.packageName to it.usageTimeMillis }.toMutableMap()
-                
+
                 combined.forEach { chunk ->
                     currentHourAppState[chunk.packageName] = (currentHourAppState[chunk.packageName] ?: 0L) + chunk.duration
                 }
@@ -241,13 +241,13 @@ class UsageSyncManager(
                 if (isPastHour && totalInHour > limit) {
                     var excess = totalInHour - limit
                     val sortedEntries = currentHourAppState.entries.sortedByDescending { it.value }
-                    
+
                     for (entry in sortedEntries) {
                         if (excess <= 0) break
                         val pkg = entry.key
                         val currentValue = currentHourAppState[pkg] ?: 0L
                         val toMove = minOf(currentValue, excess)
-                        
+
                         currentHourAppState[pkg] = currentValue - toMove
                         if (toMove > 0) {
                             carryOver.add(UsageChunk(pkg, toMove))
@@ -316,14 +316,14 @@ class UsageSyncManager(
         val dailyEntities = mutableListOf<com.etrisad.zenith.data.local.entity.DailyUsageEntity>()
 
         repository.isShieldsLoaded.first { it }
-        val allShields = repository.allShields.first() ?: emptyList()
+        val allShields = repository.allShields.first()
         val shieldPkgs = allShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.SHIELD }.map { it.packageName }.toSet()
         val goalPkgs = allShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL }.map { it.packageName }.toSet()
 
         dates.forEach { date ->
             val hourlyData = repository.getHourlyUsageForDateSync(date)
             if (hourlyData.isEmpty()) return@forEach
-            
+
             val existingDaily = repository.getDailyUsagesForDateSync(date)
             val existingDailyMap = existingDaily.associateBy { it.packageName }
 
@@ -336,10 +336,10 @@ class UsageSyncManager(
 
             val timeSinceMidnight = if (date == todayDateStr) {
                 val cal = Calendar.getInstance().apply { timeInMillis = now }
-                (cal.get(Calendar.HOUR_OF_DAY) * 3600000L) + 
-                (cal.get(Calendar.MINUTE) * 60000L) + 
-                (cal.get(Calendar.SECOND) * 1000L) + 
-                cal.get(Calendar.MILLISECOND)
+                (cal.get(Calendar.HOUR_OF_DAY) * 3600000L) +
+                        (cal.get(Calendar.MINUTE) * 60000L) +
+                        (cal.get(Calendar.SECOND) * 1000L) +
+                        cal.get(Calendar.MILLISECOND)
             } else 86400000L
 
             totalTime = totalTime.coerceAtMost(timeSinceMidnight)
@@ -352,7 +352,7 @@ class UsageSyncManager(
             appTotals.forEach { (pkg, time) ->
                 val existingPkgTime = existingDailyMap[pkg]?.usageTimeMillis ?: 0L
                 val finalPkgTime = maxOf(time, existingPkgTime).coerceAtMost(finalTotal)
-                
+
                 dailyEntities.add(
                     com.etrisad.zenith.data.local.entity.DailyUsageEntity(
                         id = existingDailyMap[pkg]?.id ?: 0,
