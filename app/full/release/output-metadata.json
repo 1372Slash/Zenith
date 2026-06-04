@@ -13,7 +13,7 @@
       "attributes": [],
       "versionCode": 7,
       "versionName": "1.5.3",
-      "outputFile": "app-full-release.apk"
+      "outputFile": "Zenith-full-1.5.3.apk"
     }
   ],
   "elementType": "File",
@@ -22,14 +22,14 @@
       "minApi": 28,
       "maxApi": 30,
       "baselineProfiles": [
-        "baselineProfiles/1/app-full-release.dm"
+        "baselineProfiles/1/Zenith-full-1.5.3.dm"
       ]
     },
     {
       "minApi": 31,
       "maxApi": 2147483647,
       "baselineProfiles": [
-        "baselineProfiles/0/app-full-release.dm"
+        "baselineProfiles/0/Zenith-full-1.5.3.dm"
       ]
     }
   ],

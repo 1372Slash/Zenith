@@ -44,7 +44,11 @@ object ScreenUsageHelper {
         val sessionCounts = mutableMapOf<String, Int>()
         val lastUsedMap = mutableMapOf<String, Long>()
 
-        val aggregatedStats = usageStatsManager.queryAndAggregateUsageStats(start, end)
+        val aggregatedStats = try {
+            usageStatsManager.queryAndAggregateUsageStats(start, end)
+        } catch (e: Exception) {
+            null
+        }
         aggregatedStats?.forEach { (pkg, stats) ->
             lastUsedMap[pkg] = stats.lastTimeUsed
         }
@@ -52,14 +56,18 @@ object ScreenUsageHelper {
         var activePkg: String? = null
         var activeStartTime = 0L
 
-        val events = usageStatsManager.queryEvents(start - MIDNIGHT_LOOKBACK_MS, end)
+        val events = try {
+            usageStatsManager.queryEvents(start - MIDNIGHT_LOOKBACK_MS, end)
+        } catch (e: Exception) {
+            null
+        }
         val event = UsageEvents.Event()
 
         var isScreenOn = false
 
         var totalSequentialUsage = 0L
 
-        while (events.hasNextEvent()) {
+        while (events?.hasNextEvent() == true) {
             events.getNextEvent(event)
             val pkg = event.packageName
             val time = event.timeStamp.coerceAtMost(end)

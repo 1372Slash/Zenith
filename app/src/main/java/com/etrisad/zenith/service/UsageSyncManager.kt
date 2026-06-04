@@ -44,7 +44,11 @@ class UsageSyncManager(
         }.timeInMillis
 
         val queryStart = maxOf(startOfToday, lastSyncTime - 1800000L)
-        val events = usageStatsManager.queryEvents(queryStart, currentTime)
+        val events = try {
+            usageStatsManager.queryEvents(queryStart, currentTime)
+        } catch (e: Exception) {
+            null
+        }
         val event = UsageEvents.Event()
 
         val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
@@ -58,7 +62,7 @@ class UsageSyncManager(
         val activeSessions = mutableMapOf<String, Long>()
         val hourlyBuckets = mutableMapOf<String, MutableMap<Int, MutableList<UsageChunk>>>()
 
-        while (events.hasNextEvent()) {
+        while (events?.hasNextEvent() == true) {
             events.getNextEvent(event)
             val pkg = event.packageName
             val time = event.timeStamp

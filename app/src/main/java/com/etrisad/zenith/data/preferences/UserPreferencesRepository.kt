@@ -556,13 +556,17 @@ class UserPreferencesRepository(private val context: Context) {
             val totalDuration = endTime - startTime
             val targetMillis = (totalDuration * 0.1).toLong()
 
-            val events = usageStatsManager.queryEvents(startTime - 30 * 60 * 1000L, actualEnd)
+            val events = try {
+                usageStatsManager.queryEvents(startTime - 30 * 60 * 1000L, actualEnd)
+            } catch (e: Exception) {
+                null
+            }
             val event = android.app.usage.UsageEvents.Event()
             val usageMap = mutableMapOf<String, Long>()
             var activePkg: String? = null
             var activeStartTime = startTime
 
-            while (events.hasNextEvent()) {
+            while (events?.hasNextEvent() == true) {
                 events.getNextEvent(event)
                 val pkg = event.packageName
                 val time = event.timeStamp

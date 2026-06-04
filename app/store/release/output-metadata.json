@@ -13,7 +13,7 @@
       "attributes": [],
       "versionCode": 7,
       "versionName": "1.5.3",
-      "outputFile": "app-store-release.apk"
+      "outputFile": "Zenith-store-1.5.3.apk"
     }
   ],
   "elementType": "File",
@@ -22,14 +22,14 @@
       "minApi": 28,
       "maxApi": 30,
       "baselineProfiles": [
-        "baselineProfiles/1/app-store-release.dm"
+        "baselineProfiles/1/Zenith-store-1.5.3.dm"
       ]
     },
     {
       "minApi": 31,
       "maxApi": 2147483647,
       "baselineProfiles": [
-        "baselineProfiles/0/app-store-release.dm"
+        "baselineProfiles/0/Zenith-store-1.5.3.dm"
       ]
     }
   ],

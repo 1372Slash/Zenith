@@ -348,7 +348,11 @@ class HomeViewModel(
                 val start = getMidnight(i)
                 val end = if (i == 0) now else getMidnight(i - 1)
 
-                val events = usm.queryEvents(start - 1800000L, end)
+                val events = try {
+                    usm.queryEvents(start - 1800000L, end)
+                } catch (e: Exception) {
+                    null
+                }
                 val event = UsageEvents.Event()
 
                 val usageMap = mutableMapOf<String, Long>()
@@ -356,7 +360,7 @@ class HomeViewModel(
                 var activeStartTime = 0L
                 var isScreenOn = true
 
-                while (events.hasNextEvent()) {
+                while (events?.hasNextEvent() == true) {
                     events.getNextEvent(event)
                     val pkg = event.packageName
                     val time = event.timeStamp
@@ -700,14 +704,18 @@ class HomeViewModel(
             val dateStr = dateFormat.format(Date(start))
 
             val usageMap = mutableMapOf<String, Long>()
-            val events = usm.queryEvents(start - 1800000L, end)
+            val events = try {
+                usm.queryEvents(start - 1800000L, end)
+            } catch (e: Exception) {
+                null
+            }
             val event = UsageEvents.Event()
 
             var activePkg: String? = null
             var activeStartTime = 0L
             var isScreenOn = true
 
-            while (events.hasNextEvent()) {
+            while (events?.hasNextEvent() == true) {
                 events.getNextEvent(event)
                 val pkg = event.packageName
                 val time = event.timeStamp
@@ -801,7 +809,11 @@ class HomeViewModel(
             val end = if (i == 0) now else getMidnight(i - 1)
             val dateStr = dateFormat.format(Date(start))
 
-            val events = usm.queryEvents(start - 1800000L, end)
+            val events = try {
+                usm.queryEvents(start - 1800000L, end)
+            } catch (e: Exception) {
+                null
+            }
             val event = UsageEvents.Event()
 
             var activePkg: String? = null
@@ -809,7 +821,7 @@ class HomeViewModel(
             var isScreenOn = true
             var dayUsage = 0L
 
-            while (events.hasNextEvent()) {
+            while (events?.hasNextEvent() == true) {
                 events.getNextEvent(event)
                 val pkg = event.packageName
                 val time = event.timeStamp
@@ -976,17 +988,21 @@ class HomeViewModel(
                             it.packageName != "OTHER_TOTAL"
                 }
 
-                val dayStats = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    usm.queryAndAggregateUsageStats(dayStart, dayEnd)
+                val dayStats = try {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        usm.queryAndAggregateUsageStats(dayStart, dayEnd)
+                    }
+                } catch (e: Exception) {
+                    null
                 }
 
                 if (dbAppRecords.isNotEmpty()) {
                     dbAppRecords.forEach { record ->
                         appTotals[record.packageName] = record.usageTimeMillis
-                        lastUsedMap[record.packageName] = dayStats[record.packageName]?.lastTimeUsed ?: 0L
+                        lastUsedMap[record.packageName] = dayStats?.get(record.packageName)?.lastTimeUsed ?: 0L
                     }
                 } else {
-                    dayStats.forEach { (pkg, stat) ->
+                    dayStats?.forEach { (pkg, stat) ->
                         if (pkg in excludePackages || pkg !in launcherApps) return@forEach
                         val time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
                         if (time > 0) {

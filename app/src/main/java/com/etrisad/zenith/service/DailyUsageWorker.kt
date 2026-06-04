@@ -73,12 +73,16 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val launcherPackage = pm.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
         val excludePackages = setOfNotNull(applicationContext.packageName, launcherPackage)
 
-        val stats = usm.queryAndAggregateUsageStats(startTime, endTime)
+        val stats = try {
+            usm.queryAndAggregateUsageStats(startTime, endTime)
+        } catch (e: Exception) {
+            null
+        }
         val timeSinceMidnight = if (isDateToday) (System.currentTimeMillis() - startTime).coerceAtLeast(0L) else (24 * 60 * 60 * 1000L)
         
         val detailedUsage = if (isDateToday) com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm) else null
 
-        stats.forEach { (pkg, stat) ->
+        stats?.forEach { (pkg, stat) ->
             if (pkg !in excludePackages && pkg in launcherApps) {
                 var time = stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
 
@@ -90,14 +94,18 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
             }
         }
 
-        val events = usm.queryEvents(startTime - 1800000L, System.currentTimeMillis().coerceAtMost(endTime))
+        val events = try {
+            usm.queryEvents(startTime - 1800000L, System.currentTimeMillis().coerceAtMost(endTime))
+        } catch (e: Exception) {
+            null
+        }
         val event = android.app.usage.UsageEvents.Event()
         val androidTotals = mutableMapOf<String, Long>()
         var activePkg: String? = null
         var activeStartTime = 0L
         var isScreenOn = true
 
-        while (events.hasNextEvent()) {
+        while (events?.hasNextEvent() == true) {
             events.getNextEvent(event)
             val time = event.timeStamp
             when (event.eventType) {
