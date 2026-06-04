@@ -24,7 +24,9 @@ import com.etrisad.zenith.ui.viewmodel.FocusViewModel
 import com.etrisad.zenith.ui.viewmodel.FocusViewModelFactory
 import com.etrisad.zenith.util.BackupUtils
 import com.etrisad.zenith.worker.BackupManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 @Composable
 fun SettingsCategoryScreen(
@@ -60,18 +62,25 @@ fun SettingsCategoryScreen(
     )
     
     val backupLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+        contract = ActivityResultContracts.CreateDocument("application/zip"),
         onResult = { uri ->
             uri?.let {
                 coroutineScope.launch {
+                    val progressToast = Toast.makeText(context, "Creating backup...", Toast.LENGTH_SHORT)
+                    progressToast.show()
+                    
                     try {
-                        UsageSyncManager(context, app.shieldRepository, app.userPreferencesRepository).syncUsageData()
+                        withTimeout(15000) {
+                            UsageSyncManager(context, app.shieldRepository, app.userPreferencesRepository).syncUsageData()
+                        }
                     } catch (_: Exception) {}
 
                     BackupUtils.backupDatabase(context, it).onSuccess {
                         preferencesRepository.setLastBackupTimestamp(System.currentTimeMillis())
+                        progressToast.cancel()
                         Toast.makeText(context, "Backup successful!", Toast.LENGTH_SHORT).show()
                     }.onFailure { e ->
+                        progressToast.cancel()
                         Toast.makeText(context, "Backup failed: ${e.message}", Toast.LENGTH_LONG).show()
                     }
                 }
@@ -289,6 +298,7 @@ fun SettingsCategoryScreen(
                             }
 
                             Toast.makeText(context, "Restore successful! Restarting app...", Toast.LENGTH_LONG).show()
+                            delay(1500)
                             BackupUtils.restartApp(context)
                         }.onFailure { e ->
                             Toast.makeText(context, "Restore failed: ${e.message}", Toast.LENGTH_LONG).show()

@@ -49,11 +49,6 @@ object BackupUtils {
             val dbShm = File("${dbFile.path}-shm")
             val prefsFile = File(context.filesDir, "datastore/$PREFS_FILE_NAME")
 
-            try {
-                val db = ZenithDatabase.getDatabase(context)
-                db.openHelper.writableDatabase.execSQL("PRAGMA wal_checkpoint(FULL)")
-            } catch (_: Exception) {}
-
             context.contentResolver.openOutputStream(targetUri)?.use { outputStream ->
                 ZipOutputStream(outputStream).use { zipOut ->
                     if (dbFile.exists()) {
@@ -78,29 +73,33 @@ object BackupUtils {
 
     suspend fun restoreDatabase(context: Context, sourceUri: Uri): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            ZenithDatabase.closeDatabase()
+            ZenithDatabase.enterMaintenanceMode()
+
+            val dbFile = context.getDatabasePath(DATABASE_NAME)
+            val dbPath = dbFile.path
+            var hasWalInZip = false
 
             context.contentResolver.openInputStream(sourceUri)?.use { inputStream ->
                 ZipInputStream(inputStream).use { zipIn ->
                     var entry: ZipEntry? = zipIn.nextEntry
                     while (entry != null) {
-                        when {
-                            entry.name == DATABASE_NAME -> {
-                                val dbFile = context.getDatabasePath(DATABASE_NAME)
+                        when (entry.name) {
+                            DATABASE_NAME -> {
                                 dbFile.parentFile?.mkdirs()
                                 FileOutputStream(dbFile).use { zipIn.copyTo(it) }
                             }
-                            entry.name == "$DATABASE_NAME-wal" -> {
-                                val walFile = File("${context.getDatabasePath(DATABASE_NAME).path}-wal")
+                            "$DATABASE_NAME-wal" -> {
+                                hasWalInZip = true
+                                val walFile = File("$dbPath-wal")
                                 walFile.parentFile?.mkdirs()
                                 FileOutputStream(walFile).use { zipIn.copyTo(it) }
                             }
-                            entry.name == "$DATABASE_NAME-shm" -> {
-                                val shmFile = File("${context.getDatabasePath(DATABASE_NAME).path}-shm")
+                            "$DATABASE_NAME-shm" -> {
+                                val shmFile = File("$dbPath-shm")
                                 shmFile.parentFile?.mkdirs()
                                 FileOutputStream(shmFile).use { zipIn.copyTo(it) }
                             }
-                            entry.name == PREFS_FILE_NAME -> {
+                            PREFS_FILE_NAME -> {
                                 val prefsFile = File(context.filesDir, "datastore/$PREFS_FILE_NAME")
                                 prefsFile.parentFile?.mkdirs()
                                 FileOutputStream(prefsFile).use { zipIn.copyTo(it) }
@@ -112,24 +111,15 @@ object BackupUtils {
                 }
             }
 
-            val dbPath = context.getDatabasePath(DATABASE_NAME).path
-            context.contentResolver.openInputStream(sourceUri)?.use { input ->
-                ZipInputStream(input).use { zipIn ->
-                    var hasWal = false
-                    var entry = zipIn.nextEntry
-                    while (entry != null) {
-                        if (entry.name.endsWith("-wal")) hasWal = true
-                        entry = zipIn.nextEntry
-                    }
-                    if (!hasWal) {
-                        File("$dbPath-wal").delete()
-                        File("$dbPath-shm").delete()
-                    }
-                }
+            if (!hasWalInZip) {
+                File("$dbPath-wal").delete()
+                File("$dbPath-shm").delete()
             }
 
+            ZenithDatabase.exitMaintenanceMode()
             Result.success(Unit)
         } catch (e: Exception) {
+            ZenithDatabase.exitMaintenanceMode()
             Result.failure(e)
         }
     }

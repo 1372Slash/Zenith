@@ -49,6 +49,9 @@ abstract class ZenithDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: ZenithDatabase? = null
 
+        @Volatile
+        private var isMaintenanceMode: Boolean = false
+
         private val MIGRATION_21_22 = object : Migration(21, 22) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 try {
@@ -208,9 +211,18 @@ abstract class ZenithDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): ZenithDatabase {
             val current = INSTANCE
-            if (current != null) {
+            if (current != null && !isMaintenanceMode) {
                 return current
             }
+
+            if (isMaintenanceMode) {
+                var retryCount = 0
+                while (isMaintenanceMode && retryCount < 50) {
+                    try { Thread.sleep(100) } catch (_: Exception) {}
+                    retryCount++
+                }
+            }
+
             return synchronized(this) {
                 val current2 = INSTANCE
                 if (current2 != null) {
@@ -240,8 +252,24 @@ abstract class ZenithDatabase : RoomDatabase() {
 
 
         fun closeDatabase() {
-            INSTANCE?.close()
-            INSTANCE = null
+            synchronized(this) {
+                INSTANCE?.close()
+                INSTANCE = null
+            }
+        }
+
+        fun enterMaintenanceMode() {
+            synchronized(this) {
+                isMaintenanceMode = true
+                INSTANCE?.close()
+                INSTANCE = null
+            }
+        }
+
+        fun exitMaintenanceMode() {
+            synchronized(this) {
+                isMaintenanceMode = false
+            }
         }
     }
 }
