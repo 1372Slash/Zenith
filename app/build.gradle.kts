@@ -57,6 +57,14 @@ android {
         compose = true
         buildConfig = true
     }
+
+    applicationVariants.all {
+        val variant = this
+        variant.outputs.all {
+            val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            output.outputFileName = "Zenith-${variant.flavorName}-${variant.versionName}.apk"
+        }
+    }
 }
 
 androidComponents {
