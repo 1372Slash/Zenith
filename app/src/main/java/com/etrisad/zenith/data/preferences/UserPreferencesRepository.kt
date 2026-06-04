@@ -131,6 +131,7 @@ class UserPreferencesRepository(private val context: Context) {
         val GS_B_GRAD = floatPreferencesKey("gs_b_grad")
         val GS_B_SLNT = floatPreferencesKey("gs_b_slnt")
         val GS_B_ROND = floatPreferencesKey("gs_b_rond")
+        val STREAK_RECOVERY_PERFORMED = booleanPreferencesKey("streak_recovery_performed")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -228,8 +229,9 @@ class UserPreferencesRepository(private val context: Context) {
                         grade = preferences[PreferencesKeys.GS_B_GRAD] ?: 0f,
                         slant = preferences[PreferencesKeys.GS_B_SLNT] ?: 0f,
                         roundness = preferences[PreferencesKeys.GS_B_ROND] ?: 0f
-                    )
-                )
+                    ),
+                ),
+                streakRecoveryPerformed = preferences[PreferencesKeys.STREAK_RECOVERY_PERFORMED] ?: false
             )
         }
 
@@ -380,16 +382,39 @@ class UserPreferencesRepository(private val context: Context) {
         val globalHistory = dbUsage.filter { it.packageName == "TOTAL" }
 
         var pastStreak = 0
+        var foundDefiniteFailure = false
         val c = Calendar.getInstance()
         for (i in 1..365) {
             c.timeInMillis = todayStart; c.add(Calendar.DAY_OF_YEAR, -i)
             val dStr = dateFormat.format(c.time)
-            val usage = globalHistory.find { it.date == dStr }?.usageTimeMillis
-            if (usage != null && usage <= targetMillis) pastStreak++ else break
+            var usage = globalHistory.find { it.date == dStr }?.usageTimeMillis
+
+            if (usage == null && i <= 30) {
+                usage = fetchSystemTotalUsageForDate(usageStatsManager, c.timeInMillis, launcherApps, excludePackages)
+                if (usage <= 0L && i > 14) usage = null
+            }
+
+            if (usage != null) {
+                if (usage <= targetMillis) pastStreak++
+                else { foundDefiniteFailure = true; break }
+            } else break
         }
 
         val isSuccessToday = totalToday <= targetMillis
-        val liveStreak = if (isSuccessToday) pastStreak + 1 else 0
+        var liveStreak = if (isSuccessToday) pastStreak + 1 else 0
+        if (!prefs.streakRecoveryPerformed && liveStreak < prefs.globalBestStreak && isSuccessToday && !foundDefiniteFailure) {
+            var provenDays = 1
+            for (j in 1..3) {
+                val cal = Calendar.getInstance().apply { timeInMillis = todayStart; add(Calendar.DAY_OF_YEAR, -j) }
+                val u = globalHistory.find { it.date == dateFormat.format(cal.time) }?.usageTimeMillis
+                    ?: fetchSystemTotalUsageForDate(usageStatsManager, cal.timeInMillis, launcherApps, excludePackages)
+                if (u <= targetMillis) provenDays++ else break
+            }
+            if (provenDays >= 3) {
+                liveStreak = maxOf(liveStreak, prefs.globalBestStreak)
+                setStreakRecoveryPerformed(true)
+            }
+        }
 
         var bestStreak = prefs.globalBestStreak
         var tempStreak = 0
@@ -435,6 +460,7 @@ class UserPreferencesRepository(private val context: Context) {
             val todayUsage = todayUsageMap[pkg] ?: 0L
 
             var pastStreak = 0
+            var foundDefiniteFailure = false
             val todayStart = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
             }.timeInMillis
@@ -443,19 +469,40 @@ class UserPreferencesRepository(private val context: Context) {
             for (i in 1..365) {
                 c.timeInMillis = todayStart; c.add(Calendar.DAY_OF_YEAR, -i)
                 val dStr = dateFormat.format(c.time)
-                val usage = history.find { it.date == dStr }?.usageTimeMillis
+                var usage = history.find { it.date == dStr }?.usageTimeMillis
+
+                if (usage == null && i <= 30) {
+                    usage = fetchSystemAppUsageForDate(usageStatsManager, pkg, c.timeInMillis)
+                    if (usage <= 0L && i > 14 && shield.type == FocusType.GOAL) usage = null
+                }
+
                 if (usage != null) {
                     val success = if (shield.type == FocusType.GOAL) usage >= limitMillis else usage <= limitMillis
-                    if (success) pastStreak++ else break
+                    if (success) pastStreak++ else { foundDefiniteFailure = true; break }
                 } else break
             }
 
             val isSuccessToday = if (shield.type == FocusType.GOAL) todayUsage >= limitMillis else todayUsage <= limitMillis
 
-            val currentStreak = if (shield.type == FocusType.GOAL) {
+            var currentStreak = if (shield.type == FocusType.GOAL) {
                 if (isSuccessToday) pastStreak + 1 else pastStreak
             } else {
                 if (isSuccessToday) pastStreak + 1 else 0
+            }
+            val prefs = userPreferencesFlow.first()
+            if (!prefs.streakRecoveryPerformed && currentStreak < shield.bestStreak && isSuccessToday && !foundDefiniteFailure) {
+                var provenDays = 1
+                for (j in 1..3) {
+                    val cal = Calendar.getInstance().apply { timeInMillis = todayStart; add(Calendar.DAY_OF_YEAR, -j) }
+                    val u = history.find { it.date == dateFormat.format(cal.time) }?.usageTimeMillis
+                        ?: fetchSystemAppUsageForDate(usageStatsManager, pkg, cal.timeInMillis)
+                    val success = if (shield.type == FocusType.GOAL) u >= limitMillis else u <= limitMillis
+                    if (success) provenDays++ else break
+                }
+                if (provenDays >= 3) {
+                    currentStreak = maxOf(currentStreak, shield.bestStreak)
+                    setStreakRecoveryPerformed(true)
+                }
             }
 
             var bestStreak = shield.bestStreak
@@ -838,6 +885,44 @@ class UserPreferencesRepository(private val context: Context) {
         }
     }
 
+    suspend fun setStreakRecoveryPerformed(performed: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.STREAK_RECOVERY_PERFORMED] = performed }
+    }
+
+    private fun fetchSystemTotalUsageForDate(
+        usm: UsageStatsManager,
+        startTime: Long,
+        launcherApps: Set<String>,
+        excludePackages: Set<String>
+    ): Long {
+        val stats = try {
+            usm.queryAndAggregateUsageStats(startTime, startTime + 86400000L)
+        } catch (e: Exception) {
+            null
+        }
+        var total = 0L
+        stats?.forEach { (pkg, stat) ->
+            if (pkg in launcherApps && pkg !in excludePackages) {
+                total += stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+            }
+        }
+        return total
+    }
+
+    private fun fetchSystemAppUsageForDate(
+        usm: UsageStatsManager,
+        packageName: String,
+        startTime: Long
+    ): Long {
+        val stats = try {
+            usm.queryAndAggregateUsageStats(startTime, startTime + 86400000L)
+        } catch (e: Exception) {
+            null
+        }
+        val stat = stats?.get(packageName) ?: return 0L
+        return stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+    }
+
     suspend fun resetCustomDelays() {
         context.dataStore.edit { preferences ->
             preferences.remove(PreferencesKeys.DELAY_POWER_SAVE); preferences.remove(PreferencesKeys.DELAY_OVERLAY_SHOWING); preferences.remove(PreferencesKeys.DELAY_GOAL_NEAR)
@@ -913,5 +998,6 @@ data class UserPreferences(
     val mindfulGatewayEnabled: Boolean = false,
     val refreshOnOpenUsageStats: Boolean = false,
     val checkUpdateOnStart: Boolean = false,
-    val gsFlexSettings: GSFlexSettings = GSFlexSettings()
+    val gsFlexSettings: GSFlexSettings = GSFlexSettings(),
+    val streakRecoveryPerformed: Boolean = false
 )
