@@ -192,8 +192,8 @@ fun DeveloperSettings(
 
             Spacer(modifier = Modifier.height(4.dp))
             SettingsActionItem(
-                title = "Reset Streak Recovery Flag",
-                summary = "Allow automatic streak recovery to run one more time",
+                title = "Run Streak Recovery",
+                summary = "Manually verify and restore streaks from system history",
                 onClick = onResetStreakRecovery,
                 icon = Icons.Outlined.RestartAlt,
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)

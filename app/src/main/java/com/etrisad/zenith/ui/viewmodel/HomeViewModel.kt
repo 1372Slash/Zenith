@@ -1616,7 +1616,7 @@ class HomeViewModel(
                 refreshUsageStats(showLoading = false)
                 refreshCurrentAppDetailUsage()
 
-                delay(5000)
+                delay(15000)
             }
         }
     }

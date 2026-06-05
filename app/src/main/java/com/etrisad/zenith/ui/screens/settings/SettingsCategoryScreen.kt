@@ -234,9 +234,12 @@ fun SettingsCategoryScreen(
                         onResetBedtimeStreak = { coroutineScope.launch { preferencesRepository.resetBedtimeStreak() } },
                         onResetStreakRecovery = {
                             coroutineScope.launch {
-                                preferencesRepository.setLastStreakCheckDate("")
-                                preferencesRepository.setStreakRecoveryPerformed(false)
-                                Toast.makeText(context, "Recovery flag reset. Streak will be checked on next refresh.", Toast.LENGTH_SHORT).show()
+                                try {
+                                    preferencesRepository.runManualStreakRecovery(app.shieldRepository)
+                                    Toast.makeText(context, "Streak recovery completed successfully!", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Recovery failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         },
                         onUpdateAppStreak = { pkg, streak ->

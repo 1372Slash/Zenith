@@ -111,15 +111,6 @@ class FocusViewModel(
         updateShieldedJob?.cancel()
         updateShieldedJob = viewModelScope.launch {
             try {
-                val initialShields = latestShields.filter { it.type == FocusType.SHIELD }
-                val initialGoals = latestShields.filter { it.type == FocusType.GOAL }
-                _uiState.update { currentState ->
-                    currentState.copy(
-                        activeShields = sortShields(initialShields, currentState.shieldSortType),
-                        activeGoals = sortShields(initialGoals, currentState.goalSortType)
-                    )
-                }
-
                 val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
 
                 val accurateUsageMap = withContext(Dispatchers.IO) {
@@ -134,7 +125,19 @@ class FocusViewModel(
                 val liveShields = latestShields.map { shield ->
                     val usage = accurateUsageMap[shield.packageName] ?: 0L
                     val limitMillis = shield.timeLimitMinutes * 60 * 1000L
-                    shield.copy(remainingTimeMillis = (limitMillis - usage).coerceAtLeast(0L))
+                    val liveRemaining = (limitMillis - usage).coerceAtLeast(0L)
+                    
+                    // Stability fix: remaining time should only decrease during the same day.
+                    // We take the minimum of live usage-based remaining time and stored remaining time.
+                    val finalRemaining = if (shield.remainingTimeMillis > 0 && liveRemaining > shield.remainingTimeMillis) {
+                        // If live remaining is GREATER than stored, it means USM reported LESS usage than we already recorded.
+                        // This can happen due to USM's asynchronous nature. We stick with the lower remaining time.
+                        shield.remainingTimeMillis
+                    } else {
+                        liveRemaining
+                    }
+                    
+                    shield.copy(remainingTimeMillis = finalRemaining)
                 }
 
                 val shields = liveShields.filter { it.type == FocusType.SHIELD }

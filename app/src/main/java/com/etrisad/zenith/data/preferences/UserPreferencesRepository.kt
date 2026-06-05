@@ -401,20 +401,7 @@ class UserPreferencesRepository(private val context: Context) {
         }
 
         val isSuccessToday = totalToday <= targetMillis
-        var liveStreak = if (isSuccessToday) pastStreak + 1 else 0
-        if (!prefs.streakRecoveryPerformed && liveStreak < prefs.globalBestStreak && isSuccessToday && !foundDefiniteFailure) {
-            var provenDays = 1
-            for (j in 1..3) {
-                val cal = Calendar.getInstance().apply { timeInMillis = todayStart; add(Calendar.DAY_OF_YEAR, -j) }
-                val u = globalHistory.find { it.date == dateFormat.format(cal.time) }?.usageTimeMillis
-                    ?: fetchSystemTotalUsageForDate(usageStatsManager, cal.timeInMillis, launcherApps, excludePackages)
-                if (u <= targetMillis) provenDays++ else break
-            }
-            if (provenDays >= 3) {
-                liveStreak = maxOf(liveStreak, prefs.globalBestStreak)
-                setStreakRecoveryPerformed(true)
-            }
-        }
+        val liveStreak = if (isSuccessToday) pastStreak + 1 else 0
 
         var bestStreak = prefs.globalBestStreak
         var tempStreak = 0
@@ -484,25 +471,10 @@ class UserPreferencesRepository(private val context: Context) {
 
             val isSuccessToday = if (shield.type == FocusType.GOAL) todayUsage >= limitMillis else todayUsage <= limitMillis
 
-            var currentStreak = if (shield.type == FocusType.GOAL) {
+            val currentStreak = if (shield.type == FocusType.GOAL) {
                 if (isSuccessToday) pastStreak + 1 else pastStreak
             } else {
                 if (isSuccessToday) pastStreak + 1 else 0
-            }
-            val prefs = userPreferencesFlow.first()
-            if (!prefs.streakRecoveryPerformed && currentStreak < shield.bestStreak && isSuccessToday && !foundDefiniteFailure) {
-                var provenDays = 1
-                for (j in 1..3) {
-                    val cal = Calendar.getInstance().apply { timeInMillis = todayStart; add(Calendar.DAY_OF_YEAR, -j) }
-                    val u = history.find { it.date == dateFormat.format(cal.time) }?.usageTimeMillis
-                        ?: fetchSystemAppUsageForDate(usageStatsManager, pkg, cal.timeInMillis)
-                    val success = if (shield.type == FocusType.GOAL) u >= limitMillis else u <= limitMillis
-                    if (success) provenDays++ else break
-                }
-                if (provenDays >= 3) {
-                    currentStreak = maxOf(currentStreak, shield.bestStreak)
-                    setStreakRecoveryPerformed(true)
-                }
             }
 
             var bestStreak = shield.bestStreak
@@ -882,6 +854,91 @@ class UserPreferencesRepository(private val context: Context) {
             preferences[PreferencesKeys.GS_B_GRAD] = settings.body.grade
             preferences[PreferencesKeys.GS_B_SLNT] = settings.body.slant
             preferences[PreferencesKeys.GS_B_ROND] = settings.body.roundness
+        }
+    }
+
+    suspend fun runManualStreakRecovery(shieldRepository: ShieldRepository) {
+        val prefs = userPreferencesFlow.first()
+        val targetMillis = prefs.screenTimeTargetMinutes * 60 * 1000L
+        val dbUsage = shieldRepository.getAllUsage().first()
+        val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val calendar = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
+        val todayStart = calendar.timeInMillis
+        if (targetMillis > 0) {
+            val (launcherApps, launcherPackage) = try {
+                val pm = context.packageManager
+                val apps = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0).map { it.activityInfo.packageName }.toSet()
+                val lPkg = pm.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
+                apps to lPkg
+            } catch (_: Exception) { emptySet<String>() to null }
+            val excludePackages = setOfNotNull(context.packageName, launcherPackage)
+
+            val globalHistory = dbUsage.filter { it.packageName == "TOTAL" }
+            var pastStreak = 0
+            for (i in 1..365) {
+                val c = Calendar.getInstance().apply { timeInMillis = todayStart; add(Calendar.DAY_OF_YEAR, -i) }
+                val dStr = dateFormat.format(c.time)
+                val usage = globalHistory.find { it.date == dStr }?.usageTimeMillis
+                    ?: fetchSystemTotalUsageForDate(usageStatsManager, c.timeInMillis, launcherApps, excludePackages)
+                if (usage <= targetMillis) pastStreak++ else break
+            }
+
+            val stats = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager).appUsageMap
+            var totalToday = 0L
+            stats.forEach { (pkg, time) -> if (pkg !in excludePackages && pkg in launcherApps) totalToday += time }
+
+            val isSuccessToday = totalToday <= targetMillis
+            if (isSuccessToday && (pastStreak + 1) < prefs.globalBestStreak) {
+                var provenDays = 1
+                for (j in 1..3) {
+                    val cal = Calendar.getInstance().apply { timeInMillis = todayStart; add(Calendar.DAY_OF_YEAR, -j) }
+                    val u = globalHistory.find { it.date == dateFormat.format(cal.time) }?.usageTimeMillis
+                        ?: fetchSystemTotalUsageForDate(usageStatsManager, cal.timeInMillis, launcherApps, excludePackages)
+                    if (u <= targetMillis) provenDays++ else break
+                }
+                if (provenDays >= 3) {
+                    updateGlobalStreak(maxOf(pastStreak + 1, prefs.globalBestStreak), prefs.globalBestStreak, System.currentTimeMillis())
+                }
+            }
+        }
+        val shields = shieldRepository.allShields.first()
+        val allUsage = dbUsage.groupBy { it.packageName }
+        val todayUsageMap = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager).appUsageMap
+
+        shields.forEach { shield ->
+            val pkg = shield.packageName
+            val history = allUsage[pkg] ?: emptyList()
+            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+            if (limitMillis <= 0 && shield.type == FocusType.SHIELD) return@forEach
+
+            var pastStreak = 0
+            for (i in 1..365) {
+                val c = Calendar.getInstance().apply { timeInMillis = todayStart; add(Calendar.DAY_OF_YEAR, -i) }
+                val dStr = dateFormat.format(c.time)
+                val usage = history.find { it.date == dStr }?.usageTimeMillis
+                    ?: fetchSystemAppUsageForDate(usageStatsManager, pkg, c.timeInMillis)
+                val success = if (shield.type == FocusType.GOAL) usage >= limitMillis else usage <= limitMillis
+                if (success) pastStreak++ else break
+            }
+
+            val todayUsage = todayUsageMap[pkg] ?: 0L
+            val isSuccessToday = if (shield.type == FocusType.GOAL) todayUsage >= limitMillis else todayUsage <= limitMillis
+            val currentStreak = if (shield.type == FocusType.GOAL) (if (isSuccessToday) pastStreak + 1 else pastStreak) else (if (isSuccessToday) pastStreak + 1 else 0)
+
+            if (isSuccessToday && currentStreak < shield.bestStreak) {
+                var provenDays = 1
+                for (j in 1..3) {
+                    val cal = Calendar.getInstance().apply { timeInMillis = todayStart; add(Calendar.DAY_OF_YEAR, -j) }
+                    val u = history.find { it.date == dateFormat.format(cal.time) }?.usageTimeMillis
+                        ?: fetchSystemAppUsageForDate(usageStatsManager, pkg, cal.timeInMillis)
+                    val success = if (shield.type == FocusType.GOAL) u >= limitMillis else u <= limitMillis
+                    if (success) provenDays++ else break
+                }
+                if (provenDays >= 3) {
+                    shieldRepository.updateShield(shield.copy(currentStreak = maxOf(currentStreak, shield.bestStreak)))
+                }
+            }
         }
     }
 
