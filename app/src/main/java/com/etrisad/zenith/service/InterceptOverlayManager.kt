@@ -62,7 +62,6 @@ class InterceptOverlayManager(
         private val SYSTEM_UI_PACKAGES = setOf(
             "com.android.systemui",
             "android",
-            "com.android.settings",
             "com.google.android.permissioncontroller",
             "com.google.android.packageinstaller"
         )

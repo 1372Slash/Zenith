@@ -1686,12 +1686,14 @@ class AppUsageMonitorService : Service() {
         val prefs = currentPreferences
         val isBedtimeOrWindDown = isBedtimeActive || (isWindDownActive && prefs?.bedtimeWindDownEnabled == true)
 
+        if (packageName in whitelistedPackages && packageName !in restrictedPackages) {
+            if (!isBedtimeOrWindDown || prefs?.mindfulGatewayEnabled != true) return true
+        }
+
         if (isBedtimeOrWindDown) {
             if (packageName in bedtimeWhitelistedPackages && packageName !in restrictedPackages) {
                 if (prefs?.mindfulGatewayEnabled != true) return true
             }
-        } else {
-            if (packageName in whitelistedPackages) return true
         }
 
         if (isKeyboardApp(packageName)) return true
