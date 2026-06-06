@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.outlined.TrendingDown
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
@@ -35,8 +36,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
 import androidx.graphics.shapes.toPath
+import coil.compose.SubcomposeAsyncImage
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -56,7 +57,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AppDetailScreen(
     packageName: String,
@@ -184,7 +185,6 @@ fun AppDetailScreen(
                         AppHeader(
                             appName = uiState.appName,
                             packageName = uiState.packageName,
-                            icon = uiState.icon,
                             focusType = uiState.type,
                             isActive = isFocusActive,
                             isPaused = isEffectivelyPaused,
@@ -369,7 +369,7 @@ fun AppDetailScreen(
 
 
     if (uiState.isSettingsSheetOpen) {
-        val appInfo = AppInfo(uiState.packageName, uiState.appName, uiState.icon)
+        val appInfo = AppInfo(uiState.packageName, uiState.appName)
         val existingShield = uiState.shieldEntity
         val focusType = uiState.type ?: FocusType.SHIELD
 
@@ -427,8 +427,7 @@ fun AppDetailScreen(
 @Composable
 fun AppHeader(
     appName: String,
-    @Suppress("UNUSED_PARAMETER") packageName: String,
-    icon: android.graphics.drawable.Drawable?,
+    packageName: String,
     focusType: FocusType?,
     isActive: Boolean,
     isPaused: Boolean = false,
@@ -461,15 +460,6 @@ fun AppHeader(
         ColorFilter.colorMatrix(matrix)
     }
 
-    val appIcon by produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, icon) {
-        val i = icon
-        if (i != null) {
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                value = i.toBitmap().asImageBitmap()
-            }
-        }
-    }
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -477,33 +467,32 @@ fun AppHeader(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(contentAlignment = Alignment.Center) {
-            val bitmapIcon = appIcon
-            if (bitmapIcon != null) {
-                Image(
-                    bitmap = bitmapIcon,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop,
-                    colorFilter = colorFilter
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Android,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = iconAlpha)
-                    )
+            SubcomposeAsyncImage(
+                model = "app-icon://$packageName",
+                contentDescription = null,
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop,
+                colorFilter = colorFilter,
+                alpha = iconAlpha,
+                error = {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Android,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = iconAlpha)
+                        )
+                    }
                 }
-            }
+            )
 
             shield?.let { s ->
                 androidx.compose.animation.AnimatedVisibility(
@@ -835,6 +824,7 @@ fun UsageTrendsRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun StreakCard(
     currentStreak: Int,
@@ -877,18 +867,9 @@ fun StreakCard(
             }
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                val sunnyShape = remember {
-                    GenericShape { size, _ ->
-                        val path = MaterialShapes.Sunny.toPath().asComposePath()
-                        val matrix = Matrix()
-                        matrix.scale(size.width, size.height)
-                        path.transform(matrix)
-                        addPath(path)
-                    }
-                }
                 Surface(
                     color = MaterialTheme.colorScheme.tertiary,
-                    shape = sunnyShape,
+                    shape = MaterialShapes.Sunny.toShape(),
                     modifier = Modifier.size(56.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {

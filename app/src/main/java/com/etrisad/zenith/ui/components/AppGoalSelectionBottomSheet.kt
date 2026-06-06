@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import kotlinx.coroutines.launch
@@ -46,12 +47,7 @@ fun AppGoalSelectionBottomSheet(
             } catch (_: Exception) {
                 pkg
             }
-            val icon = try {
-                pm.getApplicationIcon(pkg)
-            } catch (_: Exception) {
-                null
-            }
-            AppSelectionInfo(pkg, label, icon)
+            AppSelectionInfo(pkg, label)
         }
     }
 
@@ -113,7 +109,10 @@ fun AppGoalSelectionBottomSheet(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             AsyncImage(
-                                model = app.icon,
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data("app-icon://${app.packageName}")
+                                    .crossfade(500)
+                                    .build(),
                                 contentDescription = null,
                                 modifier = Modifier
                                     .size(48.dp)
@@ -138,6 +137,5 @@ fun AppGoalSelectionBottomSheet(
 
 data class AppSelectionInfo(
     val packageName: String,
-    val appName: String,
-    val icon: Any?
+    val appName: String
 )

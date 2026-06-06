@@ -25,8 +25,7 @@ import kotlinx.coroutines.withContext
 
 data class AppInfo(
     val packageName: String,
-    val appName: String,
-    val icon: Drawable?
+    val appName: String
 )
 
 data class FocusUiState(
@@ -126,12 +125,7 @@ class FocusViewModel(
                     val usage = accurateUsageMap[shield.packageName] ?: 0L
                     val limitMillis = shield.timeLimitMinutes * 60 * 1000L
                     val liveRemaining = (limitMillis - usage).coerceAtLeast(0L)
-                    
-                    // Stability fix: remaining time should only decrease during the same day.
-                    // We take the minimum of live usage-based remaining time and stored remaining time.
                     val finalRemaining = if (shield.remainingTimeMillis > 0 && liveRemaining > shield.remainingTimeMillis) {
-                        // If live remaining is GREATER than stored, it means USM reported LESS usage than we already recorded.
-                        // This can happen due to USM's asynchronous nature. We stick with the lower remaining time.
                         shield.remainingTimeMillis
                     } else {
                         liveRemaining
@@ -218,8 +212,7 @@ class FocusViewModel(
                         .map {
                             AppInfo(
                                 packageName = it.packageName,
-                                appName = pm.getApplicationLabel(it).toString(),
-                                icon = pm.getApplicationIcon(it)
+                                appName = pm.getApplicationLabel(it).toString()
                             )
                         }
                         .sortedBy { it.appName.lowercase() }
@@ -495,15 +488,7 @@ class FocusViewModel(
 
     fun editShield(shield: ShieldEntity) {
         viewModelScope.launch {
-            val appInfo = withContext(Dispatchers.IO) {
-                try {
-                    val pm = context.packageManager
-                    val app = pm.getApplicationInfo(shield.packageName, 0)
-                    AppInfo(shield.packageName, shield.appName, pm.getApplicationIcon(app))
-                } catch (e: Exception) {
-                    AppInfo(shield.packageName, shield.appName, null)
-                }
-            }
+            val appInfo = AppInfo(shield.packageName, shield.appName)
             val usage = withContext(Dispatchers.IO) {
                 getUsageTodayForPackage(shield.packageName)
             }

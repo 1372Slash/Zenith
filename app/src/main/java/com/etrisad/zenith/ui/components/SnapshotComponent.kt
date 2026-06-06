@@ -33,7 +33,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.drawable.toBitmap
+import coil.compose.AsyncImage
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.ui.viewmodel.AppUsageInfo
 import java.text.SimpleDateFormat
@@ -417,7 +417,7 @@ fun SnapshotCard(
 
                         val targetIndicatorSize = when {
                             isPendingToday -> 34.dp
-                            app.icon != null || app.packageName.isNotEmpty() -> 40.dp
+                            app.packageName.isNotEmpty() -> 40.dp
                             else -> 24.dp
                         }
 
@@ -527,12 +527,9 @@ fun SnapshotCard(
                                             modifier = Modifier.size(14.dp)
                                             
                                         )
-                                    } else if (app.icon != null) {
-                                        val appIcon = remember(app.icon) {
-                                            app.icon.toBitmap().asImageBitmap()
-                                        }
-                                        Image(
-                                            painter = BitmapPainter(appIcon),
+                                    } else if (app.packageName.isNotEmpty()) {
+                                        AsyncImage(
+                                            model = "app-icon://${app.packageName}",
                                             contentDescription = null,
                                             modifier = Modifier.size(28.dp).clip(CircleShape),
                                             contentScale = ContentScale.Crop

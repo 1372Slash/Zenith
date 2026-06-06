@@ -55,8 +55,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
-import androidx.graphics.shapes.toPath
+import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import kotlinx.coroutines.delay
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
@@ -656,16 +657,6 @@ fun ScheduleItem(
     onToggleSelection: () -> Unit = {}
 ) {
     val haptic = LocalHapticFeedback.current
-    val context = LocalContext.current
-    val appIcons = remember(schedule.packageNames) {
-        schedule.packageNames.take(4).mapNotNull { pkg ->
-            try {
-                context.packageManager.getApplicationIcon(pkg)
-            } catch (_: Exception) {
-                null
-            }
-        }
-    }
 
     val nowMillis by produceState(initialValue = System.currentTimeMillis()) {
         while (true) {
@@ -781,7 +772,7 @@ fun ScheduleItem(
                 leadingContent = {
                     Box(contentAlignment = Alignment.Center) {
                         MultiAppIconGroup(
-                            appIcons = appIcons,
+                            packageNames = schedule.packageNames.take(4),
                             totalCount = schedule.packageNames.size,
                             size = 40.dp
                         )
@@ -863,16 +854,6 @@ fun ShieldConfigItem(
     onToggleSelection: () -> Unit = {}
 ) {
     val haptic = LocalHapticFeedback.current
-    val context = LocalContext.current
-    val appIcon by produceState<android.graphics.drawable.Drawable?>(initialValue = null, shield.packageName) {
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            value = try {
-                context.packageManager.getApplicationIcon(shield.packageName)
-            } catch (_: Exception) {
-                null
-            }
-        }
-    }
 
     val isEffectivelyPaused = remember(shield.isPaused, shield.pauseEndTimestamp, nowMillis) {
         shield.isPaused && (shield.pauseEndTimestamp == 0L || nowMillis < shield.pauseEndTimestamp)
@@ -952,32 +933,34 @@ fun ShieldConfigItem(
                     modifier = Modifier.size(46.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    val icon = appIcon
-                    if (icon != null) {
-                        Image(
-                            painter = BitmapPainter(icon.toBitmap().asImageBitmap()),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop,
-                            colorFilter = colorFilter
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Android,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = iconAlpha)
-                            )
+                    SubcomposeAsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data("app-icon://${shield.packageName}")
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop,
+                        colorFilter = colorFilter,
+                        alpha = iconAlpha,
+                        error = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Android,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = iconAlpha)
+                                )
+                            }
                         }
-                    }
+                    )
 
                     androidx.compose.animation.AnimatedVisibility(
                         visible = shield.currentStreak > 0,

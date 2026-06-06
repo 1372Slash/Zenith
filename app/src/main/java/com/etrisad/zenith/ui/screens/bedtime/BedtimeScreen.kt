@@ -35,12 +35,14 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
-import androidx.graphics.shapes.toPath
+import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.components.UsageHistoryCard
@@ -1249,18 +1251,9 @@ fun BedtimeStreakCard(
             }
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                val sunnyShape = remember {
-                    GenericShape { size, _ ->
-                        val path = MaterialShapes.Sunny.toPath().asComposePath()
-                        val matrix = Matrix()
-                        matrix.scale(size.width, size.height)
-                        path.transform(matrix)
-                        addPath(path)
-                    }
-                }
                 Surface(
                     color = MaterialTheme.colorScheme.tertiary,
-                    shape = sunnyShape,
+                    shape = MaterialShapes.Sunny.toShape(),
                     modifier = Modifier.size(56.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -1386,39 +1379,32 @@ fun UsageItem(
                 )
             },
             leadingContent = {
-                val appIcon by produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, app.icon) {
-                    val icon = app.icon
-                    if (icon != null) {
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            value = icon.toBitmap().asImageBitmap()
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data("app-icon://${app.packageName}")
+                        .crossfade(500)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop,
+                    error = {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Android,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
                     }
-                }
-                val icon = appIcon
-                if (icon != null) {
-                    Image(
-                        painter = BitmapPainter(icon),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Android,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
+                )
             },
             colors = ListItemDefaults.colors(
                 containerColor = Color.Transparent

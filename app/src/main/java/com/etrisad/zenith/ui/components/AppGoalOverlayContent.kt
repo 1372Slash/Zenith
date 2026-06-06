@@ -35,11 +35,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.toPath
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 
 data class GoalAppInfo(
     val packageName: String,
-    val appName: String,
-    val icon: Any?
+    val appName: String
 )
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -88,12 +88,7 @@ fun AppGoalOverlayContent(
             } catch (e: Exception) {
                 pkg
             }
-            val icon = try {
-                context.packageManager.getApplicationIcon(pkg)
-            } catch (e: Exception) {
-                null
-            }
-            GoalAppInfo(pkg, label, icon)
+            GoalAppInfo(pkg, label)
         }
     }
 
@@ -408,7 +403,10 @@ private fun AppGoalMultiIconBox(
             if (appInfos.size > 1) {
                 Box(contentAlignment = Alignment.Center) {
                     AsyncImage(
-                        model = appInfos[0].icon,
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data("app-icon://${appInfos[0].packageName}")
+                            .crossfade(500)
+                            .build(),
                         contentDescription = null,
                         modifier = Modifier
                             .size(iconSize * 0.75f)
@@ -417,7 +415,12 @@ private fun AppGoalMultiIconBox(
                             .graphicsLayer { rotationZ = -rotationAngle * 0.4f }
                     )
                     AsyncImage(
-                        model = appInfos.getOrNull(1)?.icon,
+                        model = appInfos.getOrNull(1)?.let { 
+                            ImageRequest.Builder(LocalContext.current)
+                                .data("app-icon://${it.packageName}")
+                                .crossfade(500)
+                                .build()
+                        },
                         contentDescription = null,
                         modifier = Modifier
                             .size(iconSize * 0.75f)
@@ -428,7 +431,10 @@ private fun AppGoalMultiIconBox(
                 }
             } else if (appInfos.isNotEmpty()) {
                 AsyncImage(
-                    model = appInfos[0].icon,
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data("app-icon://${appInfos[0].packageName}")
+                        .crossfade(500)
+                        .build(),
                     contentDescription = null,
                     modifier = Modifier
                         .size(iconSize)

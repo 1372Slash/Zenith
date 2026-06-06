@@ -42,7 +42,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
+import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.ui.components.SnapshotSection
 import com.etrisad.zenith.ui.components.UsageHistoryCard
@@ -1673,26 +1675,20 @@ fun WeeklyStatsDoubleCard(
                         } else {
                             targetApps.take(3).forEach { app ->
                                 key(app.packageName) {
-                                    val appIcon by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, app.icon) {
-                                        app.icon?.let { icon ->
-                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                                value = icon.toBitmap().asImageBitmap()
-                                            }
-                                        }
-                                    }
-                                    if (appIcon != null) {
-                                        Image(
-                                            painter = BitmapPainter(appIcon!!),
-                                            contentDescription = null,
-                                            modifier = Modifier
-                                                .size(32.dp)
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.surface)
-                                                .padding(2.dp)
-                                                .clip(CircleShape),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    }
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data("app-icon://${app.packageName}")
+                                            .crossfade(500)
+                                            .build(),
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.surface)
+                                            .padding(2.dp)
+                                            .clip(CircleShape),
+                                        contentScale = ContentScale.Crop
+                                    )
                                 }
                             }
                         }
@@ -1759,39 +1755,32 @@ fun UsageItem(
                 )
             },
             leadingContent = {
-                val appIcon by produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, app.icon) {
-                    val icon = app.icon
-                    if (icon != null) {
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            value = icon.toBitmap().asImageBitmap()
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data("app-icon://${app.packageName}")
+                        .crossfade(500)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop,
+                    error = {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Android,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
                     }
-                }
-                val icon = appIcon
-                if (icon != null) {
-                    Image(
-                        painter = BitmapPainter(icon),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Android,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
+                )
             },
             colors = ListItemDefaults.colors(
                 containerColor = Color.Transparent

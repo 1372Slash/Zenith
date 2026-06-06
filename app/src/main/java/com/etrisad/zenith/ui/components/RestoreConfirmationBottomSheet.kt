@@ -368,18 +368,15 @@ private fun SnapshotDetail(
             if (topApp != null) {
                 val pkg = topApp.second
                 var appName = pkg
-                var icon: android.graphics.drawable.Drawable? = null
                 try {
                     val appInfo = pm.getApplicationInfo(pkg, 0)
                     appName = pm.getApplicationLabel(appInfo).toString()
-                    icon = pm.getApplicationIcon(appInfo)
                 } catch (_: Exception) {}
 
                 AppUsageInfo(
                     packageName = pkg,
                     appName = appName,
                     totalTimeVisible = topApp.third,
-                    icon = icon,
                     hasDatabaseRecord = true,
                     hasSystemData = false,
                     isLive = false

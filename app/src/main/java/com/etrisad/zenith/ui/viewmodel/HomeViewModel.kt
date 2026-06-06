@@ -28,7 +28,6 @@ data class AppUsageInfo(
     val packageName: String,
     val appName: String,
     val totalTimeVisible: Long,
-    val icon: android.graphics.drawable.Drawable? = null,
     val hasDatabaseRecord: Boolean = false,
     val hasSystemData: Boolean = false,
     val isLive: Boolean = false,
@@ -47,7 +46,6 @@ data class DailyUsage(
 data class AppDetailUiState(
     val packageName: String = "",
     val appName: String = "",
-    val icon: android.graphics.drawable.Drawable? = null,
     val type: com.etrisad.zenith.data.local.entity.FocusType? = null,
     val todayUsage: Long = 0L,
     val yesterdayUsage: Long = 0L,
@@ -148,7 +146,7 @@ class HomeViewModel(
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    private val appInfoCache = java.util.concurrent.ConcurrentHashMap<String, Pair<String, android.graphics.drawable.Drawable?>>()
+    private val appInfoCache = java.util.concurrent.ConcurrentHashMap<String, String>()
     private var refreshJob: Job? = null
 
     private var launcherAppsCache: Set<String>? = null
@@ -1021,8 +1019,7 @@ class HomeViewModel(
                                 try {
                                     val appInfo = pm.getApplicationInfo(pkg, 0)
                                     val label = pm.getApplicationLabel(appInfo).toString()
-                                    val icon = pm.getApplicationIcon(appInfo)
-                                    appInfoCache[pkg] = label to icon
+                                    appInfoCache[pkg] = label
                                 } catch (_: Exception) {}
                             }
                         }.awaitAll()
@@ -1035,14 +1032,13 @@ class HomeViewModel(
                 val lastUsed = lastUsedMap[pkg] ?: 0L
                 val cached = appInfoCache[pkg]
                 if (cached != null) {
-                    AppUsageInfo(pkg, cached.first, time, cached.second, sessionCount = sessions, lastTimeUsed = lastUsed)
+                    AppUsageInfo(pkg, cached, time, sessionCount = sessions, lastTimeUsed = lastUsed)
                 } else {
                     try {
                         val appInfo = pm.getApplicationInfo(pkg, 0)
                         val label = pm.getApplicationLabel(appInfo).toString()
-                        val icon = pm.getApplicationIcon(appInfo)
-                        appInfoCache[pkg] = label to icon
-                        AppUsageInfo(pkg, label, time, icon, sessionCount = sessions, lastTimeUsed = lastUsed)
+                        appInfoCache[pkg] = label
+                        AppUsageInfo(pkg, label, time, sessionCount = sessions, lastTimeUsed = lastUsed)
                     } catch (_: Exception) { null }
                 }
             }
@@ -1167,14 +1163,13 @@ class HomeViewModel(
                             val lastUsed = lastUsedMap[pkg] ?: 0L
                             val cached = appInfoCache[pkg]
                             if (cached != null) {
-                                AppUsageInfo(pkg, cached.first, duration, cached.second, lastTimeUsed = lastUsed)
+                                AppUsageInfo(pkg, cached, duration, lastTimeUsed = lastUsed)
                             } else {
                                 try {
                                     val appInfo = pm.getApplicationInfo(pkg, 0)
                                     val label = pm.getApplicationLabel(appInfo).toString()
-                                    val icon = pm.getApplicationIcon(appInfo)
-                                    appInfoCache[pkg] = label to icon
-                                    AppUsageInfo(pkg, label, duration, icon, lastTimeUsed = lastUsed)
+                                    appInfoCache[pkg] = label
+                                    AppUsageInfo(pkg, label, duration, lastTimeUsed = lastUsed)
                                 } catch (_: Exception) { null }
                             }
                         } else null
@@ -1207,14 +1202,13 @@ class HomeViewModel(
                             val lastUsed = lastUsedMap[pkg] ?: 0L
                             val cached = appInfoCache[pkg]
                             if (cached != null) {
-                                AppUsageInfo(pkg, cached.first, durationForThisHour, cached.second, lastTimeUsed = lastUsed)
+                                AppUsageInfo(pkg, cached, durationForThisHour, lastTimeUsed = lastUsed)
                             } else {
                                 try {
                                     val appInfo = pm.getApplicationInfo(pkg, 0)
                                     val label = pm.getApplicationLabel(appInfo).toString()
-                                    val icon = pm.getApplicationIcon(appInfo)
-                                    appInfoCache[pkg] = label to icon
-                                    AppUsageInfo(pkg, label, durationForThisHour, icon, lastTimeUsed = lastUsed)
+                                    appInfoCache[pkg] = label
+                                    AppUsageInfo(pkg, label, durationForThisHour, lastTimeUsed = lastUsed)
                                 } catch (_: Exception) { null }
                             }
                         } else null
@@ -1337,16 +1331,15 @@ class HomeViewModel(
                 if (topPackage != null && shouldShow) {
                     val cached = appInfoCache[topPackage]
                     if (cached != null) {
-                        snapshotStamps.add(AppUsageInfo(topPackage, cached.first, usageTime, cached.second, hasDb, hasSys, i == 0))
+                        snapshotStamps.add(AppUsageInfo(topPackage, cached, usageTime, hasDb, hasSys, i == 0))
                     } else {
                         try {
                             val appInfo = pm.getApplicationInfo(topPackage, 0)
                             val label = pm.getApplicationLabel(appInfo).toString()
-                            val icon = pm.getApplicationIcon(appInfo)
-                            appInfoCache[topPackage] = label to icon
-                            snapshotStamps.add(AppUsageInfo(topPackage, label, usageTime, icon, hasDb, hasSys, i == 0))
+                            appInfoCache[topPackage] = label
+                            snapshotStamps.add(AppUsageInfo(topPackage, label, usageTime, hasDb, hasSys, i == 0))
                         } catch (_: Exception) {
-                            snapshotStamps.add(AppUsageInfo(topPackage, topPackage, usageTime, null, hasDb, hasSys, i == 0))
+                            snapshotStamps.add(AppUsageInfo(topPackage, topPackage, usageTime, hasDatabaseRecord = hasDb, hasSystemData = hasSys, isLive = i == 0))
                         }
                     }
                 } else {
@@ -1403,14 +1396,12 @@ class HomeViewModel(
             val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
             var appName = packageName
-            var icon: android.graphics.drawable.Drawable? = null
             try {
                 val appInfo = pm.getApplicationInfo(packageName, 0)
                 appName = pm.getApplicationLabel(appInfo).toString()
-                icon    = pm.getApplicationIcon(appInfo)
             } catch (_: Exception) {}
 
-            _appDetailUiState.update { it.copy(appName = appName, icon = icon) }
+            _appDetailUiState.update { it.copy(appName = appName) }
 
             withContext(kotlinx.coroutines.Dispatchers.IO) {
                 if (detailFallbackMap.isEmpty() || forceRefresh || isNewPackage) {
@@ -1481,7 +1472,6 @@ class HomeViewModel(
                 _appDetailUiState.update { it.copy(
                     packageName      = packageName,
                     appName          = appName,
-                    icon             = icon,
                     type             = shield?.type,
                     todayUsage       = currentTodayUsage,
                     yesterdayUsage   = yesterdayUsage,
@@ -1802,16 +1792,15 @@ class HomeViewModel(
             val topApps = appUsageMap.entries.sortedByDescending { it.value }.take(3).map { (pkg, time) ->
                 val cached = appInfoCache[pkg]
                 if (cached != null) {
-                    AppUsageInfo(pkg, cached.first, time, cached.second)
+                    AppUsageInfo(pkg, cached, time)
                 } else {
                     try {
                         val appInfo = pm.getApplicationInfo(pkg, 0)
                         val label = pm.getApplicationLabel(appInfo).toString()
-                        val icon = pm.getApplicationIcon(appInfo)
-                        appInfoCache[pkg] = label to icon
-                        AppUsageInfo(pkg, label, time, icon)
+                        appInfoCache[pkg] = label
+                        AppUsageInfo(pkg, label, time)
                     } catch (_: Exception) {
-                        AppUsageInfo(pkg, pkg, time, null)
+                        AppUsageInfo(pkg, pkg, time)
                     }
                 }
             }

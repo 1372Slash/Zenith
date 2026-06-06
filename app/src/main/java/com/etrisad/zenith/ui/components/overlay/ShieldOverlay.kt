@@ -28,7 +28,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.drawable.toBitmap
+import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.UserPreferences
@@ -64,21 +66,6 @@ fun ShieldOverlay(
     val app = context.applicationContext as com.etrisad.zenith.ZenithApplication
     val shieldRepository = app.shieldRepository
     val scope = rememberCoroutineScope()
-
-    var appIconBitmap by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
-    DisposableEffect(packageName) {
-        val job = scope.launch(Dispatchers.IO) {
-            val bmp = try {
-                context.packageManager.getApplicationIcon(packageName)
-                    .toBitmap(120, 120).asImageBitmap()
-            } catch (_: Exception) { null }
-            withContext(Dispatchers.Main) { appIconBitmap = bmp }
-        }
-        onDispose {
-            job.cancel()
-            appIconBitmap = null
-        }
-    }
 
     val combinedStateState = produceState(
         initialValue = Triple(shield, totalUsageToday, totalGlobalUsageToday),
@@ -368,7 +355,7 @@ fun ShieldOverlay(
                     LandscapeInterceptLayout(
                         modifier = Modifier.displayCutoutPadding(),
                         appName = appName,
-                        appIcon = appIconBitmap,
+                        packageName = packageName,
                         shield = currentShield,
                         totalUsageToday = currentTotalUsageToday,
                         totalGlobalUsageToday = currentTotalGlobalUsageToday,
@@ -405,7 +392,7 @@ fun ShieldOverlay(
                 } else {
                     PortraitInterceptLayout(
                         appName = appName,
-                        appIcon = appIconBitmap,
+                        packageName = packageName,
                         shield = currentShield,
                         totalUsageToday = currentTotalUsageToday,
                         totalGlobalUsageToday = currentTotalGlobalUsageToday,
@@ -450,7 +437,7 @@ fun ShieldOverlay(
 @Composable
 fun PortraitInterceptLayout(
     appName: String,
-    appIcon: androidx.compose.ui.graphics.ImageBitmap?,
+    packageName: String,
     shield: ShieldEntity?,
     totalUsageToday: Long,
     totalGlobalUsageToday: Long,
@@ -495,21 +482,25 @@ fun PortraitInterceptLayout(
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
-                if (appIcon != null) {
-                    Image(
-                        bitmap = appIcon,
-                        contentDescription = null,
-                        modifier = Modifier.size(60.dp).clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Icon(
-                        Icons.Outlined.Block,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data("app-icon://$packageName")
+                        .crossfade(500)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(60.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop,
+                    error = {
+                        Icon(
+                            Icons.Outlined.Block,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -565,7 +556,7 @@ fun PortraitInterceptLayout(
 fun LandscapeInterceptLayout(
     modifier: Modifier = Modifier,
     appName: String,
-    appIcon: androidx.compose.ui.graphics.ImageBitmap?,
+    packageName: String,
     shield: ShieldEntity?,
     totalUsageToday: Long,
     totalGlobalUsageToday: Long,
@@ -657,14 +648,17 @@ fun LandscapeInterceptLayout(
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (appIcon != null) {
-                        Image(
-                            bitmap = appIcon,
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp).clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data("app-icon://$packageName")
+                            .crossfade(500)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))

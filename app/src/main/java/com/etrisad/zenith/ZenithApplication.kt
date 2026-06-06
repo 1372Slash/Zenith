@@ -50,6 +50,10 @@ class ZenithApplication : Application(), ImageLoaderFactory {
 
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)
+            .components {
+                add(com.etrisad.zenith.util.coil.AppIconMapper())
+                add(com.etrisad.zenith.util.coil.AppIconFetcher.Factory(this@ZenithApplication))
+            }
             .memoryCache {
                 MemoryCache.Builder(this)
                     .maxSizePercent(0.1)

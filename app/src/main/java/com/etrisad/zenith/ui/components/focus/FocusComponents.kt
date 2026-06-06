@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material3.*
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,41 +37,35 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
-import androidx.graphics.shapes.toPath
+import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.etrisad.zenith.ui.viewmodel.AppInfo
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MultiAppIconGroup(
-    appIcons: List<android.graphics.drawable.Drawable>,
+    packageNames: List<String>,
     totalCount: Int,
     size: Dp,
     modifier: Modifier = Modifier
 ) {
-    val sunnyShape = remember {
-        GenericShape { shapeSize, _ ->
-            val path = MaterialShapes.Sunny.toPath().asComposePath()
-            val matrix = Matrix()
-            matrix.scale(shapeSize.width, shapeSize.height)
-            path.transform(matrix)
-            addPath(path)
-        }
-    }
+    val sunnyShape = MaterialShapes.Sunny.toShape()
 
     Box(
         modifier = modifier
             .size(size)
             .clip(CircleShape)
-            .background(if (appIcons.size <= 1) Color.Transparent else MaterialTheme.colorScheme.surfaceVariant),
+            .background(if (packageNames.size <= 1) Color.Transparent else MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center
     ) {
         when {
-            appIcons.isEmpty() -> {
+            packageNames.isEmpty() -> {
                 Icon(
                     imageVector = Icons.Outlined.Schedule,
                     contentDescription = null,
@@ -78,9 +73,12 @@ fun MultiAppIconGroup(
                     modifier = Modifier.size(size * 0.6f)
                 )
             }
-            appIcons.size == 1 -> {
-                Image(
-                    painter = BitmapPainter(appIcons[0].toBitmap().asImageBitmap()),
+            packageNames.size == 1 -> {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data("app-icon://${packageNames[0]}")
+                        .crossfade(500)
+                        .build(),
                     contentDescription = null,
                     modifier = Modifier.size(size).clip(CircleShape),
                     contentScale = ContentScale.Crop
@@ -89,35 +87,45 @@ fun MultiAppIconGroup(
             else -> {
                 val iconSize = (size / 2) - 2.dp
                 val spacing = 1.dp
+                val context = LocalContext.current
                 Column(
                     modifier = Modifier.fillMaxSize().padding(2.dp),
                     verticalArrangement = Arrangement.spacedBy(spacing, Alignment.CenterVertically),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
-                        appIcons.take(2).forEach { icon ->
-                            Image(
-                                painter = BitmapPainter(icon.toBitmap().asImageBitmap()),
+                        packageNames.take(2).forEach { pkg ->
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data("app-icon://$pkg")
+                                    .crossfade(500)
+                                    .build(),
                                 contentDescription = null,
                                 modifier = Modifier.size(iconSize).clip(CircleShape),
                                 contentScale = ContentScale.Crop
                             )
                         }
                     }
-                    if (appIcons.size > 2) {
+                    if (packageNames.size > 2) {
                         Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
-                            appIcons.drop(2).take(1).forEach { icon ->
-                                Image(
-                                    painter = BitmapPainter(icon.toBitmap().asImageBitmap()),
+                            packageNames.drop(2).take(1).forEach { pkg ->
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data("app-icon://$pkg")
+                                        .crossfade(500)
+                                        .build(),
                                     contentDescription = null,
                                     modifier = Modifier.size(iconSize).clip(CircleShape),
                                     contentScale = ContentScale.Crop
                                 )
                             }
-                            if (appIcons.size == 4 && totalCount <= 4) {
-                                appIcons.drop(3).forEach { icon ->
-                                    Image(
-                                        painter = BitmapPainter(icon.toBitmap().asImageBitmap()),
+                            if (packageNames.size == 4 && totalCount <= 4) {
+                                packageNames.drop(3).forEach { pkg ->
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context)
+                                            .data("app-icon://$pkg")
+                                            .crossfade(500)
+                                            .build(),
                                         contentDescription = null,
                                         modifier = Modifier.size(iconSize).clip(CircleShape),
                                         contentScale = ContentScale.Crop
@@ -484,26 +492,28 @@ fun AppPickerItem(
             },
             leadingContent = {
                 val iconSize = 44.dp
-                if (app.icon != null) {
-                    Image(
-                        painter = BitmapPainter(app.icon.toBitmap().asImageBitmap()),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(iconSize)
-                            .clip(RoundedCornerShape(12.dp)),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(iconSize)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Outlined.Android, contentDescription = null)
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data("app-icon://${app.packageName}")
+                        .crossfade(400)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(iconSize)
+                        .clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop,
+                    error = {
+                        Box(
+                            modifier = Modifier
+                                .size(iconSize)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Outlined.Android, contentDescription = null)
+                        }
                     }
-                }
+                )
             },
             trailingContent = {
                 if (showCheckbox) {

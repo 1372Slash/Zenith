@@ -51,8 +51,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
-import androidx.graphics.shapes.toPath
+import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonWeighted
@@ -859,28 +860,20 @@ fun TopAppsSection(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         topApps.take(3).reversed().forEach { app ->
-                            val appIcon by produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, app.icon) {
-                                val icon = app.icon
-                                if (icon != null) {
-                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                        value = icon.toBitmap().asImageBitmap()
-                                    }
-                                }
-                            }
-                            val icon = appIcon
-                            if (icon != null) {
-                                Image(
-                                    painter = BitmapPainter(icon),
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.surface)
-                                        .padding(1.5.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
-                                )
-                            }
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data("app-icon://${app.packageName}")
+                                    .crossfade(500)
+                                    .build(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surface)
+                                    .padding(1.5.dp)
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
                         }
                     }
                 }
@@ -907,17 +900,6 @@ fun TopAppsSection(
                         val itemShape = when {
                             index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
                             else -> RoundedCornerShape(8.dp)
-                        }
-
-                        val context = LocalContext.current
-                        val appIcon by produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, app.packageName) {
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                value = try {
-                                    context.packageManager.getApplicationIcon(app.packageName)?.toBitmap()?.asImageBitmap()
-                                } catch (_: Exception) {
-                                    null
-                                }
-                            }
                         }
 
                         Card(
@@ -947,31 +929,32 @@ fun TopAppsSection(
                                     )
                                 },
                                 leadingContent = {
-                                    val icon = appIcon
-                                    if (icon != null) {
-                                        Image(
-                                            painter = BitmapPainter(icon),
-                                            contentDescription = null,
-                                            modifier = Modifier
-                                                .size(40.dp)
-                                                .clip(CircleShape),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    } else {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(40.dp)
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Android,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(24.dp)
-                                            )
+                                    SubcomposeAsyncImage(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data("app-icon://${app.packageName}")
+                                            .crossfade(500)
+                                            .build(),
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(CircleShape),
+                                        contentScale = ContentScale.Crop,
+                                        error = {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(40.dp)
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Android,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                            }
                                         }
-                                    }
+                                    )
                                 },
                                 colors = ListItemDefaults.colors(
                                     containerColor = Color.Transparent
@@ -1276,17 +1259,6 @@ fun ShieldItem(
     val remainingMillis = shield.remainingTimeMillis.coerceIn(0L, totalLimitMillis)
     val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
 
-    val context = LocalContext.current
-    val appIcon by produceState<androidx.compose.ui.graphics.ImageBitmap?>(initialValue = null, shield.packageName) {
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            value = try {
-                context.packageManager.getApplicationIcon(shield.packageName)?.toBitmap()?.asImageBitmap()
-            } catch (_: Exception) {
-                null
-            }
-        }
-    }
-
     val isEffectivelyPaused = remember(shield.isPaused, shield.pauseEndTimestamp, nowMillis) {
         shield.isPaused && (shield.pauseEndTimestamp == 0L || nowMillis < shield.pauseEndTimestamp)
     }
@@ -1370,32 +1342,34 @@ fun ShieldItem(
                         modifier = Modifier.size(46.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        val icon = appIcon
-                        if (icon != null) {
-                            Image(
-                                painter = BitmapPainter(icon),
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape),
-                                contentScale = ContentScale.Crop,
-                                colorFilter = colorFilter
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Android,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = iconAlpha)
-                                )
+                        SubcomposeAsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data("app-icon://${shield.packageName}")
+                                .crossfade(500)
+                                .build(),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop,
+                            colorFilter = colorFilter,
+                            alpha = iconAlpha,
+                            error = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Android,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = iconAlpha)
+                                    )
+                                }
                             }
-                        }
+                        )
 
                         androidx.compose.animation.AnimatedVisibility(
                             visible = shield.currentStreak > 0,

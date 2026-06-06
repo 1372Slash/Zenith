@@ -33,7 +33,7 @@ class BedtimeViewModel(
 ) : ViewModel() {
 
     private val context = context.applicationContext
-    private val appInfoCache = mutableMapOf<String, Pair<String, android.graphics.drawable.Drawable?>>()
+    private val appInfoCache = mutableMapOf<String, String>()
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
 
@@ -158,16 +158,15 @@ class BedtimeViewModel(
                             val pkg = entity.packageName
                             val cached = appInfoCache[pkg]
                             if (cached != null) {
-                                AppUsageInfo(pkg, cached.first, entity.usageTimeMillis, cached.second)
+                                AppUsageInfo(pkg, cached, entity.usageTimeMillis)
                             } else {
                                 try {
                                     val appInfo = pm.getApplicationInfo(pkg, 0)
                                     val label = pm.getApplicationLabel(appInfo).toString()
-                                    val icon = pm.getApplicationIcon(appInfo)
-                                    appInfoCache[pkg] = label to icon
-                                    AppUsageInfo(pkg, label, entity.usageTimeMillis, icon)
+                                    appInfoCache[pkg] = label
+                                    AppUsageInfo(pkg, label, entity.usageTimeMillis)
                                 } catch (e: Exception) {
-                                    AppUsageInfo(pkg, pkg, entity.usageTimeMillis, null)
+                                    AppUsageInfo(pkg, pkg, entity.usageTimeMillis)
                                 }
                             }
                         }.sortedByDescending { it.totalTimeVisible }

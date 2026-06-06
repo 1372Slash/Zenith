@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.etrisad.zenith.ui.components.UsageHistoryList
 import com.etrisad.zenith.ui.components.ZenithContainedLoadingIndicator
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
@@ -160,7 +161,6 @@ fun DatabaseDebugScreen(
                                     CarryOverItem(
                                         packageName = entity.packageName,
                                         displayName = appInfo?.appName ?: entity.packageName,
-                                        icon = appInfo?.icon,
                                         duration = viewModel.formatDuration(entity.usageTimeMillis),
                                         onDelete = {
                                             viewModel.deleteHourlyUsageAtHour(entity.hour, entity.packageName)
@@ -199,7 +199,6 @@ fun DatabaseDebugScreen(
 fun CarryOverItem(
     packageName: String,
     displayName: String,
-    icon: android.graphics.drawable.Drawable?,
     duration: String,
     onDelete: () -> Unit
 ) {
@@ -218,20 +217,19 @@ fun CarryOverItem(
                     .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                if (icon != null) {
-                    AsyncImage(
-                        model = icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp)
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Outlined.Schedule,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.secondary
-                    )
-                }
+                SubcomposeAsyncImage(
+                    model = "app-icon://$packageName",
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    error = {
+                        Icon(
+                            imageVector = Icons.Outlined.Schedule,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                )
             }
 
             Spacer(modifier = Modifier.width(16.dp))

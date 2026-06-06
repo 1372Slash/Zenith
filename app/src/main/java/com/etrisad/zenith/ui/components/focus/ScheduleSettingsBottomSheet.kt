@@ -65,17 +65,6 @@ fun ScheduleSettingsBottomSheet(
         label = "containerColor"
     )
 
-    val appIcons = remember(uiState.selectedAppsForSchedule) {
-        val packages = uiState.selectedAppsForSchedule.toList()
-        packages.take(4).mapNotNull { pkg ->
-            try {
-                context.packageManager.getApplicationIcon(pkg)
-            } catch (_: Exception) {
-                null
-            }
-        }
-    }
-
     var name by remember { mutableStateOf(editingSchedule?.name ?: "My Schedule") }
     var mode by remember { mutableStateOf(editingSchedule?.mode ?: ScheduleMode.BLOCK) }
     var maxEmergencyUses by remember { mutableStateOf(editingSchedule?.maxEmergencyUses?.toString() ?: "3") }
@@ -129,7 +118,7 @@ fun ScheduleSettingsBottomSheet(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val packageNames = uiState.selectedAppsForSchedule.toList()
                     MultiAppIconGroup(
-                        appIcons = appIcons,
+                        packageNames = packageNames,
                         totalCount = packageNames.size,
                         size = 56.dp,
                         modifier = Modifier

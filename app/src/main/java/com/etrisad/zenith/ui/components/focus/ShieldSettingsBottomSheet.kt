@@ -23,7 +23,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.drawable.toBitmap
+import coil.compose.SubcomposeAsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.background
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
@@ -103,15 +105,24 @@ fun ShieldSettingsBottomSheet(
                     .padding(horizontal = 16.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (appInfo.icon != null) {
-                        Image(
-                            painter = BitmapPainter(appInfo.icon.toBitmap().asImageBitmap()),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(MaterialTheme.shapes.medium)
-                        )
-                    }
+                    SubcomposeAsyncImage(
+                        model = "app-icon://${appInfo.packageName}",
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(MaterialTheme.shapes.medium),
+                        contentScale = ContentScale.Crop,
+                        error = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Outlined.Android, contentDescription = null)
+                            }
+                        }
+                    )
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text(
