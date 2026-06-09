@@ -134,13 +134,7 @@ class AppUsageMonitorService : Service() {
                     currentSessionPackage = null
                     usageStatsCache = null
 
-                    if (monitoringWakeLock == null) {
-                        monitoringWakeLock = powerManager.newWakeLock(
-                            android.os.PowerManager.PARTIAL_WAKE_LOCK,
-                            "Zenith:MonitorWakeLock"
-                        )
-                    }
-                    monitoringWakeLock?.acquire(600_000L)
+                    monitoringWakeLock?.let { if (it.isHeld) it.release() }
                 }
                 android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED -> {
                     isPowerSaveMode = powerManager.isPowerSaveMode
@@ -610,10 +604,12 @@ class AppUsageMonitorService : Service() {
                         refreshLauncherCache()
                     }
 
-                    if (currentApp != null && currentApp != packageName) {
+                    if (currentApp != null && currentApp != packageName && !launcherPackages.contains(currentApp)) {
                         sessionUsageOverlayManager.updateForegroundApp(currentApp)
 
-                        val isNewSession = currentApp != lastForegroundApp || currentShieldCache?.packageName != currentApp || currentSessionPackage == null
+                        val isNewSession = currentApp != lastForegroundApp || 
+                                          (currentShieldCache != null && currentShieldCache?.packageName != currentApp) || 
+                                          currentSessionPackage == null
 
                         if (isNewSession) {
                             lastForegroundApp?.let { prevPkg ->

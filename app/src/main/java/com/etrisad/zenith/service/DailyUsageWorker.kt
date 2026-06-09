@@ -256,9 +256,6 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
             
             WorkManager.getInstance(context).enqueueUniquePeriodicWork("DailyUsageSyncWorker", ExistingPeriodicWorkPolicy.UPDATE,
                 PeriodicWorkRequestBuilder<DailyUsageWorker>(1, TimeUnit.DAYS).setInitialDelay(calendar.timeInMillis - now, TimeUnit.MILLISECONDS).setConstraints(constraints).setInputData(workDataOf("is_backup" to false)).build())
-
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork("DailyUsageSyncWorkerBackup", ExistingPeriodicWorkPolicy.UPDATE,
-                PeriodicWorkRequestBuilder<DailyUsageWorker>(15, TimeUnit.MINUTES).setConstraints(constraints).setInputData(workDataOf("is_backup" to true)).build())
         }
     }
 }
