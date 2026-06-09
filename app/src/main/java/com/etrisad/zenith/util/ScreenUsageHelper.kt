@@ -57,7 +57,6 @@ object ScreenUsageHelper {
         var activeStartTime = 0L
 
         var isScreenOn = false
-        // Pre-scan to find the last screen state before the main query range
         try {
             val preEvents = usageStatsManager.queryEvents(start - 12 * 3600000L, start - MIDNIGHT_LOOKBACK_MS)
             val tempEvent = UsageEvents.Event()

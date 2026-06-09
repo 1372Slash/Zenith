@@ -352,8 +352,6 @@ class UsageSyncManager(
 
             var shieldTime = 0L
             var goalTime = 0L
-
-            // Combine existing packages from DB with new ones from appTotals
             val allPackages = (appTotals.keys + existingDailyMap.keys)
                 .filter { it !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL") }
 

@@ -403,7 +403,7 @@ class UserPreferencesRepository(private val context: Context) {
 
             if (usage == null) {
                 if (oldestHistoryDate != null && dStr >= oldestHistoryDate) {
-                    usage = 0L // Gap in history = success (0m)
+                    usage = 0L
                 } else if (i <= 30) {
                     usage = fetchSystemTotalUsageForDate(usageStatsManager, c.timeInMillis, launcherApps, excludePackages)
                 }
