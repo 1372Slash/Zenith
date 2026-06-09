@@ -220,8 +220,9 @@ class HomeViewModel(
             val dbRecords = dbRecordsByDate[dateStr] ?: emptyList()
             val dbTotal = dbRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
 
-            val systemRecords = if (preferSystem) (fallbackMap[dateStr] ?: emptyList()) else emptyList()
-            val systemTotal = systemRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
+            val actualSystemRecords = fallbackMap[dateStr] ?: emptyList()
+            val systemRecords = if (preferSystem) actualSystemRecords else emptyList()
+            val systemTotal = actualSystemRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
 
             val hasHourly = hourlyDatesSet.contains(dateStr)
             val hasSnap = dbRecords.any { it.packageName != "TOTAL" && it.packageName != "SHIELD_TOTAL" && it.packageName != "GOAL_TOTAL" && it.packageName != "OTHER_TOTAL" }
@@ -237,8 +238,8 @@ class HomeViewModel(
                 val liveRecords = mutableListOf<UsageRecord>()
                 dbRecords.forEach { liveRecords.add(UsageRecord.Database(it)) }
 
-                if (systemRecords.isNotEmpty()) {
-                    liveRecords.addAll(systemRecords)
+                if (actualSystemRecords.isNotEmpty()) {
+                    liveRecords.addAll(actualSystemRecords)
                 }
 
                 val liveTotal = uiState.value.totalScreenTime
@@ -258,9 +259,9 @@ class HomeViewModel(
                 groups.add(UsageHistoryGroup(
                     date = dateStr,
                     records = liveRecords,
-                    totalTimeMillis = maxOf(dbTotal, liveTotal),
+                    totalTimeMillis = if (preferSystem) maxOf(dbTotal, liveTotal) else dbTotal,
                     hasDatabaseRecord = dbRecords.isNotEmpty(),
-                    hasSystemData = systemRecords.isNotEmpty(),
+                    hasSystemData = actualSystemRecords.isNotEmpty(),
                     isLive = true,
                     hasSnapshot = hasSnap,
                     hasHourlyUsage = hasHourly,
@@ -271,7 +272,7 @@ class HomeViewModel(
                     goalTotalMillis = maxOf(dbGoalTotal, liveGoal),
                     otherTotalMillis = maxOf(dbOtherTotal, liveOther)
                 ))
-            } else if (dbRecords.isEmpty() && systemRecords.isEmpty()) {
+            } else if (dbRecords.isEmpty() && actualSystemRecords.isEmpty()) {
                 groups.add(UsageHistoryGroup(
                     date = dateStr,
                     records = emptyList(),
@@ -282,11 +283,11 @@ class HomeViewModel(
                     systemTotalMillis = 0L,
                     databaseAppSumMillis = 0L
                 ))
-            } else if (dbRecords.isEmpty() && systemRecords.isNotEmpty()) {
+            } else if (dbRecords.isEmpty() && actualSystemRecords.isNotEmpty()) {
                 groups.add(UsageHistoryGroup(
                     date = dateStr,
-                    records = systemRecords,
-                    totalTimeMillis = systemTotal,
+                    records = actualSystemRecords,
+                    totalTimeMillis = if (preferSystem) systemTotal else 0L,
                     hasSystemData = true,
                     hasSnapshot = false,
                     hasHourlyUsage = hasHourly,
@@ -296,16 +297,16 @@ class HomeViewModel(
             } else {
                 val combinedRecords = mutableListOf<UsageRecord>()
                 combinedRecords.addAll(dbRecords.map { UsageRecord.Database(it) })
-                if (systemRecords.isNotEmpty()) {
-                    combinedRecords.addAll(systemRecords)
+                if (actualSystemRecords.isNotEmpty()) {
+                    combinedRecords.addAll(actualSystemRecords)
                 }
 
                 groups.add(UsageHistoryGroup(
                     date = dateStr,
                     records = combinedRecords,
-                    totalTimeMillis = dbTotal,
+                    totalTimeMillis = if (preferSystem) maxOf(dbTotal, systemTotal) else dbTotal,
                     hasDatabaseRecord = true,
-                    hasSystemData = systemRecords.isNotEmpty(),
+                    hasSystemData = actualSystemRecords.isNotEmpty(),
                     hasSnapshot = hasSnap,
                     hasHourlyUsage = hasHourly,
                     hasPiechartData = hasPiechart,
@@ -474,14 +475,16 @@ class HomeViewModel(
             var sUsage = 0L
             var gUsage = 0L
             var appSum = 0L
+            val entitiesToInsert = mutableListOf<DailyUsageEntity>()
 
             recordsToUse.forEach { record ->
                 if (record.packageName != "TOTAL") {
                     val existing = dbAppRecords.find { it.packageName == record.packageName }?.usageTimeMillis ?: 0L
                     val finalUsage = if (mode == RepairMode.SYSTEM) maxOf(record.usageTimeMillis, existing) else existing
 
-                    shieldRepository.insertDailyUsage(
+                    entitiesToInsert.add(
                         DailyUsageEntity(
+                            id = dbAppRecords.find { it.packageName == record.packageName }?.id ?: 0,
                             date = date,
                             packageName = record.packageName,
                             usageTimeMillis = finalUsage,
@@ -518,11 +521,12 @@ class HomeViewModel(
             val finalGoalTotal = if (mode == RepairMode.SYSTEM) maxOf(gUsage, existingGoalTotal) else gUsage
             val oUsage = (finalTotal - (finalShieldTotal + finalGoalTotal)).coerceAtLeast(0L)
 
-            shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "TOTAL", usageTimeMillis = finalTotal))
-            shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "SHIELD_TOTAL", usageTimeMillis = finalShieldTotal))
-            shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "GOAL_TOTAL", usageTimeMillis = finalGoalTotal))
-            shieldRepository.insertDailyUsage(DailyUsageEntity(date = date, packageName = "OTHER_TOTAL", usageTimeMillis = oUsage))
+            entitiesToInsert.add(DailyUsageEntity(id = dbRecords.find { it.packageName == "TOTAL" }?.id ?: 0, date = date, packageName = "TOTAL", usageTimeMillis = finalTotal))
+            entitiesToInsert.add(DailyUsageEntity(id = dbRecords.find { it.packageName == "SHIELD_TOTAL" }?.id ?: 0, date = date, packageName = "SHIELD_TOTAL", usageTimeMillis = finalShieldTotal))
+            entitiesToInsert.add(DailyUsageEntity(id = dbRecords.find { it.packageName == "GOAL_TOTAL" }?.id ?: 0, date = date, packageName = "GOAL_TOTAL", usageTimeMillis = finalGoalTotal))
+            entitiesToInsert.add(DailyUsageEntity(id = dbRecords.find { it.packageName == "OTHER_TOTAL" }?.id ?: 0, date = date, packageName = "OTHER_TOTAL", usageTimeMillis = oUsage))
 
+            shieldRepository.insertAllDailyUsage(entitiesToInsert)
             userPreferencesRepository.refreshGlobalStreak(shieldRepository)
         } catch (e: Exception) {
             android.util.Log.e("HomeVM", "Error repairing data: ${e.message}")
@@ -583,24 +587,30 @@ class HomeViewModel(
             val fallbackToday = fallbackMap[todayStr]
             fallbackToday?.filter { it.packageName != "TOTAL" }?.map { record ->
                 val cached = appInfoCache[record.packageName]
+                val existing = _uiState.value.allAppsUsage.find { it.packageName == record.packageName }
                 AppUsageInfo(
                     packageName = record.packageName,
                     appName = cached?.first ?: record.packageName,
-                    totalTimeVisible = record.usageTimeMillis,
+                    totalTimeVisible = maxOf(record.usageTimeMillis, existing?.totalTimeVisible ?: 0L),
                     icon = cached?.second,
                     hasDatabaseRecord = false,
-                    hasSystemData = true
+                    hasSystemData = true,
+                    sessionCount = existing?.sessionCount ?: (if (record.usageTimeMillis > 4000) 1 else 0),
+                    lastTimeUsed = existing?.lastTimeUsed ?: 0L
                 )
             } ?: emptyList()
         } else {
             dbApps.sortedByDescending { it.usageTimeMillis }.map { entity ->
                 val cached = appInfoCache[entity.packageName]
+                val existing = _uiState.value.allAppsUsage.find { it.packageName == entity.packageName }
                 AppUsageInfo(
                     packageName = entity.packageName,
                     appName = cached?.first ?: entity.packageName,
-                    totalTimeVisible = entity.usageTimeMillis,
+                    totalTimeVisible = maxOf(entity.usageTimeMillis, existing?.totalTimeVisible ?: 0L),
                     icon = cached?.second,
-                    hasDatabaseRecord = true
+                    hasDatabaseRecord = true,
+                    sessionCount = existing?.sessionCount ?: (if (entity.usageTimeMillis > 4000) 1 else 0),
+                    lastTimeUsed = existing?.lastTimeUsed ?: 0L
                 )
             }
         }
@@ -1157,8 +1167,9 @@ class HomeViewModel(
         }
 
         val appList = appTotals.mapNotNull { (pkg, time) ->
-            val sessions = appSessionCounts[pkg] ?: (if (time > 4000) 1 else 0)
-            val lastUsed = lastUsedMap[pkg] ?: 0L
+            val existing = _uiState.value.allAppsUsage.find { it.packageName == pkg }
+            val sessions = appSessionCounts[pkg] ?: existing?.sessionCount ?: (if (time > 4000) 1 else 0)
+            val lastUsed = lastUsedMap[pkg] ?: existing?.lastTimeUsed ?: 0L
             val cached = appInfoCache[pkg]
             if (cached != null) {
                 AppUsageInfo(pkg, cached.first, time, cached.second, sessionCount = sessions, lastTimeUsed = lastUsed)
@@ -1427,17 +1438,17 @@ class HomeViewModel(
         val (liveStreak, finalBestStreak) = userPreferencesRepository.refreshGlobalStreak(shieldRepository)
 
         _uiState.update { state -> state.copy(
-            totalScreenTime      = selectedDayTotal,
+            totalScreenTime      = if (isSelectedToday) maxOf(state.totalScreenTime, selectedDayTotal) else selectedDayTotal,
             yesterdayScreenTime  = totalYesterday,
             percentageChange     = percentageChange,
             dailyUsageHistory    = history.reversed(),
             hourlyUsage          = hourlyUsage,
             snapshotStamps       = snapshotStamps.reversed(),
-            topApps              = topApps,
-            allAppsUsage         = allAppsUsage,
-            shieldUsage          = finalShieldUsage,
-            goalUsage            = finalGoalUsage,
-            otherUsage           = finalOtherUsage,
+            topApps              = if (topApps.isEmpty() && isSelectedToday) state.topApps else topApps,
+            allAppsUsage         = if (allAppsUsage.isEmpty() && isSelectedToday) state.allAppsUsage else allAppsUsage,
+            shieldUsage          = if (isSelectedToday) maxOf(state.shieldUsage, finalShieldUsage) else finalShieldUsage,
+            goalUsage            = if (isSelectedToday) maxOf(state.goalUsage, finalGoalUsage) else finalGoalUsage,
+            otherUsage           = if (isSelectedToday) maxOf(state.otherUsage, finalOtherUsage) else finalOtherUsage,
             activeShields = sortShields(liveShields.filter { it.type == FocusType.SHIELD }, state.shieldSortType),
             activeGoals   = sortShields(liveShields.filter { it.type == FocusType.GOAL }, state.goalSortType),
             globalCurrentStreak = liveStreak,

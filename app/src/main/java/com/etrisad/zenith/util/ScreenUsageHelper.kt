@@ -56,14 +56,24 @@ object ScreenUsageHelper {
         var activePkg: String? = null
         var activeStartTime = 0L
 
+        var isScreenOn = false
+        // Pre-scan to find the last screen state before the main query range
+        try {
+            val preEvents = usageStatsManager.queryEvents(start - 12 * 3600000L, start - MIDNIGHT_LOOKBACK_MS)
+            val tempEvent = UsageEvents.Event()
+            while (preEvents?.hasNextEvent() == true) {
+                preEvents.getNextEvent(tempEvent)
+                if (tempEvent.eventType == UsageEvents.Event.SCREEN_INTERACTIVE) isScreenOn = true
+                else if (tempEvent.eventType == UsageEvents.Event.SCREEN_NON_INTERACTIVE) isScreenOn = false
+            }
+        } catch (_: Exception) {}
+
         val events = try {
             usageStatsManager.queryEvents(start - MIDNIGHT_LOOKBACK_MS, end)
         } catch (e: Exception) {
             null
         }
         val event = UsageEvents.Event()
-
-        var isScreenOn = false
 
         var totalSequentialUsage = 0L
 

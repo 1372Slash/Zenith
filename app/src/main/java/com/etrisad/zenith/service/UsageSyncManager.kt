@@ -353,21 +353,28 @@ class UsageSyncManager(
             var shieldTime = 0L
             var goalTime = 0L
 
-            appTotals.forEach { (pkg, time) ->
-                val existingPkgTime = existingDailyMap[pkg]?.usageTimeMillis ?: 0L
-                val finalPkgTime = maxOf(time, existingPkgTime).coerceAtMost(finalTotal)
+            // Combine existing packages from DB with new ones from appTotals
+            val allPackages = (appTotals.keys + existingDailyMap.keys)
+                .filter { it !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL") }
 
-                dailyEntities.add(
-                    com.etrisad.zenith.data.local.entity.DailyUsageEntity(
-                        id = existingDailyMap[pkg]?.id ?: 0,
-                        date = date,
-                        packageName = pkg,
-                        usageTimeMillis = finalPkgTime,
-                        lastUpdated = now
+            allPackages.forEach { pkg ->
+                val newTime = appTotals[pkg] ?: 0L
+                val existingPkgTime = existingDailyMap[pkg]?.usageTimeMillis ?: 0L
+                val finalPkgTime = maxOf(newTime, existingPkgTime).coerceAtMost(finalTotal)
+
+                if (finalPkgTime > 0) {
+                    dailyEntities.add(
+                        com.etrisad.zenith.data.local.entity.DailyUsageEntity(
+                            id = existingDailyMap[pkg]?.id ?: 0,
+                            date = date,
+                            packageName = pkg,
+                            usageTimeMillis = finalPkgTime,
+                            lastUpdated = now
+                        )
                     )
-                )
-                if (pkg in shieldPkgs) shieldTime += finalPkgTime
-                else if (pkg in goalPkgs) goalTime += finalPkgTime
+                    if (pkg in shieldPkgs) shieldTime += finalPkgTime
+                    else if (pkg in goalPkgs) goalTime += finalPkgTime
+                }
             }
 
             val finalShieldTotal = shieldTime.coerceAtMost(finalTotal)
