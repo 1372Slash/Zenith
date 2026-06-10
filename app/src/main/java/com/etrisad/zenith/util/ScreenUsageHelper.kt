@@ -17,7 +17,7 @@ object ScreenUsageHelper {
 
     private var lastResult: UsageResult? = null
     private var lastQueryTime = 0L
-    private const val CACHE_DURATION = 10000L
+    private const val CACHE_DURATION = 20000L
 
     private const val MIDNIGHT_LOOKBACK_MS = 600000L
     private const val SESSION_MIN_DURATION = 4000L

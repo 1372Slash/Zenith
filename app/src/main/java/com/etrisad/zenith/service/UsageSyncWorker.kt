@@ -30,7 +30,7 @@ class UsageSyncWorker(
                 .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
                 .build()
 
-            val request = PeriodicWorkRequestBuilder<UsageSyncWorker>(15, TimeUnit.MINUTES)
+            val request = PeriodicWorkRequestBuilder<UsageSyncWorker>(30, TimeUnit.MINUTES)
                 .setConstraints(constraints)
                 .build()
 

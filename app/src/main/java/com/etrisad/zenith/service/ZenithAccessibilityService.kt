@@ -260,7 +260,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                         }
                     }
                 }
-                delay(2000)
+                delay(5000)
             }
         }
     }
@@ -363,7 +363,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                 lastUsageFetchTime = currentTime
             }
         } else {
-            if (currentTime - lastUsageFetchTime > 5000) {
+            if (currentTime - lastUsageFetchTime > 30000) {
                 cachedTotalUsage = getTotalUsageToday(packageName)
                 lastUsageFetchTime = currentTime
             }
@@ -700,7 +700,7 @@ class ZenithAccessibilityService : AccessibilityService() {
     private fun getTotalUsageToday(packageName: String): Long {
         val currentTime = System.currentTimeMillis()
 
-        if (currentTime - lastUsageCacheTime > 10000) {
+        if (currentTime - lastUsageCacheTime > 30000) {
             val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
             val tempMap = detailedUsage.appUsageMap
 
