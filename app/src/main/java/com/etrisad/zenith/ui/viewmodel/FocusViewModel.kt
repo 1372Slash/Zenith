@@ -161,7 +161,7 @@ class FocusViewModel(
         viewModelScope.launch {
             while (true) {
                 updateShieldedLists(allShields)
-                kotlinx.coroutines.delay(60000)
+                kotlinx.coroutines.delay(120000)
             }
         }
     }

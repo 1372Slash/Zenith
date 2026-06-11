@@ -887,7 +887,7 @@ class HomeViewModel(
 
     private suspend fun updateGlobalFallbackInternal(forceFull: Boolean = false) = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        val isFullNeeded = forceFull || _globalFallbackMap.value.isEmpty() || (now - lastFullFallbackRefresh > 1800000)
+        val isFullNeeded = forceFull || _globalFallbackMap.value.isEmpty() || (now - lastFullFallbackRefresh > 3600000)
 
         val usm = this@HomeViewModel.context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val (launcherApps, launcherPackage) = getLauncherInfo()
@@ -918,7 +918,7 @@ class HomeViewModel(
             val usm = this@HomeViewModel.context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val (launcherApps, launcherPackage) = getLauncherInfo()
             val excludePackages = setOfNotNull(this@HomeViewModel.context.packageName, launcherPackage)
-            val results = fetchFallbackForDays(1..30, usm, launcherApps, excludePackages, now)
+            val results = fetchFallbackForDays(1..7, usm, launcherApps, excludePackages, now)
             _globalFallbackMap.update { current -> current + results.toMap() }
         } finally {
             isUpdatingFullHistory = false
@@ -1617,7 +1617,7 @@ class HomeViewModel(
                     performUsageStatsRefresh(showLoading = false)
                     refreshCurrentAppDetailUsage()
                 }
-                delay(60000)
+                delay(120000)
             }
         }
     }

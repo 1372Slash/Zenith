@@ -17,8 +17,9 @@ object ScreenUsageHelper {
 
     @Volatile
     private var lastResult: UsageResult? = null
+    @Volatile
     private var lastQueryTime = 0L
-    private const val CACHE_DURATION = 60000L
+    private const val CACHE_DURATION = 120000L
 
     private const val MIDNIGHT_LOOKBACK_MS = 600000L
     private const val SESSION_MIN_DURATION = 4000L

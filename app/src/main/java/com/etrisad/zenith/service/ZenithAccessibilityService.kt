@@ -277,7 +277,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                         }
                     }
                 }
-                delay(15000)
+                delay(30000)
             }
         }
     }
@@ -391,7 +391,7 @@ class ZenithAccessibilityService : AccessibilityService() {
 
         val timeSinceLastUsed = currentTime - shield.lastUsedTimestamp
         val isNearLimit = remainingMillis < 60000
-        val shouldUpdateDB = timeSinceLastUsed > 15000 || (isNearLimit && timeSinceLastUsed > 5000)
+        val shouldUpdateDB = timeSinceLastUsed > 60000 || (isNearLimit && timeSinceLastUsed > 30000)
 
         if (shouldUpdateDB) {
             val updatedShield = shield.copy(
@@ -711,7 +711,7 @@ class ZenithAccessibilityService : AccessibilityService() {
     private fun getTotalUsageToday(packageName: String): Long {
         val currentTime = System.currentTimeMillis()
 
-        if (currentTime - lastUsageCacheTime > 30000) {
+        if (currentTime - lastUsageCacheTime > 60000) {
             val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
             val tempMap = detailedUsage.appUsageMap
 

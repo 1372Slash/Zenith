@@ -15,11 +15,14 @@ import com.etrisad.zenith.ui.widget.GlobalStreakWidget
 import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class ZenithApplication : Application(), ImageLoaderFactory {
 
     private var lastUiMode: Int = 0
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val userPreferencesRepository: UserPreferencesRepository by lazy {
         UserPreferencesRepository(this)
@@ -52,7 +55,7 @@ class ZenithApplication : Application(), ImageLoaderFactory {
         lastUiMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         com.etrisad.zenith.service.UsageSyncWorker.enqueue(this)
 
-        CoroutineScope(Dispatchers.Default).launch {
+        applicationScope.launch {
             try {
                 kotlinx.coroutines.delay(1000)
                 AppStreakWidget().updateAll(this@ZenithApplication)
@@ -94,7 +97,7 @@ class ZenithApplication : Application(), ImageLoaderFactory {
         val newUiMode = newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK
         if (newUiMode != lastUiMode) {
             lastUiMode = newUiMode
-            CoroutineScope(Dispatchers.Main).launch {
+            applicationScope.launch {
                 try {
                     kotlinx.coroutines.delay(300)
                     AppStreakWidget().updateAll(this@ZenithApplication)
@@ -103,5 +106,10 @@ class ZenithApplication : Application(), ImageLoaderFactory {
                 }
             }
         }
+    }
+
+    override fun onTerminate() {
+        super.onTerminate()
+        applicationScope.cancel()
     }
 }

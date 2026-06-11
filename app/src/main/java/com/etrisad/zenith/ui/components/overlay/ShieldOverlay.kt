@@ -101,7 +101,7 @@ fun ShieldOverlay(
                 liveAppUsage.coerceAtMost(timeSinceMidnight), 
                 totalGlobalUsageToday.coerceAtMost(timeSinceMidnight)
             )
-            delay(10000)
+            delay(30000)
         }
     }
 

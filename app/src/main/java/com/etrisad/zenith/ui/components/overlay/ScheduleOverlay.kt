@@ -98,7 +98,7 @@ fun ScheduleOverlay(
             }
 
             value = totalToday.coerceAtMost(timeSinceMidnight)
-            delay(10000)
+            delay(30000)
         }
     }
     val currentTotalGlobalUsageToday = currentTotalGlobalUsageTodayState.value

@@ -23,10 +23,24 @@ class ZenithNotificationListener : NotificationListenerService() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private lateinit var database: ZenithDatabase
+    private var cachedActiveSchedules: List<com.etrisad.zenith.data.local.entity.ScheduleEntity>? = null
+    private var lastScheduleCacheTime = 0L
 
     override fun onCreate() {
         super.onCreate()
         database = ZenithDatabase.getDatabase(this)
+    }
+
+    private suspend fun getActiveSchedulesCached(): List<com.etrisad.zenith.data.local.entity.ScheduleEntity> {
+        val now = System.currentTimeMillis()
+        val cached = cachedActiveSchedules
+        if (cached != null && now - lastScheduleCacheTime < 60000) {
+            return cached
+        }
+        val schedules = database.scheduleDao().getActiveSchedules()
+        cachedActiveSchedules = schedules
+        lastScheduleCacheTime = now
+        return schedules
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -34,7 +48,7 @@ class ZenithNotificationListener : NotificationListenerService() {
         if (sbn.isOngoing) return
 
         serviceScope.launch {
-            val activeSchedules = database.scheduleDao().getActiveSchedules()
+            val activeSchedules = getActiveSchedulesCached()
             val currentTime = LocalTime.now()
             val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -77,6 +91,7 @@ class ZenithNotificationListener : NotificationListenerService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        cachedActiveSchedules = null
         serviceScope.cancel()
     }
 
