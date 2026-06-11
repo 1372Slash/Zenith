@@ -426,7 +426,7 @@ class AppUsageMonitorService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val isCustomBitmap: Boolean
+        var isCustomBitmap: Boolean
         val iconBitmap = try {
             val drawable = packageManager.getApplicationIcon(goal.packageName)
             if (drawable is BitmapDrawable) {

@@ -21,7 +21,7 @@ import com.etrisad.zenith.data.preferences.ThemeConfig
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.ui.components.AppGoalOverlayContent
 import com.etrisad.zenith.ui.theme.ZenithTheme
-import kotlinx.coroutines.CoroutineScope
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
