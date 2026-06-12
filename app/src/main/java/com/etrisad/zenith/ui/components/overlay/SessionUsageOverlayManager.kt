@@ -2,6 +2,7 @@ package com.etrisad.zenith.ui.components.overlay
 
 import android.content.Context
 import android.graphics.PixelFormat
+import android.util.Log
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -35,12 +36,16 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.etrisad.zenith.data.preferences.FontOption
+import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.TooltipArrowPosition
 import com.etrisad.zenith.ui.components.ZenithTooltipBox
 import com.etrisad.zenith.ui.theme.GSFlexSettings
 import com.etrisad.zenith.ui.theme.ZenithTheme
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
@@ -52,6 +57,17 @@ class SessionUsageOverlayManager(private val context: Context) {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    private val _sharedPrefs = MutableStateFlow<UserPreferences?>(null)
+    val sharedPrefs: StateFlow<UserPreferences?> = _sharedPrefs
+
+    init {
+        scope.launch {
+            preferencesRepository.userPreferencesFlow.collectLatest { prefs ->
+                _sharedPrefs.value = prefs
+            }
+        }
+    }
 
     private val SYSTEM_UI_PACKAGES = setOf(
         "com.android.systemui",
@@ -231,7 +247,7 @@ class SessionUsageOverlayManager(private val context: Context) {
 
         val composeView = ComposeView(context).apply {
             setContent {
-                val userPrefs by preferencesRepository.userPreferencesFlow.collectAsState(initial = null)
+                val userPrefs by sharedPrefs.collectAsState(initial = null)
                 
                 ZenithTheme(
                     fontOption = userPrefs?.fontOption ?: FontOption.SYSTEM,
@@ -246,7 +262,7 @@ class SessionUsageOverlayManager(private val context: Context) {
                         opacity = session.opacity,
                         isVisibleProvider = { session.isVisibleState.value && !session.isTemporarilyHiddenState.value },
                         isGoal = session.isGoal,
-                        preferencesRepository = preferencesRepository,
+                        userPrefs = userPrefs,
                         onDrag = { dx, dy ->
                             params.x += dx.roundToInt()
                             params.y += dy.roundToInt()
@@ -262,6 +278,7 @@ class SessionUsageOverlayManager(private val context: Context) {
                                 delay(30000)
                                 session.isTemporarilyHiddenState.value = false
                                 updateForegroundApp(currentForegroundPackage, force = true)
+                                preferencesRepository.setHudHideFeatureLearned(true)
                             }
                         },
                         onFinish = {
@@ -372,7 +389,11 @@ class SessionUsageOverlayManager(private val context: Context) {
                         if (session.hudInstance == null && !session.isTemporarilyHiddenState.value && 
                             ((!session.isGoal && session.secondsLeftState.intValue > 0) || 
                              (session.isGoal && session.secondsElapsedState.intValue < session.totalSeconds))) {
-                            session.hudInstance = createHUDInstance(session)
+                            try {
+                                session.hudInstance = createHUDInstance(session)
+                            } catch (e: Exception) {
+                                Log.e("SessionHUD", "Failed to create HUD: ${e.message}")
+                            }
                         }
                     }
                 } else {
@@ -416,7 +437,7 @@ fun SessionUsageHUD(
     opacity: Int,
     isVisibleProvider: () -> Boolean,
     isGoal: Boolean = false,
-    preferencesRepository: UserPreferencesRepository,
+    userPrefs: UserPreferences?,
     onDrag: (Float, Float) -> Unit,
     onHideTemporarily: () -> Unit,
     onFinish: () -> Unit
@@ -424,13 +445,10 @@ fun SessionUsageHUD(
     CompositionLocalProvider(LocalRippleConfiguration provides null) {
         val entranceAnimationStarted = remember { mutableStateOf(false) }
         LaunchedEffect(Unit) { entranceAnimationStarted.value = true }
-
-        val userPrefs by preferencesRepository.userPreferencesFlow.collectAsState(initial = null)
         val tooltipState = rememberTooltipState(isPersistent = true)
-        val scope = rememberCoroutineScope()
 
         LaunchedEffect(userPrefs?.hudHideFeatureLearned) {
-            if (userPrefs?.hudHideFeatureLearned == false) {
+            if (userPrefs?.hudHideFeatureLearned == false && userPrefs != null) {
                 delay(3000)
                 tooltipState.show()
                 delay(8000)
@@ -524,9 +542,6 @@ fun SessionUsageHUD(
                         detectTapGestures(
                             onDoubleTap = {
                                 onHideTemporarily()
-                                scope.launch {
-                                    preferencesRepository.setHudHideFeatureLearned(true)
-                                }
                             }
                         )
                     },

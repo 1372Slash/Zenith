@@ -54,6 +54,7 @@ class ZenithApplication : Application(), ImageLoaderFactory {
         super.onCreate()
         lastUiMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         com.etrisad.zenith.service.UsageSyncWorker.enqueue(this)
+        com.etrisad.zenith.worker.StreakRefreshWorker.enqueue(this)
 
         applicationScope.launch {
             try {

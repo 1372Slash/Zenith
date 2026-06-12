@@ -58,7 +58,7 @@ class ZenithAccessibilityService : AccessibilityService() {
     @Volatile
     private var currentPreferences: UserPreferences? = null
     @Volatile
-    private var allShieldsCache = listOf<ShieldEntity>()
+    private var allShieldsCache = emptyMap<String, ShieldEntity>()
     @Volatile
     private var restrictedPackages = emptySet<String>()
     @Volatile
@@ -133,7 +133,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                 bedtimeWhitelistedPackages = prefs.bedtimeWhitelistedPackages
 
                 shieldRepository.isShieldsLoaded.first { it }
-                allShieldsCache = shieldRepository.allShields.first()
+                allShieldsCache = shieldRepository.allShields.first().associateBy { it.packageName }
 
                 val schedules = shieldRepository.allSchedules.first()
                 activeSchedules = schedules.filter { it.isActive }
@@ -187,9 +187,9 @@ class ZenithAccessibilityService : AccessibilityService() {
         serviceScope.launch {
             shieldRepository.isShieldsLoaded.first { it }
             shieldRepository.allShields.collect { shields ->
-                allShieldsCache = shields
+                allShieldsCache = shields.associateBy { it.packageName }
                 lastForegroundApp?.let { currentPkg ->
-                    currentShieldCache = shields.find { it.packageName == currentPkg }
+                    currentShieldCache = allShieldsCache[currentPkg]
                 }
                 updateRestrictedPackages()
             }
@@ -197,7 +197,7 @@ class ZenithAccessibilityService : AccessibilityService() {
 
         serviceScope.launch {
             shieldRepository.isShieldsLoaded.first { it }
-            shieldRepository.allSchedules.collect { schedules: List<ScheduleEntity> ->
+            shieldRepository.allSchedules.collect { schedules ->
                 activeSchedules = schedules.filter { it.isActive }
                 parsedSchedulesCache = activeSchedules.map { s ->
                     val startParts = s.startTime.split(":")
@@ -247,6 +247,7 @@ class ZenithAccessibilityService : AccessibilityService() {
         mainHandler.postDelayed({
             rootInActiveWindow?.packageName?.toString()?.let { pkg ->
                 if (pkg != packageName) {
+                    AppStateHolder.foregroundApp.value = pkg
                     packageChangeFlow.tryEmit(pkg)
                 }
             }
@@ -254,13 +255,18 @@ class ZenithAccessibilityService : AccessibilityService() {
 
         serviceScope.launch {
             while (true) {
+                if (!AppStateHolder.isScreenOn.value) {
+                    delay(60000)
+                    continue
+                }
+
                 val currentTime = System.currentTimeMillis()
                 val currentPkg = lastForegroundApp
 
                 if (currentPkg != null && !InterceptOverlayManager.isShowing && !shouldBypassBlocking(currentPkg)) {
                     val allowedUntil = allowedApps[currentPkg]
                     if (allowedUntil != null && allowedUntil != 0L && currentTime > allowedUntil) {
-                        val s = currentShieldCache ?: allShieldsCache.find { it.packageName == currentPkg } ?: shieldRepository.getShieldByPackageName(currentPkg)
+                        val s = currentShieldCache ?: allShieldsCache[currentPkg] ?: shieldRepository.getShieldByPackageName(currentPkg)
                         if (s?.isAutoQuitEnabled == true) {
                             lastKickTime = System.currentTimeMillis()
                             lastKickedPackage = currentPkg
@@ -296,6 +302,8 @@ class ZenithAccessibilityService : AccessibilityService() {
             return
         }
 
+        AppStateHolder.foregroundApp.value = packageName
+
         serviceScope.launch(Dispatchers.Main) {
             overlayManager.checkAndHide(packageName)
             packageChangeFlow.tryEmit(packageName)
@@ -310,7 +318,7 @@ class ZenithAccessibilityService : AccessibilityService() {
 
         if (shouldBypassBlocking(currentApp)) {
             previousApp?.let { prevPkg ->
-                allShieldsCache.find { it.packageName == prevPkg }?.let { shield ->
+                allShieldsCache[prevPkg]?.let { shield ->
                     if (shield.isDelayAppEnabled) {
                         serviceScope.launch {
                             shieldRepository.updateShield(shield.copy(lastDelayStartTimestamp = 0L))
@@ -326,7 +334,7 @@ class ZenithAccessibilityService : AccessibilityService() {
             return
         }
 
-        val shield = allShieldsCache.find { it.packageName == currentApp }
+        val shield = allShieldsCache[currentApp]
         currentShieldCache = shield
 
         checkBlockingInstant(currentApp, shield)
@@ -345,7 +353,7 @@ class ZenithAccessibilityService : AccessibilityService() {
 
             if (shouldCheckSchedules && !InterceptOverlayManager.isShowing) {
                 val isScheduled = checkSchedules(currentApp)
-                val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
+                val prefs = currentPreferences ?: return
                 if (!isScheduled && (shield != null || (prefs.mindfulGatewayEnabled && !shouldBypassBlocking(currentApp))) && currentTime > allowedUntil) {
                     checkIfAppIsShielded(currentApp)
                 }
@@ -504,8 +512,8 @@ class ZenithAccessibilityService : AccessibilityService() {
             return
         }
 
-        val shield = currentShieldCache ?: allShieldsCache.find { it.packageName == targetPackageName }
-        val prefs = currentPreferences ?: preferencesRepository.userPreferencesFlow.first()
+        val shield = currentShieldCache ?: allShieldsCache[targetPackageName]
+        val prefs = currentPreferences ?: return
         val isMindfulGateway = shield == null && prefs.mindfulGatewayEnabled && !shouldBypassBlocking(targetPackageName)
 
         val appName = shield?.appName ?: try {
@@ -640,7 +648,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                         lastKickTime = now
                         lastKickedPackage = targetPackageName
                         serviceScope.launch {
-                            val s = currentShieldCache ?: allShieldsCache.find { it.packageName == targetPackageName } ?: shieldRepository.getShieldByPackageName(targetPackageName)
+                            val s = currentShieldCache ?: allShieldsCache[targetPackageName] ?: shieldRepository.getShieldByPackageName(targetPackageName)
                             if (s != null && s.isDelayAppEnabled) {
                                 val updated = s.copy(lastDelayStartTimestamp = 0L)
                                 shieldRepository.updateShield(updated)
@@ -945,7 +953,7 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private fun updateRestrictedPackages() {
-        val shieldPkgs = allShieldsCache.map { it.packageName }.toSet()
+        val shieldPkgs = allShieldsCache.keys
         val schedulePkgs = activeSchedules.asSequence().filter { it.mode == ScheduleMode.BLOCK }
             .flatMap { it.packageNames }.toSet()
         hasGlobalAllowSchedule = activeSchedules.any { it.mode == ScheduleMode.ALLOW }

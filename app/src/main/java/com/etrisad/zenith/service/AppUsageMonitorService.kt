@@ -30,7 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -53,21 +53,28 @@ class AppUsageMonitorService : Service() {
     private val powerManager by lazy { getSystemService(POWER_SERVICE) as android.os.PowerManager }
     private val reusableEvent = UsageEvents.Event()
     private var lastEventQueryTime = 0L
+    @Volatile
     private var lastForegroundApp: String? = null
     private var cachedForegroundApp: String? = null
     private var cachedForegroundAppTime = 0L
+    @Volatile
     private var currentShieldCache: ShieldEntity? = null
+    @Volatile
     private var currentSessionPackage: String? = null
+    @Volatile
     private var lastUsageFetchTime = 0L
+    @Volatile
     private var cachedTotalUsage = 0L
+    @Volatile
     private var sessionStartTime = 0L
+    @Volatile
     private var baseUsageAtSessionStart = 0L
     private val allowedApps get() = shieldRepository.allowedApps
     private val lastAllowedRemainingTime = ConcurrentHashMap<String, Long>()
     private var activeSchedules = listOf<com.etrisad.zenith.data.local.entity.ScheduleEntity>()
     private var whitelistedPackages = emptySet<String>()
     private var launcherPackages = emptySet<String>()
-    private val systemAppCache = mutableMapOf<String, Boolean>()
+    private val systemAppCache = ConcurrentHashMap<String, Boolean>()
     private var lastLauncherRefreshTime = 0L
     private var currentPreferences: UserPreferences? = null
     private var allShieldsCache = emptyMap<String, ShieldEntity>()
@@ -84,12 +91,11 @@ class AppUsageMonitorService : Service() {
     private var lastDndFilter: Int? = null
     private var cachedBedtimeStartMinutes = -1
     private var cachedBedtimeEndMinutes = -1
-    private val windDownUsedPackages = mutableMapOf<String, Boolean>()
+    private val windDownUsedPackages = ConcurrentHashMap<String, Boolean>()
     private var bedtimeWhitelistedPackages = emptySet<String>()
     private var lastCheckedDayTimestamp = 0L
     private var isScreenOn = true
     private var isPowerSaveMode = false
-    private var lastStreakRefreshDate: LocalDate? = null
 
     private var restrictedPackages = emptySet<String>()
     private var hasGlobalAllowSchedule = false
@@ -101,14 +107,17 @@ class AppUsageMonitorService : Service() {
 
     private val mindfulGatewayStates get() = shieldRepository.mindfulGatewayStates
 
+    @Volatile
     private var baseGlobalUsageAtSessionStart = 0L
+    @Volatile
     private var cachedTotalGlobalUsage = 0L
 
     private val notificationManager by lazy { getSystemService(NotificationManager::class.java) }
 
+    @Volatile
     private var lastHUDUpdateTime = 0L
     private val HUD_UPDATE_INTERVAL = 1000L
-    private val dailyUsageCache = mutableMapOf<String, Long>()
+    private val dailyUsageCache = ConcurrentHashMap<String, Long>()
     private var cachedStartOfDay = 0L
     private var lastStartOfDayDate = -1
 
@@ -130,12 +139,14 @@ class AppUsageMonitorService : Service() {
             when (intent?.action) {
                 Intent.ACTION_SCREEN_ON -> {
                     isScreenOn = true
+                    AppStateHolder.isScreenOn.value = true
                     monitoringWakeLock?.let { if (it.isHeld) it.release() }
                     currentSessionPackage = null
                     lastForegroundApp = null
                 }
                 Intent.ACTION_SCREEN_OFF -> {
                     isScreenOn = false
+                    AppStateHolder.isScreenOn.value = false
                     currentShieldCache = null
                     currentSessionPackage = null
 
@@ -223,12 +234,6 @@ class AppUsageMonitorService : Service() {
                 }
 
                 updateRestrictedPackages()
-                val today = LocalDate.now()
-                if (lastStreakRefreshDate != today) {
-                    preferencesRepository.refreshGlobalStreak(shieldRepository)
-                    preferencesRepository.refreshAllAppStreaks(shieldRepository)
-                    lastStreakRefreshDate = today
-                }
 
                 dailyUsageCache.clear()
                 lastUsageCacheTime = 0L
@@ -484,7 +489,7 @@ class AppUsageMonitorService : Service() {
         }
     }
 
-    private val notifiedGoals = mutableSetOf<String>()
+    private val notifiedGoals = ConcurrentHashMap.newKeySet<String>()
 
     private fun startMonitoring() {
         if (monitoringLoopActive && System.currentTimeMillis() - lastLoopTick < 60000) return
@@ -495,365 +500,404 @@ class AppUsageMonitorService : Service() {
             } catch (t: Throwable) {
                 Log.e("ZenithAUMS", "Error in day change check: ${t.message}")
             }
+        }
 
+        // Loop 1: Foreground detection (ringan, 3s, only when AS not active)
+        serviceScope.launch {
             while (true) {
                 try {
                     lastLoopTick = System.currentTimeMillis()
-                    val currentTime = System.currentTimeMillis()
-
-                    if (currentTime - lastCheckedDayTimestamp > 120000 && lastCheckedDayDate != null) {
-                        val today = LocalDate.now()
-                        if (today != lastCheckedDayDate) {
-                            withContext(Dispatchers.IO) {
-                                com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
-                                updateStreaks()
-                                shieldRepository.resetAllRemainingTimes()
-                            }
-                            preferencesRepository.refreshGlobalStreak(shieldRepository)
-                            notifiedGoals.clear()
-                            earlyKickManager.reset()
-                            dailyUsageCache.clear()
-                            lastAllowedRemainingTime.clear()
-                            systemAppCache.clear()
-                            launcherPackages = emptySet()
-                            lastUsageCacheTime = 0L
-                            lastUsageFetchTime = 0L
-                            cachedTotalUsage = 0L
-                            cachedTotalGlobalUsage = 0L
-                            currentShieldCache = null
-
-                            sessionStartTime = currentTime
-                            baseUsageAtSessionStart = 0L
-                            baseGlobalUsageAtSessionStart = 0L
-                            lastHUDUpdateTime = 0L
-
-                            lastCheckedDayDate = today
-                            lastCheckedDayTimestamp = currentTime
-
-                            delay(1000)
-                            continue
-                        }
-
-                        currentPreferences?.let { updateBedtimeStatus(it) }
-                        val nowTime = LocalTime.now()
-                        checkSchedulesTransition(nowTime.hour * 60 + nowTime.minute)
-                        lastCheckedDayTimestamp = currentTime
-                    }
-
-                    if (ZenithAccessibilityService.isServiceRunning) {
-                        delay(60000)
-                        continue
-                    }
-
-                    if (!isScreenOn) {
-                        lastForegroundApp = null
-                        currentShieldCache = null
-                        currentSessionPackage = null
-                        checkGoalReminders()
-                        delay(30000)
-                        continue
-                    }
-
-                    var currentApp = getForegroundApp()
-
-                    if (currentApp != null) {
-                        if (launcherPackages.contains(currentApp) || currentApp == packageName) {
-                            overlayManager.hideOverlay()
-                            sessionUsageOverlayManager.destroyAllHUDs()
-
-                            lastForegroundApp?.let { prevPkg ->
-                                if (prevPkg != packageName && !launcherPackages.contains(prevPkg)) {
-                                    allShieldsCache[prevPkg]?.let { shield ->
-                                        if (shield.isDelayAppEnabled) {
-                                            serviceScope.launch {
-                                                shieldRepository.updateShield(shield.copy(lastDelayStartTimestamp = 0L))
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            overlayManager.checkAndHide(currentApp)
-                        }
-                    } else {
-                        overlayManager.hideOverlay()
-                        currentShieldCache?.let { shield ->
-                            if (shield.isDelayAppEnabled) {
-                                serviceScope.launch {
-                                    shieldRepository.updateShield(shield.copy(lastDelayStartTimestamp = 0L))
-                                }
-                                currentShieldCache = shield.copy(lastDelayStartTimestamp = 0L)
-                            }
+                    if (isScreenOn && !ZenithAccessibilityService.isServiceRunning) {
+                        val currentApp = getForegroundApp()
+                        if (currentApp != null && currentApp != AppStateHolder.foregroundApp.value) {
+                            AppStateHolder.foregroundApp.value = currentApp
                         }
                     }
+                } catch (_: Exception) {}
+                delay(3000)
+            }
+        }
 
-                    if (InterceptOverlayManager.isShowing) {
-                        lastForegroundApp = currentApp
-                        delay(30000)
-                        continue
+        // Loop 2: Main monitoring (event-driven on app change + periodic fallback)
+        serviceScope.launch {
+            // Process foreground changes reactively
+            launch {
+                AppStateHolder.foregroundApp
+                    .filterNotNull()
+                    .distinctUntilChanged()
+                    .collect { currentApp ->
+                        try {
+                            lastLoopTick = System.currentTimeMillis()
+                            handleForegroundChange(currentApp)
+                        } catch (t: Throwable) {
+                            logError(t)
+                        }
                     }
+            }
 
-                    if (launcherPackages.isEmpty() || currentTime - lastLauncherRefreshTime > 3600000) {
+            // Periodic monitoring tick
+            while (true) {
+                try {
+                    lastLoopTick = System.currentTimeMillis()
+                    if (isScreenOn && !InterceptOverlayManager.isShowing) {
+                        val currentApp = AppStateHolder.foregroundApp.value
+                        if (currentApp != null) {
+                            monitoringTick(currentApp)
+                        }
+                    }
+                } catch (t: Throwable) {
+                    logError(t)
+                }
+
+                val delayTime = computeMonitoringDelay()
+                delay(delayTime)
+            }
+        }
+
+        // Loop 3: Background data sync (60s)
+        serviceScope.launch {
+            while (true) {
+                try {
+                    if (isScreenOn && launcherPackages.isEmpty()) {
                         refreshLauncherCache()
                     }
+                } catch (_: Exception) {}
+                delay(60000)
+            }
+        }
 
-                    if (currentApp != null && currentApp != packageName && !launcherPackages.contains(currentApp)) {
-                        sessionUsageOverlayManager.updateForegroundApp(currentApp)
+        // Loop 4: Goal reminders (120s)
+        serviceScope.launch {
+            while (true) {
+                try {
+                    checkGoalReminders()
+                } catch (_: Exception) {}
+                delay(120000)
+            }
+        }
 
-                        val isNewSession = currentApp != lastForegroundApp || 
-                                          (currentShieldCache != null && currentShieldCache?.packageName != currentApp) || 
-                                          currentSessionPackage == null
+        // Loop 5: Day change & jadwal transisi (120s)
+        serviceScope.launch {
+            while (true) {
+                try {
+                    checkDayChangePeriodic()
+                } catch (_: Exception) {}
+                delay(120000)
+            }
+        }
+    }
 
-                        if (isNewSession) {
-                            lastForegroundApp?.let { prevPkg ->
-                                try {
-                                    allShieldsCache[prevPkg]?.let { prevShield ->
-                                        updateShieldInDatabase(prevShield, force = true)
-                                    }
-                                } catch (_: Exception) {}
-                            }
+    private suspend fun logError(t: Throwable) {
+        val currentTime = System.currentTimeMillis()
+        if (t.message != lastMonitoringError || currentTime - lastMonitoringErrorTime > 30000) {
+            Log.e("ZenithAUMS", "Critical error: ${t.message}", t)
+            lastMonitoringError = t.message
+            lastMonitoringErrorTime = currentTime
+        }
+        if (t is OutOfMemoryError) delay(10000) else delay(2000)
+    }
 
-                            currentShieldCache = allShieldsCache[currentApp]
+    private suspend fun handleForegroundChange(currentApp: String) {
+        val currentTime = System.currentTimeMillis()
 
-                            lastUsageFetchTime = 0L
-                            lastHUDUpdateTime = 0L
-                            sessionStartTime = currentTime
-                            currentSessionPackage = currentApp
+        if (launcherPackages.isEmpty() || currentTime - lastLauncherRefreshTime > 3600000) {
+            refreshLauncherCache()
+        }
 
-                            val startOfDay = getStartOfDay()
-                            val timeSinceMidnight = (currentTime - startOfDay).coerceAtLeast(0L)
-
-                            try {
-                                val detailedUsage = withContext(Dispatchers.IO) {
-                                    com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
-                                }
-                                val systemUsage = detailedUsage.appUsageMap[currentApp] ?: 0L
-                                val systemGlobal = getFilteredGlobalUsage(detailedUsage.appUsageMap)
-
-                                baseUsageAtSessionStart = systemUsage.coerceAtMost(timeSinceMidnight)
-                                cachedTotalUsage = baseUsageAtSessionStart
-                                baseGlobalUsageAtSessionStart = systemGlobal.coerceAtMost(timeSinceMidnight)
-                                cachedTotalGlobalUsage = baseGlobalUsageAtSessionStart
-                            } catch (_: Exception) {
-                                baseUsageAtSessionStart = 0L
-                                cachedTotalUsage = 0L
-                                baseGlobalUsageAtSessionStart = 0L
-                                cachedTotalGlobalUsage = 0L
-                            }
-
-                            if (!shouldBypassBlocking(currentApp)) {
-                                checkBlockingInstant(currentApp, currentShieldCache)
+        if (launcherPackages.contains(currentApp) || currentApp == packageName) {
+            overlayManager.hideOverlay()
+            sessionUsageOverlayManager.destroyAllHUDs()
+            lastForegroundApp?.let { prevPkg ->
+                if (prevPkg != packageName && !launcherPackages.contains(prevPkg)) {
+                    allShieldsCache[prevPkg]?.let { shield ->
+                        if (shield.isDelayAppEnabled) {
+                            serviceScope.launch {
+                                shieldRepository.updateShield(shield.copy(lastDelayStartTimestamp = 0L))
                             }
                         }
+                    }
+                }
+            }
+            currentShieldCache = null
+            currentSessionPackage = currentApp
+            cachedTotalUsage = 0L
+            lastForegroundApp = currentApp
+            return
+        }
 
-                        if (shouldBypassBlocking(currentApp)) {
-                            lastForegroundApp = currentApp
-                            val delayTime = if (isPowerSaveMode) 7000L else 4000L
-                            delay(delayTime)
-                            continue
-                        }
+        overlayManager.checkAndHide(currentApp)
+        if (InterceptOverlayManager.isShowing) {
+            lastForegroundApp = currentApp
+            return
+        }
 
-                        updateUsageTime(currentApp)
+        sessionUsageOverlayManager.updateForegroundApp(currentApp)
 
-                        val shield = currentShieldCache
-                        if (shield != null && shield.type != FocusType.GOAL && !isPaused(shield)) {
-                            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
-                            val actualRemaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
-                            val prefs = currentPreferences
+        val isNewSession = currentApp != lastForegroundApp ||
+                (currentShieldCache != null && currentShieldCache?.packageName != currentApp) ||
+                currentSessionPackage == null
 
-                            val isOverlayShowing = InterceptOverlayManager.isShowing
-                            val isSessionActive = allowedApps[currentApp]?.let { it > currentTime } ?: false
-                            val isShieldLimitReached = actualRemaining <= 0L
+        try {
+            lastForegroundApp?.let { prevPkg ->
+                if (prevPkg != currentApp) {
+                    allShieldsCache[prevPkg]?.let { prevShield ->
+                        updateShieldInDatabase(prevShield, force = true)
+                    }
+                }
+            }
+        } catch (_: Exception) {}
 
-                            val allowedAtRemaining = lastAllowedRemainingTime[currentApp] ?: Long.MAX_VALUE
-                            val threshold = 300000L
-                            val sessionStartedAboveThreshold = allowedAtRemaining > threshold
+        if (isNewSession) {
+            currentShieldCache = allShieldsCache[currentApp]
+            lastUsageFetchTime = 0L
+            lastHUDUpdateTime = 0L
+            sessionStartTime = currentTime
+            currentSessionPackage = currentApp
 
-                            if (!isOverlayShowing && !isShieldLimitReached &&
-                                earlyKickManager.shouldKick(currentApp, actualRemaining, prefs?.earlyKickEnabled ?: false) &&
-                                (!isSessionActive || sessionStartedAboveThreshold)) {
+            val startOfDay = getStartOfDay()
+            val timeSinceMidnight = (currentTime - startOfDay).coerceAtLeast(0L)
 
+            val detailedUsage = withContext(Dispatchers.IO) {
+                com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
+            }
+            val systemUsage = detailedUsage.appUsageMap[currentApp] ?: 0L
+            val systemGlobal = getFilteredGlobalUsage(detailedUsage.appUsageMap)
+
+            baseUsageAtSessionStart = systemUsage.coerceAtMost(timeSinceMidnight)
+            cachedTotalUsage = baseUsageAtSessionStart
+            baseGlobalUsageAtSessionStart = systemGlobal.coerceAtMost(timeSinceMidnight)
+            cachedTotalGlobalUsage = baseGlobalUsageAtSessionStart
+
+            if (!shouldBypassBlocking(currentApp)) {
+                checkBlockingInstant(currentApp, currentShieldCache)
+            }
+        }
+
+        lastForegroundApp = currentApp
+    }
+
+    private suspend fun monitoringTick(currentApp: String) {
+        val currentTime = System.currentTimeMillis()
+        if (currentApp == packageName || launcherPackages.contains(currentApp)) {
+            sessionUsageOverlayManager.updateForegroundApp(currentApp)
+            currentShieldCache = null
+            currentSessionPackage = currentApp
+            cachedTotalUsage = 0L
+            return
+        }
+
+        if (shouldBypassBlocking(currentApp)) return
+
+        updateUsageTime(currentApp)
+
+        val shield = currentShieldCache
+        if (shield != null && shield.type != FocusType.GOAL && !isPaused(shield)) {
+            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+            val actualRemaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
+            val prefs = currentPreferences
+
+            val isOverlayShowing = InterceptOverlayManager.isShowing
+            val isSessionActive = allowedApps[currentApp]?.let { it > currentTime } ?: false
+            val isShieldLimitReached = actualRemaining <= 0L
+
+            val allowedAtRemaining = lastAllowedRemainingTime[currentApp] ?: Long.MAX_VALUE
+            val threshold = 300000L
+            val sessionStartedAboveThreshold = allowedAtRemaining > threshold
+
+            if (!isOverlayShowing && !isShieldLimitReached &&
+                earlyKickManager.shouldKick(currentApp, actualRemaining, prefs?.earlyKickEnabled ?: false) &&
+                (!isSessionActive || sessionStartedAboveThreshold)) {
+
+                allowedApps.remove(currentApp)
+                withContext(Dispatchers.Main) {
+                    sessionUsageOverlayManager.hideHUD(currentApp)
+                    Toast.makeText(this@AppUsageMonitorService, "Early Kick: 5 minutes remaining", Toast.LENGTH_LONG).show()
+                }
+                goToHomeScreen()
+                lastForegroundApp = currentApp
+                return
+            }
+        }
+
+        val shieldForPauseCheck = currentShieldCache
+        val isAppPaused = shieldForPauseCheck != null && isPaused(shieldForPauseCheck)
+
+        val allowedUntilVal = allowedApps[currentApp]
+        if (!isAppPaused && allowedUntilVal != null && allowedUntilVal > currentTime && !ZenithAccessibilityService.isServiceRunning) {
+            val prefs = currentPreferences
+            if (prefs?.sessionUsageOverlayEnabled == true) {
+                val remainingMinutes = ((allowedUntilVal - currentTime) / 60000L).toInt().coerceAtLeast(1)
+                val sh = currentShieldCache
+                val isGoal = sh?.type == FocusType.GOAL
+
+                val limitMillis = (sh?.timeLimitMinutes ?: 0) * 60 * 1000L
+                val currentUsage = if (isGoal) getTotalUsageToday(currentApp) else cachedTotalUsage
+
+                if (!(isGoal && (currentUsage >= limitMillis || notifiedGoals.contains(currentApp)) && limitMillis > 0)) {
+                    val duration = if (isGoal) sh?.timeLimitMinutes ?: 0 else remainingMinutes
+                    val currentUsageSeconds = (currentUsage / 1000).toInt()
+                    withContext(Dispatchers.Main) {
+                        sessionUsageOverlayManager.showHUD(
+                            currentApp,
+                            duration,
+                            prefs.sessionUsageOverlaySize,
+                            prefs.sessionUsageOverlayOpacity,
+                            isGoal = isGoal,
+                            initialSeconds = if (isGoal) currentUsageSeconds else 0,
+                            onSessionEnd = {
                                 allowedApps.remove(currentApp)
-                                withContext(Dispatchers.Main) {
-                                    sessionUsageOverlayManager.hideHUD(currentApp)
-                                    Toast.makeText(this@AppUsageMonitorService, "Early Kick: 5 minutes remaining", Toast.LENGTH_LONG).show()
-                                }
-                                goToHomeScreen()
-                                lastForegroundApp = currentApp
-                                delay(4000)
-                                continue
-                            }
-                        }
-
-                        val shieldForPauseCheck = currentShieldCache
-                        val isAppPaused = shieldForPauseCheck != null && isPaused(shieldForPauseCheck)
-
-                        val allowedUntilVal = allowedApps[currentApp]
-                        if (!isAppPaused && allowedUntilVal != null && allowedUntilVal > currentTime && !ZenithAccessibilityService.isServiceRunning) {
-                            val prefs = currentPreferences
-                            if (prefs?.sessionUsageOverlayEnabled == true) {
-                                val remainingMinutes = ((allowedUntilVal - currentTime) / 60000L).toInt().coerceAtLeast(1)
-                                val shield = currentShieldCache
-                                val isGoal = shield?.type == FocusType.GOAL
-
-                                val limitMillis = (shield?.timeLimitMinutes ?: 0) * 60 * 1000L
-                                val currentUsage = if (isGoal) getTotalUsageToday(currentApp) else cachedTotalUsage
-
-                                if (!(isGoal && (currentUsage >= limitMillis || notifiedGoals.contains(currentApp)) && limitMillis > 0)) {
-                                    val duration = if (isGoal) shield?.timeLimitMinutes ?: 0 else remainingMinutes
-                                    val currentUsageSeconds = (currentUsage / 1000).toInt()
-                                    withContext(Dispatchers.Main) {
-                                        sessionUsageOverlayManager.showHUD(
-                                            currentApp,
-                                            duration,
-                                            prefs.sessionUsageOverlaySize,
-                                            prefs.sessionUsageOverlayOpacity,
-                                            isGoal = isGoal,
-                                            initialSeconds = if (isGoal) currentUsageSeconds else 0,
-                                            onSessionEnd = {
-                                                allowedApps.remove(currentApp)
-                                                serviceScope.launch {
-                                                    val s = allShieldsCache[currentApp] ?: shieldRepository.getShieldByPackageName(currentApp)
-                                                    if (s != null) {
-                                                        val updated = s.copy(lastSessionEndTimestamp = System.currentTimeMillis())
-                                                        shieldRepository.updateShield(updated)
-                                                        currentShieldCache = updated
-
-                                                        if (updated.isAutoQuitEnabled) {
-                                                            if (getForegroundApp() == currentApp) {
-                                                                goToHomeScreen()
-                                                            }
-                                                        } else {
-                                                            checkIfAppIsShielded(currentApp)
-                                                        }
-                                                    } else {
-                                                        checkIfAppIsShielded(currentApp)
-                                                    }
-                                                }
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        val isBedtimeBlocking = isBedtimeActive || (isWindDownActive && currentPreferences?.bedtimeWindDownEnabled == true)
-                        val shouldCheckSchedules = (isBedtimeBlocking && currentApp !in bedtimeWhitelistedPackages) || (allowedUntilVal == null || currentTime > allowedUntilVal)
-
-                        if (!isAppPaused && shouldCheckSchedules && !InterceptOverlayManager.isShowing && !ZenithAccessibilityService.isServiceRunning) {
-                            if (checkSchedules(currentApp)) {
-                                lastForegroundApp = currentApp
-                                delay(5000)
-                                continue
-                            }
-
-                            if (allowedUntilVal == null || currentTime > allowedUntilVal) {
-                                val shield = currentShieldCache
-                                val prefs = currentPreferences
-                                if (shield != null || (prefs?.mindfulGatewayEnabled == true && !shouldBypassBlocking(currentApp))) {
-                                    if (shield != null && shield.isAutoQuitEnabled && allowedUntilVal != null && allowedUntilVal > 0) {
-                                        lastKickTime = System.currentTimeMillis()
-                                        lastKickedPackage = currentApp
-                                        goToHomeScreen()
-                                        allowedApps.remove(currentApp)
-                                        if (shield.isDelayAppEnabled) {
-                                            serviceScope.launch {
-                                                shieldRepository.updateShield(shield.copy(lastDelayStartTimestamp = 0L))
-                                            }
-                                            currentShieldCache = currentShieldCache?.copy(lastDelayStartTimestamp = 0L)
+                                serviceScope.launch {
+                                    val s = allShieldsCache[currentApp] ?: shieldRepository.getShieldByPackageName(currentApp)
+                                    if (s != null) {
+                                        val updated = s.copy(lastSessionEndTimestamp = System.currentTimeMillis())
+                                        shieldRepository.updateShield(updated)
+                                        currentShieldCache = updated
+                                        if (updated.isAutoQuitEnabled) {
+                                            goToHomeScreen()
+                                        } else {
+                                            checkIfAppIsShielded(currentApp)
                                         }
                                     } else {
-                                        if (allowedUntilVal != null && allowedUntilVal > 0) {
-                                            allowedApps.remove(currentApp)
-                                        }
                                         checkIfAppIsShielded(currentApp)
                                     }
                                 }
                             }
-                        }
-                    } else if (currentApp != null && (currentApp == packageName || launcherPackages.contains(currentApp))) {
-                        sessionUsageOverlayManager.updateForegroundApp(currentApp)
-                        currentShieldCache = null
-                        currentSessionPackage = currentApp
-                        cachedTotalUsage = 0L
-                    }
-
-                    lastForegroundApp = currentApp
-                } catch (t: Throwable) {
-                    val currentTime = System.currentTimeMillis()
-                    if (t.message != lastMonitoringError || currentTime - lastMonitoringErrorTime > 30000) {
-                        Log.e("ZenithAUMS", "Critical error in monitoring loop: ${t.message}", t)
-                        lastMonitoringError = t.message
-                        lastMonitoringErrorTime = currentTime
-                    }
-                    if (t is OutOfMemoryError) {
-                        delay(10000)
-                    } else {
-                        delay(2000)
+                        )
                     }
                 }
-
-                checkGoalReminders()
-
-                val delayTime = try {
-                    if (!isScreenOn) {
-                        120000L
-                    } else if (isPowerSaveMode) {
-                        120000L
-                    } else if (InterceptOverlayManager.isShowing) {
-                        30000L
-                    } else if (currentPreferences?.customDelayEnabled == true) {
-                        val prefs = currentPreferences!!
-                        when {
-                            currentShieldCache != null -> {
-                                val shield = currentShieldCache!!
-                                val limitMillis = shield.timeLimitMinutes * 60 * 1000L
-                                val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
-                                if (shield.type == FocusType.GOAL) {
-                                    when {
-                                        remaining < 60000 -> prefs.delayGoalNear.coerceIn(5000L, 10000L)
-                                        remaining < 300000 -> prefs.delayGoalMid.coerceIn(7000L, 15000L)
-                                        else -> prefs.delayGoalFar.coerceIn(10000L, 25000L)
-                                    }
-                                } else {
-                                    when {
-                                        remaining > 3600000 -> prefs.delayShieldVeryFar.coerceIn(15000L, 30000L)
-                                        remaining > 600000 -> prefs.delayShieldFar.coerceIn(10000L, 25000L)
-                                        remaining > 60000 -> prefs.delayShieldMid.coerceIn(7000L, 15000L)
-                                        else -> prefs.delayShieldNear.coerceIn(5000L, 10000L)
-                                    }
-                                }
-                            }
-                            else -> prefs.delayDefault.coerceIn(10000L, 30000L)
-                        }
-                    } else {
-                        when {
-                            currentShieldCache != null -> {
-                                val shield = currentShieldCache!!
-                                val limitMillis = shield.timeLimitMinutes * 60 * 1000L
-                                val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
-                                if (shield.type == FocusType.GOAL) {
-                                    when {
-                                        remaining < 60000 -> 6000L
-                                        remaining < 300000 -> 10000L
-                                        else -> 20000L
-                                    }
-                                } else {
-                                    when {
-                                        remaining > 3600000 -> 25000L
-                                        remaining > 600000 -> 20000L
-                                        remaining > 60000 -> 12000L
-                                        else -> 6000L
-                                    }
-                                }
-                            }
-                            else -> 15000L
-                        }
-                    }
-                } catch (_: Exception) { 7000L }
-                delay(delayTime)
             }
         }
+
+        val isBedtimeBlocking = isBedtimeActive || (isWindDownActive && currentPreferences?.bedtimeWindDownEnabled == true)
+        val shouldCheckSchedules = (isBedtimeBlocking && currentApp !in bedtimeWhitelistedPackages) || (allowedUntilVal == null || currentTime > allowedUntilVal)
+
+        if (!isAppPaused && shouldCheckSchedules && !InterceptOverlayManager.isShowing && !ZenithAccessibilityService.isServiceRunning) {
+            if (checkSchedules(currentApp)) {
+                lastForegroundApp = currentApp
+                return
+            }
+
+            if (allowedUntilVal == null || currentTime > allowedUntilVal) {
+                val sh = currentShieldCache
+                val prefs = currentPreferences
+                if (sh != null || (prefs?.mindfulGatewayEnabled == true && !shouldBypassBlocking(currentApp))) {
+                    if (sh != null && sh.isAutoQuitEnabled && allowedUntilVal != null && allowedUntilVal > 0) {
+                        lastKickTime = System.currentTimeMillis()
+                        lastKickedPackage = currentApp
+                        goToHomeScreen()
+                        allowedApps.remove(currentApp)
+                        if (sh.isDelayAppEnabled) {
+                            serviceScope.launch {
+                                shieldRepository.updateShield(sh.copy(lastDelayStartTimestamp = 0L))
+                            }
+                            currentShieldCache = currentShieldCache?.copy(lastDelayStartTimestamp = 0L)
+                        }
+                    } else {
+                        if (allowedUntilVal != null && allowedUntilVal > 0) {
+                            allowedApps.remove(currentApp)
+                        }
+                        checkIfAppIsShielded(currentApp)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun computeMonitoringDelay(): Long {
+        return try {
+            if (!isScreenOn) {
+                120000L
+            } else if (isPowerSaveMode) {
+                120000L
+            } else if (InterceptOverlayManager.isShowing) {
+                30000L
+            } else if (currentPreferences?.customDelayEnabled == true) {
+                val prefs = currentPreferences!!
+                when {
+                    currentShieldCache != null -> {
+                        val shield = currentShieldCache!!
+                        val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+                        val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
+                        if (shield.type == FocusType.GOAL) {
+                            when {
+                                remaining < 60000 -> prefs.delayGoalNear.coerceIn(5000L, 10000L)
+                                remaining < 300000 -> prefs.delayGoalMid.coerceIn(7000L, 15000L)
+                                else -> prefs.delayGoalFar.coerceIn(10000L, 25000L)
+                            }
+                        } else {
+                            when {
+                                remaining > 3600000 -> prefs.delayShieldVeryFar.coerceIn(15000L, 30000L)
+                                remaining > 600000 -> prefs.delayShieldFar.coerceIn(10000L, 25000L)
+                                remaining > 60000 -> prefs.delayShieldMid.coerceIn(7000L, 15000L)
+                                else -> prefs.delayShieldNear.coerceIn(5000L, 10000L)
+                            }
+                        }
+                    }
+                    else -> prefs.delayDefault.coerceIn(10000L, 30000L)
+                }
+            } else {
+                when {
+                    currentShieldCache != null -> {
+                        val shield = currentShieldCache!!
+                        val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+                        val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
+                        if (shield.type == FocusType.GOAL) {
+                            when {
+                                remaining < 60000 -> 6000L
+                                remaining < 300000 -> 10000L
+                                else -> 20000L
+                            }
+                        } else {
+                            when {
+                                remaining > 3600000 -> 25000L
+                                remaining > 600000 -> 20000L
+                                remaining > 60000 -> 12000L
+                                else -> 6000L
+                            }
+                        }
+                    }
+                    else -> 15000L
+                }
+            }
+        } catch (_: Exception) { 7000L }
+    }
+
+    private suspend fun checkDayChangePeriodic() {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastCheckedDayTimestamp <= 120000) return
+        if (lastCheckedDayDate == null) return
+
+        val today = LocalDate.now()
+        if (today != lastCheckedDayDate) {
+            withContext(Dispatchers.IO) {
+                com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
+                shieldRepository.resetAllRemainingTimes()
+            }
+            notifiedGoals.clear()
+            earlyKickManager.reset()
+            dailyUsageCache.clear()
+            lastAllowedRemainingTime.clear()
+            systemAppCache.clear()
+            launcherPackages = emptySet()
+            lastUsageCacheTime = 0L
+            lastUsageFetchTime = 0L
+            cachedTotalUsage = 0L
+            cachedTotalGlobalUsage = 0L
+            currentShieldCache = null
+
+            sessionStartTime = currentTime
+            baseUsageAtSessionStart = 0L
+            baseGlobalUsageAtSessionStart = 0L
+            lastHUDUpdateTime = 0L
+
+            lastCheckedDayDate = today
+            lastCheckedDayTimestamp = currentTime
+            return
+        }
+
+        currentPreferences?.let { updateBedtimeStatus(it) }
+        checkSchedulesTransition(LocalTime.now().hour * 60 + LocalTime.now().minute)
+        lastCheckedDayTimestamp = currentTime
     }
 
     private suspend fun checkBlockingInstant(currentApp: String, shield: ShieldEntity?) {
@@ -1325,9 +1369,6 @@ class AppUsageMonitorService : Service() {
         val todayStr = dateFormatter.format(today)
 
         if (lastCheckStr.isNotEmpty() && lastCheckStr != todayStr) {
-            updateStreaks()
-            preferencesRepository.refreshGlobalStreak(shieldRepository)
-            preferencesRepository.refreshAllAppStreaks(shieldRepository)
             shieldRepository.resetAllRemainingTimes()
             notifiedGoals.clear()
             dailyUsageCache.clear()
