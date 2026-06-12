@@ -133,6 +133,7 @@ fun SettingsCategoryScreen(
                     "features" -> FeaturesSettings(
                         preferences = preferences,
                         onTotalUsagePillEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setTotalUsagePillEnabled(enabled) } },
+                        onForegroundNotificationStatusModeChange = { mode -> coroutineScope.launch { preferencesRepository.setForegroundNotificationStatusMode(mode) } },
                         onSessionUsageOverlayEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setSessionUsageOverlayEnabled(enabled) } },
                         onSessionUsageOverlaySizeChange = { size -> coroutineScope.launch { preferencesRepository.setSessionUsageOverlaySize(size) } },
                         onSessionUsageOverlayOpacityChange = { opacity -> coroutineScope.launch { preferencesRepository.setSessionUsageOverlayOpacity(opacity) } },

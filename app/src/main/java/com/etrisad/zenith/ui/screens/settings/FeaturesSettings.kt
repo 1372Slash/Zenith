@@ -20,13 +20,18 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.etrisad.zenith.data.preferences.ForegroundNotificationStatusMode
 import com.etrisad.zenith.data.preferences.UserPreferences
+import com.etrisad.zenith.ui.components.ZenithButtonSize
+import com.etrisad.zenith.ui.components.ZenithToggleButtonGroup
+import com.etrisad.zenith.ui.components.ZenithToggleOption
 import com.google.accompanist.drawablepainter.rememberDrawablePainter
 
 @Composable
 fun FeaturesSettings(
     preferences: UserPreferences,
     onTotalUsagePillEnabledChange: (Boolean) -> Unit,
+    onForegroundNotificationStatusModeChange: (ForegroundNotificationStatusMode) -> Unit,
     onSessionUsageOverlayEnabledChange: (Boolean) -> Unit,
     onSessionUsageOverlaySizeChange: (Int) -> Unit,
     onSessionUsageOverlayOpacityChange: (Int) -> Unit,
@@ -75,6 +80,15 @@ fun FeaturesSettings(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+        PreferenceCategory(title = "Status Notifications")
+
+        ForegroundNotificationStatusSelector(
+            selectedMode = preferences.foregroundNotificationStatusMode,
+            onModeChange = onForegroundNotificationStatusModeChange,
+            shape = RoundedCornerShape(24.dp)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
         PreferenceCategory(title = "Advanced Control")
 
         SettingsToggle(
@@ -115,6 +129,76 @@ fun FeaturesSettings(
             icon = Icons.Outlined.BatteryChargingFull,
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
         )
+    }
+}
+
+@Composable
+fun ForegroundNotificationStatusSelector(
+    selectedMode: ForegroundNotificationStatusMode,
+    onModeChange: (ForegroundNotificationStatusMode) -> Unit,
+    shape: Shape = RoundedCornerShape(8.dp)
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = shape,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.NotificationsActive,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Status Notification",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    )
+                    Text(
+                        text = "Choose what Zenith shows while monitoring is active",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            val modeOptions = listOf(
+                ForegroundNotificationStatusMode.DAILY_USAGE to "Usage",
+                ForegroundNotificationStatusMode.ACTIVE_FOCUS to "Focus",
+                ForegroundNotificationStatusMode.DEFAULT to "Default"
+            )
+
+            ZenithToggleButtonGroup(
+                options = modeOptions.map { ZenithToggleOption(text = it.second) },
+                selectedIndices = setOf(modeOptions.indexOfFirst { it.first == selectedMode }.coerceAtLeast(0)),
+                onToggle = { index -> onModeChange(modeOptions[index].first) },
+                size = ZenithButtonSize.Medium,
+                isInsideContainer = true
+            )
+        }
     }
 }
 
