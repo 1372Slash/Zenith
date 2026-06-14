@@ -46,12 +46,12 @@ enum class GSFlexPreset {
 }
 
 enum class PerformanceLevel(val labelRes: String, val descriptionRes: String) {
-    MAX_RESPONSIVENESS("Max Responsiveness", "Overlay appears instantly (0.5-30s). Higher battery usage."),
-    RESPONSIVE("Responsive", "Overlay appears within 1-60s. Moderate battery usage."),
-    BALANCED("Balanced", "Overlay appears within 3-120s. Optimized battery usage. [DEFAULT]"),
-    BATTERY_SAVER("Battery Saver", "Overlay appears within 5-300s. Low battery usage."),
-    MAX_BATTERY("Max Battery", "Overlay appears within 10-600s. Minimal battery usage."),
-    CUSTOM("Custom", "Manually tuned performance values.")
+    MAX_RESPONSIVENESS("Max Responsiveness", "Maximum speed for gaming and time-sensitive moments."),
+    RESPONSIVE("Responsive", "A snappier experience than the default profile."),
+    BALANCED("Balanced", "Tuned for everyday use."),
+    BATTERY_SAVER("Battery Saver", "Gentler on battery with reduced background checks."),
+    MAX_BATTERY("Max Battery", "Maximum battery savings with minimal background activity."),
+    CUSTOM("Custom", "Your personalized configuration.")
 }
 
 fun PerformanceLevel.isPreset() = this != PerformanceLevel.CUSTOM
@@ -67,6 +67,16 @@ data class PerformanceConfig(
     val launcherCacheMs: Long = 3_600_000L,
     val goalReminderTick: Long = 2L,
     val dayChangeTick: Long = 2L,
+    val monPowerSave: Long = 5000L,
+    val monOverlayShowing: Long = 8000L,
+    val monGoalNear: Long = 600L,
+    val monGoalMid: Long = 1200L,
+    val monGoalFar: Long = 1800L,
+    val monShieldNear: Long = 600L,
+    val monShieldMid: Long = 1500L,
+    val monShieldFar: Long = 3000L,
+    val monShieldVeryFar: Long = 5000L,
+    val monDefault: Long = 1200L,
 )
 
 fun PerformanceLevel.toConfig(): PerformanceConfig = when (this) {
@@ -81,6 +91,16 @@ fun PerformanceLevel.toConfig(): PerformanceConfig = when (this) {
         launcherCacheMs = 1_800_000L,
         goalReminderTick = 1L,
         dayChangeTick = 1L,
+        monPowerSave = 2000L,
+        monOverlayShowing = 3000L,
+        monGoalNear = 300L,
+        monGoalMid = 600L,
+        monGoalFar = 900L,
+        monShieldNear = 300L,
+        monShieldMid = 800L,
+        monShieldFar = 1500L,
+        monShieldVeryFar = 2500L,
+        monDefault = 600L,
     )
     PerformanceLevel.RESPONSIVE -> PerformanceConfig(
         a11yActiveDelay = 60_000L,
@@ -93,6 +113,16 @@ fun PerformanceLevel.toConfig(): PerformanceConfig = when (this) {
         launcherCacheMs = 3_600_000L,
         goalReminderTick = 1L,
         dayChangeTick = 1L,
+        monPowerSave = 3000L,
+        monOverlayShowing = 5000L,
+        monGoalNear = 400L,
+        monGoalMid = 800L,
+        monGoalFar = 1200L,
+        monShieldNear = 400L,
+        monShieldMid = 1000L,
+        monShieldFar = 2000L,
+        monShieldVeryFar = 3000L,
+        monDefault = 800L,
     )
     PerformanceLevel.BALANCED -> PerformanceConfig(
         a11yActiveDelay = 120_000L,
@@ -105,6 +135,16 @@ fun PerformanceLevel.toConfig(): PerformanceConfig = when (this) {
         launcherCacheMs = 3_600_000L,
         goalReminderTick = 2L,
         dayChangeTick = 2L,
+        monPowerSave = 5000L,
+        monOverlayShowing = 8000L,
+        monGoalNear = 600L,
+        monGoalMid = 1200L,
+        monGoalFar = 1800L,
+        monShieldNear = 600L,
+        monShieldMid = 1500L,
+        monShieldFar = 3000L,
+        monShieldVeryFar = 5000L,
+        monDefault = 1200L,
     )
     PerformanceLevel.BATTERY_SAVER -> PerformanceConfig(
         a11yActiveDelay = 300_000L,
@@ -117,6 +157,16 @@ fun PerformanceLevel.toConfig(): PerformanceConfig = when (this) {
         launcherCacheMs = 7_200_000L,
         goalReminderTick = 5L,
         dayChangeTick = 5L,
+        monPowerSave = 10000L,
+        monOverlayShowing = 12000L,
+        monGoalNear = 1200L,
+        monGoalMid = 3000L,
+        monGoalFar = 5000L,
+        monShieldNear = 1200L,
+        monShieldMid = 3000L,
+        monShieldFar = 6000L,
+        monShieldVeryFar = 10000L,
+        monDefault = 5000L,
     )
     PerformanceLevel.MAX_BATTERY -> PerformanceConfig(
         a11yActiveDelay = 600_000L,
@@ -129,6 +179,16 @@ fun PerformanceLevel.toConfig(): PerformanceConfig = when (this) {
         launcherCacheMs = 14_400_000L,
         goalReminderTick = 10L,
         dayChangeTick = 10L,
+        monPowerSave = 20000L,
+        monOverlayShowing = 25000L,
+        monGoalNear = 3000L,
+        monGoalMid = 6000L,
+        monGoalFar = 10000L,
+        monShieldNear = 3000L,
+        monShieldMid = 7000L,
+        monShieldFar = 12000L,
+        monShieldVeryFar = 20000L,
+        monDefault = 10000L,
     )
     PerformanceLevel.CUSTOM -> PerformanceConfig()
 }
@@ -173,17 +233,6 @@ class UserPreferencesRepository(private val context: Context) {
         val HUD_HIDE_FEATURE_LEARNED = booleanPreferencesKey("hud_hide_feature_learned")
         val SMART_REPAIR_ON_REFRESH = booleanPreferencesKey("smart_repair_on_refresh")
         val ALLOW_REPAIR_NON_UNAVAILABLE = booleanPreferencesKey("allow_repair_non_unavailable")
-        val CUSTOM_DELAY_ENABLED = booleanPreferencesKey("custom_delay_enabled")
-        val DELAY_POWER_SAVE = longPreferencesKey("delay_power_save")
-        val DELAY_OVERLAY_SHOWING = longPreferencesKey("delay_overlay_showing")
-        val DELAY_GOAL_NEAR = longPreferencesKey("delay_goal_near")
-        val DELAY_GOAL_MID = longPreferencesKey("delay_goal_mid")
-        val DELAY_GOAL_FAR = longPreferencesKey("delay_goal_far")
-        val DELAY_SHIELD_VERY_FAR = longPreferencesKey("delay_shield_very_far")
-        val DELAY_SHIELD_FAR = longPreferencesKey("delay_shield_far")
-        val DELAY_SHIELD_MID = longPreferencesKey("delay_shield_mid")
-        val DELAY_SHIELD_NEAR = longPreferencesKey("delay_shield_near")
-        val DELAY_DEFAULT = longPreferencesKey("delay_default")
         val MINDFUL_GATEWAY_ENABLED = booleanPreferencesKey("mindful_gateway_enabled")
         val REFRESH_ON_OPEN_USAGE_STATS = booleanPreferencesKey("refresh_on_open_usage_stats")
         val CHECK_UPDATE_ON_START = booleanPreferencesKey("check_update_on_start")
@@ -200,6 +249,16 @@ class UserPreferencesRepository(private val context: Context) {
         val PERF_LAUNCHER_CACHE = longPreferencesKey("perf_launcher_cache")
         val PERF_GOAL_REMINDER_TICK = longPreferencesKey("perf_goal_reminder_tick")
         val PERF_DAY_CHANGE_TICK = longPreferencesKey("perf_day_change_tick")
+        val PERF_MON_POWER_SAVE = longPreferencesKey("perf_mon_power_save")
+        val PERF_MON_OVERLAY_SHOWING = longPreferencesKey("perf_mon_overlay_showing")
+        val PERF_MON_GOAL_NEAR = longPreferencesKey("perf_mon_goal_near")
+        val PERF_MON_GOAL_MID = longPreferencesKey("perf_mon_goal_mid")
+        val PERF_MON_GOAL_FAR = longPreferencesKey("perf_mon_goal_far")
+        val PERF_MON_SHIELD_NEAR = longPreferencesKey("perf_mon_shield_near")
+        val PERF_MON_SHIELD_MID = longPreferencesKey("perf_mon_shield_mid")
+        val PERF_MON_SHIELD_FAR = longPreferencesKey("perf_mon_shield_far")
+        val PERF_MON_SHIELD_VERY_FAR = longPreferencesKey("perf_mon_shield_very_far")
+        val PERF_MON_DEFAULT = longPreferencesKey("perf_mon_default")
 
         val GS_FLEX_PRESET = stringPreferencesKey("gs_flex_preset")
         val GS_D_WGHT = floatPreferencesKey("gs_d_wght")
@@ -297,17 +356,6 @@ class UserPreferencesRepository(private val context: Context) {
             smartRepairOnRefresh = settings[PreferencesKeys.SMART_REPAIR_ON_REFRESH] ?: false,
             allowRepairNonUnavailable = settings[PreferencesKeys.ALLOW_REPAIR_NON_UNAVAILABLE] ?: false,
             shortsScreenTimeMs = runtime[RuntimeKeys.SHORTS_SCREEN_TIME_MS] ?: 0L,
-            customDelayEnabled = settings[PreferencesKeys.CUSTOM_DELAY_ENABLED] ?: false,
-            delayPowerSave = settings[PreferencesKeys.DELAY_POWER_SAVE] ?: 5000L,
-            delayOverlayShowing = settings[PreferencesKeys.DELAY_OVERLAY_SHOWING] ?: 8000L,
-            delayGoalNear = settings[PreferencesKeys.DELAY_GOAL_NEAR] ?: 600L,
-            delayGoalMid = settings[PreferencesKeys.DELAY_GOAL_MID] ?: 1200L,
-            delayGoalFar = settings[PreferencesKeys.DELAY_GOAL_FAR] ?: 1800L,
-            delayShieldVeryFar = settings[PreferencesKeys.DELAY_SHIELD_VERY_FAR] ?: 5000L,
-            delayShieldFar = settings[PreferencesKeys.DELAY_SHIELD_FAR] ?: 3000L,
-            delayShieldMid = settings[PreferencesKeys.DELAY_SHIELD_MID] ?: 1500L,
-            delayShieldNear = settings[PreferencesKeys.DELAY_SHIELD_NEAR] ?: 600L,
-            delayDefault = settings[PreferencesKeys.DELAY_DEFAULT] ?: 1200L,
             mindfulGatewayEnabled = settings[PreferencesKeys.MINDFUL_GATEWAY_ENABLED] ?: false,
             refreshOnOpenUsageStats = settings[PreferencesKeys.REFRESH_ON_OPEN_USAGE_STATS] ?: false,
             checkUpdateOnStart = settings[PreferencesKeys.CHECK_UPDATE_ON_START] ?: false,
@@ -323,6 +371,16 @@ class UserPreferencesRepository(private val context: Context) {
             perfLauncherCacheMs = settings[PreferencesKeys.PERF_LAUNCHER_CACHE] ?: PerformanceConfig().launcherCacheMs,
             perfGoalReminderTick = settings[PreferencesKeys.PERF_GOAL_REMINDER_TICK] ?: PerformanceConfig().goalReminderTick,
             perfDayChangeTick = settings[PreferencesKeys.PERF_DAY_CHANGE_TICK] ?: PerformanceConfig().dayChangeTick,
+            perfMonPowerSave = settings[PreferencesKeys.PERF_MON_POWER_SAVE] ?: PerformanceConfig().monPowerSave,
+            perfMonOverlayShowing = settings[PreferencesKeys.PERF_MON_OVERLAY_SHOWING] ?: PerformanceConfig().monOverlayShowing,
+            perfMonGoalNear = settings[PreferencesKeys.PERF_MON_GOAL_NEAR] ?: PerformanceConfig().monGoalNear,
+            perfMonGoalMid = settings[PreferencesKeys.PERF_MON_GOAL_MID] ?: PerformanceConfig().monGoalMid,
+            perfMonGoalFar = settings[PreferencesKeys.PERF_MON_GOAL_FAR] ?: PerformanceConfig().monGoalFar,
+            perfMonShieldNear = settings[PreferencesKeys.PERF_MON_SHIELD_NEAR] ?: PerformanceConfig().monShieldNear,
+            perfMonShieldMid = settings[PreferencesKeys.PERF_MON_SHIELD_MID] ?: PerformanceConfig().monShieldMid,
+            perfMonShieldFar = settings[PreferencesKeys.PERF_MON_SHIELD_FAR] ?: PerformanceConfig().monShieldFar,
+            perfMonShieldVeryFar = settings[PreferencesKeys.PERF_MON_SHIELD_VERY_FAR] ?: PerformanceConfig().monShieldVeryFar,
+            perfMonDefault = settings[PreferencesKeys.PERF_MON_DEFAULT] ?: PerformanceConfig().monDefault,
             lastChargeTimestamp = runtime[RuntimeKeys.LAST_CHARGE_TIMESTAMP] ?: 0L,
             manualResetTimestamps = runtime[RuntimeKeys.MANUAL_RESET_TIMESTAMPS]?.split(",")
                 ?.filter { it.contains(":") }
@@ -967,50 +1025,6 @@ class UserPreferencesRepository(private val context: Context) {
         context.runtimeDataStore.edit { preferences -> preferences[RuntimeKeys.SHORTS_SCREEN_TIME_MS] = ms }
     }
 
-    suspend fun setCustomDelayEnabled(enabled: Boolean) {
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.CUSTOM_DELAY_ENABLED] = enabled }
-    }
-
-    suspend fun setDelayPowerSave(delay: Long) {
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DELAY_POWER_SAVE] = delay }
-    }
-
-    suspend fun setDelayOverlayShowing(delay: Long) {
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DELAY_OVERLAY_SHOWING] = delay }
-    }
-
-    suspend fun setDelayGoalNear(delay: Long) {
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DELAY_GOAL_NEAR] = delay }
-    }
-
-    suspend fun setDelayGoalMid(delay: Long) {
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DELAY_GOAL_MID] = delay }
-    }
-
-    suspend fun setDelayGoalFar(delay: Long) {
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DELAY_GOAL_FAR] = delay }
-    }
-
-    suspend fun setDelayShieldVeryFar(delay: Long) {
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DELAY_SHIELD_VERY_FAR] = delay }
-    }
-
-    suspend fun setDelayShieldFar(delay: Long) {
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DELAY_SHIELD_FAR] = delay }
-    }
-
-    suspend fun setDelayShieldMid(delay: Long) {
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DELAY_SHIELD_MID] = delay }
-    }
-
-    suspend fun setDelayShieldNear(delay: Long) {
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DELAY_SHIELD_NEAR] = delay }
-    }
-
-    suspend fun setDelayDefault(delay: Long) {
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DELAY_DEFAULT] = delay }
-    }
-
     suspend fun setMindfulGatewayEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.MINDFUL_GATEWAY_ENABLED] = enabled }
     }
@@ -1033,25 +1047,71 @@ class UserPreferencesRepository(private val context: Context) {
         }
     }
 
-    suspend fun applyPerformanceSettings(
-        perfA11yActiveDelay: Long,
-        perfA11yInactiveDelay: Long,
-        perfScreenOffDelay: Long,
-        perfPowerSaveDelay: Long,
-        perfUsageStatsCacheMs: Long,
-        perfShieldDbWriteMs: Long,
-        perfShieldDbWriteNearMs: Long,
-        perfLauncherCacheMs: Long,
-    ) {
+    suspend fun applyPerformanceSettings(config: PerformanceConfig) {
         context.dataStore.edit { prefs ->
-            prefs[PreferencesKeys.PERF_A11Y_ACTIVE_DELAY] = perfA11yActiveDelay
-            prefs[PreferencesKeys.PERF_A11Y_INACTIVE_DELAY] = perfA11yInactiveDelay
-            prefs[PreferencesKeys.PERF_SCREEN_OFF_DELAY] = perfScreenOffDelay
-            prefs[PreferencesKeys.PERF_POWER_SAVE_DELAY] = perfPowerSaveDelay
-            prefs[PreferencesKeys.PERF_USAGE_STATS_CACHE] = perfUsageStatsCacheMs
-            prefs[PreferencesKeys.PERF_SHIELD_DB_WRITE] = perfShieldDbWriteMs
-            prefs[PreferencesKeys.PERF_SHIELD_DB_WRITE_NEAR] = perfShieldDbWriteNearMs
-            prefs[PreferencesKeys.PERF_LAUNCHER_CACHE] = perfLauncherCacheMs
+            prefs[PreferencesKeys.PERF_A11Y_ACTIVE_DELAY] = config.a11yActiveDelay
+            prefs[PreferencesKeys.PERF_A11Y_INACTIVE_DELAY] = config.a11yInactiveDelay
+            prefs[PreferencesKeys.PERF_SCREEN_OFF_DELAY] = config.screenOffDelay
+            prefs[PreferencesKeys.PERF_POWER_SAVE_DELAY] = config.powerSaveDelay
+            prefs[PreferencesKeys.PERF_USAGE_STATS_CACHE] = config.usageStatsCacheMs
+            prefs[PreferencesKeys.PERF_SHIELD_DB_WRITE] = config.shieldDbWriteMs
+            prefs[PreferencesKeys.PERF_SHIELD_DB_WRITE_NEAR] = config.shieldDbWriteNearMs
+            prefs[PreferencesKeys.PERF_LAUNCHER_CACHE] = config.launcherCacheMs
+            prefs[PreferencesKeys.PERF_MON_POWER_SAVE] = config.monPowerSave
+            prefs[PreferencesKeys.PERF_MON_OVERLAY_SHOWING] = config.monOverlayShowing
+            prefs[PreferencesKeys.PERF_MON_GOAL_NEAR] = config.monGoalNear
+            prefs[PreferencesKeys.PERF_MON_GOAL_MID] = config.monGoalMid
+            prefs[PreferencesKeys.PERF_MON_GOAL_FAR] = config.monGoalFar
+            prefs[PreferencesKeys.PERF_MON_SHIELD_NEAR] = config.monShieldNear
+            prefs[PreferencesKeys.PERF_MON_SHIELD_MID] = config.monShieldMid
+            prefs[PreferencesKeys.PERF_MON_SHIELD_FAR] = config.monShieldFar
+            prefs[PreferencesKeys.PERF_MON_SHIELD_VERY_FAR] = config.monShieldVeryFar
+            prefs[PreferencesKeys.PERF_MON_DEFAULT] = config.monDefault
+        }
+    }
+
+    suspend fun setPerfMonPowerSave(delay: Long) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.PERF_MON_POWER_SAVE] = delay }
+    }
+    suspend fun setPerfMonOverlayShowing(delay: Long) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.PERF_MON_OVERLAY_SHOWING] = delay }
+    }
+    suspend fun setPerfMonGoalNear(delay: Long) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.PERF_MON_GOAL_NEAR] = delay }
+    }
+    suspend fun setPerfMonGoalMid(delay: Long) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.PERF_MON_GOAL_MID] = delay }
+    }
+    suspend fun setPerfMonGoalFar(delay: Long) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.PERF_MON_GOAL_FAR] = delay }
+    }
+    suspend fun setPerfMonShieldNear(delay: Long) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.PERF_MON_SHIELD_NEAR] = delay }
+    }
+    suspend fun setPerfMonShieldMid(delay: Long) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.PERF_MON_SHIELD_MID] = delay }
+    }
+    suspend fun setPerfMonShieldFar(delay: Long) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.PERF_MON_SHIELD_FAR] = delay }
+    }
+    suspend fun setPerfMonShieldVeryFar(delay: Long) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.PERF_MON_SHIELD_VERY_FAR] = delay }
+    }
+    suspend fun setPerfMonDefault(delay: Long) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.PERF_MON_DEFAULT] = delay }
+    }
+    suspend fun resetPerfMonDelays() {
+        context.dataStore.edit { preferences ->
+            preferences.remove(PreferencesKeys.PERF_MON_POWER_SAVE)
+            preferences.remove(PreferencesKeys.PERF_MON_OVERLAY_SHOWING)
+            preferences.remove(PreferencesKeys.PERF_MON_GOAL_NEAR)
+            preferences.remove(PreferencesKeys.PERF_MON_GOAL_MID)
+            preferences.remove(PreferencesKeys.PERF_MON_GOAL_FAR)
+            preferences.remove(PreferencesKeys.PERF_MON_SHIELD_NEAR)
+            preferences.remove(PreferencesKeys.PERF_MON_SHIELD_MID)
+            preferences.remove(PreferencesKeys.PERF_MON_SHIELD_FAR)
+            preferences.remove(PreferencesKeys.PERF_MON_SHIELD_VERY_FAR)
+            preferences.remove(PreferencesKeys.PERF_MON_DEFAULT)
         }
     }
 
@@ -1242,14 +1302,6 @@ class UserPreferencesRepository(private val context: Context) {
         return stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
     }
 
-    suspend fun resetCustomDelays() {
-        context.dataStore.edit { preferences ->
-            preferences.remove(PreferencesKeys.DELAY_POWER_SAVE); preferences.remove(PreferencesKeys.DELAY_OVERLAY_SHOWING); preferences.remove(PreferencesKeys.DELAY_GOAL_NEAR)
-            preferences.remove(PreferencesKeys.DELAY_GOAL_MID); preferences.remove(PreferencesKeys.DELAY_GOAL_FAR); preferences.remove(PreferencesKeys.DELAY_SHIELD_VERY_FAR)
-            preferences.remove(PreferencesKeys.DELAY_SHIELD_FAR); preferences.remove(PreferencesKeys.DELAY_SHIELD_MID); preferences.remove(PreferencesKeys.DELAY_SHIELD_NEAR)
-            preferences.remove(PreferencesKeys.DELAY_DEFAULT)
-        }
-    }
 }
 
 data class UserPreferences(
@@ -1303,17 +1355,6 @@ data class UserPreferences(
     val smartRepairOnRefresh: Boolean = false,
     val allowRepairNonUnavailable: Boolean = false,
     val shortsScreenTimeMs: Long = 0L,
-    val customDelayEnabled: Boolean = false,
-    val delayPowerSave: Long = 5000L,
-    val delayOverlayShowing: Long = 8000L,
-    val delayGoalNear: Long = 600L,
-    val delayGoalMid: Long = 1200L,
-    val delayGoalFar: Long = 1800L,
-    val delayShieldVeryFar: Long = 5000L,
-    val delayShieldFar: Long = 3000L,
-    val delayShieldMid: Long = 1500L,
-    val delayShieldNear: Long = 600L,
-    val delayDefault: Long = 1200L,
     val mindfulGatewayEnabled: Boolean = false,
     val refreshOnOpenUsageStats: Boolean = false,
     val checkUpdateOnStart: Boolean = false,
@@ -1329,6 +1370,16 @@ data class UserPreferences(
     val perfLauncherCacheMs: Long = PerformanceConfig().launcherCacheMs,
     val perfGoalReminderTick: Long = PerformanceConfig().goalReminderTick,
     val perfDayChangeTick: Long = PerformanceConfig().dayChangeTick,
+    val perfMonPowerSave: Long = PerformanceConfig().monPowerSave,
+    val perfMonOverlayShowing: Long = PerformanceConfig().monOverlayShowing,
+    val perfMonGoalNear: Long = PerformanceConfig().monGoalNear,
+    val perfMonGoalMid: Long = PerformanceConfig().monGoalMid,
+    val perfMonGoalFar: Long = PerformanceConfig().monGoalFar,
+    val perfMonShieldNear: Long = PerformanceConfig().monShieldNear,
+    val perfMonShieldMid: Long = PerformanceConfig().monShieldMid,
+    val perfMonShieldFar: Long = PerformanceConfig().monShieldFar,
+    val perfMonShieldVeryFar: Long = PerformanceConfig().monShieldVeryFar,
+    val perfMonDefault: Long = PerformanceConfig().monDefault,
     val lastChargeTimestamp: Long = 0L,
     val manualResetTimestamps: Map<String, Long> = emptyMap(),
     val gsFlexSettings: GSFlexSettings = GSFlexSettings(),
@@ -1347,13 +1398,43 @@ data class UserPreferences(
             launcherCacheMs = perfLauncherCacheMs,
             goalReminderTick = perfGoalReminderTick,
             dayChangeTick = perfDayChangeTick,
+            monPowerSave = perfMonPowerSave,
+            monOverlayShowing = perfMonOverlayShowing,
+            monGoalNear = perfMonGoalNear,
+            monGoalMid = perfMonGoalMid,
+            monGoalFar = perfMonGoalFar,
+            monShieldNear = perfMonShieldNear,
+            monShieldMid = perfMonShieldMid,
+            monShieldFar = perfMonShieldFar,
+            monShieldVeryFar = perfMonShieldVeryFar,
+            monDefault = perfMonDefault,
         )
     }
 }
 
 fun PerformanceConfig.detectPreset(): PerformanceLevel {
     PerformanceLevel.entries.forEach { level ->
-        if (level.isPreset() && this == level.toConfig()) return level
+        if (level.isPreset()) {
+            val preset = level.toConfig()
+            if (a11yActiveDelay == preset.a11yActiveDelay &&
+                a11yInactiveDelay == preset.a11yInactiveDelay &&
+                screenOffDelay == preset.screenOffDelay &&
+                powerSaveDelay == preset.powerSaveDelay &&
+                usageStatsCacheMs == preset.usageStatsCacheMs &&
+                shieldDbWriteMs == preset.shieldDbWriteMs &&
+                shieldDbWriteNearMs == preset.shieldDbWriteNearMs &&
+                launcherCacheMs == preset.launcherCacheMs &&
+                monPowerSave == preset.monPowerSave &&
+                monOverlayShowing == preset.monOverlayShowing &&
+                monGoalNear == preset.monGoalNear &&
+                monGoalMid == preset.monGoalMid &&
+                monGoalFar == preset.monGoalFar &&
+                monShieldNear == preset.monShieldNear &&
+                monShieldMid == preset.monShieldMid &&
+                monShieldFar == preset.monShieldFar &&
+                monShieldVeryFar == preset.monShieldVeryFar &&
+                monDefault == preset.monDefault) return level
+        }
     }
     return PerformanceLevel.CUSTOM
 }

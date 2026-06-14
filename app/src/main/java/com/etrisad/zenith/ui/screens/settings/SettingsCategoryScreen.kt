@@ -123,7 +123,7 @@ fun SettingsCategoryScreen(
     )
 
     val performanceApplyAction = remember { mutableStateOf<() -> Unit>({}) }
-    var perfSelectedLevel by remember { mutableStateOf(preferences.performanceLevel) }
+    var perfSelectedLevel by remember(preferences.performanceLevel) { mutableStateOf(preferences.performanceLevel) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -199,11 +199,9 @@ fun SettingsCategoryScreen(
                             preferences = preferences,
                             selectedLevel = perfSelectedLevel,
                             onSelectedLevelChange = { perfSelectedLevel = it },
-                            onApplyCustomSettings = { a11yActive, a11yInactive, screenOff, powerSave, usageCache, dbWrite, dbWriteNear, launcherCache ->
+                            onApplyCustomSettings = { config ->
                                 coroutineScope.launch {
-                                    preferencesRepository.applyPerformanceSettings(
-                                        a11yActive, a11yInactive, screenOff, powerSave, usageCache, dbWrite, dbWriteNear, launcherCache
-                                    )
+                                    preferencesRepository.applyPerformanceSettings(config)
                                 }
                             },
                             onSetPerformanceLevel = { level ->
@@ -212,6 +210,7 @@ fun SettingsCategoryScreen(
                                 }
                             },
                             onRegisterApplyAction = { action -> performanceApplyAction.value = action },
+                            onResetPerfMonDelays = { coroutineScope.launch { preferencesRepository.resetPerfMonDelays() } },
                         )
                     }
                     "developer" -> DeveloperSettings(
@@ -235,18 +234,6 @@ fun SettingsCategoryScreen(
                             }
                         },
                         onNavigateToFontTest = { navController.navigate(Screen.FontTest.route) },
-                        onCustomDelayEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setCustomDelayEnabled(enabled) } },
-                        onSetDelayPowerSave = { delay -> coroutineScope.launch { preferencesRepository.setDelayPowerSave(delay) } },
-                        onSetDelayOverlayShowing = { delay -> coroutineScope.launch { preferencesRepository.setDelayOverlayShowing(delay) } },
-                        onSetDelayGoalNear = { delay -> coroutineScope.launch { preferencesRepository.setDelayGoalNear(delay) } },
-                        onSetDelayGoalMid = { delay -> coroutineScope.launch { preferencesRepository.setDelayGoalMid(delay) } },
-                        onSetDelayGoalFar = { delay -> coroutineScope.launch { preferencesRepository.setDelayGoalFar(delay) } },
-                        onSetDelayShieldVeryFar = { delay -> coroutineScope.launch { preferencesRepository.setDelayShieldVeryFar(delay) } },
-                        onSetDelayShieldFar = { delay -> coroutineScope.launch { preferencesRepository.setDelayShieldFar(delay) } },
-                        onSetDelayShieldMid = { delay -> coroutineScope.launch { preferencesRepository.setDelayShieldMid(delay) } },
-                        onSetDelayShieldNear = { delay -> coroutineScope.launch { preferencesRepository.setDelayShieldNear(delay) } },
-                        onSetDelayDefault = { delay -> coroutineScope.launch { preferencesRepository.setDelayDefault(delay) } },
-                        onResetCustomDelays = { coroutineScope.launch { preferencesRepository.resetCustomDelays() } },
                         onNavigateToSystemUsageDebug = { navController.navigate(Screen.SystemUsageDebug.route) },
                         onTriggerOnboardingPermissions = { onOpenPermissions() },
                         onTriggerOnboardingStats = {

@@ -240,6 +240,19 @@ class ZenithAccessibilityService : AccessibilityService() {
                 val currentTime = System.currentTimeMillis()
                 val currentPkg = lastForegroundApp
 
+                var checkInterval = cfg.a11yActiveDelay
+                if (currentPkg != null) {
+                    val allowedUntil = allowedApps[currentPkg] ?: 0L
+                    if (allowedUntil > 0) {
+                        val remaining = allowedUntil - currentTime
+                        checkInterval = when {
+                            remaining < 10000 -> 1000L
+                            remaining < 60000 -> 5000L
+                            else -> 15000L.coerceAtMost(cfg.a11yActiveDelay)
+                        }
+                    }
+                }
+
                 if (currentPkg != null && !InterceptOverlayManager.isShowing && !shouldBypassBlocking(currentPkg)) {
                     val shouldRemove: Boolean
                     synchronized(allowedApps) {
@@ -263,7 +276,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                         }
                     }
                 }
-                delay(cfg.a11yActiveDelay)
+                delay(checkInterval)
             }
         }
     }
@@ -492,7 +505,10 @@ class ZenithAccessibilityService : AccessibilityService() {
 
     private fun getTotalGlobalUsageToday(): Long {
         val currentTime = System.currentTimeMillis()
-        if (currentTime - lastGlobalUsageCacheTime < 30000) {
+        val cfg = SharedMonitoringState.performanceConfig
+        val cacheDuration = (cfg.usageStatsCacheMs / 2).coerceIn(15000L, 1800000L)
+        
+        if (currentTime - lastGlobalUsageCacheTime < cacheDuration) {
             return cachedTotalGlobalUsage
         }
 
@@ -521,8 +537,10 @@ class ZenithAccessibilityService : AccessibilityService() {
 
     private fun getTotalUsageToday(packageName: String): Long {
         val currentTime = System.currentTimeMillis()
+        val cfg = SharedMonitoringState.performanceConfig
+        val cacheDuration = cfg.usageStatsCacheMs.coerceIn(30000L, 3600000L)
 
-        if (currentTime - lastUsageCacheTime > 60000) {
+        if (currentTime - lastUsageCacheTime > cacheDuration) {
             val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
             val tempMap = detailedUsage.appUsageMap
 

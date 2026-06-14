@@ -540,11 +540,10 @@ class AppUsageMonitorService : Service() {
                 }
 
                 val cfg = SharedMonitoringState.performanceConfig
-                val delayTime = when {
-                    !isScreenOn -> cfg.screenOffDelay
-                    InterceptOverlayManager.isShowing -> 8000L
-                    ZenithAccessibilityService.isServiceRunning -> cfg.a11yActiveDelay
-                    else -> computeMonitoringDelay()
+                val delayTime = if (ZenithAccessibilityService.isServiceRunning) {
+                    cfg.a11yActiveDelay
+                } else {
+                    computeMonitoringDelay()
                 }
                 delay(delayTime)
             }
@@ -768,38 +767,26 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun computeMonitoringDelay(): Long {
-        val prefs = SharedMonitoringState.currentPreferences
+        val cfg = SharedMonitoringState.performanceConfig
+        val currentApp = lastForegroundApp
+        val allowedUntil = currentApp?.let { allowedApps[it] } ?: 0L
+        val currentTime = System.currentTimeMillis()
+        if (allowedUntil > currentTime) {
+            val remaining = allowedUntil - currentTime
+            return when {
+                remaining < 10000 -> 1000L
+                remaining < 60000 -> 5000L
+                else -> 15000L
+            }
+        }
+
         return try {
             if (!isScreenOn) {
-                120000L
+                cfg.screenOffDelay
             } else if (AppStateHolder.isPowerSaveMode.value) {
-                5000L
+                cfg.monPowerSave
             } else if (InterceptOverlayManager.isShowing) {
-                8000L
-            } else if (prefs?.customDelayEnabled == true) {
-                val p = prefs
-                when {
-                    currentShieldCache != null -> {
-                        val shield = currentShieldCache!!
-                        val limitMillis = shield.timeLimitMinutes * 60 * 1000L
-                        val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
-                        if (shield.type == FocusType.GOAL) {
-                            when {
-                                remaining < 60000 -> p.delayGoalNear.coerceIn(500L, 10000L)
-                                remaining < 300000 -> p.delayGoalMid.coerceIn(1000L, 15000L)
-                                else -> p.delayGoalFar.coerceIn(1500L, 25000L)
-                            }
-                        } else {
-                            when {
-                                remaining > 3600000 -> p.delayShieldVeryFar.coerceIn(3000L, 30000L)
-                                remaining > 600000 -> p.delayShieldFar.coerceIn(2000L, 25000L)
-                                remaining > 60000 -> p.delayShieldMid.coerceIn(1000L, 15000L)
-                                else -> p.delayShieldNear.coerceIn(500L, 10000L)
-                            }
-                        }
-                    }
-                    else -> p.delayDefault.coerceIn(1000L, 30000L)
-                }
+                cfg.monOverlayShowing
             } else {
                 when {
                     currentShieldCache != null -> {
@@ -808,20 +795,20 @@ class AppUsageMonitorService : Service() {
                         val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
                         if (shield.type == FocusType.GOAL) {
                             when {
-                                remaining < 60000 -> 600L
-                                remaining < 300000 -> 1200L
-                                else -> 1800L
+                                remaining < 60000 -> cfg.monGoalNear
+                                remaining < 300000 -> cfg.monGoalMid
+                                else -> cfg.monGoalFar
                             }
                         } else {
                             when {
-                                remaining > 3600000 -> 5000L
-                                remaining > 600000 -> 3000L
-                                remaining > 60000 -> 1500L
-                                else -> 600L
+                                remaining > 3600000 -> cfg.monShieldVeryFar
+                                remaining > 600000 -> cfg.monShieldFar
+                                remaining > 60000 -> cfg.monShieldMid
+                                else -> cfg.monShieldNear
                             }
                         }
                     }
-                    else -> 1200L
+                    else -> cfg.monDefault
                 }
             }
         } catch (_: Exception) { 1200L }
@@ -895,21 +882,25 @@ class AppUsageMonitorService : Service() {
         cachedTotalGlobalUsage = baseGlobalUsageAtSessionStart + sessionElapsed
 
         val shield = currentShieldCache ?: return
+        val cfg = SharedMonitoringState.performanceConfig
         val shieldType = shield.type
 
         val limitMillis = shield.timeLimitMinutes * 60 * 1000L
         val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
         val isNearLimit = remaining < 60000
+        
+        val baseInterval = cfg.usageStatsCacheMs.coerceIn(30000L, 3600000L)
+        
         val needsDetailedFetch = if (shieldType == FocusType.GOAL) {
             val uiUpdateInterval = when {
                 isNearLimit -> 15000L
-                remaining < 300000 -> 30000L
-                remaining < 900000 -> 45000L
-                else -> 60000L
+                remaining < 300000 -> 30000L.coerceAtMost(baseInterval)
+                remaining < 900000 -> 45000L.coerceAtMost(baseInterval)
+                else -> baseInterval
             }
             currentTime - lastHUDUpdateTime > uiUpdateInterval || lastHUDUpdateTime == 0L
         } else {
-            val fetchInterval = if (isNearLimit) 30000L else 60000L
+            val fetchInterval = if (isNearLimit) 30000L else baseInterval
             currentTime - lastUsageFetchTime > fetchInterval
         }
 
@@ -1249,7 +1240,10 @@ class AppUsageMonitorService : Service() {
 
     private fun getUsageStatsList() {
         val currentTime = System.currentTimeMillis()
-        if (currentTime - lastUsageCacheTime < 60000 && SharedMonitoringState.dailyUsageCache.isNotEmpty()) {
+        val cfg = SharedMonitoringState.performanceConfig
+        val cacheDuration = cfg.usageStatsCacheMs.coerceIn(60000L, 3600000L)
+        
+        if (currentTime - lastUsageCacheTime < cacheDuration && SharedMonitoringState.dailyUsageCache.isNotEmpty()) {
             return
         }
 
