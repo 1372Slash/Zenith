@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -64,11 +65,15 @@ class BedtimeViewModel(
 
     init {
         refreshStreak()
+        loadHourlyUsage()
+        loadBedtimeHistory()
         viewModelScope.launch {
-            userPreferences.collectLatest {
-                loadHourlyUsage()
-                loadBedtimeHistory()
-            }
+            userPreferences
+                .debounce(500)
+                .collectLatest {
+                    loadHourlyUsage()
+                    loadBedtimeHistory()
+                }
         }
     }
 

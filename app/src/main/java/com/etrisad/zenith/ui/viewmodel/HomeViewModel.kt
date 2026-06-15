@@ -1357,7 +1357,6 @@ class HomeViewModel(
 
             if (newlyLocked.isNotEmpty()) {
                 shieldRepository.insertHourlyUsage(newlyLocked)
-                userPreferencesRepository.setLastSyncTimestamp(System.currentTimeMillis())
             }
         }
 
@@ -1527,9 +1526,6 @@ class HomeViewModel(
             isLoading = false
         ) }
 
-        viewModelScope.launch {
-            userPreferencesRepository.setLastKnownDailyUsage(actualTodayTotal, dateFormat.format(Date(now)))
-        }
     }
 
     fun loadAppDetail(packageName: String, forceRefresh: Boolean = false) {

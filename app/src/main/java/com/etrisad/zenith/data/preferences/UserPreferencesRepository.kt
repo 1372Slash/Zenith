@@ -23,6 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -417,7 +418,7 @@ class UserPreferencesRepository(private val context: Context) {
             ),
             streakRecoveryPerformed = runtime[RuntimeKeys.STREAK_RECOVERY_PERFORMED] ?: false
         )
-    }
+    }.distinctUntilChanged()
 
 
     suspend fun setUserName(name: String) {
@@ -527,12 +528,16 @@ class UserPreferencesRepository(private val context: Context) {
         context.runtimeDataStore.edit { preferences -> preferences[RuntimeKeys.LAST_STREAK_CHECK_DATE] = date }
     }
 
+    private var lastSavedGlobalStreak: Triple<Int, Int, Long>? = null
+
     suspend fun updateGlobalStreak(current: Int, best: Int, timestamp: Long) {
+        if (lastSavedGlobalStreak == Triple(current, best, timestamp)) return
         context.runtimeDataStore.edit { preferences ->
             preferences[RuntimeKeys.GLOBAL_CURRENT_STREAK] = current
             preferences[RuntimeKeys.GLOBAL_BEST_STREAK] = best
             preferences[RuntimeKeys.GLOBAL_LAST_STREAK_UPDATE_TIMESTAMP] = timestamp
         }
+        lastSavedGlobalStreak = Triple(current, best, timestamp)
     }
 
     suspend fun refreshGlobalStreak(shieldRepository: ShieldRepository): Pair<Int, Int> {
@@ -925,8 +930,12 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.TOTAL_USAGE_PILL_ENABLED] = enabled }
     }
 
+    private var lastSavedDailyUsage: Pair<Long, String>? = null
+
     suspend fun setLastKnownDailyUsage(usage: Long, date: String) {
+        if (lastSavedDailyUsage == Pair(usage, date)) return
         context.runtimeDataStore.edit { preferences -> preferences[RuntimeKeys.LAST_KNOWN_DAILY_USAGE] = usage; preferences[RuntimeKeys.LAST_KNOWN_DAILY_USAGE_DATE] = date }
+        lastSavedDailyUsage = Pair(usage, date)
     }
 
     suspend fun setBedtimeEnabled(enabled: Boolean) {
@@ -961,11 +970,15 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.BEDTIME_WHITELISTED_PACKAGES] = packages.joinToString(",") }
     }
 
+    private var lastSavedBedtimeStreak: Pair<Int, Int>? = null
+
     suspend fun updateBedtimeStreak(current: Int, best: Int) {
+        if (lastSavedBedtimeStreak == Pair(current, best)) return
         context.runtimeDataStore.edit { preferences ->
             preferences[RuntimeKeys.BEDTIME_CURRENT_STREAK] = current
             preferences[RuntimeKeys.BEDTIME_BEST_STREAK] = best
         }
+        lastSavedBedtimeStreak = Pair(current, best)
     }
 
     suspend fun resetBedtimeStreak() {
@@ -993,8 +1006,12 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.DEVELOPER_MODE_ENABLED] = enabled }
     }
 
+    private var lastSavedSyncTimestamp = 0L
+
     suspend fun setLastSyncTimestamp(timestamp: Long) {
+        if (lastSavedSyncTimestamp == timestamp) return
         context.runtimeDataStore.edit { preferences -> preferences[RuntimeKeys.LAST_SYNC_TIMESTAMP] = timestamp }
+        lastSavedSyncTimestamp = timestamp
     }
 
     suspend fun setPreferSystemUsageHistory(enabled: Boolean) {
