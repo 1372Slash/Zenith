@@ -1254,12 +1254,13 @@ class HomeViewModel(
             }
         }
 
-        val topApps = appList.sortedByDescending { it.totalTimeVisible }.take(5)
         val allAppsUsage = appList.sortedByDescending { it.totalTimeVisible }
+        val topApps = allAppsUsage.take(5)
 
         val selectedDateStr = dateFormat.format(Date(selectedDate))
-
         val selectedDayHistory = allHistory.filter { it.date == selectedDateStr }
+        val appSum = allAppsUsage.sumOf { it.totalTimeVisible }
+
         val storedShieldUsage = selectedDayHistory.find { it.packageName == "SHIELD_TOTAL" }?.usageTimeMillis
         val storedGoalUsage = selectedDayHistory.find { it.packageName == "GOAL_TOTAL" }?.usageTimeMillis
         val storedOtherUsage = selectedDayHistory.find { it.packageName == "OTHER_TOTAL" }?.usageTimeMillis
@@ -1271,9 +1272,8 @@ class HomeViewModel(
         }
 
         val selectedDayTotal = if (isSelectedToday) {
-            allAppsUsage.sumOf { it.totalTimeVisible }.coerceAtMost(timeSinceMidnight)
+            appSum.coerceAtMost(timeSinceMidnight)
         } else {
-            val appSum = allAppsUsage.sumOf { it.totalTimeVisible }
             val dbTotal = selectedDayHistory.find { it.packageName == "TOTAL" }?.usageTimeMillis
             val fallbackTotal = if (preferSystemUsageHistory) {
                 _globalFallbackMap.value[selectedDateStr]?.find { it.packageName == "TOTAL" }?.usageTimeMillis
@@ -1647,11 +1647,21 @@ class HomeViewModel(
         }
     }
 
+    private var isActive = true
+
+    fun setActive(active: Boolean) {
+        isActive = active
+    }
+
     private fun startRealTimeUpdates() {
         viewModelScope.launch {
             val cal = Calendar.getInstance()
             var lastUpdateDay = cal.get(Calendar.DAY_OF_YEAR)
             while (true) {
+                if (!isActive) {
+                    delay(5000)
+                    continue
+                }
                 cal.timeInMillis = System.currentTimeMillis()
                 val currentDay = cal.get(Calendar.DAY_OF_YEAR)
                 if (currentDay != lastUpdateDay) {
@@ -1665,7 +1675,11 @@ class HomeViewModel(
                     refreshCurrentAppDetailUsage()
                 }
                 val remainingToTarget = (currentTargetMinutes * 60 * 1000L - _uiState.value.totalScreenTime).coerceAtLeast(0L)
-                val interval = if (remainingToTarget < 60_000L) 1000L else 10_000L
+                val interval = when {
+                    remainingToTarget < 30_000L -> 1000L
+                    remainingToTarget < 300_000L -> 3000L
+                    else -> 10_000L
+                }
                 delay(interval)
             }
         }

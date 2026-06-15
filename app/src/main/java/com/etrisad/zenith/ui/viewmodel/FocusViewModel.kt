@@ -13,6 +13,7 @@ import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -157,11 +158,21 @@ class FocusViewModel(
         }
     }
 
+    private var isActive = true
+
+    fun setActive(active: Boolean) {
+        isActive = active
+    }
+
     private fun startRealTimeUpdates() {
         viewModelScope.launch {
             while (true) {
+                if (!isActive) {
+                    delay(5000)
+                    continue
+                }
                 updateShieldedLists(allShields)
-                kotlinx.coroutines.delay(120000)
+                delay(120000)
             }
         }
     }

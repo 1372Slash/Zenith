@@ -24,6 +24,8 @@ import com.etrisad.zenith.service.DailyUsageWorker
 import android.os.Build
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -62,6 +64,20 @@ class MainActivity : ComponentActivity() {
 
         val focusViewModelFactory = FocusViewModelFactory(applicationContext, shieldRepository, userPreferencesRepository)
         val focusViewModel = ViewModelProvider(this, focusViewModelFactory)[FocusViewModel::class.java]
+
+        lifecycle.addObserver(LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> {
+                    homeViewModel.setActive(true)
+                    focusViewModel.setActive(true)
+                }
+                Lifecycle.Event.ON_STOP -> {
+                    homeViewModel.setActive(false)
+                    focusViewModel.setActive(false)
+                }
+                else -> {}
+            }
+        })
 
         try {
             val serviceIntent = Intent(this, AppUsageMonitorService::class.java)
