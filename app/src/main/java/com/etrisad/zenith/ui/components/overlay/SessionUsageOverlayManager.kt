@@ -133,7 +133,14 @@ class SessionUsageOverlayManager(
         onSessionEnd: () -> Unit = {}
     ) {
         synchronized(activeSessions) {
-            if (activeSessions.any { it.packageName == packageName }) return
+            val existing = activeSessions.find { it.packageName == packageName }
+            if (existing != null) {
+                if (existing.hudInstance == null) {
+                    existing.isVisibleState.value = true
+                    existing.hudInstance = createHUDInstance(existing)
+                }
+                return
+            }
 
             if (activeSessions.size >= MaxHuds) {
                 hideHUD(activeSessions.firstOrNull()?.packageName)
@@ -288,13 +295,8 @@ class SessionUsageOverlayManager(
                                 session.secondsElapsedState.intValue >= session.totalSeconds 
                                 else session.secondsLeftState.intValue <= 0
                                 
-                            val shouldBeVisible = session.isVisibleState.value && !session.isTemporarilyHiddenState.value
-                                
                             if (isTimeUp) {
                                 hideHUD(session.packageName)
-                            } else if (!shouldBeVisible) {
-                                session.hudInstance?.let { destroyHUDInstance(it, session.packageName) }
-                                session.hudInstance = null
                             }
                         }
                     )
@@ -382,6 +384,32 @@ class SessionUsageOverlayManager(
         }
     }
 
+    fun ensureSessionHUDActive(packageName: String) {
+        if (packageName.isEmpty() || SYSTEM_UI_PACKAGES.contains(packageName)) return
+        synchronized(activeSessions) {
+            val session = activeSessions.find { it.packageName == packageName }
+            session?.let {
+                it.isVisibleState.value = true
+                it.backgroundTimestamp = 0L
+                if (it.hudInstance == null && !it.isTemporarilyHiddenState.value &&
+                    ((!it.isGoal && it.secondsLeftState.intValue > 0) ||
+                     (it.isGoal && it.secondsElapsedState.intValue < it.totalSeconds))) {
+                    if (Looper.myLooper() == Looper.getMainLooper()) {
+                        it.hudInstance = createHUDInstance(it)
+                    } else {
+                        mainHandler.post {
+                            synchronized(it) {
+                                if (it.hudInstance == null) {
+                                    it.hudInstance = createHUDInstance(it)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fun updateForegroundApp(packageName: String, force: Boolean = false) {
         if (packageName.isEmpty() || SYSTEM_UI_PACKAGES.contains(packageName)) return
         if (!force && currentForegroundPackage == packageName) return
@@ -410,10 +438,6 @@ class SessionUsageOverlayManager(
                         }
                     }
                 } else {
-                    session.hudInstance?.let {
-                        destroyHUDInstance(it, session.packageName)
-                        session.hudInstance = null
-                    }
                     if (session.isVisibleState.value) {
                         session.isVisibleState.value = false
                         if (session.backgroundTimestamp == 0L) {

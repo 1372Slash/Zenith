@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ZenithAccessibilityService : AccessibilityService() {
 
@@ -273,6 +274,10 @@ class ZenithAccessibilityService : AccessibilityService() {
                     checkInterval = cfg.a11yInactiveDelay
                 }
 
+                if (currentPkg != null) {
+                    sessionUsageOverlayManager.ensureSessionHUDActive(currentPkg)
+                }
+
                 if (currentPkg != null && !InterceptOverlayManager.isShowing && !shouldBypassBlocking(currentPkg)) {
                     val shouldRemove: Boolean
                     synchronized(allowedApps) {
@@ -311,6 +316,25 @@ class ZenithAccessibilityService : AccessibilityService() {
                                         checkIfAppIsShielded(currentPkg)
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+                if (!InterceptOverlayManager.isShowing && currentPkg != null && shouldBypassBlocking(currentPkg)) {
+                    val actualPkg = withContext(Dispatchers.Main) {
+                        rootInActiveWindow?.packageName?.toString()
+                    }
+                    if (actualPkg != null && actualPkg != currentPkg && !shouldBypassBlocking(actualPkg)) {
+                        val actualAllowedUntil = synchronized(allowedApps) { allowedApps[actualPkg] }
+                        if (actualAllowedUntil != null && actualAllowedUntil != 0L && currentTime > actualAllowedUntil) {
+                            synchronized(allowedApps) { allowedApps.remove(actualPkg) }
+                            val s = SharedMonitoringState.allShieldsCache[actualPkg]
+                            if (s?.isAutoQuitEnabled == true) {
+                                lastKickTime = System.currentTimeMillis()
+                                lastKickedPackage = actualPkg
+                                goToHomeScreen()
+                            } else if (!InterceptOverlayManager.isShowing) {
+                                checkIfAppIsShielded(actualPkg)
                             }
                         }
                     }
@@ -510,7 +534,12 @@ class ZenithAccessibilityService : AccessibilityService() {
         overlayActionHandler.getMindfulShield(packageName, appName)
 
     private suspend fun checkIfAppIsShielded(targetPackageName: String) {
-        if (targetPackageName != lastForegroundApp) return
+        if (targetPackageName != lastForegroundApp) {
+            val actualPkg = withContext(Dispatchers.Main) {
+                rootInActiveWindow?.packageName?.toString()
+            }
+            if (targetPackageName != actualPkg) return
+        }
 
         if (targetPackageName == InterceptOverlayManager.lastKickedPackage && System.currentTimeMillis() - InterceptOverlayManager.lastKickTime < 500) {
             return
