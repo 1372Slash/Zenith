@@ -1,5 +1,6 @@
 package com.etrisad.zenith.service
 
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.view.inputmethod.InputMethodManager
 import com.etrisad.zenith.data.local.entity.FocusType
@@ -292,6 +293,7 @@ class OverlayActionHandler(
         schedule: ScheduleEntity,
         totalGlobalUsageToday: Long,
         updateShieldCache: (ShieldEntity?) -> Unit,
+        recheckSchedules: (String) -> Unit = {},
         onAllowUseExtra: ((minutes: Int) -> Unit)? = null,
     ) {
         scope.launch(Dispatchers.Main) {
@@ -325,21 +327,7 @@ class OverlayActionHandler(
                                         onSessionEnd = {
                                             allowedApps.remove(packageName)
                                             scope.launch {
-                                                val shield = SharedMonitoringState.allShieldsCache[packageName]
-                                                    ?: shieldRepository.getShieldByPackageName(packageName)
-                                                if (shield != null) {
-                                                    val updated = shield.copy(lastSessionEndTimestamp = System.currentTimeMillis())
-                                                    shieldRepository.updateShield(updated)
-                                                    if (updated.isAutoQuitEnabled) {
-                                                        if (getForegroundAppName() == packageName) {
-                                                            goToHomeScreen()
-                                                        }
-                                                    } else {
-                                                        recheckShield(packageName)
-                                                    }
-                                                } else {
-                                                    recheckShield(packageName)
-                                                }
+                                                checkSchedules(packageName, updateShieldCache, recheckSchedules)
                                             }
                                         }
                                     )
@@ -420,13 +408,46 @@ class OverlayActionHandler(
         }
     }
 
+    fun shouldBypassBlocking(packageName: String): Boolean {
+        if (packageName == contextPkg) return true
+
+        val prefs = SharedMonitoringState.currentPreferences
+        val isBedtimeOrWindDown = SharedMonitoringState.isBedtimeActive || (SharedMonitoringState.isWindDownActive && prefs?.bedtimeWindDownEnabled == true)
+
+        if (packageName in SharedMonitoringState.whitelistedPackages && packageName !in SharedMonitoringState.restrictedPackages) return true
+
+        if (isBedtimeOrWindDown && packageName in SharedMonitoringState.bedtimeWhitelistedPackages && packageName !in SharedMonitoringState.restrictedPackages) return true
+
+        if (isKeyboardApp(packageName)) return true
+
+        if (packageName in SharedMonitoringState.CRITICAL_SYSTEM_PACKAGES) return true
+
+        if (SharedMonitoringState.launcherPackages.contains(packageName) ||
+            packageName.contains("launcher", ignoreCase = true) ||
+            packageName.contains("home", ignoreCase = true)) return true
+
+        if (packageName in SharedMonitoringState.restrictedPackages) return false
+
+        val isSystem = SharedMonitoringState.systemAppCache.getOrPut(packageName) {
+            try {
+                val appInfo = packageManager.getApplicationInfo(packageName, 0)
+                (appInfo.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
+            } catch (_: Exception) { false }
+        }
+
+        return if (isSystem) {
+            if (packageName.contains("car.mode", ignoreCase = true)) true
+            else if (isBedtimeOrWindDown) packageName !in SharedMonitoringState.restrictedPackages
+            else !(packageName in SharedMonitoringState.restrictedPackages || SharedMonitoringState.hasGlobalAllowSchedule || (prefs?.mindfulGatewayEnabled == true))
+        } else false
+    }
+
     fun checkSchedules(
         packageName: String,
-        shouldBypass: (String) -> Boolean,
         updateShieldCache: (ShieldEntity?) -> Unit,
         recheckSchedules: (String) -> Unit,
     ): Boolean {
-        if (shouldBypass(packageName)) return false
+        if (shouldBypassBlocking(packageName)) return false
 
         val allowedUntil = allowedApps[packageName] ?: 0L
         if (System.currentTimeMillis() < allowedUntil) return false
@@ -469,7 +490,7 @@ class OverlayActionHandler(
                         if (packageName in ps.packageNames) {
                             val originalSchedule = SharedMonitoringState.activeSchedules.find { it.id == ps.id } ?: return false
                             val totalGlobalUsageToday = getTotalGlobalUsageToday()
-                            showScheduleOverlay(packageName, originalSchedule, totalGlobalUsageToday, updateShieldCache)
+                            showScheduleOverlay(packageName, originalSchedule, totalGlobalUsageToday, updateShieldCache, recheckSchedules)
                             return true
                         }
                     }
@@ -477,7 +498,7 @@ class OverlayActionHandler(
                         if (packageName !in ps.packageNames) {
                             val originalSchedule = SharedMonitoringState.activeSchedules.find { it.id == ps.id } ?: return false
                             val totalGlobalUsageToday = getTotalGlobalUsageToday()
-                            showScheduleOverlay(packageName, originalSchedule, totalGlobalUsageToday, updateShieldCache)
+                            showScheduleOverlay(packageName, originalSchedule, totalGlobalUsageToday, updateShieldCache, recheckSchedules)
                             return true
                         }
                     }

@@ -114,14 +114,21 @@ class AppUsageMonitorService : Service() {
                     isScreenOn = true
                     AppStateHolder.isScreenOn.value = true
                     currentSessionPackage = null
-                    lastForegroundApp = null
-                    Log.w("ZenithAUMS", "SCREEN ON: starting foreground + collectors")
+                    cachedForegroundApp = null
+                    cachedForegroundAppTime = 0L
+                    Log.w("ZenithAUMS", "SCREEN ON: starting foreground")
                     try {
                         startForeground(NOTIFICATION_ID, createNotification())
                     } catch (e: Exception) {
                         Log.e("ZenithAUMS", "startForeground failed: ${e.message}")
                     }
-                    launchCollectors()
+                    val currentApp = getForegroundApp()
+                    if (currentApp != null) {
+                        lastForegroundApp = currentApp
+                        if (currentApp != AppStateHolder.foregroundApp.value) {
+                            AppStateHolder.foregroundApp.value = currentApp
+                        }
+                    }
                     if (!monitoringLoopActive) {
                         Log.w("ZenithAUMS", "SCREEN ON: calling startMonitoring()")
                         startMonitoring()
@@ -218,7 +225,7 @@ class AppUsageMonitorService : Service() {
                     }
                 }
 
-                updateRestrictedPackages()
+                SharedMonitoringState.updateRestrictedPackages()
 
                 SharedMonitoringState.dailyUsageCache.clear()
                 lastUsageCacheTime = 0L
@@ -459,7 +466,7 @@ class AppUsageMonitorService : Service() {
                 SharedMonitoringState.goalShieldsCache = shields.filter {
                     it.type == FocusType.GOAL && it.goalReminderPeriodMinutes > 0
                 }
-                updateRestrictedPackages()
+                SharedMonitoringState.updateRestrictedPackages()
             }
         }
 
@@ -478,7 +485,7 @@ class AppUsageMonitorService : Service() {
                         packageNames = s.packageNames.toSet()
                     )
                 }
-                updateRestrictedPackages()
+                SharedMonitoringState.updateRestrictedPackages()
             }
         }
 
@@ -801,6 +808,26 @@ class AppUsageMonitorService : Service() {
                         }
                         checkIfAppIsShielded(currentApp)
                     }
+                }
+            }
+        }
+
+        if (ZenithAccessibilityService.isServiceRunning && !InterceptOverlayManager.isShowing) {
+            val s = currentShieldCache
+            if (s != null && s.type != FocusType.GOAL && !isAppPaused) {
+                val limitMs = s.timeLimitMinutes * 60 * 1000L
+                val remainingMs = (limitMs - cachedTotalUsage).coerceAtLeast(0L)
+                if (remainingMs <= 0L && (allowedUntilVal == null || currentTime > allowedUntilVal)) {
+                    if (s.isAutoQuitEnabled) {
+                        lastKickTime = System.currentTimeMillis()
+                        lastKickedPackage = currentApp
+                        goToHomeScreen()
+                        allowedApps.remove(currentApp)
+                    } else {
+                        checkIfAppIsShielded(currentApp)
+                    }
+                    lastForegroundApp = currentApp
+                    return
                 }
             }
         }
@@ -1421,7 +1448,6 @@ class AppUsageMonitorService : Service() {
     private fun checkSchedules(packageName: String): Boolean {
         return overlayActionHandler.checkSchedules(
             packageName = packageName,
-            shouldBypass = { pkg -> shouldBypassBlocking(pkg) },
             updateShieldCache = { updated -> currentShieldCache = updated },
             recheckSchedules = { pkg -> checkSchedules(pkg) }
         )
@@ -1456,66 +1482,17 @@ class AppUsageMonitorService : Service() {
             return cachedBypassResult
         }
 
-        if (packageName == this.packageName) {
-            cachedBypassPackage = packageName; cachedBypassResult = true; cachedBypassTime = now
-            return true
-        }
-
         if (packageName == InterceptOverlayManager.lastKickedPackage && now - InterceptOverlayManager.lastKickTime < 500) {
             cachedBypassPackage = packageName; cachedBypassResult = true; cachedBypassTime = now
             return true
         }
 
-        val prefs = SharedMonitoringState.currentPreferences
-        val isBedtimeOrWindDown = SharedMonitoringState.isBedtimeActive || (SharedMonitoringState.isWindDownActive && prefs?.bedtimeWindDownEnabled == true)
-
-        val result = when {
-            packageName in SharedMonitoringState.whitelistedPackages && packageName !in SharedMonitoringState.restrictedPackages -> {
-                if (!isBedtimeOrWindDown || prefs?.mindfulGatewayEnabled != true) true else null
-            }
-            isBedtimeOrWindDown && packageName in SharedMonitoringState.bedtimeWhitelistedPackages && packageName !in SharedMonitoringState.restrictedPackages -> {
-                if (prefs?.mindfulGatewayEnabled != true) true else null
-            }
-            isKeyboardApp(packageName) -> true
-            packageName in CRITICAL_SYSTEM_PACKAGES -> true
-            SharedMonitoringState.launcherPackages.contains(packageName) ||
-                packageName.contains("launcher", ignoreCase = true) ||
-                packageName.contains("home", ignoreCase = true) -> true
-            packageName in SharedMonitoringState.restrictedPackages -> false
-            else -> null
-        }
-
-        if (result != null) {
-            cachedBypassPackage = packageName; cachedBypassResult = result; cachedBypassTime = now
-            return result
-        }
-
-        val isSystem = SharedMonitoringState.systemAppCache.getOrPut(packageName) {
-            try {
-                val appInfo = packageManager.getApplicationInfo(packageName, 0)
-                (appInfo.flags and (android.content.pm.ApplicationInfo.FLAG_SYSTEM or android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
-            } catch (_: Exception) { false }
-        }
-
-        val finalResult = if (isSystem) {
-            if (packageName.contains("car.mode", ignoreCase = true)) true
-            else if (isBedtimeOrWindDown) false
-            else !(packageName in SharedMonitoringState.restrictedPackages || SharedMonitoringState.hasGlobalAllowSchedule || (prefs?.mindfulGatewayEnabled == true))
-        } else false
-
-        cachedBypassPackage = packageName; cachedBypassResult = finalResult; cachedBypassTime = now
-        return finalResult
+        val result = overlayActionHandler.shouldBypassBlocking(packageName)
+        cachedBypassPackage = packageName; cachedBypassResult = result; cachedBypassTime = now
+        return result
     }
 
     private fun isKeyboardApp(packageName: String): Boolean = overlayActionHandler.isKeyboardApp(packageName)
-
-    private fun updateRestrictedPackages() {
-        val shieldPkgs = SharedMonitoringState.allShieldsCache.keys
-        val schedulePkgs = SharedMonitoringState.activeSchedules.asSequence().filter { it.mode == com.etrisad.zenith.data.local.entity.ScheduleMode.BLOCK }
-            .flatMap { it.packageNames }.toSet()
-        SharedMonitoringState.hasGlobalAllowSchedule = SharedMonitoringState.activeSchedules.any { it.mode == com.etrisad.zenith.data.local.entity.ScheduleMode.ALLOW }
-        SharedMonitoringState.restrictedPackages = shieldPkgs + schedulePkgs + BLOCKABLE_SYSTEM_APPS
-    }
 
     private fun showScheduleOverlay(packageName: String, schedule: com.etrisad.zenith.data.local.entity.ScheduleEntity) {
         val totalGlobalUsageToday = getTotalGlobalUsageToday()
@@ -1636,14 +1613,5 @@ class AppUsageMonitorService : Service() {
         private const val NOTIFICATION_ID = 101
         private const val BEDTIME_CHANNEL_ID = "zenith_bedtime_channel"
         private const val WIND_DOWN_NOTIFICATION_ID = 2001
-        private val CRITICAL_SYSTEM_PACKAGES = setOf(
-            "android", "com.android.systemui", "com.android.settings", "com.android.phone",
-            "com.android.server.telecom", "com.google.android.packageinstaller",
-            "com.android.packageinstaller", "com.google.android.permissioncontroller"
-        )
-        private val BLOCKABLE_SYSTEM_APPS = setOf(
-            "com.google.android.youtube", "com.android.chrome",
-            "com.google.android.apps.youtube.music", "com.android.vending"
-        )
     }
 }

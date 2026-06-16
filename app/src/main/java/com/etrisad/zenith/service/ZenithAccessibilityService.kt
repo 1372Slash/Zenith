@@ -7,6 +7,7 @@ import android.util.Log
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.app.PendingIntent
 import android.app.usage.UsageStats
 import android.view.accessibility.AccessibilityEvent
 import android.view.inputmethod.InputMethodManager
@@ -42,6 +43,7 @@ class ZenithAccessibilityService : AccessibilityService() {
     private lateinit var sessionUsageOverlayManager: SessionUsageOverlayManager
     private lateinit var overlayActionHandler: OverlayActionHandler
     private val usageStatsManager by lazy { getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager }
+    private val notificationManager by lazy { getSystemService(NotificationManager::class.java) }
     private val reusableCalendar = Calendar.getInstance()
 
     private var lastForegroundApp: String? = null
@@ -59,6 +61,7 @@ class ZenithAccessibilityService : AccessibilityService() {
 
     private var lastKickTime = 0L
     private var lastKickedPackage: String? = null
+    private var lastDndFilter: Int? = null
 
     private var monitoringJob: kotlinx.coroutines.Job? = null
 
@@ -71,6 +74,8 @@ class ZenithAccessibilityService : AccessibilityService() {
         @Volatile
         var lastEventTime = 0L
         private var instance: ZenithAccessibilityService? = null
+        const val BEDTIME_CHANNEL_ID = "zenith_bedtime_channel"
+        const val WIND_DOWN_NOTIFICATION_ID = 2001
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -109,7 +114,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                     )
                 }
 
-                updateRestrictedPackages()
+                SharedMonitoringState.updateRestrictedPackages()
                 updateBedtimeStatus(prefs)
 
                 usageStatsCache = null
@@ -154,6 +159,8 @@ class ZenithAccessibilityService : AccessibilityService() {
             getTotalGlobalUsageToday = { getTotalGlobalUsageToday() },
         )
 
+        createBedtimeNotificationChannel()
+
         serviceScope.launch(Dispatchers.Main) {
             overlayManager.hideOverlay()
         }
@@ -165,7 +172,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                 lastForegroundApp?.let { currentPkg ->
                     currentShieldCache = SharedMonitoringState.allShieldsCache[currentPkg]
                 }
-                updateRestrictedPackages()
+                SharedMonitoringState.updateRestrictedPackages()
             }
         }
 
@@ -184,7 +191,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                         packageNames = s.packageNames.toSet()
                     )
                 }
-                updateRestrictedPackages()
+                SharedMonitoringState.updateRestrictedPackages()
             }
         }
 
@@ -286,6 +293,25 @@ class ZenithAccessibilityService : AccessibilityService() {
                             }
                         } else {
                             checkIfAppIsShielded(currentPkg)
+                        }
+                    }
+                    if (!shouldRemove) {
+                        val s = currentShieldCache ?: SharedMonitoringState.allShieldsCache[currentPkg]
+                        if (s != null && s.type != FocusType.GOAL && !isPaused(s)) {
+                            val limitMs = s.timeLimitMinutes * 60 * 1000L
+                            val totalUsage = getTotalUsageToday(currentPkg)
+                            if (limitMs > 0 && totalUsage >= limitMs) {
+                                val allowedUntil = allowedApps[currentPkg]
+                                if (allowedUntil == null || allowedUntil == 0L || currentTime > allowedUntil) {
+                                    if (s.isAutoQuitEnabled) {
+                                        lastKickTime = System.currentTimeMillis()
+                                        lastKickedPackage = currentPkg
+                                        goToHomeScreen()
+                                    } else {
+                                        checkIfAppIsShielded(currentPkg)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -625,18 +651,76 @@ class ZenithAccessibilityService : AccessibilityService() {
         }
 
         val wasWindDownActive = SharedMonitoringState.isWindDownActive
+        if (windDownActive && !wasWindDownActive) {
+            SharedMonitoringState.windDownUsedPackages.clear()
+            if (prefs.bedtimeNotificationEnabled) {
+                sendWindDownNotification()
+            }
+        }
+
         SharedMonitoringState.isBedtimeActive = active
         SharedMonitoringState.isWindDownActive = windDownActive
+        SharedMonitoringState.isBedtimeBlockingActive = active || (windDownActive && prefs.bedtimeWindDownEnabled)
 
-        if (SharedMonitoringState.isWindDownActive && !wasWindDownActive) {
-            SharedMonitoringState.windDownUsedPackages.clear()
+        updateDndAndWindDown(
+            active && prefs.bedtimeDndEnabled,
+            (active || windDownActive) && prefs.bedtimeWindDownEnabled
+        )
+    }
+
+    private fun createBedtimeNotificationChannel() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            if (notificationManager.getNotificationChannel(BEDTIME_CHANNEL_ID) == null) {
+                val channel = NotificationChannel(
+                    BEDTIME_CHANNEL_ID, "Bedtime & Wind Down", NotificationManager.IMPORTANCE_DEFAULT
+                ).apply {
+                    description = "Notifications for bedtime and wind down mode"
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+        }
+    }
+
+    private fun sendWindDownNotification() {
+        val intent = packageManager.getLaunchIntentForPackage(packageName)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, BEDTIME_CHANNEL_ID)
+            .setContentTitle("Time for Wind Down")
+            .setContentText("Bedtime is in 30 minutes. Prepare and get ready for bed.")
+            .setSmallIcon(android.R.drawable.ic_lock_power_off)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        notificationManager.notify(WIND_DOWN_NOTIFICATION_ID, notification)
+    }
+
+    private fun updateDndAndWindDown(dnd: Boolean, windDown: Boolean) {
+        if (notificationManager.isNotificationPolicyAccessGranted) {
+            try {
+                val targetFilter = if (dnd) NotificationManager.INTERRUPTION_FILTER_PRIORITY else NotificationManager.INTERRUPTION_FILTER_ALL
+
+                if (lastDndFilter == null) {
+                    lastDndFilter = notificationManager.currentInterruptionFilter
+                }
+
+                if (lastDndFilter != targetFilter) {
+                    notificationManager.setInterruptionFilter(targetFilter)
+                    lastDndFilter = targetFilter
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
     private fun checkSchedules(packageName: String): Boolean {
         return overlayActionHandler.checkSchedules(
             packageName = packageName,
-            shouldBypass = { pkg -> shouldBypassBlocking(pkg) },
             updateShieldCache = { updated -> currentShieldCache = updated },
             recheckSchedules = { pkg -> checkSchedules(pkg) }
         )
@@ -666,58 +750,8 @@ class ZenithAccessibilityService : AccessibilityService() {
     private fun isKeyboardApp(packageName: String): Boolean = overlayActionHandler.isKeyboardApp(packageName)
 
     private fun shouldBypassBlocking(packageName: String): Boolean {
-        if (packageName == this.packageName) return true
-
-        val prefs = SharedMonitoringState.currentPreferences
-        val isBedtimeOrWindDown = SharedMonitoringState.isBedtimeActive || (SharedMonitoringState.isWindDownActive && prefs?.bedtimeWindDownEnabled == true)
-
-        if (packageName in SharedMonitoringState.whitelistedPackages && packageName !in SharedMonitoringState.restrictedPackages) {
-            if (!isBedtimeOrWindDown || prefs?.mindfulGatewayEnabled != true) return true
-        }
-
-        if (isBedtimeOrWindDown) {
-            if (packageName in SharedMonitoringState.bedtimeWhitelistedPackages && packageName !in SharedMonitoringState.restrictedPackages) {
-                if (prefs?.mindfulGatewayEnabled != true) return true
-            }
-        }
-
-        if (packageName in CRITICAL_SYSTEM_PACKAGES) return true
-        if (packageName.contains("launcher", ignoreCase = true) || packageName.contains("home", ignoreCase = true)) return true
-
-        val isSystem = SharedMonitoringState.systemAppCache.getOrPut(packageName) {
-            try {
-                val appInfo = packageManager.getApplicationInfo(packageName, 0)
-                (appInfo.flags and (android.content.pm.ApplicationInfo.FLAG_SYSTEM or android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
-            } catch (_: Exception) { false }
-        }
-
-        if (isSystem) {
-            if (packageName.contains("car.mode", ignoreCase = true)) return true
-            if (isBedtimeOrWindDown) return false
-            val isMindfulActive = prefs?.mindfulGatewayEnabled == true
-            return !(packageName in SharedMonitoringState.restrictedPackages || SharedMonitoringState.hasGlobalAllowSchedule || isMindfulActive)
-        }
-
-        return false
+        return overlayActionHandler.shouldBypassBlocking(packageName)
     }
-
-    private fun updateRestrictedPackages() {
-        val shieldPkgs = SharedMonitoringState.allShieldsCache.keys
-        val schedulePkgs = SharedMonitoringState.activeSchedules.asSequence().filter { it.mode == ScheduleMode.BLOCK }
-            .flatMap { it.packageNames }.toSet()
-        SharedMonitoringState.hasGlobalAllowSchedule = SharedMonitoringState.activeSchedules.any { it.mode == ScheduleMode.ALLOW }
-        SharedMonitoringState.restrictedPackages = shieldPkgs + schedulePkgs + BLOCKABLE_SYSTEM_APPS
-    }
-
-    private val CRITICAL_SYSTEM_PACKAGES = setOf(
-        "android", "com.android.systemui", "com.android.settings", "com.android.phone",
-        "com.android.server.telecom", "com.google.android.packageinstaller",
-        "com.android.packageinstaller", "com.google.android.permissioncontroller"
-    )
-    private val BLOCKABLE_SYSTEM_APPS = setOf(
-        "com.google.android.youtube", "com.android.chrome",
-        "com.google.android.apps.youtube.music", "com.android.vending"
-    )
 
     private fun showScheduleOverlay(packageName: String, schedule: ScheduleEntity) {
         val totalGlobalUsageToday = getTotalGlobalUsageToday()

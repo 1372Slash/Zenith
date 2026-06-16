@@ -150,8 +150,6 @@ class BedtimeViewModel(
             val nextDateStr = dateFormat.format(nextDateCal.time)
 
             val pm = context.packageManager
-
-            // Query each unique date once instead of per-hour
             val date1Data = withContext(Dispatchers.IO) {
                 shieldRepository.getHourlyUsageForDateSync(startDateStr)
             }
@@ -249,8 +247,6 @@ class BedtimeViewModel(
             calendar.set(Calendar.MINUTE, 0)
             calendar.set(Calendar.SECOND, 0)
             calendar.set(Calendar.MILLISECOND, 0)
-
-            // First pass: collect all unique dates before querying
             val uniqueDates = mutableSetOf<String>()
             val dayEntries = mutableListOf<Triple<Long, String, String>>()
 
@@ -265,8 +261,6 @@ class BedtimeViewModel(
                 uniqueDates.add(nextDateStr)
                 dayEntries.add(Triple(sessionStartCal.timeInMillis, startDateStr, nextDateStr))
             }
-
-            // Batch query all unique dates in one call
             val allHourlyData = withContext(Dispatchers.IO) {
                 shieldRepository.getHourlyUsageForDatesSync(uniqueDates.toList())
                     .groupBy { it.date }

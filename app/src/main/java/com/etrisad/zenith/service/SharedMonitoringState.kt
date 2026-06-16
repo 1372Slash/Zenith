@@ -61,4 +61,23 @@ object SharedMonitoringState {
         dailyUsageCache.clear()
         notifiedGoals.clear()
     }
+
+    val CRITICAL_SYSTEM_PACKAGES = setOf(
+        "android", "com.android.systemui", "com.android.settings", "com.android.phone",
+        "com.android.server.telecom", "com.google.android.packageinstaller",
+        "com.android.packageinstaller", "com.google.android.permissioncontroller"
+    )
+
+    val BLOCKABLE_SYSTEM_APPS = setOf(
+        "com.google.android.youtube", "com.android.chrome",
+        "com.google.android.apps.youtube.music", "com.android.vending"
+    )
+
+    fun updateRestrictedPackages() {
+        val shieldPkgs = allShieldsCache.keys
+        val schedulePkgs = activeSchedules.asSequence().filter { it.mode == ScheduleMode.BLOCK }
+            .flatMap { it.packageNames }.toSet()
+        hasGlobalAllowSchedule = activeSchedules.any { it.mode == ScheduleMode.ALLOW }
+        restrictedPackages = shieldPkgs + schedulePkgs + BLOCKABLE_SYSTEM_APPS
+    }
 }
