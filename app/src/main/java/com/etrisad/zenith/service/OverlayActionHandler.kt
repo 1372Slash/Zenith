@@ -13,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import java.util.concurrent.ConcurrentHashMap
 
 class OverlayActionHandler(
     private val shieldRepository: ShieldRepository,
@@ -31,6 +32,8 @@ class OverlayActionHandler(
     private val allowedApps get() = shieldRepository.allowedApps
     private val mindfulGatewayStates get() = shieldRepository.mindfulGatewayStates
     private val reusableCalendar = Calendar.getInstance()
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val allowedSessionHandlers = ConcurrentHashMap<String, Runnable>()
 
     private var keyboardPackages = emptySet<String>()
     private var lastKeyboardRefreshTime = 0L
@@ -178,7 +181,34 @@ class OverlayActionHandler(
         getTotalUsageTodayFn: () -> Long,
     ) {
         val currentTimeOnAllow = System.currentTimeMillis()
-        allowedApps[targetPackageName] = currentTimeOnAllow + (minutes * 60 * 1000L)
+        val endTime = currentTimeOnAllow + (minutes * 60 * 1000L)
+        allowedApps[targetPackageName] = endTime
+
+        allowedSessionHandlers[targetPackageName]?.let { mainHandler.removeCallbacks(it) }
+        val runnable = Runnable {
+            val entryEndTime = allowedApps[targetPackageName] ?: return@Runnable
+            if (allowedApps[targetPackageName] != entryEndTime) return@Runnable
+            allowedApps.remove(targetPackageName)
+            if (getForegroundAppName() != targetPackageName) return@Runnable
+            val s = SharedMonitoringState.allShieldsCache[targetPackageName]
+            if (s == null) return@Runnable
+            if (s.isAutoQuitEnabled) {
+                goToHomeScreen()
+            } else {
+                showShieldOverlay(
+                    targetPackageName = targetPackageName,
+                    shield = s,
+                    isMindfulGateway = false,
+                    delayDurationSeconds = 0,
+                    totalUsageToday = getTotalUsageToday(targetPackageName),
+                    totalGlobalUsageToday = getTotalGlobalUsageToday(),
+                    updateShieldCache = {},
+                    getTotalUsageTodayFn = { getTotalUsageToday(targetPackageName) }
+                )
+            }
+        }
+        allowedSessionHandlers[targetPackageName] = runnable
+        mainHandler.postDelayed(runnable, minutes * 60 * 1000L)
 
         scope.launch {
             if (isMindfulGateway) {

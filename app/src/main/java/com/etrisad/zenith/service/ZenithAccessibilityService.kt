@@ -154,7 +154,7 @@ class ZenithAccessibilityService : AccessibilityService() {
             contextPkg = packageName,
             scope = serviceScope,
             goToHomeScreen = { goToHomeScreen() },
-            getForegroundAppName = { lastForegroundApp },
+            getForegroundAppName = { rootInActiveWindow?.packageName?.toString() ?: lastForegroundApp },
             recheckShield = { pkg -> serviceScope.launch { checkIfAppIsShielded(pkg) } },
             getTotalUsageToday = { pkg -> getTotalUsageToday(pkg) },
             getTotalGlobalUsageToday = { getTotalGlobalUsageToday() },
@@ -242,104 +242,113 @@ class ZenithAccessibilityService : AccessibilityService() {
         monitoringJob?.cancel()
         monitoringJob = serviceScope.launch {
             while (true) {
-                val cfg = SharedMonitoringState.performanceConfig
-                if (!AppStateHolder.isScreenOn.value) {
-                    delay(cfg.screenOffDelay)
-                    continue
-                }
+                try {
+                    val cfg = SharedMonitoringState.performanceConfig
+                    if (!AppStateHolder.isScreenOn.value) {
+                        delay(cfg.screenOffDelay)
+                        continue
+                    }
 
-                val currentTime = System.currentTimeMillis()
-                val currentPkg = lastForegroundApp
+                    val currentTime = System.currentTimeMillis()
+                    val currentPkg = lastForegroundApp
 
-                var checkInterval = cfg.a11yActiveDelay
-                if (currentPkg != null) {
-                    val isMonitored = SharedMonitoringState.allShieldsCache.containsKey(currentPkg) || 
-                                     SharedMonitoringState.restrictedPackages.contains(currentPkg)
-                    
-                    if (!isMonitored) {
+                    var checkInterval = cfg.a11yActiveDelay
+                    if (currentPkg != null) {
+                        val isMonitored = SharedMonitoringState.allShieldsCache.containsKey(currentPkg) || 
+                                         SharedMonitoringState.restrictedPackages.contains(currentPkg)
+                        
+                        if (!isMonitored) {
+                            checkInterval = cfg.a11yInactiveDelay
+                        }
+                        
+                        val allowedUntil = allowedApps[currentPkg] ?: 0L
+                        if (allowedUntil > 0) {
+                            val remaining = allowedUntil - currentTime
+                            val dynamicInterval = when {
+                                remaining < 10000 -> 1000L
+                                remaining < 60000 -> 5000L
+                                else -> 15000L
+                            }
+                            checkInterval = dynamicInterval.coerceAtMost(checkInterval)
+                        }
+                    } else {
                         checkInterval = cfg.a11yInactiveDelay
                     }
-                    
-                    val allowedUntil = allowedApps[currentPkg] ?: 0L
-                    if (allowedUntil > 0) {
-                        val remaining = allowedUntil - currentTime
-                        val dynamicInterval = when {
-                            remaining < 10000 -> 1000L
-                            remaining < 60000 -> 5000L
-                            else -> 15000L
+
+                    if (currentPkg != null) {
+                        sessionUsageOverlayManager.ensureSessionHUDActive(currentPkg)
+                    }
+
+                    if (currentPkg != null && !InterceptOverlayManager.isShowing && !shouldBypassBlocking(currentPkg)) {
+                        val isExpired: Boolean
+                        synchronized(allowedApps) {
+                            val allowedUntil = allowedApps[currentPkg]
+                            isExpired = allowedUntil != null && allowedUntil != 0L && currentTime > allowedUntil
                         }
-                        checkInterval = dynamicInterval.coerceAtMost(checkInterval)
-                    }
-                } else {
-                    checkInterval = cfg.a11yInactiveDelay
-                }
-
-                if (currentPkg != null) {
-                    sessionUsageOverlayManager.ensureSessionHUDActive(currentPkg)
-                }
-
-                if (currentPkg != null && !InterceptOverlayManager.isShowing && !shouldBypassBlocking(currentPkg)) {
-                    val shouldRemove: Boolean
-                    synchronized(allowedApps) {
-                        val allowedUntil = allowedApps[currentPkg]
-                        shouldRemove = allowedUntil != null && allowedUntil != 0L && currentTime > allowedUntil
-                        if (shouldRemove) allowedApps.remove(currentPkg)
-                    }
-                    if (shouldRemove) {
-                        val s = currentShieldCache ?: SharedMonitoringState.allShieldsCache[currentPkg] ?: shieldRepository.getShieldByPackageName(currentPkg)
-                        if (s?.isAutoQuitEnabled == true) {
-                            lastKickTime = System.currentTimeMillis()
-                            lastKickedPackage = currentPkg
-                            goToHomeScreen()
-                            if (s.isDelayAppEnabled) {
-                                val updated = s.copy(lastDelayStartTimestamp = 0L)
-                                shieldRepository.updateShield(updated)
-                                currentShieldCache = updated
+                        if (isExpired) {
+                            val s = currentShieldCache ?: SharedMonitoringState.allShieldsCache[currentPkg] ?: shieldRepository.getShieldByPackageName(currentPkg)
+                            if (s?.isAutoQuitEnabled == true) {
+                                synchronized(allowedApps) { allowedApps.remove(currentPkg) }
+                                lastKickTime = System.currentTimeMillis()
+                                lastKickedPackage = currentPkg
+                                goToHomeScreen()
+                                if (s.isDelayAppEnabled) {
+                                    val updated = s.copy(lastDelayStartTimestamp = 0L)
+                                    shieldRepository.updateShield(updated)
+                                    currentShieldCache = updated
+                                }
+                            } else if (!InterceptOverlayManager.isShowing) {
+                                checkIfAppIsShielded(currentPkg)
                             }
-                        } else if (!InterceptOverlayManager.isShowing) {
-                            checkIfAppIsShielded(currentPkg)
-                        }
-                    }
-                    if (!shouldRemove) {
-                        val s = currentShieldCache ?: SharedMonitoringState.allShieldsCache[currentPkg]
-                        if (s != null && s.type != FocusType.GOAL && !isPaused(s)) {
-                            val limitMs = s.timeLimitMinutes * 60 * 1000L
-                            val totalUsage = getTotalUsageToday(currentPkg)
-                            if (limitMs > 0 && totalUsage >= limitMs) {
-                                val allowedUntil = allowedApps[currentPkg]
-                                if (allowedUntil == null || allowedUntil == 0L || currentTime > allowedUntil) {
-                                    if (s.isAutoQuitEnabled) {
-                                        lastKickTime = System.currentTimeMillis()
-                                        lastKickedPackage = currentPkg
-                                        goToHomeScreen()
-                                    } else if (!InterceptOverlayManager.isShowing) {
-                                        checkIfAppIsShielded(currentPkg)
+                        } else {
+                            val s = currentShieldCache ?: SharedMonitoringState.allShieldsCache[currentPkg]
+                            if (s != null && s.type != FocusType.GOAL && !isPaused(s)) {
+                                val limitMs = s.timeLimitMinutes * 60 * 1000L
+                                val totalUsage = getTotalUsageToday(currentPkg)
+                                if (limitMs > 0 && totalUsage >= limitMs) {
+                                    val allowedUntil = allowedApps[currentPkg]
+                                    if (allowedUntil == null || allowedUntil == 0L || currentTime > allowedUntil) {
+                                        if (s.isAutoQuitEnabled) {
+                                            synchronized(allowedApps) { allowedApps.remove(currentPkg) }
+                                            lastKickTime = System.currentTimeMillis()
+                                            lastKickedPackage = currentPkg
+                                            goToHomeScreen()
+                                        } else if (!InterceptOverlayManager.isShowing) {
+                                            checkIfAppIsShielded(currentPkg)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
-                if (!InterceptOverlayManager.isShowing && currentPkg != null && shouldBypassBlocking(currentPkg)) {
-                    val actualPkg = withContext(Dispatchers.Main) {
-                        rootInActiveWindow?.packageName?.toString()
-                    }
-                    if (actualPkg != null && actualPkg != currentPkg && !shouldBypassBlocking(actualPkg)) {
-                        val actualAllowedUntil = synchronized(allowedApps) { allowedApps[actualPkg] }
-                        if (actualAllowedUntil != null && actualAllowedUntil != 0L && currentTime > actualAllowedUntil) {
-                            synchronized(allowedApps) { allowedApps.remove(actualPkg) }
-                            val s = SharedMonitoringState.allShieldsCache[actualPkg]
-                            if (s?.isAutoQuitEnabled == true) {
-                                lastKickTime = System.currentTimeMillis()
-                                lastKickedPackage = actualPkg
-                                goToHomeScreen()
-                            } else if (!InterceptOverlayManager.isShowing) {
-                                checkIfAppIsShielded(actualPkg)
+                    if (!InterceptOverlayManager.isShowing && currentPkg != null && shouldBypassBlocking(currentPkg)) {
+                        val actualPkg = withContext(Dispatchers.Main) {
+                            rootInActiveWindow?.packageName?.toString()
+                        }
+                        if (actualPkg != null && actualPkg != currentPkg && !shouldBypassBlocking(actualPkg)) {
+                            val actualExpired: Boolean
+                            synchronized(allowedApps) {
+                                val actualAllowedUntil = allowedApps[actualPkg]
+                                actualExpired = actualAllowedUntil != null && actualAllowedUntil != 0L && currentTime > actualAllowedUntil
+                            }
+                            if (actualExpired) {
+                                synchronized(allowedApps) { allowedApps.remove(actualPkg) }
+                                val s = SharedMonitoringState.allShieldsCache[actualPkg]
+                                if (s?.isAutoQuitEnabled == true) {
+                                    lastKickTime = System.currentTimeMillis()
+                                    lastKickedPackage = actualPkg
+                                    goToHomeScreen()
+                                } else if (!InterceptOverlayManager.isShowing) {
+                                    checkIfAppIsShielded(actualPkg)
+                                }
                             }
                         }
                     }
+                    delay(checkInterval)
+                } catch (e: Exception) {
+                    Log.e("ZenithAS", "Monitoring loop error: ${e.message}")
+                    delay(5000)
                 }
-                delay(checkInterval)
             }
         }
     }

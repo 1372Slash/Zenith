@@ -856,7 +856,8 @@ class AppUsageMonitorService : Service() {
             if (s != null && s.type != FocusType.GOAL && !isAppPaused) {
                 val limitMs = s.timeLimitMinutes * 60 * 1000L
                 val remainingMs = (limitMs - cachedTotalUsage).coerceAtLeast(0L)
-                if (remainingMs <= 0L && (allowedUntilVal == null || currentTime > allowedUntilVal)) {
+                val isAllowedExpired = allowedUntilVal != null && allowedUntilVal > 0L && currentTime > allowedUntilVal
+                if (isAllowedExpired || (remainingMs <= 0L && (allowedUntilVal == null || currentTime > allowedUntilVal))) {
                     if (s.isAutoQuitEnabled) {
                         lastKickTime = System.currentTimeMillis()
                         lastKickedPackage = currentApp
