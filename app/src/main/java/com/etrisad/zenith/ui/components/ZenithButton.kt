@@ -269,7 +269,14 @@ private fun ZenithButtonCore(
 
     LaunchedEffect(enableAfterDelayMillis) {
         if (enableAfterDelayMillis > 0) {
-            delayAnim.animateTo(1f, tween(enableAfterDelayMillis.toInt(), easing = LinearEasing))
+            val startTime = System.currentTimeMillis()
+            while (true) {
+                val elapsed = System.currentTimeMillis() - startTime
+                val p = (elapsed.toFloat() / enableAfterDelayMillis).coerceIn(0f, 1f)
+                delayAnim.snapTo(p)
+                if (p >= 1f) break
+                delay(16)
+            }
             bounceScale.animateTo(
                 targetValue = 1f,
                 initialVelocity = 2f,
@@ -342,7 +349,15 @@ private fun ZenithButtonCore(
         if (isPressed && enabled && !isLoading && !isDelaying) {
             try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (e: Exception) { e.printStackTrace() }
             if (isHoldAction) {
-                if (holdAnim.animateTo(1f, tween(holdDuration.toInt(), easing = LinearEasing)).endReason == AnimationEndReason.Finished && curPressed) {
+                val startTime = System.currentTimeMillis()
+                while (true) {
+                    val elapsed = System.currentTimeMillis() - startTime
+                    val p = (elapsed.toFloat() / holdDuration).coerceIn(0f, 1f)
+                    holdAnim.snapTo(p)
+                    if (p >= 1f) break
+                    delay(16)
+                }
+                if (curPressed) {
                     try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (e: Exception) { e.printStackTrace() }
                     onHoldComplete?.invoke()
                     holdAnim.snapTo(0f)

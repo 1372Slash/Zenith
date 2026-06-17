@@ -164,17 +164,15 @@ fun ShieldOverlay(
 
     LaunchedEffect(isDelaying) {
         if (isDelaying && delayDurationSeconds > 0) {
-            val remainingProgress = 1f - delayProgressAnimatable.value
-            val remainingDuration = (remainingProgress * delayDurationSeconds * 1000).toInt()
+            val totalDuration = delayDurationSeconds * 1000L
+            val startTime = System.currentTimeMillis() - (delayProgressAnimatable.value * totalDuration).toLong()
             
-            if (remainingDuration > 0) {
-                delayProgressAnimatable.animateTo(
-                    targetValue = 1f,
-                    animationSpec = tween(
-                        durationMillis = remainingDuration,
-                        easing = LinearEasing
-                    )
-                )
+            while (true) {
+                val elapsed = System.currentTimeMillis() - startTime
+                val p = (elapsed.toFloat() / totalDuration).coerceIn(0f, 1f)
+                delayProgressAnimatable.snapTo(p)
+                if (p >= 1f) break
+                delay(16)
             }
             isDelaying = false
         } else {
@@ -235,10 +233,14 @@ fun ShieldOverlay(
                 if (state.isBlocked) {
                     if (!state.isEmergencyHolding) {
                         autoKickProgress.snapTo(0f)
-                        autoKickProgress.animateTo(
-                            targetValue = 1f,
-                            animationSpec = tween(durationMillis = 4000, easing = LinearEasing)
-                        )
+                        val startTime = System.currentTimeMillis()
+                        while (true) {
+                            val elapsed = System.currentTimeMillis() - startTime
+                            val p = (elapsed.toFloat() / 4000f).coerceIn(0f, 1f)
+                            autoKickProgress.snapTo(p)
+                            if (p >= 1f) break
+                            delay(16)
+                        }
                         if (showContent) {
                             showContent = false
                             delay(300)
@@ -252,10 +254,14 @@ fun ShieldOverlay(
                     autoKickProgress.snapTo(0f)
                     delay(8000)
                     
-                    autoKickProgress.animateTo(
-                        targetValue = 1f,
-                        animationSpec = tween(durationMillis = 5000, easing = LinearEasing)
-                    )
+                    val startTime = System.currentTimeMillis()
+                    while (true) {
+                        val elapsed = System.currentTimeMillis() - startTime
+                        val p = (elapsed.toFloat() / 5000f).coerceIn(0f, 1f)
+                        autoKickProgress.snapTo(p)
+                        if (p >= 1f) break
+                        delay(16)
+                    }
                     
                     if (showContent) {
                         showContent = false

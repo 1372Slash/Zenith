@@ -64,10 +64,14 @@ fun WindDownOverlayContent(
     LaunchedEffect(sessionUsed) {
         if (sessionUsed) {
             delay(2000)
-            autoKickProgress.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(durationMillis = 5000, easing = LinearEasing)
-            )
+            val startTime = System.currentTimeMillis()
+            while (true) {
+                val elapsed = System.currentTimeMillis() - startTime
+                val p = (elapsed.toFloat() / 5000f).coerceIn(0f, 1f)
+                autoKickProgress.snapTo(p)
+                if (p >= 1f) break
+                delay(16)
+            }
             showContent = false
             delay(400)
             onCloseApp()
@@ -97,20 +101,26 @@ fun WindDownOverlayContent(
 
     LaunchedEffect(isDelaying) {
         if (isDelaying && !sessionUsed) {
-            delayProgressAnimatable.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(
-                    durationMillis = delayDurationSeconds * 1000,
-                    easing = LinearEasing
-                )
-            )
+            val totalDuration = delayDurationSeconds * 1000L
+            val startTime = System.currentTimeMillis()
+            while (true) {
+                val elapsed = System.currentTimeMillis() - startTime
+                val p = (elapsed.toFloat() / totalDuration).coerceIn(0f, 1f)
+                delayProgressAnimatable.snapTo(p)
+                if (p >= 1f) break
+                delay(16)
+            }
             isDelaying = false
         } else if (!isDelaying && !sessionUsed) {
             delay(2000)
-            autoKickProgress.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(durationMillis = 5000, easing = LinearEasing)
-            )
+            val startTime = System.currentTimeMillis()
+            while (true) {
+                val elapsed = System.currentTimeMillis() - startTime
+                val p = (elapsed.toFloat() / 5000f).coerceIn(0f, 1f)
+                autoKickProgress.snapTo(p)
+                if (p >= 1f) break
+                delay(16)
+            }
             showContent = false
             delay(400)
             onCloseApp()

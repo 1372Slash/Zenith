@@ -205,10 +205,14 @@ fun FeaturedCarousel(
         if (itemsCount > 1) {
             lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 autoScrollProgress.snapTo(0f)
-                autoScrollProgress.animateTo(
-                    targetValue = 1f,
-                    animationSpec = tween(5000, easing = LinearEasing)
-                )
+                val startTime = System.currentTimeMillis()
+                while (true) {
+                    val elapsed = System.currentTimeMillis() - startTime
+                    val p = (elapsed.toFloat() / 5000f).coerceIn(0f, 1f)
+                    autoScrollProgress.snapTo(p)
+                    if (p >= 1f) break
+                    delay(16)
+                }
                 
                 if (!pagerState.isScrollInProgress) {
                     val nextStep = (pagerState.currentPage + 1) % itemsCount

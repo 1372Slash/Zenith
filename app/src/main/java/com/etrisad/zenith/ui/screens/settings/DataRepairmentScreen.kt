@@ -656,12 +656,15 @@ fun HoldToAcceptButton(
 
     LaunchedEffect(isHolding, enabled) {
         if (isHolding && enabled) {
-            val result = progress.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(1500, easing = LinearEasing)
-            )
-            
-            if (result.endReason == AnimationEndReason.Finished && isHolding) {
+            val startTime = System.currentTimeMillis()
+            while (true) {
+                val elapsed = System.currentTimeMillis() - startTime
+                val p = (elapsed.toFloat() / 1500f).coerceIn(0f, 1f)
+                progress.snapTo(p)
+                if (p >= 1f) break
+                delay(16)
+            }
+            if (isHolding) {
                 onAccept()
                 isHolding = false
                 progress.snapTo(0f)

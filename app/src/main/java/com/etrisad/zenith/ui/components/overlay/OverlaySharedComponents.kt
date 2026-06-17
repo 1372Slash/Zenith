@@ -35,6 +35,7 @@ import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithButtonType
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.Locale
 
@@ -305,10 +306,16 @@ fun EmergencyButton(onEmergencyUse: () -> Unit, onHoldingChange: (Boolean) -> Un
     LaunchedEffect(isPressed) {
         onHoldingChange(isPressed)
         if (isPressed) {
-            if (holdProgress.animateTo(1f, tween(5000, easing = LinearEasing)).endReason == AnimationEndReason.Finished) {
-                onEmergencyUse()
-                holdProgress.snapTo(0f)
+            val startTime = System.currentTimeMillis()
+            while (true) {
+                val elapsed = System.currentTimeMillis() - startTime
+                val p = (elapsed.toFloat() / 5000f).coerceIn(0f, 1f)
+                holdProgress.snapTo(p)
+                if (p >= 1f) break
+                delay(16)
             }
+            onEmergencyUse()
+            holdProgress.snapTo(0f)
         } else {
             holdProgress.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
         }
@@ -417,17 +424,28 @@ fun DurationButton(
     var startAnimation by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { startAnimation = true }
 
-    val progressState = animateFloatAsState(
-        targetValue = if (startAnimation) 1f else 0f,
-        animationSpec = if (delaySeconds > 0) {
-            tween(durationMillis = delaySeconds * 1000, easing = LinearEasing)
-        } else {
-            snap()
-        },
-        label = "buttonProgress"
-    )
+    val progressState = remember { Animatable(0f) }
+    var isEnabled by remember { mutableStateOf(delaySeconds <= 0) }
 
-    val isEnabled = progressState.value >= 1f
+    LaunchedEffect(startAnimation) {
+        if (startAnimation) {
+            if (delaySeconds > 0) {
+                val totalMillis = delaySeconds * 1000L
+                val startTime = System.currentTimeMillis()
+                while (true) {
+                    val elapsed = System.currentTimeMillis() - startTime
+                    val p = (elapsed.toFloat() / totalMillis).coerceIn(0f, 1f)
+                    progressState.snapTo(p)
+                    if (p >= 1f) break
+                    delay(16)
+                }
+                isEnabled = true
+            } else {
+                progressState.snapTo(1f)
+                isEnabled = true
+            }
+        }
+    }
     val buttonScale = remember { Animatable(1f) }
 
     LaunchedEffect(isEnabled) {

@@ -63,6 +63,15 @@ fun BedtimeOverlayContent(
         label = "exitProgress"
     )
 
+    LaunchedEffect(startExitTimer) {
+        if (startExitTimer) {
+            delay(5000)
+            showContent = false
+            delay(400)
+            onCloseApp()
+        }
+    }
+
     val bedtimeUiState by produceState(
         initialValue = Triple(0f, "0m", ""),
         key1 = userPreferences
@@ -114,14 +123,6 @@ fun BedtimeOverlayContent(
     LaunchedEffect(Unit) {
         showContent = true
         startExitTimer = true
-    }
-
-    LaunchedEffect(exitProgress) {
-        if (exitProgress >= 1f) {
-            showContent = false
-            delay(400)
-            onCloseApp()
-        }
     }
 
     val configuration = LocalConfiguration.current

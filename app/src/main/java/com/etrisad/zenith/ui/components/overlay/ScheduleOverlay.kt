@@ -134,10 +134,14 @@ fun ScheduleOverlay(
                 if (isEmergencyUnlocked || isEmergencyHolding) return@LaunchedEffect
 
                 autoKickProgress.snapTo(0f)
-                autoKickProgress.animateTo(
-                    targetValue = 1f,
-                    animationSpec = tween(durationMillis = 4000, easing = LinearEasing)
-                )
+                val startTime = System.currentTimeMillis()
+                while (true) {
+                    val elapsed = System.currentTimeMillis() - startTime
+                    val p = (elapsed.toFloat() / 4000f).coerceIn(0f, 1f)
+                    autoKickProgress.snapTo(p)
+                    if (p >= 1f) break
+                    delay(16)
+                }
                 if (showContent) {
                     showContent = false
                     delay(300)

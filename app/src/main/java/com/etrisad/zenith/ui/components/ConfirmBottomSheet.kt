@@ -316,12 +316,23 @@ fun Lever(isOn: Boolean, onToggle: (Boolean) -> Unit) {
 @Composable
 fun PhaseTwoHold(durationMillis: Long, onComplete: () -> Unit) {
     var isHolding by remember { mutableStateOf(false) }
-    val progress = animateFloatAsState(
-        targetValue = if (isHolding) 1f else 0f,
-        animationSpec = if (isHolding) tween(durationMillis.toInt(), easing = LinearEasing) else spring(stiffness = Spring.StiffnessLow),
-        label = "HoldProgress",
-        finishedListener = { if (it == 1f) onComplete() }
-    )
+    var holdProgress by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(isHolding) {
+        if (isHolding) {
+            val startTime = System.currentTimeMillis()
+            while (true) {
+                val elapsed = System.currentTimeMillis() - startTime
+                val p = (elapsed.toFloat() / durationMillis).coerceIn(0f, 1f)
+                holdProgress = p
+                if (p >= 1f) break
+                delay(16)
+            }
+            onComplete()
+        } else {
+            holdProgress = 0f
+        }
+    }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Phase 2: Verification", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -348,7 +359,7 @@ fun PhaseTwoHold(durationMillis: Long, onComplete: () -> Unit) {
                 }
         ) {
             CircularWavyProgressIndicator(
-                progress = { progress.value },
+                progress = { holdProgress },
                 modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colorScheme.primary,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
