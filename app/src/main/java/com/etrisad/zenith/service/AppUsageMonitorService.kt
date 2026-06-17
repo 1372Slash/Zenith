@@ -79,6 +79,7 @@ class AppUsageMonitorService : Service() {
 
     private var lastDndFilter: Int? = null
     private var lastCheckedDayTimestamp = 0L
+    @Volatile
     private var isScreenOn = true
 
     private var previouslyActiveScheduleIds = setOf<Long>()
@@ -112,6 +113,7 @@ class AppUsageMonitorService : Service() {
         override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
             when (intent?.action) {
                 Intent.ACTION_SCREEN_ON -> {
+                    Log.d("Zenith_SCREEN", "SCREEN ON received")
                     isScreenOn = true
                     AppStateHolder.isScreenOn.value = true
                     currentSessionPackage = null
@@ -137,8 +139,11 @@ class AppUsageMonitorService : Service() {
                     } else {
                         Log.w("ZenithAUMS", "SCREEN ON: monitoringLoopActive=$monitoringLoopActive, SKIP startMonitoring")
                     }
+                    Log.d("Zenith_SCREEN", "SCREEN ON: restoring HUD views")
+                    sessionUsageOverlayManager.restoreAllHUDViews()
                 }
                 Intent.ACTION_SCREEN_OFF -> {
+                    Log.d("Zenith_SCREEN", "SCREEN OFF received")
                     isScreenOn = false
                     AppStateHolder.isScreenOn.value = false
                     currentShieldCache = null
@@ -148,6 +153,9 @@ class AppUsageMonitorService : Service() {
                     monitoringJob = null
                     foregroundAppJob = null
                     monitoringLoopActive = false
+                    overlayActionHandler.cancelPendingTimers()
+                    Log.d("Zenith_SCREEN", "Calling hideAllHUDViews() due to SCREEN OFF")
+                    sessionUsageOverlayManager.hideAllHUDViews()
                     scheduleScreenOffGoalAlarm()
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     Log.w("ZenithAUMS", "SCREEN OFF: monitoring cancelled, foreground removed")
@@ -179,7 +187,10 @@ class AppUsageMonitorService : Service() {
             }
             "com.etrisad.zenith.action.SCREEN_OFF_GOAL_CHECK" -> {
                 if (!isScreenOn) {
+                    Log.d("Zenith_SCREEN", "SCREEN_OFF_GOAL_CHECK: running checkGoalReminders()")
                     serviceScope.launch { checkGoalReminders() }
+                } else {
+                    Log.d("Zenith_SCREEN", "SCREEN_OFF_GOAL_CHECK: ignored, screen is ON")
                 }
             }
         }
@@ -187,6 +198,10 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun refreshData() {
+        if (!isScreenOn) {
+            Log.d("Zenith_SCREEN", "refreshData() SKIPPED: screen is OFF")
+            return
+        }
         serviceScope.launch {
             try {
                 withContext(Dispatchers.IO) {
@@ -237,12 +252,12 @@ class AppUsageMonitorService : Service() {
                 lastUsageCacheTime = 0L
                 lastUsageFetchTime = 0L
 
-                if (!monitoringLoopActive) {
+                if (!monitoringLoopActive && isScreenOn) {
                     startMonitoring()
                 }
             } catch (e: Exception) {
                 Log.e("ZenithAUMS", "Error in refreshData: ${e.message}")
-                if (!monitoringLoopActive) startMonitoring()
+                if (!monitoringLoopActive && isScreenOn) startMonitoring()
             }
         }
     }
@@ -374,6 +389,7 @@ class AppUsageMonitorService : Service() {
     private var lastGoalReminderCheckTime = 0L
 
     private suspend fun checkGoalReminders() {
+        Log.d("Zenith_SCREEN", "checkGoalReminders() called (isScreenOn=$isScreenOn)")
         val goals = SharedMonitoringState.goalShieldsCache
         if (goals.isEmpty()) return
         val currentTime = System.currentTimeMillis()
@@ -546,6 +562,10 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun startMonitoring() {
+        if (!isScreenOn) {
+            Log.d("Zenith_SCREEN", "startMonitoring() SKIPPED: screen is OFF")
+            return
+        }
         startMonitoringCount++
         Log.w("ZenithAUMS", "startMonitoring() called #$startMonitoringCount | active=$monitoringLoopActive | tickAge=${System.currentTimeMillis() - lastLoopTick}")
         if (monitoringLoopActive && System.currentTimeMillis() - lastLoopTick < 60000) return

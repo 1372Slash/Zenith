@@ -2,6 +2,7 @@ package com.etrisad.zenith.service
 
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.util.Log
 import android.view.inputmethod.InputMethodManager
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
@@ -9,6 +10,7 @@ import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.ui.components.overlay.SessionUsageOverlayManager
+import com.etrisad.zenith.service.AppStateHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -34,6 +36,12 @@ class OverlayActionHandler(
     private val reusableCalendar = Calendar.getInstance()
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val allowedSessionHandlers = ConcurrentHashMap<String, Runnable>()
+
+    fun cancelPendingTimers() {
+        Log.d("Zenith_SCREEN", "OverlayActionHandler: cancelling ${allowedSessionHandlers.size} pending timers")
+        allowedSessionHandlers.values.forEach { mainHandler.removeCallbacks(it) }
+        allowedSessionHandlers.clear()
+    }
 
     private var keyboardPackages = emptySet<String>()
     private var lastKeyboardRefreshTime = 0L
@@ -116,6 +124,10 @@ class OverlayActionHandler(
         updateShieldCache: (ShieldEntity?) -> Unit,
         getTotalUsageTodayFn: () -> Long,
     ) {
+        if (!AppStateHolder.isScreenOn.value) {
+            Log.d("Zenith_SCREEN", "showShieldOverlay($targetPackageName) SKIPPED: screen OFF")
+            return
+        }
         val shieldWithTimestamp = processDelayForShield(shield, isMindfulGateway, delayDurationSeconds, targetPackageName)
 
         scope.launch(Dispatchers.Main) {
@@ -186,6 +198,10 @@ class OverlayActionHandler(
 
         allowedSessionHandlers[targetPackageName]?.let { mainHandler.removeCallbacks(it) }
         val runnable = Runnable {
+            if (!AppStateHolder.isScreenOn.value) {
+                Log.d("Zenith_SCREEN", "Session timer expired for $targetPackageName but screen OFF, skipping overlay")
+                return@Runnable
+            }
             val entryEndTime = allowedApps[targetPackageName] ?: return@Runnable
             if (allowedApps[targetPackageName] != entryEndTime) return@Runnable
             allowedApps.remove(targetPackageName)
@@ -328,6 +344,10 @@ class OverlayActionHandler(
         recheckSchedules: (String) -> Unit = {},
         onAllowUseExtra: ((minutes: Int) -> Unit)? = null,
     ) {
+        if (!AppStateHolder.isScreenOn.value) {
+            Log.d("Zenith_SCREEN", "showScheduleOverlay($packageName) SKIPPED: screen OFF")
+            return
+        }
         scope.launch(Dispatchers.Main) {
             val appName = getAppName(packageName)
 
@@ -379,6 +399,10 @@ class OverlayActionHandler(
     }
 
     fun showBedtimeOverlay(packageName: String) {
+        if (!AppStateHolder.isScreenOn.value) {
+            Log.d("Zenith_SCREEN", "showBedtimeOverlay($packageName) SKIPPED: screen OFF")
+            return
+        }
         scope.launch(Dispatchers.Main) {
             val appName = getAppName(packageName)
 
@@ -401,6 +425,10 @@ class OverlayActionHandler(
         recheckSchedules: (String) -> Unit,
         onAllowUseExtra: ((minutes: Int) -> Unit)? = null,
     ) {
+        if (!AppStateHolder.isScreenOn.value) {
+            Log.d("Zenith_SCREEN", "showWindDownOverlay($packageName) SKIPPED: screen OFF")
+            return
+        }
         scope.launch(Dispatchers.Main) {
             val appName = getAppName(packageName)
 

@@ -218,11 +218,46 @@ class SessionUsageOverlayManager(
             mainHandler.post { destroyAllHUDs() }
             return
         }
+        android.util.Log.d("Zenith_SCREEN", "SessionUsageOverlayManager: destroying all HUDs")
         synchronized(activeSessions) {
             activeSessions.forEach { session ->
                 session.hudInstance?.let { destroyHUDInstance(it, session.packageName) }
                 session.hudInstance = null
                 session.isVisibleState.value = false
+                session.timerJob?.cancel()
+                session.timerJob = null
+            }
+        }
+    }
+
+    fun hideAllHUDViews() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { hideAllHUDViews() }
+            return
+        }
+        synchronized(activeSessions) {
+            activeSessions.forEach { session ->
+                session.hudInstance?.let { destroyHUDInstance(it, session.packageName) }
+                session.hudInstance = null
+                session.isVisibleState.value = false
+            }
+        }
+    }
+
+    fun restoreAllHUDViews() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { restoreAllHUDViews() }
+            return
+        }
+        synchronized(activeSessions) {
+            activeSessions.forEach { session ->
+                session.isVisibleState.value = true
+                session.backgroundTimestamp = 0L
+                if (session.hudInstance == null && !session.isTemporarilyHiddenState.value &&
+                    ((!session.isGoal && session.secondsLeftState.intValue > 0) ||
+                     (session.isGoal && session.secondsElapsedState.intValue < session.totalSeconds))) {
+                    session.hudInstance = createHUDInstance(session)
+                }
             }
         }
     }

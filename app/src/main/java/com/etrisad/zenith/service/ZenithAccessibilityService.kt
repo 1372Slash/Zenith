@@ -87,6 +87,10 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private fun refreshService() {
+        if (!AppStateHolder.isScreenOn.value) {
+            Log.d("Zenith_SCREEN", "A11Y refreshService() SKIPPED: screen is OFF")
+            return
+        }
         serviceScope.launch {
             try {
                 val prefs = preferencesRepository.userPreferencesFlow.first()
@@ -231,6 +235,10 @@ class ZenithAccessibilityService : AccessibilityService() {
         }
 
         mainHandler.postDelayed({
+            if (!AppStateHolder.isScreenOn.value) {
+                Log.d("Zenith_SCREEN", "A11Y 1s callback SKIPPED: screen is OFF")
+                return@postDelayed
+            }
             rootInActiveWindow?.packageName?.toString()?.let { pkg ->
                 if (pkg != packageName) {
                     AppStateHolder.foregroundApp.value = pkg
@@ -245,6 +253,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                 try {
                     val cfg = SharedMonitoringState.performanceConfig
                     if (!AppStateHolder.isScreenOn.value) {
+                        Log.d("Zenith_SCREEN", "A11Y monitoring loop: screen OFF, delaying ${cfg.screenOffDelay}ms")
                         delay(cfg.screenOffDelay)
                         continue
                     }
@@ -402,12 +411,15 @@ class ZenithAccessibilityService : AccessibilityService() {
             }
             val bypassedPkg = currentApp
             mainHandler.postDelayed({
-                if (!InterceptOverlayManager.isShowing) {
-                    val actualPkg = rootInActiveWindow?.packageName?.toString()
-                    if (actualPkg != null && actualPkg != packageName && actualPkg != bypassedPkg && actualPkg != lastForegroundApp) {
-                        AppStateHolder.foregroundApp.value = actualPkg
-                        packageChangeFlow.tryEmit(actualPkg)
-                    }
+                if (!AppStateHolder.isScreenOn.value) {
+                    Log.d("Zenith_SCREEN", "A11Y 800ms callback SKIPPED: screen is OFF")
+                    return@postDelayed
+                }
+                if (!InterceptOverlayManager.isShowing) return@postDelayed
+                val actualPkg = rootInActiveWindow?.packageName?.toString()
+                if (actualPkg != null && actualPkg != packageName && actualPkg != bypassedPkg && actualPkg != lastForegroundApp) {
+                    AppStateHolder.foregroundApp.value = actualPkg
+                    packageChangeFlow.tryEmit(actualPkg)
                 }
             }, 800)
             return
