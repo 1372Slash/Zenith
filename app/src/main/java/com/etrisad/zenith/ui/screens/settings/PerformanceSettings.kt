@@ -721,7 +721,7 @@ fun DelaySliderItem(
                 Text(text = description, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text(text = "${displayValue.toInt()}ms", style = MaterialTheme.typography.labelMedium,
+            Text(text = fmtDur(displayValue.toLong()), style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
         }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -866,10 +866,15 @@ private fun BatteryWarningBottomSheet(
 }
 
 private fun fmtDur(ms: Long): String = when {
+    ms >= 3600000 -> {
+        val h = ms / 3600000
+        val m = (ms % 3600000) / 60000
+        if (m > 0) "${h}h ${m}m" else "${h}h"
+    }
     ms >= 60000 -> {
         val m = ms / 60000
         val s = (ms % 60000) / 1000
-        if (s > 0) "${m}m ${s}s" else "${m}min"
+        if (s > 0) "${m}m ${s}s" else "${m}m"
     }
     ms >= 1000 -> "${ms / 1000}s"
     else -> "${ms}ms"
@@ -943,6 +948,11 @@ private fun fmtVal(value: Float, unit: String): String = when {
     unit == "min" && value >= 60 -> "${(value / 60).toInt()}h"
     unit == "min" && value >= 1 -> "${value.toInt()}m"
     unit == "min" && value < 1 -> "${(value * 60).toInt()}s"
+    unit == "s" && value >= 60 -> {
+        val m = (value / 60).toInt()
+        val s = (value % 60).toInt()
+        if (s > 0) "${m}m ${s}s" else "${m}m"
+    }
     else -> "${value.toInt()}s"
 }
 
