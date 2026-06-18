@@ -81,6 +81,7 @@ class DatabaseBackupWorker(
             .setSmallIcon(R.drawable.ic_database_upload)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setAutoCancel(true)
+            .setGroup("zenith_system")
             .build()
 
         notificationManager.notify(NOTIFICATION_ID, notification)

@@ -95,6 +95,7 @@ class NotificationInsightsWorker(context: Context, params: WorkerParameters) : C
                     .setSmallIcon(R.drawable.ic_calendar)
                     .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                     .setAutoCancel(true)
+                    .setGroup("zenith_insights")
                     .build()
 
                 manager.notify(NOTIFICATION_DAILY_RECAP, notification)
@@ -144,6 +145,7 @@ class NotificationInsightsWorker(context: Context, params: WorkerParameters) : C
                     .setSmallIcon(R.drawable.ic_analytics)
                     .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                     .setAutoCancel(true)
+                    .setGroup("zenith_insights")
                     .build()
 
                 manager.notify(NOTIFICATION_WEEKLY_INSIGHT, notification)
@@ -183,6 +185,7 @@ class NotificationInsightsWorker(context: Context, params: WorkerParameters) : C
                     .setSmallIcon(R.drawable.ic_crown)
                     .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                     .setAutoCancel(true)
+                    .setGroup("zenith_insights")
                     .build()
 
                 manager.notify(NOTIFICATION_MILESTONE, notification)

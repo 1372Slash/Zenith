@@ -101,6 +101,7 @@ class AppUsageMonitorService : Service() {
     private var lastMonitoringErrorTime = 0L
     private var foregroundNotificationStarted = false
     private var lastNotificationRefreshTime = 0L
+    private var lastNotificationText: String? = null
 
     private var cachedBypassPackage: String? = null
     private var cachedBypassResult = false
@@ -360,6 +361,7 @@ class AppUsageMonitorService : Service() {
         )
 
         launchCollectors()
+        createMonitorNotificationChannel()
 
         startForeground(NOTIFICATION_ID, createNotification())
         foregroundNotificationStarted = true
@@ -485,6 +487,7 @@ class AppUsageMonitorService : Service() {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+            .setGroup("zenith_goals")
             .build()
 
         manager.notify(goal.packageName.hashCode() + 1000, notification)
@@ -1089,8 +1092,12 @@ class AppUsageMonitorService : Service() {
         val currentTime = System.currentTimeMillis()
         if (!force && currentTime - lastNotificationRefreshTime < NOTIFICATION_UPDATE_INTERVAL) return
 
+        val newText = createNotificationStatusText()
+        if (force && newText == lastNotificationText) return
+        lastNotificationText = newText
+
         lastNotificationRefreshTime = currentTime
-        notificationManager.notify(NOTIFICATION_ID, createNotification())
+        notificationManager.notify(NOTIFICATION_ID, createNotification(newText))
     }
 
     private var lastDbUpdateTime = 0L
@@ -1187,6 +1194,7 @@ class AppUsageMonitorService : Service() {
             .setSmallIcon(R.drawable.ic_flag)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
+            .setGroup("zenith_goals")
             .build()
 
         manager.notify(packageName.hashCode(), notification)
@@ -1221,6 +1229,7 @@ class AppUsageMonitorService : Service() {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+            .setGroup("zenith_bedtime")
             .build()
 
         manager.notify(WIND_DOWN_NOTIFICATION_ID, notification)
@@ -1236,6 +1245,7 @@ class AppUsageMonitorService : Service() {
             .setSmallIcon(R.drawable.ic_check)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
+            .setGroup("zenith_goals")
             .build()
 
         manager.notify(999, notification)
@@ -1660,17 +1670,20 @@ class AppUsageMonitorService : Service() {
         }
     }
 
-    private fun createNotification(): Notification {
+    private fun createMonitorNotificationChannel() {
         val channelId = "zenith_monitor_channel"
         val channel = NotificationChannel(
             channelId, "Zenith Monitor Service", NotificationManager.IMPORTANCE_LOW
         ).apply { setShowBadge(false) }
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)
+    }
 
+    private fun createNotification(statusText: String? = null): Notification {
+        val channelId = "zenith_monitor_channel"
         return NotificationCompat.Builder(this, channelId)
             .setContentTitle("Zenith is active")
-            .setContentText(createNotificationStatusText())
+            .setContentText(statusText ?: createNotificationStatusText())
             .setSmallIcon(R.drawable.ic_zenith)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)

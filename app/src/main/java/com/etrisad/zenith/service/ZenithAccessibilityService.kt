@@ -547,6 +547,7 @@ class ZenithAccessibilityService : AccessibilityService() {
             .setSmallIcon(R.drawable.ic_flag)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
+            .setGroup("zenith_goals")
             .build()
 
         try {
@@ -761,6 +762,7 @@ class ZenithAccessibilityService : AccessibilityService() {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+            .setGroup("zenith_bedtime")
             .build()
 
         notificationManager.notify(WIND_DOWN_NOTIFICATION_ID, notification)

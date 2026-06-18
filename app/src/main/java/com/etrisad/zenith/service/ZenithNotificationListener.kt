@@ -104,17 +104,17 @@ class ZenithNotificationListener : NotificationListenerService() {
             CoroutineScope(Dispatchers.IO).launch {
                 val notifications = database.interceptedNotificationDao().getNotificationsByScheduleId(scheduleId)
                 
-                notifications.forEach { intercepted ->
-                    val channelId = "zenith_restored_notifications"
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        val channel = NotificationChannel(
-                            channelId,
-                            "Restored Notifications",
-                            NotificationManager.IMPORTANCE_DEFAULT
-                        )
-                        notificationManager.createNotificationChannel(channel)
-                    }
+                val channelId = "zenith_restored_notifications"
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    val channel = NotificationChannel(
+                        channelId,
+                        "Restored Notifications",
+                        NotificationManager.IMPORTANCE_DEFAULT
+                    )
+                    notificationManager.createNotificationChannel(channel)
+                }
 
+                notifications.forEach { intercepted ->
                     val launchIntent = context.packageManager.getLaunchIntentForPackage(intercepted.packageName)
                     val pendingIntent = if (launchIntent != null) {
                         PendingIntent.getActivity(context, intercepted.id.toInt(), launchIntent, PendingIntent.FLAG_IMMUTABLE)
@@ -157,6 +157,7 @@ class ZenithNotificationListener : NotificationListenerService() {
                         .setShowWhen(true)
                         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                         .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                        .setGroup("zenith_restored")
                     
                     pendingIntent?.let { builder.setContentIntent(it) }
 
