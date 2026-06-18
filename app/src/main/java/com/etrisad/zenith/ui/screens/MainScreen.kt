@@ -195,6 +195,7 @@ fun MainScreen(
     var showOnboardingStatsSheet by remember { mutableStateOf(false) }
     var showOnboardingUpdateSheet by remember { mutableStateOf(false) }
     var showUserSheet by remember { mutableStateOf(false) }
+    var permissionsMissing by remember { mutableStateOf(false) }
 
     val updateManager = remember { GitHubUpdateManager(context) }
     var latestRelease by remember { mutableStateOf<GitHubRelease?>(null) }
@@ -210,12 +211,25 @@ fun MainScreen(
         }
     }
 
+    fun updatePermissionsBadge() {
+        val hasUsage = com.etrisad.zenith.util.hasUsageStatsPermission(context)
+        val hasOvl = android.provider.Settings.canDrawOverlays(context)
+        val hasNotif = com.etrisad.zenith.util.hasNotificationPermission(context)
+        val hasNotifPolicy = (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted
+        val hasAccess = com.etrisad.zenith.util.isAccessibilityServiceEnabled(context)
+        val allMain = hasUsage && hasOvl && hasNotif && hasNotifPolicy
+        val allRequired = if (preferences.accessibilityRequired) allMain && hasAccess else allMain
+        permissionsMissing = !allRequired
+    }
+
     val currentCheckPermissions by rememberUpdatedState {
         val hasUsageStats = com.etrisad.zenith.util.hasUsageStatsPermission(context)
         val hasOverlay = android.provider.Settings.canDrawOverlays(context)
         val hasNotifications = com.etrisad.zenith.util.hasNotificationPermission(context)
         val hasNotificationPolicy = (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted
         val hasAccessibility = com.etrisad.zenith.util.isAccessibilityServiceEnabled(context)
+
+        permissionsMissing = !(hasUsageStats && hasOverlay && hasNotifications && hasNotificationPolicy)
 
         val mainGranted = hasUsageStats && hasOverlay && hasNotifications && hasNotificationPolicy
 
@@ -269,7 +283,7 @@ fun MainScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                currentCheckPermissions()
+                updatePermissionsBadge()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -284,7 +298,7 @@ fun MainScreen(
             onDismissRequest = {
                 showPermissionSheet = false
                 scope.launch { userPreferencesRepository.initializeDefaultWhitelist() }
-                currentCheckPermissions()
+                updatePermissionsBadge()
             },
             onAllPermissionsGranted = {
                 showPermissionSheet = false
@@ -795,7 +809,8 @@ fun MainScreen(
                             preferencesRepository = userPreferencesRepository,
                             innerPadding = innerPadding,
                             navController = navController,
-                            onOpenPermissions = { showPermissionSheet = true }
+                            onOpenPermissions = { showPermissionSheet = true },
+                            permissionsMissing = permissionsMissing
                         )
                     }
                     composable(Screen.Bedtime.route) {

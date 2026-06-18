@@ -23,7 +23,8 @@ fun GeneralSettings(
     onSetEmergencyRecharge: (Int) -> Unit,
     onSetDelayAppDuration: (Int) -> Unit,
     onShowWhitelistSheetChange: (Boolean) -> Unit,
-    onOpenPermissions: () -> Unit
+    onOpenPermissions: () -> Unit,
+    permissionsMissing: Boolean = false
 ) {
     var showTargetSheet by remember { mutableStateOf(false) }
     var showEmergencyRechargeSheet by remember { mutableStateOf(false) }
@@ -34,10 +35,20 @@ fun GeneralSettings(
 
         SettingsActionItem(
             title = "Permissions",
-            summary = "Manage required and optional system permissions",
+            summary = if (permissionsMissing) "Some required permissions are not granted" else "Manage required and optional system permissions",
             onClick = onOpenPermissions,
             icon = Icons.Outlined.Security,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
+            trailing = if (permissionsMissing) {
+                {
+                    Icon(
+                        imageVector = Icons.Outlined.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            } else null
         )
 
         Spacer(modifier = Modifier.height(4.dp))

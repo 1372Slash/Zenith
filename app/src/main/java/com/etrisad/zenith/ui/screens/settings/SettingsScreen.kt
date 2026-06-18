@@ -31,7 +31,8 @@ fun SettingsScreen(
     preferencesRepository: UserPreferencesRepository,
     innerPadding: PaddingValues,
     navController: NavController,
-    onOpenPermissions: () -> Unit
+    onOpenPermissions: () -> Unit,
+    permissionsMissing: Boolean = false
 ) {
     val preferences by preferencesRepository.userPreferencesFlow.collectAsState(initial = UserPreferences())
     val coroutineScope = rememberCoroutineScope()
@@ -129,7 +130,8 @@ fun SettingsScreen(
                     onSetEmergencyRecharge = { mins -> coroutineScope.launch { preferencesRepository.setEmergencyRechargeDuration(mins) } },
                     onSetDelayAppDuration = { secs -> coroutineScope.launch { preferencesRepository.setDelayAppDuration(secs) } },
                     onShowWhitelistSheetChange = { showWhitelistSheet = it },
-                    onOpenPermissions = onOpenPermissions
+                    onOpenPermissions = onOpenPermissions,
+                    permissionsMissing = permissionsMissing
                 )
             }
 

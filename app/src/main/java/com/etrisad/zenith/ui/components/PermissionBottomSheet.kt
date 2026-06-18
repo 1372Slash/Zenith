@@ -46,6 +46,7 @@ import com.etrisad.zenith.util.isAccessibilityServiceEnabled
 import com.etrisad.zenith.util.isAndroidGo
 import com.etrisad.zenith.util.isIgnoringBatteryOptimizations
 import com.etrisad.zenith.util.isNotificationListenerEnabled
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 enum class GroupPosition {
@@ -94,6 +95,26 @@ fun PermissionBottomSheet(
             }
         }
     )
+
+    fun openAccessibilitySettings(ctx: android.content.Context) {
+        ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        })
+        scope.launch {
+            while (true) {
+                delay(500)
+                if (isAccessibilityServiceEnabled(ctx)) {
+                    delay(300)
+                    val launchIntent = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)
+                    if (launchIntent != null) {
+                        launchIntent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NEW_TASK)
+                        ctx.startActivity(launchIntent)
+                    }
+                    break
+                }
+            }
+        }
+    }
 
     val allGranted = hasUsageStats && hasOverlay && hasNotifications && hasNotificationPolicy && (hasAccessibility || !preferences.accessibilityRequired)
 
@@ -226,12 +247,7 @@ fun PermissionBottomSheet(
                     title = "Accessibility Service",
                     description = "To detect app launches instantly",
                     isGranted = hasAccessibility,
-                    onClick = {
-                        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(intent)
-                    },
+                    onClick = { openAccessibilitySettings(context) },
                     icon = Icons.Outlined.AccessibilityNew,
                     position = GroupPosition.Bottom
                 )
@@ -252,12 +268,7 @@ fun PermissionBottomSheet(
                             title = "Accessibility Service",
                             description = "To detect app launches instantly",
                             isGranted = hasAccessibility,
-                            onClick = {
-                                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
-                                context.startActivity(intent)
-                            },
+                            onClick = { openAccessibilitySettings(context) },
                             icon = Icons.Outlined.AccessibilityNew,
                             position = GroupPosition.Top,
                             isInsideCollapse = true
@@ -332,18 +343,34 @@ fun PermissionBottomSheet(
                 }
             }
             
-            if (allGranted) {
-                Spacer(modifier = Modifier.height(24.dp))
-                ZenithButton(
-                    onClick = {
-                        scope.launch {
-                            sheetState.hide()
-                            onAllPermissionsGranted()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    text = "Everything is Ready!"
+            AnimatedVisibility(
+                visible = allGranted,
+                enter = fadeIn(
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
+                ) + expandVertically(
+                    expandFrom = Alignment.Top,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
+                ),
+                exit = fadeOut(
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
+                ) + shrinkVertically(
+                    shrinkTowards = Alignment.Top,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
                 )
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    ZenithButton(
+                        onClick = {
+                            scope.launch {
+                                sheetState.hide()
+                                onAllPermissionsGranted()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        text = "Everything is Ready!"
+                    )
+                }
             }
         }
     }

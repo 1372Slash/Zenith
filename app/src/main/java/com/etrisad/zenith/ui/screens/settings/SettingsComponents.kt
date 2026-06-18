@@ -153,7 +153,8 @@ fun SettingsActionItem(
     summary: String,
     onClick: () -> Unit,
     icon: ImageVector,
-    shape: Shape
+    shape: Shape,
+    trailing: @Composable (() -> Unit)? = null
 ) {
     Surface(
         onClick = onClick,
@@ -195,6 +196,10 @@ fun SettingsActionItem(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            if (trailing != null) {
+                trailing()
+                Spacer(modifier = Modifier.width(8.dp))
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
