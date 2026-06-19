@@ -199,6 +199,9 @@ class SessionUsageOverlayManager(
                         val secondsToProcess = (elapsedMillis / 1000).toInt()
                         if (!isGoal) {
                             session.secondsLeftState.intValue = (session.secondsLeftState.intValue - secondsToProcess).coerceAtLeast(0)
+                        } else {
+                            val newElapsed = session.secondsElapsedState.intValue + secondsToProcess
+                            session.secondsElapsedState.intValue = newElapsed.coerceAtMost(session.totalSeconds)
                         }
                         lastUpdateMillis = now - (elapsedMillis % 1000)
                     }
@@ -227,6 +230,7 @@ class SessionUsageOverlayManager(
                 session.timerJob?.cancel()
                 session.timerJob = null
             }
+            activeSessions.clear()
         }
     }
 
@@ -331,8 +335,9 @@ class SessionUsageOverlayManager(
                                 else session.secondsLeftState.intValue <= 0
                                 
                             if (isTimeUp) {
-                                hideHUD(session.packageName)
+                                session.isVisibleState.value = false
                             }
+                            hideHUD(session.packageName)
                         }
                     )
                 }
@@ -478,6 +483,10 @@ class SessionUsageOverlayManager(
                         if (session.backgroundTimestamp == 0L) {
                             session.backgroundTimestamp = System.currentTimeMillis()
                         }
+                    }
+                    session.hudInstance?.let {
+                        destroyHUDInstance(it, session.packageName)
+                        session.hudInstance = null
                     }
                 }
             }
