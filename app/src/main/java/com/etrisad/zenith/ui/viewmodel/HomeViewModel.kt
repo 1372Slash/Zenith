@@ -720,8 +720,6 @@ class HomeViewModel(
                 dailyUsageHistory = historyList.reversed(),
                 snapshotStamps = snapshotStamps.reversed(),
                 targetMillis = targetMillis,
-                activeShields = sortShields(shields.filter { it.type == FocusType.SHIELD }, state.shieldSortType),
-                activeGoals = sortShields(shields.filter { it.type == FocusType.GOAL }, state.goalSortType),
                 isLoading = shouldStillLoad
             )
         }
@@ -734,13 +732,32 @@ class HomeViewModel(
         viewModelScope.launch {
             shieldRepository.allShields.collect { shields ->
                 allShields = shields
+                val liveShields = withContext(Dispatchers.IO) {
+                    try {
+                        val usm = this@HomeViewModel.context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+                        val accurateUsageMap = ScreenUsageHelper.fetchAppUsageTodayTillNow(usm)
+                        shields.map { shield ->
+                            val usage = accurateUsageMap[shield.packageName] ?: 0L
+                            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+                            val liveRemaining = (limitMillis - usage).coerceAtLeast(0L)
+                            val finalRemaining = if (shield.remainingTimeMillis > 0 && liveRemaining > shield.remainingTimeMillis) {
+                                shield.remainingTimeMillis
+                            } else {
+                                liveRemaining
+                            }
+                            shield.copy(remainingTimeMillis = finalRemaining)
+                        }
+                    } catch (e: Exception) {
+                        shields
+                    }
+                }
                 _uiState.update { it.copy(
-                    activeShields = sortShields(shields.filter { it.type == FocusType.SHIELD }, it.shieldSortType),
-                    activeGoals = sortShields(shields.filter { it.type == FocusType.GOAL }, it.goalSortType)
+                    activeShields = sortShields(liveShields.filter { it.type == FocusType.SHIELD }, it.shieldSortType),
+                    activeGoals = sortShields(liveShields.filter { it.type == FocusType.GOAL }, it.goalSortType)
                 ) }
                 val currentPkg = _appDetailUiState.value.packageName
                 if (currentPkg.isNotEmpty()) {
-                    val shield = shields.find { it.packageName == currentPkg }
+                    val shield = liveShields.find { it.packageName == currentPkg }
                     _appDetailUiState.update { it.copy(
                         shieldEntity = shield,
                         type = shield?.type,
@@ -1275,7 +1292,13 @@ class HomeViewModel(
         val liveShields = allShields.map { shield ->
             val usage = filteredTodayUsage[shield.packageName] ?: 0L
             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
-            shield.copy(remainingTimeMillis = (limitMillis - usage).coerceAtLeast(0L))
+            val liveRemaining = (limitMillis - usage).coerceAtLeast(0L)
+            val finalRemaining = if (shield.remainingTimeMillis > 0 && liveRemaining > shield.remainingTimeMillis) {
+                shield.remainingTimeMillis
+            } else {
+                liveRemaining
+            }
+            shield.copy(remainingTimeMillis = finalRemaining)
         }
 
         val selectedDayTotal = if (isSelectedToday) {
@@ -1546,58 +1569,73 @@ class HomeViewModel(
         if (isNew) _appDetailUiState.value = AppDetailUiState(packageName = packageName, isLoading = true)
         else _appDetailUiState.update { it.copy(isLoading = true) }
         appDetailJob = viewModelScope.launch {
-            val usm = this@HomeViewModel.context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-            val pm = this@HomeViewModel.context.packageManager; val dateFormat = getDateFormat()
-            var appName = packageName
             try {
-                val appInfo = pm.getApplicationInfo(packageName, 0)
-                appName = pm.getApplicationLabel(appInfo).toString()
-                appInfoCache[packageName] = appName
-            } catch (_: Exception) {}
-            
-            _appDetailUiState.update { it.copy(appName = appName) }
-            withContext(Dispatchers.IO) { if (detailFallbackMap.isEmpty() || forceRefresh || isNew) updatePackageFallback(packageName) }
-            combine(shieldRepository.getLastNDaysUsageForPackage(packageName, 21), shieldRepository.getShieldByPackageNameFlow(packageName), userPreferencesRepository.userPreferencesFlow) { historyDB, shield, prefs ->
-                val detailed = withContext(Dispatchers.IO) { kotlinx.coroutines.withTimeoutOrNull(5000) { ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true) } }
-                val todayU = detailed?.appUsageMap?.get(packageName) ?: 0L; val sessions = detailed?.sessionCounts?.get(packageName) ?: 0
-                val hourlyU = MutableList(24) { detailed?.hourlyUsageMap?.get(it)?.get(packageName) ?: 0L }; val peakH = hourlyU.indices.maxByOrNull { hourlyU[it] } ?: -1
-                val yesterdayStr = dateFormat.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }.time)
-                val yesterdayU = historyDB.find { it.date == yesterdayStr }?.usageTimeMillis ?: if (prefs.preferSystemUsageHistory) detailFallbackMap[yesterdayStr] ?: 0L else 0L
-                val history = (0 until 21).map { i -> val dStart = getMidnight(i); val dStr = dateFormat.format(Date(dStart)); val dbE = historyDB.find { it.date == dStr }; val dTotal = if (i == 0) todayU else dbE?.usageTimeMillis ?: if (prefs.preferSystemUsageHistory) detailFallbackMap[dStr] ?: 0L else 0L; DailyUsage(dStart, dTotal, dbE != null, detailFallbackMap[dStr] != null, i == 0) }
+                val usm = this@HomeViewModel.context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+                val pm = this@HomeViewModel.context.packageManager; val dateFormat = getDateFormat()
+                var appName = packageName
+                try {
+                    val appInfo = pm.getApplicationInfo(packageName, 0)
+                    appName = pm.getApplicationLabel(appInfo).toString()
+                    appInfoCache[packageName] = appName
+                } catch (_: Exception) {}
                 
-                val lastCharge = prefs.lastChargeTimestamp
-                val manualReset = prefs.manualResetTimestamps[packageName] ?: 0L
-                val resetTime = maxOf(lastCharge, manualReset)
-                var sinceLastCharge = 0L
-                
-                if (resetTime > 0) {
-                    val usageSince = withContext(Dispatchers.IO) { ScreenUsageHelper.fetchAppUsageSince(usm, resetTime) }
-                    sinceLastCharge = usageSince[packageName] ?: 0L
-                }
+                _appDetailUiState.update { it.copy(appName = appName) }
+                withContext(Dispatchers.IO) { if (detailFallbackMap.isEmpty() || forceRefresh || isNew) updatePackageFallback(packageName) }
+                combine(shieldRepository.getLastNDaysUsageForPackage(packageName, 21), shieldRepository.getShieldByPackageNameFlow(packageName), userPreferencesRepository.userPreferencesFlow) { historyDB, shield, prefs ->
+                    try {
+                        val detailed = withContext(Dispatchers.IO) { kotlinx.coroutines.withTimeoutOrNull(5000) { ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true) } }
+                        val todayU = detailed?.appUsageMap?.get(packageName) ?: 0L; val sessions = detailed?.sessionCounts?.get(packageName) ?: 0
+                        val hourlyU = MutableList(24) { detailed?.hourlyUsageMap?.get(it)?.get(packageName) ?: 0L }; val peakH = hourlyU.indices.maxByOrNull { hourlyU[it] } ?: -1
+                        val yesterdayStr = dateFormat.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }.time)
+                        val yesterdayU = historyDB.find { it.date == yesterdayStr }?.usageTimeMillis ?: if (prefs.preferSystemUsageHistory) detailFallbackMap[yesterdayStr] ?: 0L else 0L
+                        val history = (0 until 21).map { i -> val dStart = getMidnight(i); val dStr = dateFormat.format(Date(dStart)); val dbE = historyDB.find { it.date == dStr }; val dTotal = if (i == 0) todayU else dbE?.usageTimeMillis ?: if (prefs.preferSystemUsageHistory) detailFallbackMap[dStr] ?: 0L else 0L; DailyUsage(dStart, dTotal, dbE != null, detailFallbackMap[dStr] != null, i == 0) }
+                        
+                        val lastCharge = prefs.lastChargeTimestamp
+                        val manualReset = prefs.manualResetTimestamps[packageName] ?: 0L
+                        val resetTime = maxOf(lastCharge, manualReset)
+                        var sinceLastCharge = 0L
+                        
+                        if (resetTime > 0) {
+                            val usageSince = withContext(Dispatchers.IO) { ScreenUsageHelper.fetchAppUsageSince(usm, resetTime) }
+                            sinceLastCharge = usageSince[packageName] ?: 0L
+                        }
 
-                _appDetailUiState.update { it.copy(
-                    packageName = packageName, 
-                    appName = appName, 
-                    type = shield?.type, 
-                    todayUsage = todayU, 
-                    yesterdayUsage = yesterdayU, 
-                    averageUsage = if (history.any { it.totalTime > 0 }) history.filter { it.totalTime > 0 }.map { it.totalTime }.average().toLong() else 0L, 
-                    totalSessions = sessions.coerceAtLeast(if (todayU > 0) 1 else 0), 
-                    peakHour = peakH, 
-                    percentageChange = if (yesterdayU > 0) (todayU - yesterdayU).toFloat() / yesterdayU * 100 else if (todayU > 0) 100f else 0f, 
-                    usageHistory = history.reversed(), 
-                    hourlyUsage = hourlyU, 
-                    currentStreak = shield?.currentStreak ?: 0, 
-                    bestStreak = shield?.bestStreak ?: 0, 
-                    shieldEntity = shield, 
-                    isPaused = shield?.isPaused ?: false, 
-                    pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L, 
-                    sinceLastChargeUsage = sinceLastCharge,
-                    lastResetTimestamp = resetTime,
-                    batteryStatsResetEnabled = prefs.batteryStatsResetEnabled,
-                    isLoading = false
-                ) }
-            }.collect()
+                        _appDetailUiState.update { it.copy(
+                            packageName = packageName, 
+                            appName = appName, 
+                            type = shield?.type, 
+                            todayUsage = todayU, 
+                            yesterdayUsage = yesterdayU, 
+                            averageUsage = if (history.any { it.totalTime > 0 }) history.filter { it.totalTime > 0 }.map { it.totalTime }.average().toLong() else 0L, 
+                            totalSessions = sessions.coerceAtLeast(if (todayU > 0) 1 else 0), 
+                            peakHour = peakH, 
+                            percentageChange = if (yesterdayU > 0) (todayU - yesterdayU).toFloat() / yesterdayU * 100 else if (todayU > 0) 100f else 0f, 
+                            usageHistory = history.reversed(), 
+                            hourlyUsage = hourlyU, 
+                            currentStreak = shield?.currentStreak ?: 0, 
+                            bestStreak = shield?.bestStreak ?: 0, 
+                            shieldEntity = shield, 
+                            isPaused = shield?.isPaused ?: false, 
+                            pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L, 
+                            sinceLastChargeUsage = sinceLastCharge,
+                            lastResetTimestamp = resetTime,
+                            batteryStatsResetEnabled = prefs.batteryStatsResetEnabled,
+                            isLoading = false
+                        ) }
+                    } catch (e: Exception) {
+                        android.util.Log.e("HomeVM", "Error in app detail combine for $packageName: ${e.message}")
+                        _appDetailUiState.update { it.copy(isLoading = false) }
+                    }
+                }.catch { e ->
+                    android.util.Log.e("HomeVM", "App detail flow failed for $packageName: ${e.message}")
+                    _appDetailUiState.update { it.copy(isLoading = false) }
+                }.collect()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.e("HomeVM", "App detail load failed for $packageName: ${e.message}")
+                _appDetailUiState.update { it.copy(isLoading = false) }
+            }
         }
     }
 
