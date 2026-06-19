@@ -238,15 +238,34 @@ class OverlayActionHandler(
 
         allowedSessionHandlers[targetPackageName]?.let { mainHandler.removeCallbacks(it) }
         val runnable = Runnable {
-            if (!AppStateHolder.isScreenOn.value) return@Runnable
-            val entryEndTime = allowedApps[targetPackageName] ?: return@Runnable
-            if (allowedApps[targetPackageName] != entryEndTime) return@Runnable
-            if (getForegroundAppName() != targetPackageName) return@Runnable
+            Log.d("Zenith_BT", "Timer FIRED for $targetPackageName")
+            if (!AppStateHolder.isScreenOn.value) {
+                Log.d("Zenith_BT", "Timer EXIT: screen OFF for $targetPackageName")
+                return@Runnable
+            }
+            val entryEndTime = allowedApps[targetPackageName]
+            if (entryEndTime == null) {
+                Log.d("Zenith_BT", "Timer EXIT: no allowedApps entry for $targetPackageName")
+                return@Runnable
+            }
+            if (allowedApps[targetPackageName] != entryEndTime) {
+                Log.d("Zenith_BT", "Timer EXIT: entry replaced for $targetPackageName")
+                return@Runnable
+            }
+            val fg = getForegroundAppName()
+            if (fg != targetPackageName) {
+                Log.d("Zenith_BT", "Timer EXIT: foreground mismatch for $targetPackageName (fg=$fg)")
+                return@Runnable
+            }
             allowedApps.remove(targetPackageName)
             val s = SharedMonitoringState.allShieldsCache[targetPackageName]
             val mindful = mindfulGatewayStates[targetPackageName]
             val shield = s ?: mindful
-            if (shield == null) return@Runnable
+            if (shield == null) {
+                Log.d("Zenith_BT", "Timer EXIT: shield not found for $targetPackageName")
+                return@Runnable
+            }
+            Log.d("Zenith_BT", "Timer EXECUTING action for $targetPackageName (autoQuit=${shield.isAutoQuitEnabled})")
             if (shield.isAutoQuitEnabled) {
                 goToHomeScreen()
             } else {

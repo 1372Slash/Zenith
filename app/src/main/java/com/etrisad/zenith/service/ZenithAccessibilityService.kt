@@ -428,7 +428,11 @@ class ZenithAccessibilityService : AccessibilityService() {
         if (now - lastPkgTime < 300) return
         lastA11yPackageTime[packageName] = now
 
-        lastForegroundApp = packageName
+        if (packageName !in SharedMonitoringState.CRITICAL_SYSTEM_PACKAGES && !isKeyboardApp(packageName)) {
+            lastForegroundApp = packageName
+        } else {
+            Log.d("Zenith_A11Y", "Skipped lastForegroundApp update for transient package: $packageName (lfga=$lastForegroundApp)")
+        }
         AppStateHolder.foregroundApp.value = packageName
 
         serviceScope.launch(Dispatchers.Main) {
@@ -476,9 +480,13 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun handlePackageChange(currentApp: String) {
-        if (currentApp == lastForegroundApp && InterceptOverlayManager.isShowing) return
+        if (currentApp == lastForegroundApp && InterceptOverlayManager.isShowing) {
+            Log.d("Zenith_HPC", "Early return: $currentApp same app + overlay showing")
+            return
+        }
 
         if (shouldBypassBlocking(currentApp)) {
+            Log.d("Zenith_HPC", "Bypass branch: $currentApp (lfga was $lastForegroundApp)")
             if (SharedMonitoringState.launcherPackages.contains(currentApp) || currentApp == packageName) {
                 InterceptOverlayManager.lastKickTime = 0L
                 InterceptOverlayManager.lastKickedPackage = null
@@ -519,6 +527,7 @@ class ZenithAccessibilityService : AccessibilityService() {
             return
         }
 
+        Log.d("Zenith_HPC", "Non-bypass: $currentApp (lfga was $lastForegroundApp, updating)")
         lastForegroundApp = currentApp
 
         val shield = SharedMonitoringState.allShieldsCache[currentApp]
