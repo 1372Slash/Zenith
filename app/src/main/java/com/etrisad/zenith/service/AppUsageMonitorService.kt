@@ -644,6 +644,7 @@ class AppUsageMonitorService : Service() {
                             }
                             if (maintenanceTick % cfg.goalReminderTick == 0L) checkGoalReminders()
                             if (maintenanceTick % cfg.dayChangeTick == 0L) checkDayChangePeriodic()
+                            if (maintenanceTick % 5L == 0L) SharedMonitoringState.performPeriodicCleanup()
                         }
                     }
                 } catch (t: Throwable) {
@@ -776,6 +777,29 @@ class AppUsageMonitorService : Service() {
 
         if (shouldBypassBlocking(currentApp)) return
 
+        if (ZenithAccessibilityService.isServiceRunning && !InterceptOverlayManager.isShowing) {
+            val shield = currentShieldCache
+            val isAppPaused = shield != null && isPaused(shield)
+            val allowedUntilVal = allowedApps[currentApp]
+            if (shield != null && shield.type != FocusType.GOAL && !isAppPaused) {
+                val limitMs = shield.timeLimitMinutes * 60 * 1000L
+                val remainingMs = (limitMs - cachedTotalUsage).coerceAtLeast(0L)
+                val isAllowedExpired = allowedUntilVal != null && allowedUntilVal > 0L && currentTime > allowedUntilVal
+                if (isAllowedExpired || (remainingMs <= 0L && (allowedUntilVal == null || currentTime > allowedUntilVal))) {
+                    if (shield.isAutoQuitEnabled) {
+                        lastKickTime = System.currentTimeMillis()
+                        lastKickedPackage = currentApp
+                        goToHomeScreen()
+                        allowedApps.remove(currentApp)
+                    } else if (!InterceptOverlayManager.isShowing) {
+                        checkIfAppIsShielded(currentApp)
+                    }
+                    lastForegroundApp = currentApp
+                }
+            }
+            return
+        }
+
         updateUsageTime(currentApp)
 
         val shield = currentShieldCache
@@ -890,26 +914,6 @@ class AppUsageMonitorService : Service() {
             }
         }
 
-        if (ZenithAccessibilityService.isServiceRunning && !InterceptOverlayManager.isShowing) {
-            val s = currentShieldCache
-            if (s != null && s.type != FocusType.GOAL && !isAppPaused) {
-                val limitMs = s.timeLimitMinutes * 60 * 1000L
-                val remainingMs = (limitMs - cachedTotalUsage).coerceAtLeast(0L)
-                val isAllowedExpired = allowedUntilVal != null && allowedUntilVal > 0L && currentTime > allowedUntilVal
-                if (isAllowedExpired || (remainingMs <= 0L && (allowedUntilVal == null || currentTime > allowedUntilVal))) {
-                    if (s.isAutoQuitEnabled) {
-                        lastKickTime = System.currentTimeMillis()
-                        lastKickedPackage = currentApp
-                        goToHomeScreen()
-                        allowedApps.remove(currentApp)
-                    } else {
-                        checkIfAppIsShielded(currentApp)
-                    }
-                    lastForegroundApp = currentApp
-                    return
-                }
-            }
-        }
     }
 
     private fun computeMonitoringDelay(): Long {
@@ -919,7 +923,11 @@ class AppUsageMonitorService : Service() {
         val currentTime = System.currentTimeMillis()
         
         if (!isScreenOn) return cfg.screenOffDelay
-        
+
+        if (ZenithAccessibilityService.isServiceRunning && !InterceptOverlayManager.isShowing) {
+            return cfg.a11yActiveDelay
+        }
+
         if (allowedUntil > currentTime) {
             val remaining = allowedUntil - currentTime
             val baseDelay = when {
@@ -1411,7 +1419,7 @@ class AppUsageMonitorService : Service() {
         val cfg = SharedMonitoringState.performanceConfig
         val cacheDuration = cfg.usageStatsCacheMs.coerceIn(60000L, 3600000L)
         
-        if (currentTime - lastUsageCacheTime < cacheDuration && SharedMonitoringState.dailyUsageCache.isNotEmpty()) {
+        if ((currentTime - lastUsageCacheTime < cacheDuration || currentTime - SharedMonitoringState.lastDailyUsageFetchTime < cacheDuration) && SharedMonitoringState.dailyUsageCache.isNotEmpty()) {
             return
         }
 
@@ -1428,6 +1436,7 @@ class AppUsageMonitorService : Service() {
         } catch (_: Exception) { }
 
         lastUsageCacheTime = currentTime
+        SharedMonitoringState.lastDailyUsageFetchTime = currentTime
     }
 
 
@@ -1719,7 +1728,7 @@ class AppUsageMonitorService : Service() {
         try {
             overlayManager.hideOverlay()
             overlayManager.destroy()
-            sessionUsageOverlayManager.destroyAllHUDs()
+            sessionUsageOverlayManager.destroy()
         } catch (_: Exception) {}
         try {
             unregisterReceiver(screenStateReceiver)

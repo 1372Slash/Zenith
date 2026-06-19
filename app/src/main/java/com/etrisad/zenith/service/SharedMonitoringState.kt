@@ -45,6 +45,7 @@ object SharedMonitoringState {
 
     private var cachedStartOfDayTime = 0L
     private var cachedStartOfDayValue = 0L
+    @Volatile var lastDailyUsageFetchTime = 0L
 
     fun getStartOfDay(): Long {
         val now = System.currentTimeMillis()
@@ -60,6 +61,22 @@ object SharedMonitoringState {
     fun clearDailyCaches() {
         dailyUsageCache.clear()
         notifiedGoals.clear()
+    }
+
+    fun performPeriodicCleanup() {
+        val now = System.currentTimeMillis()
+        val startOfDay = getStartOfDay()
+        val staleThreshold = now - 600_000L
+
+        windDownUsedPackages.entries.removeIf { it.value && now - startOfDay > 86400000L }
+
+        if (dailyUsageCache.size > 100) {
+            dailyUsageCache.entries.removeIf { it.value <= 0L }
+        }
+
+        if (systemAppCache.size > 200) {
+            systemAppCache.clear()
+        }
     }
 
     val CRITICAL_SYSTEM_PACKAGES = setOf(

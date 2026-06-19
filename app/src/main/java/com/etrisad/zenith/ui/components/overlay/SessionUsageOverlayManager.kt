@@ -234,6 +234,13 @@ class SessionUsageOverlayManager(
         }
     }
 
+    fun destroy() {
+        destroyAllHUDs()
+        scope.cancel()
+        managerScope.cancel()
+        foregroundUpdateJob?.cancel()
+    }
+
     fun hideAllHUDViews() {
         if (Looper.myLooper() != Looper.getMainLooper()) {
             mainHandler.post { hideAllHUDViews() }

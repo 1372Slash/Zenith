@@ -67,6 +67,7 @@ class ZenithAccessibilityService : AccessibilityService() {
     private var lastDndFilter: Int? = null
 
     private var monitoringJob: kotlinx.coroutines.Job? = null
+    private var bypassCheckRunnable: Runnable? = null
 
     private var cachedTotalGlobalUsage: Long = 0L
     private var lastGlobalUsageCacheTime: Long = 0L
@@ -381,6 +382,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                             }
                         }
                     }
+                    if (currentTime % 300_000L < checkInterval) SharedMonitoringState.performPeriodicCleanup()
                     delay(checkInterval)
                 } catch (e: Exception) {
                     Log.e("ZenithAS", "Monitoring loop error: ${e.message}")
@@ -392,9 +394,15 @@ class ZenithAccessibilityService : AccessibilityService() {
 
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
+    private var lastA11yEventProcessedTime = 0L
+
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         lastEventTime = System.currentTimeMillis()
         if (!AppStateHolder.isScreenOn.value || event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastA11yEventProcessedTime < 200) return
+        lastA11yEventProcessedTime = now
 
         val packageName = event.packageName?.toString() ?: return
         if (packageName == this.packageName) return
@@ -412,6 +420,8 @@ class ZenithAccessibilityService : AccessibilityService() {
             disableSelf()
             return
         }
+
+        if (packageName == AppStateHolder.foregroundApp.value) return
 
         AppStateHolder.foregroundApp.value = packageName
 
@@ -489,18 +499,20 @@ class ZenithAccessibilityService : AccessibilityService() {
                 overlayManager.hideOverlay()
             }
             val bypassedPkg = currentApp
-            mainHandler.postDelayed({
+            bypassCheckRunnable?.let { mainHandler.removeCallbacks(it) }
+            bypassCheckRunnable = Runnable {
                 if (!AppStateHolder.isScreenOn.value) {
                     Log.d("Zenith_SCREEN", "A11Y 800ms callback SKIPPED: screen is OFF")
-                    return@postDelayed
+                    return@Runnable
                 }
-                if (!InterceptOverlayManager.isShowing) return@postDelayed
+                if (!InterceptOverlayManager.isShowing) return@Runnable
                 val actualPkg = rootInActiveWindow?.packageName?.toString()
                 if (actualPkg != null && actualPkg != packageName && actualPkg != bypassedPkg && actualPkg != lastForegroundApp) {
                     AppStateHolder.foregroundApp.value = actualPkg
                     packageChangeFlow.tryEmit(actualPkg)
                 }
-            }, 800)
+            }
+            mainHandler.postDelayed(bypassCheckRunnable!!, 800)
             return
         }
 
@@ -724,7 +736,7 @@ class ZenithAccessibilityService : AccessibilityService() {
         val cfg = SharedMonitoringState.performanceConfig
         val cacheDuration = cfg.usageStatsCacheMs.coerceIn(30000L, 3600000L)
 
-        if (currentTime - lastUsageCacheTime > cacheDuration) {
+        if (currentTime - lastUsageCacheTime > cacheDuration && currentTime - SharedMonitoringState.lastDailyUsageFetchTime > cacheDuration) {
             val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
             val tempMap = detailedUsage.appUsageMap
 
@@ -737,6 +749,7 @@ class ZenithAccessibilityService : AccessibilityService() {
                 if (cappedTime > 0) SharedMonitoringState.dailyUsageCache[pkg] = cappedTime
             }
             lastUsageCacheTime = currentTime
+            SharedMonitoringState.lastDailyUsageFetchTime = currentTime
         }
 
         return SharedMonitoringState.dailyUsageCache[packageName] ?: 0L
@@ -956,10 +969,12 @@ class ZenithAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         isServiceRunning = false
+        bypassCheckRunnable?.let { mainHandler.removeCallbacks(it) }
+        bypassCheckRunnable = null
         try {
             overlayManager.hideOverlay()
             overlayManager.destroy()
-            sessionUsageOverlayManager.destroyAllHUDs()
+            sessionUsageOverlayManager.destroy()
         } catch (_: Exception) {}
         serviceJob.cancel()
     }
