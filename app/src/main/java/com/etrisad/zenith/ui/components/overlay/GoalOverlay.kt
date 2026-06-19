@@ -119,7 +119,7 @@ fun GoalOverlay(
             value = Triple(
                 shield, 
                 liveAppUsage.coerceAtMost(timeSinceMidnight), 
-                totalGlobalUsageToday.coerceAtMost(timeSinceMidnight)
+                detailedUsage.totalGlobalUsage.coerceAtMost(timeSinceMidnight)
             )
             delay(30000)
         }

@@ -99,7 +99,7 @@ fun ShieldOverlay(
             value = Triple(
                 s ?: shield, 
                 liveAppUsage.coerceAtMost(timeSinceMidnight), 
-                totalGlobalUsageToday.coerceAtMost(timeSinceMidnight)
+                detailedUsage.totalGlobalUsage.coerceAtMost(timeSinceMidnight)
             )
             delay(30000)
         }
