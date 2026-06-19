@@ -67,14 +67,9 @@ fun BedtimeScreen(
     innerPadding: PaddingValues
 ) {
     val preferences by viewModel.userPreferences.collectAsState()
-    val hourlyUsage by viewModel.hourlyUsage.collectAsState()
-    val bedtimePercentage by viewModel.bedtimeUsagePercentage.collectAsState()
-    val totalUsageMillis by viewModel.bedtimeUsageTotalMillis.collectAsState()
-    val totalDurationMillis by viewModel.bedtimeDurationTotalMillis.collectAsState()
-    val bedtimeHistory by viewModel.bedtimeHistory.collectAsState()
-    val sessionDateRange by viewModel.bedtimeDateRange.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     
-    val bedtimeTargetMillis = remember(totalDurationMillis) { (totalDurationMillis * 0.1f).toLong() }
+    val bedtimeTargetMillis = remember(uiState.bedtimeDurationTotalMillis) { (uiState.bedtimeDurationTotalMillis * 0.1f).toLong() }
 
     var showAppPicker by remember { mutableStateOf(false) }
     var showStartTimePicker by remember { mutableStateOf(false) }
@@ -84,8 +79,8 @@ fun BedtimeScreen(
     var isOtherHourAppsExpanded by remember(selectedHour) { mutableStateOf(false) }
     var hourlySortType by remember { mutableStateOf(HourlySortType.USAGE_TIME) }
     
-    val hourlyAppsData = remember(hourlyUsage, selectedHour, hourlySortType) {
-        val hourData = hourlyUsage.find { it.hour == selectedHour }
+    val hourlyAppsData = remember(uiState.hourlyUsage, selectedHour, hourlySortType) {
+        val hourData = uiState.hourlyUsage.find { it.hour == selectedHour }
         if (hourData != null && hourData.apps.isNotEmpty()) {
             val sortedApps = when(hourlySortType) {
                 HourlySortType.USAGE_TIME -> hourData.apps.sortedByDescending { it.totalTimeVisible }
@@ -224,9 +219,9 @@ fun BedtimeScreen(
             item(key = "bedtime_hourly_chart") {
                 Column(modifier = Modifier.animateItem()) {
                     BedtimeHourlyUsageChart(
-                        hourlyUsage = hourlyUsage,
+                        hourlyUsage = uiState.hourlyUsage,
                         selectedHour = selectedHour,
-                        dateRange = sessionDateRange,
+                        dateRange = uiState.bedtimeDateRange,
                         onHourClick = { selectedHour = if (selectedHour == it) null else it },
                         formatDuration = viewModel::formatDuration,
                         index = 0,
@@ -402,7 +397,7 @@ fun BedtimeScreen(
                 Column(modifier = Modifier.animateItem()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     UsageHistoryCard(
-                        history = bedtimeHistory,
+                        history = uiState.bedtimeHistory,
                         targetMillis = bedtimeTargetMillis,
                         focusType = FocusType.SHIELD,
                         formatDuration = { viewModel.formatDuration(it) },
@@ -416,14 +411,14 @@ fun BedtimeScreen(
             item(key = "bedtime_efficiency_card") {
                 Column(modifier = Modifier.animateItem()) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    val limitMillis = (totalDurationMillis * 0.1f).toLong()
-                    val remainingMillis = limitMillis - totalUsageMillis
+                    val limitMillis = (uiState.bedtimeDurationTotalMillis * 0.1f).toLong()
+                    val remainingMillis = limitMillis - uiState.bedtimeUsageTotalMillis
                     val isExceeded = remainingMillis < 0
                     
                     BedtimeEfficiencyCard(
-                        percentage = bedtimePercentage,
-                        totalUsage = viewModel.formatDuration(totalUsageMillis),
-                        totalDuration = viewModel.formatDuration(totalDurationMillis),
+                        percentage = uiState.bedtimeUsagePercentage,
+                        totalUsage = viewModel.formatDuration(uiState.bedtimeUsageTotalMillis),
+                        totalDuration = viewModel.formatDuration(uiState.bedtimeDurationTotalMillis),
                         usageLeft = viewModel.formatDuration(kotlin.math.abs(remainingMillis)),
                         isExceeded = isExceeded,
                         index = hourlyGroupTotal - 1,

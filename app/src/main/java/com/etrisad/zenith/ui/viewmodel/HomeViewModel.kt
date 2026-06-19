@@ -799,7 +799,7 @@ class HomeViewModel(
     val todayHourlyUsage: Flow<List<HourlyUsageEntity>> = allDatabaseUsage.flatMapLatest {
         val today = getDateFormat().format(Date())
         shieldRepository.getHourlyUsageForDate(today)
-    }
+    }.flowOn(Dispatchers.Default)
 
     fun onRefresh() {
         triggerServiceRefresh()

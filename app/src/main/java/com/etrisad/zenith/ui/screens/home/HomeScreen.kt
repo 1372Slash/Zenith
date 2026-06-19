@@ -1015,60 +1015,64 @@ data class BedtimeStatus(
 @Composable
 fun rememberBedtimeStatus(prefs: UserPreferences): BedtimeStatus {
     var status by remember { mutableStateOf(BedtimeStatus(false, "", 1f)) }
+    var tick by remember { mutableStateOf(0L) }
     
-    LaunchedEffect(prefs) {
-        val cal = Calendar.getInstance()
+    LaunchedEffect(Unit) {
         while (true) {
-            cal.timeInMillis = System.currentTimeMillis()
-            if (!prefs.bedtimeEnabled) {
-                status = BedtimeStatus(false, "", 1f)
-            } else {
-                val currentDay = cal.get(Calendar.DAY_OF_WEEK)
-                val currentMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
-                cal.add(Calendar.DAY_OF_YEAR, -1)
-                val yesterdayDay = cal.get(Calendar.DAY_OF_WEEK)
-                cal.add(Calendar.DAY_OF_YEAR, 1)
-                
-                val startParts = prefs.bedtimeStartTime.split(":")
-                val endParts = prefs.bedtimeEndTime.split(":")
-                val startMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 22) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0)
-                val endMinutes = (endParts.getOrNull(0)?.toIntOrNull() ?: 7) * 60 + (endParts.getOrNull(1)?.toIntOrNull() ?: 0)
+            tick = System.currentTimeMillis()
+            delay(60000)
+        }
+    }
+    
+    LaunchedEffect(prefs, tick) {
+        if (!prefs.bedtimeEnabled) {
+            status = BedtimeStatus(false, "", 1f)
+            return@LaunchedEffect
+        }
+        val cal = Calendar.getInstance()
+        cal.timeInMillis = tick
+        val currentDay = cal.get(Calendar.DAY_OF_WEEK)
+        val currentMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+        cal.add(Calendar.DAY_OF_YEAR, -1)
+        val yesterdayDay = cal.get(Calendar.DAY_OF_WEEK)
+        
+        val startParts = prefs.bedtimeStartTime.split(":")
+        val endParts = prefs.bedtimeEndTime.split(":")
+        val startMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 22) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0)
+        val endMinutes = (endParts.getOrNull(0)?.toIntOrNull() ?: 7) * 60 + (endParts.getOrNull(1)?.toIntOrNull() ?: 0)
 
-                val effectiveStartMinutes = startMinutes - 30
+        val effectiveStartMinutes = startMinutes - 30
 
-                var isActive = false
-                if (effectiveStartMinutes <= endMinutes) {
-                    if (currentDay in prefs.bedtimeDays) {
-                        isActive = currentMinutes in effectiveStartMinutes until endMinutes
-                    }
-                } else {
-                    if (currentDay in prefs.bedtimeDays && currentMinutes >= effectiveStartMinutes) {
-                        isActive = true
-                    } else if (yesterdayDay in prefs.bedtimeDays && currentMinutes < endMinutes) {
-                        isActive = true
-                    }
-                }
-
-                if (isActive) {
-                    val nowAdj = if (currentMinutes < effectiveStartMinutes && effectiveStartMinutes > endMinutes) currentMinutes + 1440 else currentMinutes
-                    val startAdj = effectiveStartMinutes
-                    val endAdj = if (endMinutes < effectiveStartMinutes) endMinutes + 1440 else endMinutes
-                    
-                    val totalDuration = endAdj - startAdj
-                    val elapsed = nowAdj - startAdj
-                    val progress = (elapsed.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
-                    
-                    val remainingMinutes = (endAdj - nowAdj).coerceAtLeast(0)
-                    val h = remainingMinutes / 60
-                    val m = remainingMinutes % 60
-                    val timeStr = if (h > 0) "${h}h ${m}m" else "${m}m"
-                    
-                    status = BedtimeStatus(true, timeStr, progress)
-                } else {
-                    status = BedtimeStatus(false, "", 1f)
-                }
+        var isActive = false
+        if (effectiveStartMinutes <= endMinutes) {
+            if (currentDay in prefs.bedtimeDays) {
+                isActive = currentMinutes in effectiveStartMinutes until endMinutes
             }
-            delay(10000)
+        } else {
+            if (currentDay in prefs.bedtimeDays && currentMinutes >= effectiveStartMinutes) {
+                isActive = true
+            } else if (yesterdayDay in prefs.bedtimeDays && currentMinutes < endMinutes) {
+                isActive = true
+            }
+        }
+
+        if (isActive) {
+            val nowAdj = if (currentMinutes < effectiveStartMinutes && effectiveStartMinutes > endMinutes) currentMinutes + 1440 else currentMinutes
+            val startAdj = effectiveStartMinutes
+            val endAdj = if (endMinutes < effectiveStartMinutes) endMinutes + 1440 else endMinutes
+            
+            val totalDuration = endAdj - startAdj
+            val elapsed = nowAdj - startAdj
+            val progress = (elapsed.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
+            
+            val remainingMinutes = (endAdj - nowAdj).coerceAtLeast(0)
+            val h = remainingMinutes / 60
+            val m = remainingMinutes % 60
+            val timeStr = if (h > 0) "${h}h ${m}m" else "${m}m"
+            
+            status = BedtimeStatus(true, timeStr, progress)
+        } else {
+            status = BedtimeStatus(false, "", 1f)
         }
     }
     return status
@@ -1086,7 +1090,7 @@ fun QuickActionsSection(
     LaunchedEffect(bedtimeStatus.isActive) {
         if (bedtimeStatus.isActive) {
             while (true) {
-                delay(3000)
+                delay(60000)
                 showRemainingTime = !showRemainingTime
             }
         } else {

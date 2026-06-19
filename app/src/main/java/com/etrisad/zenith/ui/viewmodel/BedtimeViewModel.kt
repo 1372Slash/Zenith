@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
+import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -26,6 +28,16 @@ import java.time.Instant
 import java.time.ZoneId
 import java.util.Calendar
 import java.util.Locale
+
+@Immutable
+data class BedtimeUiState(
+    val hourlyUsage: List<HourlyUsageInfo> = emptyList(),
+    val bedtimeUsagePercentage: Float = 0f,
+    val bedtimeUsageTotalMillis: Long = 0L,
+    val bedtimeDurationTotalMillis: Long = 0L,
+    val bedtimeHistory: List<DailyUsage> = emptyList(),
+    val bedtimeDateRange: String = ""
+)
 
 class BedtimeViewModel(
     context: Context,
@@ -45,23 +57,8 @@ class BedtimeViewModel(
             initialValue = UserPreferences()
         )
 
-    private val _hourlyUsage = MutableStateFlow<List<HourlyUsageInfo>>(emptyList())
-    val hourlyUsage: StateFlow<List<HourlyUsageInfo>> = _hourlyUsage.asStateFlow()
-
-    private val _bedtimeUsagePercentage = MutableStateFlow(0f)
-    val bedtimeUsagePercentage: StateFlow<Float> = _bedtimeUsagePercentage.asStateFlow()
-
-    private val _bedtimeUsageTotalMillis = MutableStateFlow(0L)
-    val bedtimeUsageTotalMillis: StateFlow<Long> = _bedtimeUsageTotalMillis.asStateFlow()
-
-    private val _bedtimeDurationTotalMillis = MutableStateFlow(0L)
-    val bedtimeDurationTotalMillis: StateFlow<Long> = _bedtimeDurationTotalMillis.asStateFlow()
-
-    private val _bedtimeHistory = MutableStateFlow<List<DailyUsage>>(emptyList())
-    val bedtimeHistory: StateFlow<List<DailyUsage>> = _bedtimeHistory.asStateFlow()
-
-    private val _bedtimeDateRange = MutableStateFlow("")
-    val bedtimeDateRange: StateFlow<String> = _bedtimeDateRange.asStateFlow()
+    private val _uiState = MutableStateFlow(BedtimeUiState())
+    val uiState: StateFlow<BedtimeUiState> = _uiState.asStateFlow()
 
     init {
         refreshStreak()
@@ -196,12 +193,11 @@ class BedtimeViewModel(
                 )
             }
 
-            _hourlyUsage.value = usageInfoList
             val totalUsage = usageInfoList.sumOf { it.usageTimeMillis }
-            _bedtimeUsageTotalMillis.value = totalUsage
-
             val totalDurationMillis = sessionEndCal.timeInMillis - sessionStartCal.timeInMillis
-            _bedtimeDurationTotalMillis.value = totalDurationMillis
+            val usagePercentage = if (totalDurationMillis > 0) {
+                (totalUsage.toFloat() / totalDurationMillis).coerceIn(0f, 1f)
+            } else 0f
 
             val dayFormat = SimpleDateFormat("dd", Locale.getDefault())
             val monthFormat = SimpleDateFormat("MMM", Locale.getDefault())
@@ -211,17 +207,21 @@ class BedtimeViewModel(
             val startMonth = monthFormat.format(sessionStartCal.time)
             val endMonth = monthFormat.format(sessionEndCal.time)
             
-            _bedtimeDateRange.value = if (startMonth == endMonth) {
+            val dateRange = if (startMonth == endMonth) {
                 if (startDay == endDay) "$startDay $startMonth"
                 else "$startDay-$endDay $startMonth"
             } else {
                 "$startDay $startMonth - $endDay $endMonth"
             }
 
-            if (totalDurationMillis > 0) {
-                _bedtimeUsagePercentage.value = (totalUsage.toFloat() / totalDurationMillis).coerceIn(0f, 1f)
-            } else {
-                _bedtimeUsagePercentage.value = 0f
+            _uiState.update {
+                it.copy(
+                    hourlyUsage = usageInfoList,
+                    bedtimeUsageTotalMillis = totalUsage,
+                    bedtimeDurationTotalMillis = totalDurationMillis,
+                    bedtimeDateRange = dateRange,
+                    bedtimeUsagePercentage = usagePercentage
+                )
             }
         }
     }
@@ -281,7 +281,7 @@ class BedtimeViewModel(
                 )
             }
 
-            _bedtimeHistory.value = historyList.reversed()
+            _uiState.update { it.copy(bedtimeHistory = historyList.reversed()) }
         }
     }
 

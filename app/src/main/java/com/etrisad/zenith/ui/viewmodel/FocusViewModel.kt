@@ -17,8 +17,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -69,6 +71,8 @@ class FocusViewModel(
     init {
         viewModelScope.launch {
             shieldRepository.allShields
+                .debounce(300)
+                .flowOn(Dispatchers.Default)
                 .collect { shields ->
                     try {
                         allShields = shields
@@ -80,14 +84,17 @@ class FocusViewModel(
                 }
         }
         viewModelScope.launch {
-            shieldRepository.allSchedules.collect { schedules ->
-                _uiState.update { it.copy(activeSchedules = schedules) }
-            }
+            shieldRepository.allSchedules
+                .flowOn(Dispatchers.Default)
+                .collect { schedules ->
+                    _uiState.update { it.copy(activeSchedules = schedules) }
+                }
         }
         viewModelScope.launch {
             preferencesRepository.userPreferencesFlow
                 .map { it.whitelistedPackages }
                 .distinctUntilChanged()
+                .flowOn(Dispatchers.Default)
                 .collect {
                     loadInstalledApps()
                 }
