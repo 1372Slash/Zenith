@@ -19,9 +19,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.etrisad.zenith.ZenithApplication
 import com.etrisad.zenith.data.manager.GitHubUpdateManager
+import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.preferences.PerformanceLevel
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.ui.components.ConfirmBottomSheet
+import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.data.remote.model.GitHubRelease
 import com.etrisad.zenith.service.UsageSyncManager
 import com.etrisad.zenith.ui.navigation.Screen
@@ -56,6 +59,12 @@ fun SettingsCategoryScreen(
     var latestRelease by remember { mutableStateOf<GitHubRelease?>(null) }
     var backupMetadata by remember { mutableStateOf<BackupUtils.BackupMetadata?>(null) }
     var pendingRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
+
+    val goalCount by produceState(initialValue = 0) {
+        app.shieldRepository.allShields.collect { shields ->
+            value = shields.count { it.type == FocusType.GOAL }
+        }
+    }
 
     val focusViewModel: FocusViewModel = viewModel(
         factory = FocusViewModelFactory(
@@ -189,7 +198,11 @@ fun SettingsCategoryScreen(
                         onShowCurrentEventEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setShowCurrentEvent(enabled) } },
                         onDailyRecapEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setDailyRecapEnabled(enabled) } },
                         onWeeklyInsightEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setWeeklyInsightEnabled(enabled) } },
-                        onTrendMilestoneEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setTrendMilestoneEnabled(enabled) } }
+                        onTrendMilestoneEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setTrendMilestoneEnabled(enabled) } },
+                        onIncentiveLockEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setIncentiveLockEnabled(enabled) } },
+                        onIncentiveLockDisableRequest = { coroutineScope.launch { preferencesRepository.setIncentiveLockDisableRequestTimestamp(System.currentTimeMillis()) } },
+                        onIncentiveLockCancelDisableRequest = { coroutineScope.launch { preferencesRepository.setIncentiveLockDisableRequestTimestamp(0L) } },
+                        goalCount = goalCount
                     )
                     "appearance" -> AppearanceSettings(
                         preferences = preferences,

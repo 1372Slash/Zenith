@@ -33,6 +33,9 @@ interface DailyUsageDao {
     @Query("SELECT * FROM daily_usage WHERE date = :date")
     suspend fun getUsagesForDate(date: String): List<DailyUsageEntity>
 
+    @Query("SELECT * FROM daily_usage WHERE date = :date")
+    fun getUsagesForDateFlow(date: String): Flow<List<DailyUsageEntity>>
+
     @Query("DELETE FROM daily_usage WHERE date < :thresholdDate")
     suspend fun deleteOldUsage(thresholdDate: String)
 

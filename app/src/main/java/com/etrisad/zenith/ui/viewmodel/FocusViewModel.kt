@@ -51,7 +51,9 @@ data class FocusUiState(
     val editingSchedule: ScheduleEntity? = null,
     val isSelectionMode: Boolean = false,
     val selectedShields: Set<String> = emptySet(),
-    val selectedSchedules: Set<Long> = emptySet()
+    val selectedSchedules: Set<Long> = emptySet(),
+    val incentiveLockEnabled: Boolean = false,
+    val incentiveLockGoalsMetToday: Boolean = false
 )
 
 @OptIn(kotlinx.coroutines.FlowPreview::class)
@@ -91,12 +93,18 @@ class FocusViewModel(
                 }
         }
         viewModelScope.launch {
+            var lastWhitelist: Set<String>? = null
             preferencesRepository.userPreferencesFlow
-                .map { it.whitelistedPackages }
-                .distinctUntilChanged()
                 .flowOn(Dispatchers.Default)
-                .collect {
-                    loadInstalledApps()
+                .collect { prefs ->
+                    _uiState.update { it.copy(
+                        incentiveLockEnabled = prefs.incentiveLockEnabled,
+                        incentiveLockGoalsMetToday = prefs.incentiveLockGoalsMetToday
+                    ) }
+                    if (lastWhitelist == null || lastWhitelist != prefs.whitelistedPackages) {
+                        lastWhitelist = prefs.whitelistedPackages
+                        loadInstalledApps()
+                    }
                 }
         }
         startRealTimeUpdates()

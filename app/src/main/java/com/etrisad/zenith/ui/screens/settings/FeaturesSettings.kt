@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,10 +45,27 @@ fun FeaturesSettings(
     onShowCurrentEventEnabledChange: (Boolean) -> Unit,
     onDailyRecapEnabledChange: (Boolean) -> Unit,
     onWeeklyInsightEnabledChange: (Boolean) -> Unit,
-    onTrendMilestoneEnabledChange: (Boolean) -> Unit
+    onTrendMilestoneEnabledChange: (Boolean) -> Unit,
+    onIncentiveLockEnabledChange: (Boolean) -> Unit,
+    onIncentiveLockDisableRequest: () -> Unit,
+    onIncentiveLockCancelDisableRequest: () -> Unit,
+    goalCount: Int
 ) {
     val context = LocalContext.current
     val calendarPermissionGranted = remember { hasCalendarPermission(context) }
+    var showConfirmSheet by remember { mutableStateOf(false) }
+
+    if (showConfirmSheet) {
+        com.etrisad.zenith.ui.components.ConfirmBottomSheet(
+            onDismiss = { showConfirmSheet = false },
+            onConfirm = {
+                onIncentiveLockDisableRequest()
+                showConfirmSheet = false
+            },
+            leverCount = 10,
+            showTimeSelection = false
+        )
+    }
 
     Column {
         PreferenceCategory(title = "Interface Overlays")
@@ -183,8 +201,101 @@ fun FeaturesSettings(
             checked = preferences.batteryStatsResetEnabled,
             onCheckedChange = onBatteryStatsResetEnabledChange,
             icon = Icons.Outlined.BatteryChargingFull,
-            shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+            shape = RoundedCornerShape(8.dp)
         )
+
+        Spacer(modifier = Modifier.height(4.dp))
+        val isDisablingIncentiveLock = preferences.incentiveLockDisableRequestTimestamp > 0
+
+        SettingsToggle(
+            title = "Incentive Lock",
+            description = "Require 100% goal completion for all apps before allowing free use of shielded apps",
+            checked = preferences.incentiveLockEnabled,
+            onCheckedChange = { enabled ->
+                if (enabled) {
+                    if (goalCount > 0) {
+                        onIncentiveLockEnabledChange(true)
+                    } else {
+                        Toast.makeText(context, "Please add at least one app goal first", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    showConfirmSheet = true
+                }
+            },
+            icon = Icons.Outlined.Lock,
+            enabled = (preferences.incentiveLockEnabled || goalCount > 0) && !isDisablingIncentiveLock,
+            shape = if (isDisablingIncentiveLock) {
+                RoundedCornerShape(8.dp)
+            } else {
+                RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+            }
+        )
+
+        AnimatedVisibility(
+            visible = isDisablingIncentiveLock,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            val deactivationTime = preferences.incentiveLockDisableRequestTimestamp + 3600000L
+            var timeLeftMillis by remember(preferences.incentiveLockDisableRequestTimestamp) { 
+                mutableLongStateOf(deactivationTime - System.currentTimeMillis()) 
+            }
+            
+            LaunchedEffect(preferences.incentiveLockDisableRequestTimestamp) {
+                if (preferences.incentiveLockDisableRequestTimestamp > 0) {
+                    while (timeLeftMillis > 0) {
+                        timeLeftMillis = deactivationTime - System.currentTimeMillis()
+                        if (timeLeftMillis <= 0) {
+                            onIncentiveLockEnabledChange(false)
+                            onIncentiveLockCancelDisableRequest()
+                        }
+                        delay(1000)
+                    }
+                }
+            }
+
+            Column {
+                Spacer(modifier = Modifier.height(4.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Outlined.Timer,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Disabling Incentive Lock...",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            val minutesLeft = (timeLeftMillis / 60000).coerceAtLeast(0)
+                            val secondsLeft = ((timeLeftMillis % 60000) / 1000).coerceAtLeast(0)
+                            val timeStr = String.format("%02d:%02d", minutesLeft, secondsLeft)
+                            val targetTimeStr = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(deactivationTime))
+                            Text(
+                                "Feature will be disabled in $timeStr (around $targetTimeStr)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
+                            )
+                        }
+                        IconButton(onClick = onIncentiveLockCancelDisableRequest) {
+                            Icon(Icons.Outlined.Close, contentDescription = "Cancel", tint = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

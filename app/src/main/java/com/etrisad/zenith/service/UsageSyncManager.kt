@@ -403,6 +403,23 @@ class UsageSyncManager(
         if (dailyEntities.isNotEmpty()) {
             repository.insertAllDailyUsage(dailyEntities)
         }
+        val prefs = preferencesRepository.userPreferencesFlow.first()
+        if (prefs.incentiveLockEnabled && !prefs.incentiveLockGoalsMetToday) {
+            val todayDateStr = dateFormat.format(Date(now))
+            if (dates.contains(todayDateStr)) {
+                val goals = allShields.filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL }
+                if (goals.isNotEmpty()) {
+                    val currentUsages = repository.getDailyUsagesForDateSync(todayDateStr).associateBy { it.packageName }
+                    val allMet = goals.all { goal ->
+                        val usage = currentUsages[goal.packageName]?.usageTimeMillis ?: 0L
+                        usage >= goal.timeLimitMinutes * 60000L
+                    }
+                    if (allMet) {
+                        preferencesRepository.setIncentiveLockGoalsMetToday(true)
+                    }
+                }
+            }
+        }
     }
 
 }

@@ -215,6 +215,16 @@ class ZenithAccessibilityService : AccessibilityService() {
                 SharedMonitoringState.whitelistedPackages = preferences.whitelistedPackages
                 SharedMonitoringState.bedtimeWhitelistedPackages = preferences.bedtimeWhitelistedPackages
 
+                if (preferences.incentiveLockDisableRequestTimestamp > 0) {
+                    val now = System.currentTimeMillis()
+                    if (now >= preferences.incentiveLockDisableRequestTimestamp + 3600000L) {
+                        serviceScope.launch {
+                            preferencesRepository.setIncentiveLockEnabled(false)
+                            preferencesRepository.setIncentiveLockDisableRequestTimestamp(0L)
+                        }
+                    }
+                }
+
                 val startParts = preferences.bedtimeStartTime.split(":")
                 val endParts = preferences.bedtimeEndTime.split(":")
                 SharedMonitoringState.cachedBedtimeStartMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 22) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0)

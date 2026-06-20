@@ -8,6 +8,7 @@ import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.local.entity.DailyUsageEntity
 import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
+import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,7 +16,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 class ShieldRepository(
@@ -194,5 +199,29 @@ class ShieldRepository(
 
     suspend fun getScheduleById(id: Long): ScheduleEntity? {
         return scheduleDao.getScheduleById(id)
+    }
+
+    fun getIncentiveGoalProgress(): Flow<Float> {
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        return combine(
+            allShields,
+            dailyUsageDao.getUsagesForDateFlow(today)
+        ) { shields, usages ->
+            val goals = shields.filter { it.type == FocusType.GOAL }
+            if (goals.isEmpty()) return@combine 1f
+
+            val usageMap = usages.associateBy { it.packageName }
+            var totalProgress = 0.0
+            goals.forEach { goal ->
+                val usage = usageMap[goal.packageName]?.usageTimeMillis ?: 0L
+                val target = goal.timeLimitMinutes * 60000L
+                if (target > 0) {
+                    totalProgress += (usage.toDouble() / target).coerceAtMost(1.0)
+                } else {
+                    totalProgress += 1.0
+                }
+            }
+            (totalProgress / goals.size).toFloat()
+        }
     }
 }

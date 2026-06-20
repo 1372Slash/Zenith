@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -158,7 +159,8 @@ fun OverlayDragHandleWithIndicators(
     modifier: Modifier = Modifier,
     currentUses: Int? = null,
     maxUses: Int? = null,
-    emergencyCount: Int? = null
+    emergencyCount: Int? = null,
+    isIncentiveLocked: Boolean = false
 ) {
     Row(
         modifier = modifier
@@ -168,7 +170,20 @@ fun OverlayDragHandleWithIndicators(
         horizontalArrangement = Arrangement.Center
     ) {
         Box(modifier = Modifier.weight(1f)) {
-            if (currentUses != null && maxUses != null) {
+            if (isIncentiveLocked) {
+                ZenithButton(
+                    onClick = { },
+                    text = "Lock",
+                    icon = Icons.Outlined.Lock,
+                    type = ZenithButtonType.Tonal,
+                    size = ZenithButtonSize.Small,
+                    modifier = Modifier.padding(start = 16.dp).widthIn(max = 110.dp),
+                    isDisableWeight = true,
+                    isDisableExpand = true,
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            } else if (currentUses != null && maxUses != null) {
                 ZenithButton(
                     onClick = { },
                     text = "$currentUses/$maxUses",

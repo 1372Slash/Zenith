@@ -248,6 +248,7 @@ class UserPreferencesRepository(private val context: Context) {
         val DAILY_RECAP_ENABLED = booleanPreferencesKey("daily_recap_enabled")
         val WEEKLY_INSIGHT_ENABLED = booleanPreferencesKey("weekly_insight_enabled")
         val TREND_MILESTONE_ENABLED = booleanPreferencesKey("trend_milestone_enabled")
+        val INCENTIVE_LOCK_ENABLED = booleanPreferencesKey("incentive_lock_enabled")
 
         val PERFORMANCE_LEVEL = stringPreferencesKey("performance_level")
         val PERF_A11Y_ACTIVE_DELAY = longPreferencesKey("perf_a11y_active_delay")
@@ -310,6 +311,8 @@ class UserPreferencesRepository(private val context: Context) {
         val LAST_CHARGE_TIMESTAMP = longPreferencesKey("last_charge_timestamp")
         val MANUAL_RESET_TIMESTAMPS = stringPreferencesKey("manual_reset_timestamps")
         val STREAK_RECOVERY_PERFORMED = booleanPreferencesKey("streak_recovery_performed")
+        val INCENTIVE_LOCK_DISABLE_REQUEST_TIMESTAMP = longPreferencesKey("incentive_lock_disable_request_timestamp")
+        val INCENTIVE_LOCK_GOALS_MET_TODAY = booleanPreferencesKey("incentive_lock_goals_met_today")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = combine(
@@ -379,6 +382,9 @@ class UserPreferencesRepository(private val context: Context) {
             dailyRecapEnabled = settings[PreferencesKeys.DAILY_RECAP_ENABLED] ?: true,
             weeklyInsightEnabled = settings[PreferencesKeys.WEEKLY_INSIGHT_ENABLED] ?: true,
             trendMilestoneEnabled = settings[PreferencesKeys.TREND_MILESTONE_ENABLED] ?: true,
+            incentiveLockEnabled = settings[PreferencesKeys.INCENTIVE_LOCK_ENABLED] ?: false,
+            incentiveLockDisableRequestTimestamp = runtime[RuntimeKeys.INCENTIVE_LOCK_DISABLE_REQUEST_TIMESTAMP] ?: 0L,
+            incentiveLockGoalsMetToday = runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_TODAY] ?: false,
             performanceLevel = PerformanceLevel.valueOf(settings[PreferencesKeys.PERFORMANCE_LEVEL] ?: PerformanceLevel.BALANCED.name),
             perfA11yActiveDelay = settings[PreferencesKeys.PERF_A11Y_ACTIVE_DELAY] ?: PerformanceConfig().a11yActiveDelay,
             perfA11yInactiveDelay = settings[PreferencesKeys.PERF_A11Y_INACTIVE_DELAY] ?: PerformanceConfig().a11yInactiveDelay,
@@ -496,6 +502,18 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setWhitelistedPackages(packages: Set<String>) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.WHITELISTED_PACKAGES] = packages.joinToString(",") }
+    }
+
+    suspend fun setIncentiveLockEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.INCENTIVE_LOCK_ENABLED] = enabled }
+    }
+
+    suspend fun setIncentiveLockDisableRequestTimestamp(timestamp: Long) {
+        context.runtimeDataStore.edit { preferences -> preferences[RuntimeKeys.INCENTIVE_LOCK_DISABLE_REQUEST_TIMESTAMP] = timestamp }
+    }
+
+    suspend fun setIncentiveLockGoalsMetToday(met: Boolean) {
+        context.runtimeDataStore.edit { preferences -> preferences[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_TODAY] = met }
     }
 
     suspend fun initializeDefaultWhitelist() {
@@ -1478,6 +1496,9 @@ data class UserPreferences(
     val manualResetTimestamps: Map<String, Long> = emptyMap(),
     val gsFlexSettings: GSFlexSettings = GSFlexSettings(),
     val streakRecoveryPerformed: Boolean = false,
+    val incentiveLockEnabled: Boolean = false,
+    val incentiveLockDisableRequestTimestamp: Long = 0L,
+    val incentiveLockGoalsMetToday: Boolean = false,
 ) {
     fun buildPerformanceConfig(): PerformanceConfig {
         if (performanceLevel.isPreset()) return performanceLevel.toConfig()

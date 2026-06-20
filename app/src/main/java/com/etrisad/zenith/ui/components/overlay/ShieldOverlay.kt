@@ -125,8 +125,13 @@ fun ShieldOverlay(
 
     val userPrefsRepo = remember(context.applicationContext) { UserPreferencesRepository(context.applicationContext) }
     val userPrefs by produceState(initialValue = UserPreferences()) {
-        value = userPrefsRepo.userPreferencesFlow.first()
+        userPrefsRepo.userPreferencesFlow.collect { value = it }
     }
+
+    val incentiveProgress by produceState(initialValue = 0f) {
+        shieldRepository.getIncentiveGoalProgress().collect { value = it }
+    }
+    val isIncentiveLocked = userPrefs.incentiveLockEnabled && !userPrefs.incentiveLockGoalsMetToday && (currentShield?.type == FocusType.SHIELD || currentShield == null)
 
     val isDelayEnabled = currentShield != null && currentShield.isDelayAppEnabled && currentShield.type == FocusType.SHIELD
     
@@ -209,7 +214,7 @@ fun ShieldOverlay(
         if (isPeriodExpired) 0 else (currentShield?.currentPeriodUses ?: 0)
     }
     val maxUses = currentShield?.maxUsesPerPeriod ?: 5
-    val isUsesExceeded = remember(currentUses, maxUses) { currentUses >= maxUses }
+    val isUsesExceeded = remember(currentUses, maxUses, isIncentiveLocked) { isIncentiveLocked || currentUses >= maxUses }
     val isTimeLimitReached = remember(currentTotalUsageToday, currentShield) {
         currentShield != null && currentShield.timeLimitMinutes > 0 && currentTotalUsageToday >= (currentShield.timeLimitMinutes * 60 * 1000L)
     }
@@ -222,10 +227,11 @@ fun ShieldOverlay(
         }
     }
 
-    val isBlocked by remember(isUsesExceeded, isTimeLimitReached, remainingMinutes, isEmergencyUnlocked, currentShield?.type) {
+    val isBlocked by remember(isUsesExceeded, isTimeLimitReached, remainingMinutes, isEmergencyUnlocked, currentShield?.type, isIncentiveLocked) {
         derivedStateOf {
             val effectivelyTimeReached = isTimeLimitReached || (remainingMinutes != null && remainingMinutes <= 0)
-            (isUsesExceeded || effectivelyTimeReached) && !isEmergencyUnlocked && currentShield?.type == FocusType.SHIELD
+            val baseBlocked = (isUsesExceeded || effectivelyTimeReached) && !isEmergencyUnlocked
+            baseBlocked && (currentShield?.type == FocusType.SHIELD || (isIncentiveLocked && currentShield == null))
         }
     }
 
@@ -402,6 +408,8 @@ fun ShieldOverlay(
                         refreshTimeLeftMillis = refreshTimeLeftMillis,
                         currentUses = currentUses,
                         maxUses = maxUses,
+                        isIncentiveLocked = isIncentiveLocked,
+                        incentiveProgress = incentiveProgress,
                         autoKickProgress = { autoKickProgress.value },
                         onEmergencyHoldingChange = { isEmergencyHolding = it },
                         onEmergencyClick = { isEmergencyUnlocked = true },
@@ -440,6 +448,8 @@ fun ShieldOverlay(
                         refreshTimeLeftMillis = refreshTimeLeftMillis,
                         currentUses = currentUses,
                         maxUses = maxUses,
+                        isIncentiveLocked = isIncentiveLocked,
+                        incentiveProgress = incentiveProgress,
                         autoKickProgress = { autoKickProgress.value },
                         onEmergencyHoldingChange = { isEmergencyHolding = it },
                         onEmergencyClick = { isEmergencyUnlocked = true },
@@ -486,6 +496,8 @@ fun PortraitInterceptLayout(
     refreshTimeLeftMillis: Long,
     currentUses: Int,
     maxUses: Int,
+    isIncentiveLocked: Boolean = false,
+    incentiveProgress: Float = 0f,
     autoKickProgress: () -> Float,
     onEmergencyClick: () -> Unit,
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
@@ -496,7 +508,8 @@ fun PortraitInterceptLayout(
         OverlayDragHandleWithIndicators(
             currentUses = if (shield?.type == FocusType.SHIELD) currentUses else null,
             maxUses = if (shield?.type == FocusType.SHIELD) maxUses else null,
-            emergencyCount = if (shield?.type == FocusType.SHIELD) shield.emergencyUseCount else null
+            emergencyCount = if (shield?.type == FocusType.SHIELD) shield.emergencyUseCount else null,
+            isIncentiveLocked = isIncentiveLocked
         )
 
         Column(
@@ -575,6 +588,8 @@ fun PortraitInterceptLayout(
                 isUsesExceeded = isUsesExceeded,
                 isTimeLimitReached = isTimeLimitReached,
                 refreshTimeLeftMillis = refreshTimeLeftMillis,
+                isIncentiveLocked = isIncentiveLocked,
+                incentiveProgress = incentiveProgress,
                 autoKickProgress = autoKickProgress,
                 onEmergencyClick = onEmergencyClick,
                 onEmergencyHoldingChange = onEmergencyHoldingChange,
@@ -607,6 +622,8 @@ fun LandscapeInterceptLayout(
     refreshTimeLeftMillis: Long,
     currentUses: Int,
     maxUses: Int,
+    isIncentiveLocked: Boolean = false,
+    incentiveProgress: Float = 0f,
     autoKickProgress: () -> Float,
     onEmergencyClick: () -> Unit,
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
@@ -747,6 +764,8 @@ fun LandscapeInterceptLayout(
                     isUsesExceeded = isUsesExceeded,
                     isTimeLimitReached = isTimeLimitReached,
                     refreshTimeLeftMillis = refreshTimeLeftMillis,
+                    isIncentiveLocked = isIncentiveLocked,
+                    incentiveProgress = incentiveProgress,
                     autoKickProgress = autoKickProgress,
                     onEmergencyClick = onEmergencyClick,
                     onEmergencyHoldingChange = onEmergencyHoldingChange,
@@ -776,6 +795,8 @@ fun ShieldSection(
     isUsesExceeded: Boolean,
     isTimeLimitReached: Boolean,
     refreshTimeLeftMillis: Long,
+    isIncentiveLocked: Boolean = false,
+    incentiveProgress: Float = 0f,
     autoKickProgress: () -> Float,
     onEmergencyClick: () -> Unit,
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
@@ -846,6 +867,8 @@ fun ShieldSection(
             isTimeLimitReached = effectivelyTimeReached,
             refreshTimeLeftMillis = refreshTimeLeftMillis,
             shield = shield,
+            isIncentiveLocked = isIncentiveLocked,
+            incentiveProgress = incentiveProgress,
             onEmergencyClick = onEmergencyClick,
             onEmergencyHoldingChange = onEmergencyHoldingChange
         )
@@ -934,6 +957,8 @@ fun ShieldLandscapeContent(
     isUsesExceeded: Boolean,
     isTimeLimitReached: Boolean,
     refreshTimeLeftMillis: Long,
+    isIncentiveLocked: Boolean = false,
+    incentiveProgress: Float = 0f,
     autoKickProgress: () -> Float,
     onEmergencyClick: () -> Unit,
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
@@ -951,7 +976,13 @@ fun ShieldLandscapeContent(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.weight(1f))
-            LimitReachedContent(isUsesExceeded, isTimeLimitReached, refreshTimeLeftMillis)
+            LimitReachedContent(
+                isUsesExceeded = isUsesExceeded,
+                isTimeLimitReached = isTimeLimitReached,
+                refreshTimeLeftMillis = refreshTimeLeftMillis,
+                isIncentiveLocked = isIncentiveLocked,
+                incentiveProgress = incentiveProgress
+            )
             if (shield != null && shield.emergencyUseCount > 0) {
                 Spacer(modifier = Modifier.height(16.dp))
                 EmergencyButton(onEmergencyUse = onEmergencyClick, onHoldingChange = onEmergencyHoldingChange)
@@ -997,11 +1028,13 @@ fun LimitReachedSection(
     isTimeLimitReached: Boolean,
     refreshTimeLeftMillis: Long,
     shield: ShieldEntity?,
+    isIncentiveLocked: Boolean = false,
+    incentiveProgress: Float = 0f,
     onEmergencyClick: () -> Unit,
     onEmergencyHoldingChange: (Boolean) -> Unit = {}
 ) {
     Spacer(modifier = Modifier.height(24.dp))
-    LimitReachedContent(isUsesExceeded, isTimeLimitReached, refreshTimeLeftMillis)
+    LimitReachedContent(isUsesExceeded, isTimeLimitReached, refreshTimeLeftMillis, isIncentiveLocked, incentiveProgress)
     if (shield != null && shield.emergencyUseCount > 0) {
         Spacer(modifier = Modifier.height(16.dp))
         EmergencyButton(onEmergencyUse = onEmergencyClick, onHoldingChange = onEmergencyHoldingChange)
@@ -1012,9 +1045,37 @@ fun LimitReachedSection(
 fun LimitReachedContent(
     isUsesExceeded: Boolean,
     isTimeLimitReached: Boolean,
-    refreshTimeLeftMillis: Long
+    refreshTimeLeftMillis: Long,
+    isIncentiveLocked: Boolean = false,
+    incentiveProgress: Float = 0f
 ) {
-    if (isUsesExceeded && !isTimeLimitReached) {
+    if (isIncentiveLocked) {
+        val percentage = (incentiveProgress * 100).toInt()
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "Incentive Lock Active",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.error,
+                fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Complete all your app goals to unlock!\nCurrently at $percentage% completion.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Stay focused! You're making great progress.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+        }
+    } else if (isUsesExceeded && !isTimeLimitReached) {
         var countdownText by remember { mutableStateOf(formatCountdown(refreshTimeLeftMillis)) }
         LaunchedEffect(refreshTimeLeftMillis) {
             var current = refreshTimeLeftMillis
