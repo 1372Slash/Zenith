@@ -40,6 +40,7 @@ import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.service.AppUsageMonitorService
 import com.etrisad.zenith.util.canScheduleExactAlarms
+import com.etrisad.zenith.util.hasCalendarPermission
 import com.etrisad.zenith.util.hasNotificationPermission
 import com.etrisad.zenith.util.hasUsageStatsPermission
 import com.etrisad.zenith.util.isAccessibilityServiceEnabled
@@ -75,6 +76,7 @@ fun PermissionBottomSheet(
     var hasNotifications by remember { mutableStateOf(hasNotificationPermission(context)) }
     var hasNotificationPolicy by remember { mutableStateOf((context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted) }
     var hasNotificationListener by remember { mutableStateOf(isNotificationListenerEnabled(context)) }
+    var hasCalendar by remember { mutableStateOf(hasCalendarPermission(context)) }
     var isBatteryOptimized by remember { mutableStateOf(!isIgnoringBatteryOptimizations(context)) }
     var canExactAlarm by remember { mutableStateOf(canScheduleExactAlarms(context)) }
     
@@ -127,6 +129,7 @@ fun PermissionBottomSheet(
                 hasNotifications = hasNotificationPermission(context)
                 hasNotificationPolicy = (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted
                 hasNotificationListener = isNotificationListenerEnabled(context)
+                hasCalendar = hasCalendarPermission(context)
                 isBatteryOptimized = !isIgnoringBatteryOptimizations(context)
                 canExactAlarm = canScheduleExactAlarms(context)
             }
@@ -286,7 +289,23 @@ fun PermissionBottomSheet(
                             context.startActivity(intent)
                         },
                         icon = Icons.Outlined.PhonelinkErase,
-                        position = if (preferences.accessibilityRequired) GroupPosition.Single else GroupPosition.Bottom,
+                        position = if (preferences.accessibilityRequired) GroupPosition.Top else GroupPosition.Middle,
+                        isInsideCollapse = true
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    PermissionItemRow(
+                        title = "Calendar Access",
+                        description = "Show current calendar event during app delay",
+                        isGranted = hasCalendar,
+                        onClick = {
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", context.packageName, null)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
+                        },
+                        icon = Icons.Outlined.CalendarMonth,
+                        position = GroupPosition.Bottom,
                         isInsideCollapse = true
                     )
                 }

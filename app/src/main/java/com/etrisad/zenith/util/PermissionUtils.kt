@@ -9,7 +9,9 @@ import android.provider.Settings
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.view.accessibility.AccessibilityManager
 import android.app.AlarmManager
+import android.content.pm.PackageManager
 import android.os.PowerManager
+import androidx.core.content.ContextCompat
 
 fun hasAllPermissions(context: Context): Boolean {
     val hasUsageStats = hasUsageStatsPermission(context)
@@ -79,4 +81,8 @@ fun canScheduleExactAlarms(context: Context): Boolean {
 fun isAndroidGo(context: Context): Boolean {
     val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
     return activityManager.isLowRamDevice
+}
+
+fun hasCalendarPermission(context: Context): Boolean {
+    return ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
 }

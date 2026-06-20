@@ -6,12 +6,17 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.*
@@ -19,18 +24,24 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import com.etrisad.zenith.data.CalendarEventProvider
+import com.etrisad.zenith.data.CurrentCalendarEvent
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.UserPreferences
@@ -150,6 +161,16 @@ fun ShieldOverlay(
     }
     val randomMessage = remember(isDelaying) {
         if (isDelaying) motivationalMessages.random() else ""
+    }
+
+    var currentEvent by remember { mutableStateOf<CurrentCalendarEvent?>(null) }
+
+    LaunchedEffect(isDelaying, userPrefs.showCurrentEvent) {
+        if (isDelaying && userPrefs.showCurrentEvent) {
+            withContext(Dispatchers.IO) {
+                currentEvent = CalendarEventProvider.fetchCurrentEvent(context)
+            }
+        }
     }
 
     val backgroundAlpha by animateFloatAsState(
@@ -373,6 +394,7 @@ fun ShieldOverlay(
                         isEmergencyUnlocked = isEmergencyUnlocked,
                         isDelaying = isDelaying,
                         randomMessage = randomMessage,
+                        currentEvent = currentEvent,
                         delayProgressAnimatable = delayProgressAnimatable,
                         delayDurationSeconds = delayDurationSeconds,
                         isUsesExceeded = isUsesExceeded,
@@ -410,6 +432,7 @@ fun ShieldOverlay(
                         isEmergencyUnlocked = isEmergencyUnlocked,
                         isDelaying = isDelaying,
                         randomMessage = randomMessage,
+                        currentEvent = currentEvent,
                         delayProgressAnimatable = delayProgressAnimatable,
                         delayDurationSeconds = delayDurationSeconds,
                         isUsesExceeded = isUsesExceeded,
@@ -455,6 +478,7 @@ fun PortraitInterceptLayout(
     isEmergencyUnlocked: Boolean,
     isDelaying: Boolean,
     randomMessage: String,
+    currentEvent: CurrentCalendarEvent?,
     delayProgressAnimatable: Animatable<Float, AnimationVector1D>,
     delayDurationSeconds: Int,
     isUsesExceeded: Boolean,
@@ -545,6 +569,7 @@ fun PortraitInterceptLayout(
                 isEmergencyUnlocked = isEmergencyUnlocked,
                 isDelaying = isDelaying,
                 randomMessage = randomMessage,
+                currentEvent = currentEvent,
                 delayProgressAnimatable = delayProgressAnimatable,
                 delayDurationSeconds = delayDurationSeconds,
                 isUsesExceeded = isUsesExceeded,
@@ -574,6 +599,7 @@ fun LandscapeInterceptLayout(
     isEmergencyUnlocked: Boolean,
     isDelaying: Boolean,
     randomMessage: String,
+    currentEvent: CurrentCalendarEvent?,
     delayProgressAnimatable: Animatable<Float, AnimationVector1D>,
     delayDurationSeconds: Int,
     isUsesExceeded: Boolean,
@@ -715,6 +741,7 @@ fun LandscapeInterceptLayout(
                     isEmergencyUnlocked = isEmergencyUnlocked,
                     isDelaying = isDelaying,
                     randomMessage = randomMessage,
+                    currentEvent = currentEvent,
                     delayProgressAnimatable = delayProgressAnimatable,
                     delayDurationSeconds = delayDurationSeconds,
                     isUsesExceeded = isUsesExceeded,
@@ -743,6 +770,7 @@ fun ShieldSection(
     isEmergencyUnlocked: Boolean,
     isDelaying: Boolean,
     randomMessage: String,
+    currentEvent: CurrentCalendarEvent?,
     delayProgressAnimatable: Animatable<Float, AnimationVector1D>,
     delayDurationSeconds: Int,
     isUsesExceeded: Boolean,
@@ -835,7 +863,7 @@ fun ShieldSection(
             label = "delayContent"
         ) { delaying ->
             if (delaying) {
-                DelayInProgressSection(randomMessage, delayProgressAnimatable, delayDurationSeconds)
+                DelayInProgressSection(randomMessage, delayProgressAnimatable, delayDurationSeconds, currentEvent)
             } else {
                 DurationSelectionSection(minutesToDisplay, isEmergencyUnlocked, onAllowUse)
             }
@@ -900,6 +928,7 @@ fun ShieldLandscapeContent(
     isEmergencyUnlocked: Boolean,
     isDelaying: Boolean,
     randomMessage: String,
+    currentEvent: CurrentCalendarEvent?,
     delayProgressAnimatable: Animatable<Float, AnimationVector1D>,
     delayDurationSeconds: Int,
     isUsesExceeded: Boolean,
@@ -937,7 +966,7 @@ fun ShieldLandscapeContent(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(modifier = Modifier.weight(1f))
-                DelayInProgressSection(randomMessage, delayProgressAnimatable, delayDurationSeconds)
+                DelayInProgressSection(randomMessage, delayProgressAnimatable, delayDurationSeconds, currentEvent)
                 Spacer(modifier = Modifier.weight(1f))
                 CloseAppTextButton(onCloseApp, autoKickProgress, size = ZenithButtonSize.Large)
             }
@@ -1019,20 +1048,116 @@ fun LimitReachedContent(
 fun DelayInProgressSection(
     randomMessage: String,
     delayProgressAnimatable: Animatable<Float, AnimationVector1D>,
-    delayDurationSeconds: Int
+    delayDurationSeconds: Int,
+    currentEvent: CurrentCalendarEvent? = null
 ) {
+    val eventProgress = remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(currentEvent) {
+        if (currentEvent != null) {
+            while (true) {
+                val now = System.currentTimeMillis()
+                val duration = currentEvent.eventEndMillis - currentEvent.eventStartMillis
+                eventProgress.floatValue = if (duration > 0) {
+                    ((now - currentEvent.eventStartMillis).toFloat() / duration).coerceIn(0f, 1f)
+                } else 0f
+                delay(100)
+            }
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = randomMessage,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+        if (currentEvent != null) {
+            val pillColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            val pillLarge = 24.dp
+            val pillSmall = 4.dp
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(
+                        topStart = pillLarge, bottomStart = pillLarge,
+                        topEnd = pillSmall, bottomEnd = pillSmall
+                    )
+                ) {
+                    Box(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.CalendarMonth,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+
+                Surface(
+                    color = pillColor,
+                    shape = RoundedCornerShape(pillSmall),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                    ) {
+                        RollingText(
+                            text = currentEvent.title,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        if (!currentEvent.description.isNullOrBlank()) {
+                            RollingText(
+                                text = currentEvent.description,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                Surface(
+                    color = pillColor,
+                    shape = RoundedCornerShape(
+                        topStart = pillSmall, bottomStart = pillSmall,
+                        topEnd = pillLarge, bottomEnd = pillLarge
+                    )
+                ) {
+                    Box(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularWavyProgressIndicator(
+                            progress = { eventProgress.floatValue.coerceIn(0f, 1f) },
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.outlineVariant,
+                            stroke = Stroke(width = 6.dp.value),
+                            trackStroke = Stroke(width = 6.dp.value),
+                            wavelength = 8.dp
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        } else {
+            Text(
+                text = randomMessage,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
         Box(contentAlignment = Alignment.Center) {
             CircularWavyProgressIndicator(
@@ -1041,7 +1166,7 @@ fun DelayInProgressSection(
                 color = MaterialTheme.colorScheme.tertiary,
                 amplitude = { 1f },
                 wavelength = 30.dp,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                trackColor = MaterialTheme.colorScheme.outlineVariant,
             )
             val secondsLeft by remember(delayDurationSeconds) {
                 derivedStateOf { kotlin.math.ceil((1f - delayProgressAnimatable.value) * delayDurationSeconds).toInt() }
@@ -1071,5 +1196,65 @@ fun DurationSelectionSection(remainingMinutes: Int?, isEmergencyUnlocked: Boolea
         Spacer(modifier = Modifier.height(16.dp))
 
         DurationButtonsGrid(if (isEmergencyUnlocked) null else remainingMinutes, onAllowUse)
+    }
+}
+
+@Composable
+private fun RollingText(
+    text: String,
+    style: TextStyle,
+    fontWeight: FontWeight? = null,
+    color: Color
+) {
+    val textMeasurer = rememberTextMeasurer()
+    val textWidth = remember(text, style, fontWeight) {
+        val mergedStyle = if (fontWeight != null) style.copy(fontWeight = fontWeight) else style
+        textMeasurer.measure(
+            text = AnnotatedString(text),
+            style = mergedStyle,
+            maxLines = 1,
+            softWrap = false
+        ).size.width
+    }
+    var containerWidth by remember { mutableIntStateOf(0) }
+    val needsScroll = textWidth > containerWidth
+    val offsetX = remember { Animatable(0f) }
+
+    LaunchedEffect(needsScroll, textWidth, containerWidth) {
+        if (needsScroll && textWidth > 0 && containerWidth > 0) {
+            val maxScroll = -(textWidth - containerWidth + 24f).coerceAtMost(0f)
+            while (true) {
+                offsetX.animateTo(
+                    targetValue = maxScroll,
+                    animationSpec = tween(durationMillis = 3000, easing = LinearEasing)
+                )
+                delay(1500)
+                offsetX.animateTo(
+                    targetValue = 0f,
+                    animationSpec = tween(durationMillis = 3000, easing = LinearEasing)
+                )
+                delay(1500)
+            }
+        } else {
+            offsetX.snapTo(0f)
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .graphicsLayer { clip = true }
+            .onSizeChanged { containerWidth = it.width },
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Text(
+            text = text,
+            style = style,
+            fontWeight = fontWeight,
+            color = color,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Visible,
+            modifier = Modifier.graphicsLayer { translationX = offsetX.value }
+        )
     }
 }

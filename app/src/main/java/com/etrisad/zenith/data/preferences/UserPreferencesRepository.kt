@@ -244,6 +244,7 @@ class UserPreferencesRepository(private val context: Context) {
         val REFRESH_ON_OPEN_USAGE_STATS = booleanPreferencesKey("refresh_on_open_usage_stats")
         val CHECK_UPDATE_ON_START = booleanPreferencesKey("check_update_on_start")
         val BATTERY_STATS_RESET_ENABLED = booleanPreferencesKey("battery_stats_reset_enabled")
+        val SHOW_CURRENT_EVENT = booleanPreferencesKey("show_current_event")
         val DAILY_RECAP_ENABLED = booleanPreferencesKey("daily_recap_enabled")
         val WEEKLY_INSIGHT_ENABLED = booleanPreferencesKey("weekly_insight_enabled")
         val TREND_MILESTONE_ENABLED = booleanPreferencesKey("trend_milestone_enabled")
@@ -374,6 +375,7 @@ class UserPreferencesRepository(private val context: Context) {
             refreshOnOpenUsageStats = settings[PreferencesKeys.REFRESH_ON_OPEN_USAGE_STATS] ?: false,
             checkUpdateOnStart = settings[PreferencesKeys.CHECK_UPDATE_ON_START] ?: false,
             batteryStatsResetEnabled = settings[PreferencesKeys.BATTERY_STATS_RESET_ENABLED] ?: false,
+            showCurrentEvent = settings[PreferencesKeys.SHOW_CURRENT_EVENT] ?: false,
             dailyRecapEnabled = settings[PreferencesKeys.DAILY_RECAP_ENABLED] ?: true,
             weeklyInsightEnabled = settings[PreferencesKeys.WEEKLY_INSIGHT_ENABLED] ?: true,
             trendMilestoneEnabled = settings[PreferencesKeys.TREND_MILESTONE_ENABLED] ?: true,
@@ -1096,6 +1098,10 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.BATTERY_STATS_RESET_ENABLED] = enabled }
     }
 
+    suspend fun setShowCurrentEvent(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.SHOW_CURRENT_EVENT] = enabled }
+    }
+
     suspend fun setDailyRecapEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.DAILY_RECAP_ENABLED] = enabled }
     }
@@ -1443,6 +1449,7 @@ data class UserPreferences(
     val refreshOnOpenUsageStats: Boolean = false,
     val checkUpdateOnStart: Boolean = false,
     val batteryStatsResetEnabled: Boolean = false,
+    val showCurrentEvent: Boolean = false,
     val dailyRecapEnabled: Boolean = true,
     val weeklyInsightEnabled: Boolean = true,
     val trendMilestoneEnabled: Boolean = true,

@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,10 +52,26 @@ fun SettingsToggle(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     icon: ImageVector,
-    shape: Shape = RoundedCornerShape(24.dp)
+    shape: Shape = RoundedCornerShape(24.dp),
+    enabled: Boolean = true
 ) {
+    val cardAlpha by animateFloatAsState(
+        targetValue = if (enabled) 1f else 0.5f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "cardAlpha"
+    )
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(cardAlpha)
+            .then(
+                if (!enabled) Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { onCheckedChange(!checked) }
+                ) else Modifier
+            ),
         shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -103,6 +120,7 @@ fun SettingsToggle(
             Switch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
+                enabled = enabled,
                 thumbContent = {
                     val thumbSize by animateDpAsState(
                         targetValue = if (checked) 28.dp else 24.dp,

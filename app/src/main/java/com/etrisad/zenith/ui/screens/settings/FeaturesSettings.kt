@@ -1,5 +1,6 @@
 package com.etrisad.zenith.ui.screens.settings
 
+import android.widget.Toast
 import android.app.WallpaperManager
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -22,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.data.preferences.ForegroundNotificationStatusMode
 import com.etrisad.zenith.data.preferences.UserPreferences
+import com.etrisad.zenith.util.hasCalendarPermission
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithToggleButtonGroup
 import com.etrisad.zenith.ui.components.ZenithToggleOption
@@ -39,10 +41,14 @@ fun FeaturesSettings(
     onEarlyKickEnabledChange: (Boolean) -> Unit,
     onInterceptAudioFocusEnabledChange: (Boolean) -> Unit,
     onBatteryStatsResetEnabledChange: (Boolean) -> Unit,
+    onShowCurrentEventEnabledChange: (Boolean) -> Unit,
     onDailyRecapEnabledChange: (Boolean) -> Unit,
     onWeeklyInsightEnabledChange: (Boolean) -> Unit,
     onTrendMilestoneEnabledChange: (Boolean) -> Unit
 ) {
+    val context = LocalContext.current
+    val calendarPermissionGranted = remember { hasCalendarPermission(context) }
+
     Column {
         PreferenceCategory(title = "Interface Overlays")
 
@@ -62,7 +68,7 @@ fun FeaturesSettings(
             checked = preferences.sessionUsageOverlayEnabled,
             onCheckedChange = onSessionUsageOverlayEnabledChange,
             icon = Icons.Outlined.Timer,
-            shape = if (preferences.sessionUsageOverlayEnabled) RoundedCornerShape(8.dp) else RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+            shape = RoundedCornerShape(8.dp)
         )
 
         AnimatedVisibility(
@@ -77,10 +83,27 @@ fun FeaturesSettings(
                     opacity = preferences.sessionUsageOverlayOpacity,
                     onSizeChange = onSessionUsageOverlaySizeChange,
                     onOpacityChange = onSessionUsageOverlayOpacityChange,
-                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                    shape = RoundedCornerShape(8.dp)
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(4.dp))
+        SettingsToggle(
+            title = "Show Current Event",
+            description = if (calendarPermissionGranted) "Show your current calendar event with progress during app delay" else "Grant Calendar Access permission in Settings to enable",
+            checked = preferences.showCurrentEvent,
+            onCheckedChange = { enabled ->
+                if (calendarPermissionGranted) {
+                    onShowCurrentEventEnabledChange(enabled)
+                } else {
+                    Toast.makeText(context, "Please enable Calendar Access permission in Settings", Toast.LENGTH_SHORT).show()
+                }
+            },
+            icon = Icons.Outlined.CalendarMonth,
+            enabled = calendarPermissionGranted,
+            shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
         PreferenceCategory(title = "Notifications")

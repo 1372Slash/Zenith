@@ -490,7 +490,7 @@ fun DurationButton(
                         progress = { progressState.value },
                         modifier = Modifier.size(36.dp),
                         color = MaterialTheme.colorScheme.tertiary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        trackColor = MaterialTheme.colorScheme.outlineVariant,
                         stroke = Stroke(width = 6.dp.value),
                         trackStroke = Stroke(width = 6.dp.value),
                         wavelength = 12.dp
