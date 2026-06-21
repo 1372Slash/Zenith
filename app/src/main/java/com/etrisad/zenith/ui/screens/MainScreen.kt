@@ -61,11 +61,14 @@ import com.etrisad.zenith.ui.screens.focus.FocusScreen
 import com.etrisad.zenith.ui.screens.home.HomeScreen
 import com.etrisad.zenith.ui.screens.home.UsageStatsScreen
 import com.etrisad.zenith.ui.screens.bedtime.BedtimeScreen
+import com.etrisad.zenith.ui.screens.graceperiod.GracePeriodScreen
 import com.etrisad.zenith.ui.screens.settings.SettingsScreen
 import com.etrisad.zenith.ui.viewmodel.FocusViewModel
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
 import com.etrisad.zenith.ui.viewmodel.BedtimeViewModel
 import com.etrisad.zenith.ui.viewmodel.BedtimeViewModelFactory
+import com.etrisad.zenith.ui.viewmodel.GracePeriodViewModel
+import com.etrisad.zenith.ui.viewmodel.GracePeriodViewModelFactory
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.data.manager.GitHubUpdateManager
 import com.etrisad.zenith.data.remote.model.GitHubRelease
@@ -88,6 +91,9 @@ fun MainScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val bedtimeViewModel: BedtimeViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         factory = BedtimeViewModelFactory(context, userPreferencesRepository, shieldRepository)
+    )
+    val gracePeriodViewModel: GracePeriodViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = GracePeriodViewModelFactory(userPreferencesRepository)
     )
     val navController = rememberNavController()
 
@@ -128,6 +134,7 @@ fun MainScreen(
     val isDeepScreen =
         currentRoute == Screen.UsageStats.route ||
                 currentRoute == Screen.Bedtime.route ||
+                currentRoute == Screen.GracePeriod.route ||
                 currentRoute == Screen.DatabaseDebug.route ||
                 currentRoute == Screen.DataRepairment.route ||
                 currentRoute == Screen.FontTest.route ||
@@ -165,6 +172,8 @@ fun MainScreen(
     var bedtimeSwitchVisible by remember { mutableStateOf(false) }
     var bedtimeSwitchInLayout by remember { mutableStateOf(false) }
     var showPauseSheet by remember { mutableStateOf(false) }
+    var gracePeriodSwitchVisible by remember { mutableStateOf(false) }
+    var gracePeriodSwitchInLayout by remember { mutableStateOf(false) }
     val performanceBackInterceptor = remember { mutableStateOf<() -> Boolean>({ false }) }
 
     var showBatchDeleteSheet by remember { mutableStateOf(false) }
@@ -188,6 +197,28 @@ fun MainScreen(
             if (bedtimeSwitchInLayout) {
                 delay(1500)
                 bedtimeSwitchInLayout = false
+            }
+        }
+    }
+
+    LaunchedEffect(currentRoute, preferences.gracePeriodEnabled) {
+        val isGracePeriodScreen = currentRoute == Screen.GracePeriod.route
+        val shouldShow = isGracePeriodScreen && preferences.gracePeriodEnabled
+
+        if (shouldShow) {
+            if (!gracePeriodSwitchInLayout) {
+                gracePeriodSwitchInLayout = true
+                delay(1200)
+            }
+            gracePeriodSwitchVisible = true
+        } else {
+            if (gracePeriodSwitchVisible) {
+                gracePeriodSwitchVisible = false
+                delay(800)
+            }
+            if (gracePeriodSwitchInLayout) {
+                delay(1500)
+                gracePeriodSwitchInLayout = false
             }
         }
     }
@@ -591,6 +622,71 @@ fun MainScreen(
                                     }
                                 }
                             }
+                            if (gracePeriodSwitchInLayout) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(end = 16.dp)
+                                        .width(52.dp)
+                                        .height(32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = gracePeriodSwitchVisible,
+                                        enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
+                                                slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+                                        exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                                    ) {
+                                        Switch(
+                                            checked = preferences.gracePeriodEnabled,
+                                            onCheckedChange = {
+                                                gracePeriodViewModel.setGracePeriodEnabled(!preferences.gracePeriodEnabled)
+                                            },
+                                            thumbContent = {
+                                                val thumbSize by animateDpAsState(
+                                                    targetValue = if (preferences.gracePeriodEnabled) 28.dp else 24.dp,
+                                                    animationSpec = spring(
+                                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                        stiffness = Spring.StiffnessMediumLow
+                                                    ),
+                                                    label = "thumb_size"
+                                                )
+
+                                                val iconColor by animateColorAsState(
+                                                    targetValue = if (preferences.gracePeriodEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                                                    label = "switch_icon_color"
+                                                )
+
+                                                Box(
+                                                    modifier = Modifier.size(thumbSize),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    AnimatedContent(
+                                                        targetState = preferences.gracePeriodEnabled,
+                                                        transitionSpec = {
+                                                            (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                                    scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
+                                                                .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                                        scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
+                                                        },
+                                                        label = "switch_icon_anim"
+                                                    ) { isChecked ->
+                                                        Icon(
+                                                            imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
+                                                            tint = iconColor
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 )
@@ -671,6 +767,7 @@ fun MainScreen(
                         val isTargetDeep =
                             targetRoute == Screen.UsageStats.route ||
                                     targetRoute == Screen.Bedtime.route ||
+                                    targetRoute == Screen.GracePeriod.route ||
                                     targetRoute == Screen.DatabaseDebug.route ||
                                     targetRoute == Screen.DataRepairment.route ||
                                     targetRoute == Screen.FontTest.route ||
@@ -681,6 +778,7 @@ fun MainScreen(
                         val isInitialDeep =
                             initialRoute == Screen.UsageStats.route ||
                                     initialRoute == Screen.Bedtime.route ||
+                                    initialRoute == Screen.GracePeriod.route ||
                                     initialRoute == Screen.DatabaseDebug.route ||
                                     initialRoute == Screen.DataRepairment.route ||
                                     initialRoute == Screen.FontTest.route ||
@@ -723,6 +821,7 @@ fun MainScreen(
                         val isTargetDeep =
                             targetRoute == Screen.UsageStats.route ||
                                     targetRoute == Screen.Bedtime.route ||
+                                    targetRoute == Screen.GracePeriod.route ||
                                     targetRoute == Screen.DatabaseDebug.route ||
                                     targetRoute == Screen.DataRepairment.route ||
                                     targetRoute == Screen.FontTest.route ||
@@ -734,6 +833,7 @@ fun MainScreen(
                         val isInitialDeep =
                             initialRoute == Screen.UsageStats.route ||
                                     initialRoute == Screen.Bedtime.route ||
+                                    initialRoute == Screen.GracePeriod.route ||
                                     initialRoute == Screen.DatabaseDebug.route ||
                                     initialRoute == Screen.DataRepairment.route ||
                                     initialRoute == Screen.FontTest.route ||
@@ -821,6 +921,9 @@ fun MainScreen(
                     composable(Screen.Bedtime.route) {
                         BedtimeScreen(bedtimeViewModel, innerPadding)
                     }
+                    composable(Screen.GracePeriod.route) {
+                        GracePeriodScreen(gracePeriodViewModel, innerPadding)
+                    }
                     composable(Screen.UsageStats.route) {
                         UsageStatsScreen(
                             viewModel = homeViewModel,
@@ -903,6 +1006,7 @@ fun MainScreen(
                     val showBottomBar =
                     currentRoute != Screen.UsageStats.route &&
                             currentRoute != Screen.Bedtime.route &&
+                            currentRoute != Screen.GracePeriod.route &&
                             currentRoute != Screen.DatabaseDebug.route &&
                             currentRoute != Screen.DataRepairment.route &&
                             currentRoute != Screen.FontTest.route &&

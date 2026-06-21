@@ -32,6 +32,9 @@ object SharedMonitoringState {
     @Volatile var lastLauncherAppsRefreshTime = 0L
     @Volatile var cachedBedtimeStartMinutes = -1
     @Volatile var cachedBedtimeEndMinutes = -1
+    @Volatile var cachedGracePeriodStartMinutes = -1
+    @Volatile var cachedGracePeriodEndMinutes = -1
+    @Volatile var isGracePeriodActive = false
     @Volatile var isBedtimeActive = false
     @Volatile var isWindDownActive = false
     @Volatile var isBedtimeBlockingActive = false

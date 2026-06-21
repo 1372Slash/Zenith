@@ -49,6 +49,7 @@ fun FeaturesSettings(
     onIncentiveLockEnabledChange: (Boolean) -> Unit,
     onIncentiveLockDisableRequest: () -> Unit,
     onIncentiveLockCancelDisableRequest: () -> Unit,
+    onNavigateToGracePeriod: () -> Unit,
     goalCount: Int
 ) {
     val context = LocalContext.current
@@ -163,7 +164,7 @@ fun FeaturesSettings(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-        PreferenceCategory(title = "Advanced Control")
+        PreferenceCategory(title = "Entry Control")
 
         SettingsToggle(
             title = "Mindful Gateway",
@@ -172,36 +173,6 @@ fun FeaturesSettings(
             onCheckedChange = onMindfulGatewayEnabledChange,
             icon = Icons.Outlined.AutoFixHigh,
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-        SettingsToggle(
-            title = "Early Kick",
-            description = "Optionally eject from apps 5 minutes before your time limit expires",
-            checked = preferences.earlyKickEnabled,
-            onCheckedChange = onEarlyKickEnabledChange,
-            icon = Icons.Outlined.ExitToApp,
-            shape = RoundedCornerShape(8.dp)
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-        SettingsToggle(
-            title = "Pause Media",
-            description = "Automatically pause media when an overlay appears",
-            checked = preferences.interceptAudioFocusEnabled,
-            onCheckedChange = onInterceptAudioFocusEnabledChange,
-            icon = Icons.Outlined.MusicNote,
-            shape = RoundedCornerShape(8.dp)
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-        SettingsToggle(
-            title = "Battery Usage Reset",
-            description = "Track app usage since last charge and provide a reset option in app details",
-            checked = preferences.batteryStatsResetEnabled,
-            onCheckedChange = onBatteryStatsResetEnabledChange,
-            icon = Icons.Outlined.BatteryChargingFull,
-            shape = RoundedCornerShape(8.dp)
         )
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -224,11 +195,7 @@ fun FeaturesSettings(
             },
             icon = Icons.Outlined.Lock,
             enabled = (preferences.incentiveLockEnabled || goalCount > 0) && !isDisablingIncentiveLock,
-            shape = if (isDisablingIncentiveLock) {
-                RoundedCornerShape(8.dp)
-            } else {
-                RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-            }
+            shape = RoundedCornerShape(8.dp)
         )
 
         AnimatedVisibility(
@@ -258,7 +225,7 @@ fun FeaturesSettings(
                 Spacer(modifier = Modifier.height(4.dp))
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
+                    shape = RoundedCornerShape(8.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
                     )
@@ -296,6 +263,47 @@ fun FeaturesSettings(
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(4.dp))
+        SettingsActionItem(
+            title = "Grace Period",
+            summary = "Set a time window where all apps become unblocked",
+            onClick = onNavigateToGracePeriod,
+            icon = Icons.Outlined.FreeBreakfast,
+            shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        PreferenceCategory(title = "Triggers")
+
+        SettingsToggle(
+            title = "Pause Media",
+            description = "Automatically pause media when an overlay appears",
+            checked = preferences.interceptAudioFocusEnabled,
+            onCheckedChange = onInterceptAudioFocusEnabledChange,
+            icon = Icons.Outlined.MusicNote,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+        SettingsToggle(
+            title = "Early Kick",
+            description = "Optionally eject from apps 5 minutes before your time limit expires",
+            checked = preferences.earlyKickEnabled,
+            onCheckedChange = onEarlyKickEnabledChange,
+            icon = Icons.Outlined.ExitToApp,
+            shape = RoundedCornerShape(8.dp)
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+        SettingsToggle(
+            title = "Battery Usage Reset",
+            description = "Track app usage since last charge and provide a reset option in app details",
+            checked = preferences.batteryStatsResetEnabled,
+            onCheckedChange = onBatteryStatsResetEnabledChange,
+            icon = Icons.Outlined.BatteryChargingFull,
+            shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+        )
     }
 }
 

@@ -527,6 +527,8 @@ class OverlayActionHandler(
     fun shouldBypassBlocking(packageName: String): Boolean {
         if (packageName == contextPkg) return true
 
+        if (SharedMonitoringState.isGracePeriodActive) return true
+
         if (SharedMonitoringState.isFinancialApp(packageName)) return true
 
         val prefs = SharedMonitoringState.currentPreferences
@@ -566,6 +568,8 @@ class OverlayActionHandler(
         recheckSchedules: (String) -> Unit,
     ): Boolean {
         if (shouldBypassBlocking(packageName)) return false
+
+        if (SharedMonitoringState.isGracePeriodActive) return false
 
         val allowedUntil = allowedApps[packageName] ?: 0L
         if (System.currentTimeMillis() < allowedUntil) return false

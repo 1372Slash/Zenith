@@ -202,6 +202,7 @@ fun SettingsCategoryScreen(
                         onIncentiveLockEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setIncentiveLockEnabled(enabled) } },
                         onIncentiveLockDisableRequest = { coroutineScope.launch { preferencesRepository.setIncentiveLockDisableRequestTimestamp(System.currentTimeMillis()) } },
                         onIncentiveLockCancelDisableRequest = { coroutineScope.launch { preferencesRepository.setIncentiveLockDisableRequestTimestamp(0L) } },
+                        onNavigateToGracePeriod = { navController.navigate(Screen.GracePeriod.route) },
                         goalCount = goalCount
                     )
                     "appearance" -> AppearanceSettings(

@@ -229,6 +229,10 @@ class UserPreferencesRepository(private val context: Context) {
         val BEDTIME_WIND_DOWN_ENABLED = booleanPreferencesKey("bedtime_wind_down_enabled")
         val BEDTIME_NOTIFICATION_ENABLED = booleanPreferencesKey("bedtime_notification_enabled")
         val BEDTIME_WHITELISTED_PACKAGES = stringPreferencesKey("bedtime_whitelisted_packages")
+        val GRACE_PERIOD_ENABLED = booleanPreferencesKey("grace_period_enabled")
+        val GRACE_PERIOD_START_TIME = stringPreferencesKey("grace_period_start_time")
+        val GRACE_PERIOD_END_TIME = stringPreferencesKey("grace_period_end_time")
+        val GRACE_PERIOD_DAYS = stringPreferencesKey("grace_period_days")
         val USER_NAME = stringPreferencesKey("user_name")
         val EARLY_KICK_ENABLED = booleanPreferencesKey("early_kick_enabled")
         val INTERCEPT_AUDIO_FOCUS_ENABLED = booleanPreferencesKey("intercept_audio_focus_enabled")
@@ -353,6 +357,10 @@ class UserPreferencesRepository(private val context: Context) {
             bedtimeStartTime = settings[PreferencesKeys.BEDTIME_START_TIME] ?: "22:00",
             bedtimeEndTime = settings[PreferencesKeys.BEDTIME_END_TIME] ?: "07:00",
             bedtimeDays = settings[PreferencesKeys.BEDTIME_DAYS]?.split(",")?.filter { it.isNotEmpty() }?.map { it.toInt() }?.toSet() ?: setOf(1, 2, 3, 4, 5, 6, 7),
+            gracePeriodEnabled = settings[PreferencesKeys.GRACE_PERIOD_ENABLED] ?: false,
+            gracePeriodStartTime = settings[PreferencesKeys.GRACE_PERIOD_START_TIME] ?: "12:00",
+            gracePeriodEndTime = settings[PreferencesKeys.GRACE_PERIOD_END_TIME] ?: "13:00",
+            gracePeriodDays = settings[PreferencesKeys.GRACE_PERIOD_DAYS]?.split(",")?.filter { it.isNotEmpty() }?.map { it.toInt() }?.toSet() ?: setOf(1, 2, 3, 4, 5, 6, 7),
             bedtimeDndEnabled = settings[PreferencesKeys.BEDTIME_DND_ENABLED] ?: false,
             bedtimeWindDownEnabled = settings[PreferencesKeys.BEDTIME_WIND_DOWN_ENABLED] ?: false,
             bedtimeNotificationEnabled = settings[PreferencesKeys.BEDTIME_NOTIFICATION_ENABLED] ?: true,
@@ -1028,6 +1036,22 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.BEDTIME_WHITELISTED_PACKAGES] = packages.joinToString(",") }
     }
 
+    suspend fun setGracePeriodEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.GRACE_PERIOD_ENABLED] = enabled }
+    }
+
+    suspend fun setGracePeriodStartTime(time: String) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.GRACE_PERIOD_START_TIME] = time }
+    }
+
+    suspend fun setGracePeriodEndTime(time: String) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.GRACE_PERIOD_END_TIME] = time }
+    }
+
+    suspend fun setGracePeriodDays(days: Set<Int>) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.GRACE_PERIOD_DAYS] = days.joinToString(",") }
+    }
+
     private var lastSavedBedtimeStreak: Pair<Int, Int>? = null
 
     suspend fun updateBedtimeStreak(current: Int, best: Int) {
@@ -1449,6 +1473,10 @@ data class UserPreferences(
     val bedtimeCurrentStreak: Int = 0,
     val bedtimeBestStreak: Int = 0,
     val bedtimeStreakResetDate: String = "",
+    val gracePeriodEnabled: Boolean = false,
+    val gracePeriodStartTime: String = "12:00",
+    val gracePeriodEndTime: String = "13:00",
+    val gracePeriodDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7),
     val userName: String = "User",
     val earlyKickEnabled: Boolean = false,
     val interceptAudioFocusEnabled: Boolean = true,

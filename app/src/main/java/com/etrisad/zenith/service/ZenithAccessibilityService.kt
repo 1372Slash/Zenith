@@ -125,7 +125,12 @@ class ZenithAccessibilityService : AccessibilityService() {
                 }
 
                 SharedMonitoringState.updateRestrictedPackages()
+                val gpStart = prefs.gracePeriodStartTime.split(":")
+                val gpEnd = prefs.gracePeriodEndTime.split(":")
+                SharedMonitoringState.cachedGracePeriodStartMinutes = (gpStart.getOrNull(0)?.toIntOrNull() ?: 12) * 60 + (gpStart.getOrNull(1)?.toIntOrNull() ?: 0)
+                SharedMonitoringState.cachedGracePeriodEndMinutes = (gpEnd.getOrNull(0)?.toIntOrNull() ?: 13) * 60 + (gpEnd.getOrNull(1)?.toIntOrNull() ?: 0)
                 updateBedtimeStatus(prefs)
+                updateGracePeriodStatus(prefs)
 
                 usageStatsCache = null
                 lastUsageCacheTime = 0L
@@ -230,7 +235,13 @@ class ZenithAccessibilityService : AccessibilityService() {
                 SharedMonitoringState.cachedBedtimeStartMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 22) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0)
                 SharedMonitoringState.cachedBedtimeEndMinutes = (endParts.getOrNull(0)?.toIntOrNull() ?: 7) * 60 + (endParts.getOrNull(1)?.toIntOrNull() ?: 0)
 
+                val gpStart = preferences.gracePeriodStartTime.split(":")
+                val gpEnd = preferences.gracePeriodEndTime.split(":")
+                SharedMonitoringState.cachedGracePeriodStartMinutes = (gpStart.getOrNull(0)?.toIntOrNull() ?: 12) * 60 + (gpStart.getOrNull(1)?.toIntOrNull() ?: 0)
+                SharedMonitoringState.cachedGracePeriodEndMinutes = (gpEnd.getOrNull(0)?.toIntOrNull() ?: 13) * 60 + (gpEnd.getOrNull(1)?.toIntOrNull() ?: 0)
+
                 updateBedtimeStatus(preferences)
+                updateGracePeriodStatus(preferences)
             }
         }
 
@@ -878,6 +889,42 @@ class ZenithAccessibilityService : AccessibilityService() {
             active && prefs.bedtimeDndEnabled,
             (active || windDownActive) && prefs.bedtimeWindDownEnabled
         )
+    }
+
+    private fun updateGracePeriodStatus(prefs: UserPreferences) {
+        val currentTime = System.currentTimeMillis()
+        val currentDay: Int
+        val currentMinutes: Int
+        val yesterdayDay: Int
+
+        synchronized(reusableCalendar) {
+            reusableCalendar.timeInMillis = currentTime
+            currentDay = reusableCalendar.get(Calendar.DAY_OF_WEEK)
+            currentMinutes = reusableCalendar.get(Calendar.HOUR_OF_DAY) * 60 + reusableCalendar.get(Calendar.MINUTE)
+            reusableCalendar.add(Calendar.DAY_OF_YEAR, -1)
+            yesterdayDay = reusableCalendar.get(Calendar.DAY_OF_WEEK)
+        }
+
+        val startMinutes = SharedMonitoringState.cachedGracePeriodStartMinutes
+        val endMinutes = SharedMonitoringState.cachedGracePeriodEndMinutes
+
+        var active = false
+
+        if (prefs.gracePeriodEnabled) {
+            if (startMinutes <= endMinutes) {
+                if (currentDay in prefs.gracePeriodDays) {
+                    active = currentMinutes in startMinutes..endMinutes
+                }
+            } else {
+                if (currentDay in prefs.gracePeriodDays && currentMinutes >= startMinutes) {
+                    active = true
+                } else if (yesterdayDay in prefs.gracePeriodDays && currentMinutes <= endMinutes) {
+                    active = true
+                }
+            }
+        }
+
+        SharedMonitoringState.isGracePeriodActive = active
     }
 
     private fun createBedtimeNotificationChannel() {
