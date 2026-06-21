@@ -436,7 +436,7 @@ class AppUsageMonitorService : Service() {
                     val isNightTime = hour >= 22 || hour < 5
 
                     if ((!SharedMonitoringState.isBedtimeActive || hour >= 6) && !isNightTime) {
-                        AppGoalOverlayActivity.start(this@AppUsageMonitorService, overlayGoals.map { it.packageName })
+                        sendGoalCallerNotification(overlayGoals)
                     }
                 }
             }
@@ -499,6 +499,47 @@ class AppUsageMonitorService : Service() {
         if (isCustomBitmap) iconBitmap?.recycle()
     }
 
+    private fun sendGoalCallerNotification(goals: List<ShieldEntity>) {
+        val channelId = "zenith_goal_caller_channel"
+        val manager = getSystemService(NotificationManager::class.java)
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            if (manager.getNotificationChannel(channelId) == null) {
+                val channel = NotificationChannel(
+                    channelId, "Goal Caller", NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Full-screen goal caller alerts"
+                }
+                manager.createNotificationChannel(channel)
+            }
+        }
+
+        val firstGoal = goals.first()
+        val intent = Intent(this, AppGoalOverlayActivity::class.java).apply {
+            putStringArrayListExtra(
+                AppGoalOverlayActivity.EXTRA_PACKAGE_NAMES,
+                ArrayList(goals.map { it.packageName })
+            )
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Time for ${firstGoal.appName}?")
+            .setContentText("Your goal setting suggests it's time to open ${firstGoal.appName} and make some progress!")
+            .setSmallIcon(R.drawable.ic_flag)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setFullScreenIntent(pendingIntent, true)
+            .setAutoCancel(true)
+            .build()
+
+        manager.notify(2000, notification)
+    }
+
     private fun createGoalNotificationChannel() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             val channelId = "zenith_goal_channel"
@@ -528,6 +569,10 @@ class AppUsageMonitorService : Service() {
                 }
                 SharedMonitoringState.goalShieldsCache = shields.filter {
                     it.type == FocusType.GOAL && it.goalReminderPeriodMinutes > 0
+                }
+                if (!isScreenOn) {
+                    cancelScreenOffGoalAlarm()
+                    scheduleScreenOffGoalAlarm()
                 }
                 SharedMonitoringState.updateRestrictedPackages()
                 refreshForegroundNotification(force = true)
@@ -644,20 +689,23 @@ class AppUsageMonitorService : Service() {
                                 monitoringTick(currentApp)
                             }
                         }
+                    }
 
-                        val elapsedMinutes = (lastLoopTick - startTime) / 60_000L
-                        if (elapsedMinutes > maintenanceTick) {
-                            maintenanceTick = elapsedMinutes
-                            val cfg = SharedMonitoringState.performanceConfig
+                    val elapsedMinutes = (lastLoopTick - startTime) / 60_000L
+                    if (elapsedMinutes > maintenanceTick) {
+                        maintenanceTick = elapsedMinutes
+                        val cfg = SharedMonitoringState.performanceConfig
+                        if (isScreenOn) {
                             if (SharedMonitoringState.launcherPackages.isEmpty() || lastLoopTick - lastLauncherRefreshTime > cfg.launcherCacheMs) {
                                 refreshLauncherCache()
                             }
-                            if (maintenanceTick % cfg.goalReminderTick == 0L) checkGoalReminders()
                             if (maintenanceTick % cfg.dayChangeTick == 0L) checkDayChangePeriodic()
                             if (maintenanceTick % 5L == 0L) SharedMonitoringState.performPeriodicCleanup()
                         }
+                        if (maintenanceTick % cfg.goalReminderTick == 0L) checkGoalReminders()
                     }
                 } catch (t: Throwable) {
+                    if (t is kotlinx.coroutines.CancellationException) throw t
                     logError(t)
                 }
 
