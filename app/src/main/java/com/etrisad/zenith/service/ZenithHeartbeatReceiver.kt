@@ -27,13 +27,9 @@ class ZenithHeartbeatReceiver : BroadcastReceiver() {
                 }
                 
                 try {
-                    context.startForegroundService(monitorIntent)
+                    context.startService(monitorIntent)
                 } catch (e: Exception) {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                        android.util.Log.w("ZenithHeartbeat", "Background start failed, service might be restricted: ${e.message}")
-                    } else {
-                        context.startService(monitorIntent)
-                    }
+                    android.util.Log.w("ZenithHeartbeat", "Failed to start service: ${e.message}")
                 }
 
                 if (ZenithAccessibilityService.isServiceRunning) {
