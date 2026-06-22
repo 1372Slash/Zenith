@@ -5,7 +5,6 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,10 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -127,78 +123,43 @@ fun BedtimeOverlayContent(
 
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Transparent),
-        contentAlignment = Alignment.BottomCenter
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer { alpha = backgroundAlphaState.value }
-                .background(Color.Black)
-                .pointerInput(Unit) {
-                    detectTapGestures { }
-                }
-        )
 
-        AnimatedVisibility(
-            visible = showContent,
-            enter = slideInVertically(
-                initialOffsetY = { it },
-                animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)
-            ) + fadeIn(),
-            exit = slideOutVertically(
-                targetOffsetY = { it },
-                animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)
-            ) + fadeOut(),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Card(
-                modifier = Modifier
-                    .let { 
-                        if (isLandscape) it.widthIn(max = 720.dp).fillMaxHeight(0.95f) 
-                        else it.fillMaxWidth().fillMaxHeight(0.9f) 
+    InterceptBottomSheet(
+        visible = showContent,
+        backgroundAlpha = backgroundAlphaState.value,
+        isLandscape = isLandscape,
+        maxWidthLandscape = 720.dp,
+        maxHeightFraction = if (isLandscape) 0.95f else 0.9f,
+        showBedtimePill = false
+    ) { _ ->
+        if (isLandscape) {
+            LandscapeBedtimeLayout(
+                appName = appName,
+                appIcon = appIcon,
+                bedtimeUiState = bedtimeUiState,
+                exitProgress = exitProgress,
+                onCloseApp = {
+                    scope.launch {
+                        showContent = false
+                        delay(400)
+                        onCloseApp()
                     }
-                    .align(Alignment.BottomCenter)
-                    .imePadding(),
-                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
-            ) {
-                if (isLandscape) {
-                    LandscapeBedtimeLayout(
-                        appName = appName,
-                        appIcon = appIcon,
-                        bedtimeUiState = bedtimeUiState,
-                        exitProgress = exitProgress,
-                        onCloseApp = {
-                            scope.launch {
-                                showContent = false
-                                delay(400)
-                                onCloseApp()
-                            }
-                        }
-                    )
-                } else {
-                    PortraitBedtimeLayout(
-                        appName = appName,
-                        appIcon = appIcon,
-                        bedtimeUiState = bedtimeUiState,
-                        exitProgress = exitProgress,
-                        onCloseApp = {
-                            scope.launch {
-                                showContent = false
-                                delay(400)
-                                onCloseApp()
-                            }
-                        }
-                    )
                 }
-            }
+            )
+        } else {
+            PortraitBedtimeLayout(
+                appName = appName,
+                appIcon = appIcon,
+                bedtimeUiState = bedtimeUiState,
+                exitProgress = exitProgress,
+                onCloseApp = {
+                    scope.launch {
+                        showContent = false
+                        delay(400)
+                        onCloseApp()
+                    }
+                }
+            )
         }
     }
 }
@@ -214,12 +175,10 @@ fun PortraitBedtimeLayout(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(bottom = 24.dp, start = 24.dp, end = 24.dp, top = 0.dp)
+            .padding(bottom = 24.dp, start = 24.dp, end = 24.dp)
             .navigationBarsPadding(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        OverlayDragHandleWithIndicators()
-
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -258,8 +217,6 @@ fun LandscapeBedtimeLayout(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        OverlayDragHandleWithIndicators()
-        
         Row(
             modifier = Modifier
                 .weight(1f)

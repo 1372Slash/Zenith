@@ -5,7 +5,6 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,11 +15,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -140,112 +137,64 @@ fun WindDownOverlayContent(
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Transparent),
-        contentAlignment = Alignment.BottomCenter
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer { alpha = backgroundAlphaState.value }
-                .background(Color.Black)
-                .pointerInput(Unit) {
-                    detectTapGestures { }
-                }
-        )
-
-        AnimatedVisibility(
-            visible = showContent,
-            enter = slideInVertically(
-                initialOffsetY = { it },
-                animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)
-            ) + fadeIn(),
-            exit = slideOutVertically(
-                targetOffsetY = { it },
-                animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)
-            ) + fadeOut(),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier
-                    .let { 
-                        if (isLandscape) it.widthIn(max = 720.dp).wrapContentHeight() 
-                        else it.fillMaxWidth().wrapContentHeight() 
+    InterceptBottomSheet(
+        visible = showContent,
+        backgroundAlpha = backgroundAlphaState.value,
+        isLandscape = isLandscape,
+        maxWidthLandscape = 720.dp,
+        showBedtimePill = true,
+        userPreferences = userPreferences
+    ) { _ ->
+        if (isLandscape) {
+            LandscapeWindDownLayout(
+                appName = appName,
+                appIcon = appIcon,
+                sessionUsed = sessionUsed,
+                isDelaying = isDelaying,
+                randomMessage = randomMessage,
+                delayProgressAnimatable = delayProgressAnimatable,
+                delayDurationSeconds = delayDurationSeconds,
+                autoKickProgress = autoKickProgress.value,
+                onAllowUse = { minutes ->
+                    scope.launch {
+                        showContent = false
+                        delay(400)
+                        onAllowUse(minutes)
                     }
-                    .align(Alignment.BottomCenter),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                BedtimeAlertPill(
-                    userPreferences = userPreferences,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .imePadding(),
-                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
-                ) {
-                    if (isLandscape) {
-                        LandscapeWindDownLayout(
-                            appName = appName,
-                            appIcon = appIcon,
-                            sessionUsed = sessionUsed,
-                            isDelaying = isDelaying,
-                            randomMessage = randomMessage,
-                            delayProgressAnimatable = delayProgressAnimatable,
-                            delayDurationSeconds = delayDurationSeconds,
-                            autoKickProgress = autoKickProgress.value,
-                            onAllowUse = { minutes ->
-                                scope.launch {
-                                    showContent = false
-                                    delay(400)
-                                    onAllowUse(minutes)
-                                }
-                            },
-                            onCloseApp = {
-                                scope.launch {
-                                    showContent = false
-                                    delay(400)
-                                    onCloseApp()
-                                }
-                            }
-                        )
-                    } else {
-                        PortraitWindDownLayout(
-                            appName = appName,
-                            appIcon = appIcon,
-                            sessionUsed = sessionUsed,
-                            isDelaying = isDelaying,
-                            randomMessage = randomMessage,
-                            delayProgressAnimatable = delayProgressAnimatable,
-                            delayDurationSeconds = delayDurationSeconds,
-                            autoKickProgress = autoKickProgress.value,
-                            onAllowUse = { minutes ->
-                                scope.launch {
-                                    showContent = false
-                                    delay(400)
-                                    onAllowUse(minutes)
-                                }
-                            },
-                            onCloseApp = {
-                                scope.launch {
-                                    showContent = false
-                                    delay(400)
-                                    onCloseApp()
-                                }
-                            }
-                        )
+                },
+                onCloseApp = {
+                    scope.launch {
+                        showContent = false
+                        delay(400)
+                        onCloseApp()
                     }
                 }
-            }
+            )
+        } else {
+            PortraitWindDownLayout(
+                appName = appName,
+                appIcon = appIcon,
+                sessionUsed = sessionUsed,
+                isDelaying = isDelaying,
+                randomMessage = randomMessage,
+                delayProgressAnimatable = delayProgressAnimatable,
+                delayDurationSeconds = delayDurationSeconds,
+                autoKickProgress = autoKickProgress.value,
+                onAllowUse = { minutes ->
+                    scope.launch {
+                        showContent = false
+                        delay(400)
+                        onAllowUse(minutes)
+                    }
+                },
+                onCloseApp = {
+                    scope.launch {
+                        showContent = false
+                        delay(400)
+                        onCloseApp()
+                    }
+                }
+            )
         }
     }
 }
@@ -265,14 +214,11 @@ fun PortraitWindDownLayout(
 ) {
     Column(
         modifier = Modifier
-            .padding(bottom = 24.dp, start = 24.dp, end = 24.dp, top = 0.dp)
+            .padding(bottom = 24.dp, start = 24.dp, end = 24.dp)
             .fillMaxWidth()
             .navigationBarsPadding(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        OverlayDragHandleWithIndicators()
-
-        Spacer(modifier = Modifier.height(24.dp))
 
         WindDownHeader(appName, appIcon, sessionUsed)
 
@@ -314,8 +260,6 @@ fun LandscapeWindDownLayout(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        OverlayDragHandleWithIndicators()
-
         Row(
             modifier = Modifier
                 .displayCutoutPadding()

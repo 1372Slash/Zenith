@@ -21,10 +21,15 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.ui.components.focus.AppPickerBottomSheet
+import com.etrisad.zenith.ui.components.overlay.InterceptBottomSheet
 import com.etrisad.zenith.ui.viewmodel.AppInfo
 import com.etrisad.zenith.ui.viewmodel.FocusUiState
 import com.etrisad.zenith.util.ScreenUsageHelper
@@ -58,6 +63,8 @@ fun DeveloperSettings(
     var selectedAppInfo by remember { mutableStateOf<AppInfo?>(null) }
     var showStreakEditSheet by remember { mutableStateOf(false) }
     var showAppUsageEditSheet by remember { mutableStateOf(false) }
+    var showBottomSheetTest by remember { mutableStateOf(false) }
+    var bottomSheetExpandValue by remember { mutableFloatStateOf(0f) }
 
     if (preferences.developerModeEnabled) {
         Column {
@@ -215,10 +222,140 @@ fun DeveloperSettings(
                 summary = "Demo variable axes with Google Sans Flex",
                 onClick = onNavigateToFontTest,
                 icon = Icons.Outlined.FontDownload,
+                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+            SettingsActionItem(
+                title = "Test Bottom Sheet Expand",
+                summary = "Interactive test for InterceptBottomSheet expand behavior",
+                onClick = { showBottomSheetTest = true },
+                icon = Icons.Outlined.OpenInFull,
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+
+    if (showBottomSheetTest) {
+        var showContentB by remember { mutableStateOf(false) }
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val screenHeightDp = with(density) {
+            androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
+        }
+        val contentHeight = screenHeightDp * (0.3f + bottomSheetExpandValue * 0.6f)
+
+        Dialog(
+            onDismissRequest = { showBottomSheetTest = false },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = false
+            )
+        ) {
+            Box(Modifier.fillMaxSize()) {
+                InterceptBottomSheet(
+                    visible = true,
+                    backgroundAlpha = 0.6f,
+                    isLandscape = false,
+                    showBedtimePill = false,
+                    contentKey = showContentB
+                ) { key ->
+                    Column(
+                        modifier = Modifier
+                            .height(contentHeight)
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (key == true) {
+                            Icon(
+                                imageVector = Icons.Outlined.Shield,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+
+                            Text(
+                                text = "Content B — Shield",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Text(
+                                text = "This demonstrates content transition.\nTap the button below to toggle.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Outlined.PauseCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.tertiary
+                            )
+
+                            Text(
+                                text = "Content A — Pause Point",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Text(
+                                text = "Slide to adjust height.\nBottom stays fixed, top expands.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.weight(1f))
+
+                        Text(
+                            text = "Height: ${(30 + bottomSheetExpandValue * 60).toInt()}% of screen",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        Slider(
+                            value = bottomSheetExpandValue,
+                            onValueChange = { bottomSheetExpandValue = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = SliderDefaults.colors(
+                                thumbColor = MaterialTheme.colorScheme.primary,
+                                activeTrackColor = MaterialTheme.colorScheme.primary,
+                                inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = { showContentB = !showContentB },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text(
+                                text = if (key == true) "Show Content A" else "Show Content B",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedButton(
+                            onClick = { showBottomSheetTest = false },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text("Close", fontWeight = FontWeight.Medium)
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
         }
     }
 

@@ -5,7 +5,6 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
@@ -25,11 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -341,144 +337,100 @@ fun ShieldOverlay(
         return
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Transparent),
-        contentAlignment = Alignment.BottomCenter
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = backgroundAlpha))
-                .pointerInput(Unit) {
-                    detectTapGestures { }
-                }
-        )
-
-        AnimatedVisibility(
-            visible = showContent,
-            enter = slideInVertically(
-                initialOffsetY = { it },
-                animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)
-            ) + fadeIn(),
-            exit = slideOutVertically(
-                targetOffsetY = { it },
-                animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)
-            ) + fadeOut(),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier
-                    .let { 
-                        if (isLandscape) it.widthIn(max = 640.dp).wrapContentHeight() 
-                        else it.fillMaxWidth().wrapContentHeight() 
+    InterceptBottomSheet(
+        visible = showContent,
+        backgroundAlpha = backgroundAlpha,
+        isLandscape = isLandscape,
+        showBedtimePill = true,
+        userPreferences = userPrefs,
+        dragHandleCurrentUses = if (currentShield?.type == FocusType.SHIELD) currentUses else null,
+        dragHandleMaxUses = if (currentShield?.type == FocusType.SHIELD) maxUses else null,
+        dragHandleEmergencyCount = if (currentShield?.type == FocusType.SHIELD) currentShield.emergencyUseCount else null,
+        dragHandleIsIncentiveLocked = isIncentiveLocked
+    ) { _ ->
+        if (isLandscape) {
+            LandscapeInterceptLayout(
+                modifier = Modifier.displayCutoutPadding(),
+                appName = appName,
+                packageName = packageName,
+                shield = currentShield,
+                totalUsageToday = currentTotalUsageToday,
+                totalGlobalUsageToday = currentTotalGlobalUsageToday,
+                userPrefs = userPrefs,
+                remainingMinutes = remainingMinutes,
+                isEmergencyUnlocked = isEmergencyUnlocked,
+                isDelaying = isDelaying,
+                randomMessage = randomMessage,
+                currentEvent = currentEvent,
+                delayProgressAnimatable = delayProgressAnimatable,
+                delayDurationSeconds = delayDurationSeconds,
+                isUsesExceeded = isUsesExceeded,
+                isTimeLimitReached = isTimeLimitReached,
+                refreshTimeLeftMillis = refreshTimeLeftMillis,
+                currentUses = currentUses,
+                maxUses = maxUses,
+                isIncentiveLocked = isIncentiveLocked,
+                incentiveProgress = incentiveProgress,
+                autoKickProgress = { autoKickProgress.value },
+                onEmergencyHoldingChange = { isEmergencyHolding = it },
+                onEmergencyClick = { isEmergencyUnlocked = true },
+                onAllowUse = { minutes ->
+                    scope.launch {
+                        showContent = false
+                        delay(400)
+                        currentOnAllowUse(minutes, isEmergencyUnlocked)
                     }
-                    .align(Alignment.BottomCenter),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                BedtimeAlertPill(
-                    userPreferences = userPrefs,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .imePadding(),
-                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
-                ) {
-                if (isLandscape) {
-                    LandscapeInterceptLayout(
-                        modifier = Modifier.displayCutoutPadding(),
-                        appName = appName,
-                        packageName = packageName,
-                        shield = currentShield,
-                        totalUsageToday = currentTotalUsageToday,
-                        totalGlobalUsageToday = currentTotalGlobalUsageToday,
-                        userPrefs = userPrefs,
-                        remainingMinutes = remainingMinutes,
-                        isEmergencyUnlocked = isEmergencyUnlocked,
-                        isDelaying = isDelaying,
-                        randomMessage = randomMessage,
-                        currentEvent = currentEvent,
-                        delayProgressAnimatable = delayProgressAnimatable,
-                        delayDurationSeconds = delayDurationSeconds,
-                        isUsesExceeded = isUsesExceeded,
-                        isTimeLimitReached = isTimeLimitReached,
-                        refreshTimeLeftMillis = refreshTimeLeftMillis,
-                        currentUses = currentUses,
-                        maxUses = maxUses,
-                        isIncentiveLocked = isIncentiveLocked,
-                        incentiveProgress = incentiveProgress,
-                        autoKickProgress = { autoKickProgress.value },
-                        onEmergencyHoldingChange = { isEmergencyHolding = it },
-                        onEmergencyClick = { isEmergencyUnlocked = true },
-                        onAllowUse = { minutes ->
-                            scope.launch {
-                                showContent = false
-                                delay(400)
-                                currentOnAllowUse(minutes, isEmergencyUnlocked)
-                            }
-                        },
-                        onCloseApp = {
-                            scope.launch {
-                                showContent = false
-                                delay(400)
-                                currentOnCloseApp()
-                            }
-                        }
-                    )
-                } else {
-                    PortraitInterceptLayout(
-                        appName = appName,
-                        packageName = packageName,
-                        shield = currentShield,
-                        totalUsageToday = currentTotalUsageToday,
-                        totalGlobalUsageToday = currentTotalGlobalUsageToday,
-                        userPrefs = userPrefs,
-                        remainingMinutes = remainingMinutes,
-                        isEmergencyUnlocked = isEmergencyUnlocked,
-                        isDelaying = isDelaying,
-                        randomMessage = randomMessage,
-                        currentEvent = currentEvent,
-                        delayProgressAnimatable = delayProgressAnimatable,
-                        delayDurationSeconds = delayDurationSeconds,
-                        isUsesExceeded = isUsesExceeded,
-                        isTimeLimitReached = isTimeLimitReached,
-                        refreshTimeLeftMillis = refreshTimeLeftMillis,
-                        currentUses = currentUses,
-                        maxUses = maxUses,
-                        isIncentiveLocked = isIncentiveLocked,
-                        incentiveProgress = incentiveProgress,
-                        autoKickProgress = { autoKickProgress.value },
-                        onEmergencyHoldingChange = { isEmergencyHolding = it },
-                        onEmergencyClick = { isEmergencyUnlocked = true },
-                        onAllowUse = { minutes ->
-                            scope.launch {
-                                showContent = false
-                                delay(400)
-                                currentOnAllowUse(minutes, isEmergencyUnlocked)
-                            }
-                        },
-                        onCloseApp = {
-                            scope.launch {
-                                showContent = false
-                                delay(400)
-                                currentOnCloseApp()
-                            }
-                        }
-                    )
+                },
+                onCloseApp = {
+                    scope.launch {
+                        showContent = false
+                        delay(400)
+                        currentOnCloseApp()
+                    }
                 }
-            }
+            )
+        } else {
+            PortraitInterceptLayout(
+                appName = appName,
+                packageName = packageName,
+                shield = currentShield,
+                totalUsageToday = currentTotalUsageToday,
+                totalGlobalUsageToday = currentTotalGlobalUsageToday,
+                userPrefs = userPrefs,
+                remainingMinutes = remainingMinutes,
+                isEmergencyUnlocked = isEmergencyUnlocked,
+                isDelaying = isDelaying,
+                randomMessage = randomMessage,
+                currentEvent = currentEvent,
+                delayProgressAnimatable = delayProgressAnimatable,
+                delayDurationSeconds = delayDurationSeconds,
+                isUsesExceeded = isUsesExceeded,
+                isTimeLimitReached = isTimeLimitReached,
+                refreshTimeLeftMillis = refreshTimeLeftMillis,
+                currentUses = currentUses,
+                maxUses = maxUses,
+                isIncentiveLocked = isIncentiveLocked,
+                incentiveProgress = incentiveProgress,
+                autoKickProgress = { autoKickProgress.value },
+                onEmergencyHoldingChange = { isEmergencyHolding = it },
+                onEmergencyClick = { isEmergencyUnlocked = true },
+                onAllowUse = { minutes ->
+                    scope.launch {
+                        showContent = false
+                        delay(400)
+                        currentOnAllowUse(minutes, isEmergencyUnlocked)
+                    }
+                },
+                onCloseApp = {
+                    scope.launch {
+                        showContent = false
+                        delay(400)
+                        currentOnCloseApp()
+                    }
+                }
+            )
         }
     }
-}
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -510,22 +462,13 @@ fun PortraitInterceptLayout(
     onAllowUse: (Int) -> Unit,
     onCloseApp: () -> Unit
 ) {
-    Box(modifier = Modifier.fillMaxWidth()) {
-        OverlayDragHandleWithIndicators(
-            currentUses = if (shield?.type == FocusType.SHIELD) currentUses else null,
-            maxUses = if (shield?.type == FocusType.SHIELD) maxUses else null,
-            emergencyCount = if (shield?.type == FocusType.SHIELD) shield.emergencyUseCount else null,
-            isIncentiveLocked = isIncentiveLocked
-        )
-
-        Column(
-            modifier = Modifier
-                .padding(bottom = 24.dp, start = 24.dp, end = 24.dp, top = 24.dp)
-                .fillMaxWidth()
-                .navigationBarsPadding(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(24.dp))
+    Column(
+        modifier = Modifier
+            .padding(bottom = 24.dp, start = 24.dp, end = 24.dp)
+            .fillMaxWidth()
+            .navigationBarsPadding(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
 
             Box(
                 modifier = Modifier
@@ -602,7 +545,6 @@ fun PortraitInterceptLayout(
                 onAllowUse = onAllowUse,
                 onCloseApp = onCloseApp
             )
-        }
     }
 }
 
@@ -640,15 +582,6 @@ fun LandscapeInterceptLayout(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(12.dp))
-        Box(
-            modifier = Modifier
-                .width(40.dp)
-                .height(4.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.outlineVariant)
-        )
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
