@@ -901,6 +901,10 @@ class AppUsageMonitorService : Service() {
                 val isGoal = sh?.type == FocusType.GOAL
 
                 val limitMillis = (sh?.timeLimitMinutes ?: 0) * 60 * 1000L
+                if (isGoal) {
+                    com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
+                    SharedMonitoringState.lastDailyUsageFetchTime = 0L
+                }
                 val currentUsage = if (isGoal) getTotalUsageToday(currentApp) else cachedTotalUsage
 
                 if (!(isGoal && (currentUsage >= limitMillis || SharedMonitoringState.notifiedGoals.contains(currentApp)) && limitMillis > 0)) {

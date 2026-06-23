@@ -90,6 +90,7 @@ fun ShieldOverlay(
         shield
     ) {
         val usm = context.getSystemService(android.content.Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
+        com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
         val cal = Calendar.getInstance()
         var lastOfDay = 0L
         var cachedOfDay = 0L

@@ -11,6 +11,7 @@ import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.ui.components.overlay.SessionUsageOverlayManager
 import com.etrisad.zenith.service.AppStateHolder
+import com.etrisad.zenith.util.ScreenUsageHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -155,6 +156,10 @@ class OverlayActionHandler(
                     if (currentPrefs?.sessionUsageOverlayEnabled == true) {
                         val isGoal = shieldWithTimestamp.type == FocusType.GOAL
                         val limitMillis = (shieldWithTimestamp.timeLimitMinutes) * 60 * 1000L
+                        if (isGoal) {
+                            ScreenUsageHelper.clearCache()
+                            SharedMonitoringState.lastDailyUsageFetchTime = 0L
+                        }
                         val currentUsage = getTotalUsageTodayFn()
 
                         if (!(isGoal && (currentUsage >= limitMillis || SharedMonitoringState.notifiedGoals.contains(targetPackageName)) && limitMillis > 0)) {
@@ -333,6 +338,10 @@ class OverlayActionHandler(
             if (currentPrefs.sessionUsageOverlayEnabled) {
                 val isGoal = shieldWithTimestamp.type == FocusType.GOAL
                 val limitMillis = (shieldWithTimestamp.timeLimitMinutes) * 60 * 1000L
+                if (isGoal) {
+                    ScreenUsageHelper.clearCache()
+                    SharedMonitoringState.lastDailyUsageFetchTime = 0L
+                }
                 val currentUsage = getTotalUsageTodayFn()
 
                 if (!(isGoal && (currentUsage >= limitMillis || SharedMonitoringState.notifiedGoals.contains(targetPackageName)) && limitMillis > 0)) {
