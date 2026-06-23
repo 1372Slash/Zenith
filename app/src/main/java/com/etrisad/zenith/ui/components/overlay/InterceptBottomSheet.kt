@@ -65,12 +65,12 @@ fun InterceptBottomSheet(
                 val hsv = FloatArray(3)
                 android.graphics.Color.colorToHSV(currentScheme.primary.toArgb(), hsv)
                 val hue = hsv[0]
-                val tintSurface = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 0.28f, if (isDark) 0.12f else 0.97f)))
+                val tintSurface = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isDark) 0.28f else 0.08f, if (isDark) 0.12f else 0.97f)))
                 currentScheme.copy(
                     surface = tintSurface,
                     surfaceContainer = tintSurface,
-                    surfaceContainerLow = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 0.18f, if (isDark) 0.16f else 0.96f))),
-                    surfaceContainerHigh = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 0.38f, if (isDark) 0.24f else 0.9f)))
+                    surfaceContainerLow = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isDark) 0.18f else 0.04f, if (isDark) 0.16f else 0.96f))),
+                    surfaceContainerHigh = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isDark) 0.38f else 0.12f, if (isDark) 0.24f else 0.9f)))
                 )
             }
             paletteId == "custom" -> {
