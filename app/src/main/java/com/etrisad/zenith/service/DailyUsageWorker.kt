@@ -51,6 +51,7 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
                 database.shieldDao().resetAllRemainingTimes()
                 val prefsRepo = UserPreferencesRepository(applicationContext)
                 prefsRepo.setIncentiveLockGoalsMetToday(false)
+                prefsRepo.setIncentiveLockGoalsMetDate("")
             } catch (_: Exception) {}
         }
         val dateString = dateFormat.format(calendar.time)

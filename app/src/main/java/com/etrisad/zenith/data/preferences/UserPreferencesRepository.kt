@@ -322,6 +322,7 @@ class UserPreferencesRepository(private val context: Context) {
         val STREAK_RECOVERY_PERFORMED = booleanPreferencesKey("streak_recovery_performed")
         val INCENTIVE_LOCK_DISABLE_REQUEST_TIMESTAMP = longPreferencesKey("incentive_lock_disable_request_timestamp")
         val INCENTIVE_LOCK_GOALS_MET_TODAY = booleanPreferencesKey("incentive_lock_goals_met_today")
+        val INCENTIVE_LOCK_GOALS_MET_DATE = stringPreferencesKey("incentive_lock_goals_met_date")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = combine(
@@ -397,7 +398,8 @@ class UserPreferencesRepository(private val context: Context) {
             trendMilestoneEnabled = settings[PreferencesKeys.TREND_MILESTONE_ENABLED] ?: true,
             incentiveLockEnabled = settings[PreferencesKeys.INCENTIVE_LOCK_ENABLED] ?: false,
             incentiveLockDisableRequestTimestamp = runtime[RuntimeKeys.INCENTIVE_LOCK_DISABLE_REQUEST_TIMESTAMP] ?: 0L,
-            incentiveLockGoalsMetToday = runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_TODAY] ?: false,
+            incentiveLockGoalsMetToday = if (runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_TODAY] != true) false
+                else runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_DATE] == SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
             performanceLevel = PerformanceLevel.valueOf(settings[PreferencesKeys.PERFORMANCE_LEVEL] ?: PerformanceLevel.BALANCED.name),
             perfA11yActiveDelay = settings[PreferencesKeys.PERF_A11Y_ACTIVE_DELAY] ?: PerformanceConfig().a11yActiveDelay,
             perfA11yInactiveDelay = settings[PreferencesKeys.PERF_A11Y_INACTIVE_DELAY] ?: PerformanceConfig().a11yInactiveDelay,
@@ -531,6 +533,10 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setIncentiveLockGoalsMetToday(met: Boolean) {
         context.runtimeDataStore.edit { preferences -> preferences[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_TODAY] = met }
+    }
+
+    suspend fun setIncentiveLockGoalsMetDate(date: String) {
+        context.runtimeDataStore.edit { preferences -> preferences[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_DATE] = date }
     }
 
     suspend fun initializeDefaultWhitelist() {

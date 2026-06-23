@@ -251,9 +251,7 @@ fun UsageStatsScreen(
         ) {
         item(key = "zenith_dashboard") {
             Column(modifier = Modifier.animateItem()) {
-                val selectedDayTotal = remember(uiState.dailyUsageHistory, uiState.selectedDateMillis) {
-                    uiState.dailyUsageHistory.find { it.date == uiState.selectedDateMillis }?.totalTime ?: 0L
-                }
+                val selectedDayTotal = uiState.totalScreenTime
                 ZenithDashboard(
                     totalTime = selectedDayTotal,
                     targetTime = uiState.targetMillis,

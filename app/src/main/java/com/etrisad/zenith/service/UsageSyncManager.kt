@@ -416,6 +416,7 @@ class UsageSyncManager(
                     }
                     if (allMet) {
                         preferencesRepository.setIncentiveLockGoalsMetToday(true)
+                        preferencesRepository.setIncentiveLockGoalsMetDate(todayDateStr)
                     }
                 }
             }

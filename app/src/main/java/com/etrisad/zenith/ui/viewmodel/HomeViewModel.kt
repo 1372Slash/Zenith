@@ -621,11 +621,14 @@ class HomeViewModel(
         val dbApps = selectedDayUsage.filter { it.packageName !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL") }
         val fallbackDayApps = fallbackMap[selectedDateStr]?.filter { it.packageName != "TOTAL" } ?: emptyList()
         val mergedAppMap = mutableMapOf<String, Long>()
-        dbApps.forEach { mergedAppMap[it.packageName] = it.usageTimeMillis }
         if (prefs.preferSystemUsageHistory) {
-            fallbackDayApps.forEach { record ->
-                mergedAppMap[record.packageName] = maxOf(mergedAppMap[record.packageName] ?: 0L, record.usageTimeMillis)
+            fallbackDayApps.forEach { mergedAppMap[it.packageName] = it.usageTimeMillis }
+            dbApps.forEach { record ->
+                if (!mergedAppMap.containsKey(record.packageName))
+                    mergedAppMap[record.packageName] = record.usageTimeMillis
             }
+        } else {
+            dbApps.forEach { mergedAppMap[it.packageName] = it.usageTimeMillis }
         }
 
         val allApps = mergedAppMap.entries.sortedByDescending { it.value }.map { (pkg, time) ->
@@ -711,7 +714,6 @@ class HomeViewModel(
             val shouldStillLoad = state.isLoading && fallbackMap.isEmpty() && isSelectedDayToday
             
             state.copy(
-                totalScreenTime = currentTotal,
                 allAppsUsage = allApps,
                 topApps = allApps.take(5),
                 shieldUsage = maxOf(state.shieldUsage, shieldTotal),
@@ -1117,8 +1119,6 @@ class HomeViewModel(
         if (_uiState.value.selectedDateMillis == date && refreshJob?.isActive == true) return
         _uiState.update { it.copy(
             selectedDateMillis = date,
-            allAppsUsage = emptyList(),
-            topApps = emptyList(),
             isLoading = true
         ) }
         refreshUsageStats(showLoading = true)
@@ -1200,8 +1200,7 @@ class HomeViewModel(
             val selectedDayHistory = allHistory.filter { it.date == dateFormat.format(Date(todayStart)) }
 
             filteredTodayUsage.forEach { (pkg, time) ->
-                val dbTime = selectedDayHistory.find { it.packageName == pkg }?.usageTimeMillis ?: 0L
-                appTotals[pkg] = maxOf(time, dbTime)
+                appTotals[pkg] = time
             }
 
             selectedDayHistory.forEach { record ->
