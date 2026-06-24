@@ -507,6 +507,12 @@ class ZenithAccessibilityService : AccessibilityService() {
         }
 
         if (shouldBypassBlocking(currentApp)) {
+            // Don't change state for transient system UI overlays (volume panel, keyboard, etc.)
+            if (InterceptOverlayManager.isShowing && (InterceptOverlayManager.isSystemUiPackage(currentApp) || isKeyboardApp(currentApp))) {
+                Log.d("Zenith_HPC", "Bypass branch SKIPPED for transient system UI: $currentApp")
+                return
+            }
+
             Log.d("Zenith_HPC", "Bypass branch: $currentApp (lfga was $lastForegroundApp)")
             if (SharedMonitoringState.launcherPackages.contains(currentApp) || currentApp == packageName) {
                 if (System.currentTimeMillis() - InterceptOverlayManager.lastKickTime >= 500) {

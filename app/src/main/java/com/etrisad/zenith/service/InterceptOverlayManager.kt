@@ -50,6 +50,7 @@ class InterceptOverlayManager(
     private val managerScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var overlayUsageState: androidx.compose.runtime.MutableState<Pair<Long, Long>>? = null
     private val sharedPrefs = MutableStateFlow<com.etrisad.zenith.data.preferences.UserPreferences?>(null)
+    private var recreateOverlay: (() -> Unit)? = null
 
     init {
         managerScope.launch {
@@ -74,12 +75,13 @@ class InterceptOverlayManager(
         private var focusRequestJob: kotlinx.coroutines.Job? = null
         private val afChangeListener = AudioManager.OnAudioFocusChangeListener { }
 
-        private val SYSTEM_UI_PACKAGES = setOf(
+        val SYSTEM_UI_PACKAGES = setOf(
             "com.android.systemui",
             "android",
             "com.google.android.permissioncontroller",
             "com.google.android.packageinstaller"
         )
+        fun isSystemUiPackage(packageName: String): Boolean = packageName in SYSTEM_UI_PACKAGES
         private var keyboardPackages = emptySet<String>()
         private var lastKeyboardRefreshTime = 0L
     }
@@ -128,6 +130,10 @@ class InterceptOverlayManager(
 
             isShowing = true
             currentPackage = packageName
+        }
+
+        recreateOverlay = {
+            showOverlay(packageName, appName, shield, totalUsageToday, totalGlobalUsageToday, delayDurationSeconds, onAllowUse, onCloseApp, onGoalDismiss)
         }
 
         val usageState = androidx.compose.runtime.mutableStateOf(Pair(totalUsageToday, totalGlobalUsageToday))
@@ -216,6 +222,10 @@ class InterceptOverlayManager(
             currentPackage = packageName
         }
 
+        recreateOverlay = {
+            showScheduleOverlay(packageName, appName, schedule, totalGlobalUsageToday, onAllowUse, onCloseApp)
+        }
+
         val usageState = androidx.compose.runtime.mutableStateOf(Pair(0L, totalGlobalUsageToday))
         overlayUsageState = usageState
 
@@ -293,6 +303,10 @@ class InterceptOverlayManager(
             currentPackage = packageName
         }
 
+        recreateOverlay = {
+            showBedtimeOverlay(packageName, appName, onCloseApp)
+        }
+
         val vStore = ViewModelStore()
         viewModelStore = vStore
         
@@ -358,6 +372,10 @@ class InterceptOverlayManager(
 
             isShowing = true
             currentPackage = packageName
+        }
+
+        recreateOverlay = {
+            showWindDownOverlay(packageName, appName, sessionUsed, onAllowUse, onCloseApp)
         }
 
         val vStore = ViewModelStore()
@@ -453,15 +471,29 @@ class InterceptOverlayManager(
                 }
                 composeView.addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
                     override fun onViewDetachedFromWindow(v: android.view.View) {
+                        val savedRecreate: (() -> Unit)?
+                        val savedPkg: String?
                         synchronized(this@InterceptOverlayManager) {
                             if (v == overlayView) {
+                                savedPkg = currentPackage
+                                savedRecreate = if (isShowing) recreateOverlay else null
                                 isShowing = false
                                 currentPackage = null
                                 overlayView = null
                                 lifecycleOwner = null
                                 viewModelStore = null
                                 overlayUsageState = null
+                            } else {
+                                savedPkg = null
+                                savedRecreate = null
                             }
+                        }
+                        if (savedRecreate != null && savedPkg != null) {
+                            mainHandler.postDelayed({
+                                if (!InterceptOverlayManager.isShowing) {
+                                    savedRecreate()
+                                }
+                            }, 300)
                         }
                     }
                     override fun onViewAttachedToWindow(v: android.view.View) {}
@@ -542,6 +574,7 @@ class InterceptOverlayManager(
             lifecycleOwner = null
             viewModelStore = null
             overlayUsageState = null
+            recreateOverlay = null
         }
 
         if (viewToRemove == null) return
@@ -701,6 +734,7 @@ class InterceptOverlayManager(
             lifecycleOwner = null
             viewModelStore = null
             overlayUsageState = null
+            recreateOverlay = null
         }
 
         if (viewToRemove != null) {
