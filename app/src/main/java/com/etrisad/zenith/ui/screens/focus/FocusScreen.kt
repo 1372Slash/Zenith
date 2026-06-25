@@ -65,6 +65,7 @@ import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.components.ShieldSortHeader
+import com.etrisad.zenith.ui.components.UninstalledAppCard
 import com.etrisad.zenith.ui.theme.ZenithTheme
 import com.etrisad.zenith.ui.viewmodel.AppInfo
 import com.etrisad.zenith.ui.viewmodel.FocusUiState
@@ -77,7 +78,9 @@ import com.etrisad.zenith.ui.components.focus.*
 fun FocusScreen(
     viewModel: FocusViewModel,
     innerPadding: PaddingValues,
-    onAppClick: (String) -> Unit
+    onAppClick: (String) -> Unit,
+    onDeleteShield: (ShieldEntity) -> Unit,
+    onDismissUninstalled: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val isAppPickerOpen = remember { mutableStateOf(false) }
@@ -109,6 +112,8 @@ fun FocusScreen(
             innerPadding = innerPadding,
             onEditShield = onEditShield,
             onDeleteShield = { pendingDeleteShield = it },
+            onDeleteShieldDirect = onDeleteShield,
+            onDismissUninstalled = onDismissUninstalled,
             onEditSchedule = onEditSchedule,
             onDeleteSchedule = { pendingDeleteSchedule = it },
             onShieldSortTypeChange = onShieldSortTypeChange,
@@ -347,7 +352,9 @@ fun FocusScreenContent(
     selectedShields: Set<String> = emptySet(),
     selectedSchedules: Set<Long> = emptySet(),
     onToggleShieldSelection: (String) -> Unit = {},
-    onToggleScheduleSelection: (Long) -> Unit = {}
+    onToggleScheduleSelection: (Long) -> Unit = {},
+    onDeleteShieldDirect: (ShieldEntity) -> Unit = {},
+    onDismissUninstalled: (String) -> Unit = {}
 ) {
     val nowMillis by produceState(initialValue = System.currentTimeMillis()) {
         while (true) {
@@ -421,6 +428,14 @@ fun FocusScreenContent(
                             isSelectionMode = isSelectionMode,
                             isSelected = shield.packageName in selectedShields,
                             onToggleSelection = { onToggleShieldSelection(shield.packageName) }
+                        )
+                    }
+                    if (shield.packageName in uiState.uninstalledShields) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        UninstalledAppCard(
+                            appName = shield.appName,
+                            onDelete = { onDeleteShieldDirect(shield) },
+                            onDismissToday = { onDismissUninstalled(shield.packageName) }
                         )
                     }
                     if (index < uiState.activeGoals.size - 1) {
@@ -535,6 +550,14 @@ fun FocusScreenContent(
                             isSelectionMode = isSelectionMode,
                             isSelected = shield.packageName in selectedShields,
                             onToggleSelection = { onToggleShieldSelection(shield.packageName) }
+                        )
+                    }
+                    if (shield.packageName in uiState.uninstalledShields) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        UninstalledAppCard(
+                            appName = shield.appName,
+                            onDelete = { onDeleteShieldDirect(shield) },
+                            onDismissToday = { onDismissUninstalled(shield.packageName) }
                         )
                     }
                     if (index < uiState.activeShields.size - 1) {

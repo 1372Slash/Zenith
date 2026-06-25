@@ -55,6 +55,7 @@ import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.etrisad.zenith.data.local.entity.FocusType
+import com.etrisad.zenith.ui.components.UninstalledAppCard
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonWeighted
 import com.etrisad.zenith.ui.components.ZenithButtonType
@@ -96,7 +97,9 @@ fun HomeScreen(
     innerPadding: PaddingValues,
     onSeeFullList: () -> Unit,
     onAppClick: (String) -> Unit,
-    onBedtimeClick: () -> Unit
+    onBedtimeClick: () -> Unit,
+    onDeleteShield: (ShieldEntity) -> Unit,
+    onDismissUninstalled: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val preferences by viewModel.homeScreenPreferences.collectAsState()
@@ -128,7 +131,9 @@ fun HomeScreen(
         onBedtimeClick = onBedtimeClick,
         onStatsClick = onSeeFullList,
         onDaySelected = onDaySelected,
-        onRefresh = { viewModel.onRefresh() }
+        onRefresh = { viewModel.onRefresh() },
+        onDeleteShield = onDeleteShield,
+        onDismissUninstalled = onDismissUninstalled
     )
 }
 
@@ -147,7 +152,9 @@ fun HomeScreenContent(
     onBedtimeClick: () -> Unit,
     onStatsClick: () -> Unit,
     onDaySelected: (Long?) -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onDeleteShield: (ShieldEntity) -> Unit = {},
+    onDismissUninstalled: (String) -> Unit = {}
 ) {
     val pullToRefreshState = rememberPullToRefreshState()
     var isManualRefreshing by remember { mutableStateOf(false) }
@@ -376,7 +383,14 @@ fun HomeScreenContent(
                     }
                 }
             } else {
-                shieldList(shields = uiState.activeGoals, formatDuration = formatDuration, onAppClick = onAppClick)
+                shieldList(
+                    shields = uiState.activeGoals,
+                    formatDuration = formatDuration,
+                    onAppClick = onAppClick,
+                    uninstalledPackages = uiState.uninstalledShieldPackageNames,
+                    onDeleteShield = onDeleteShield,
+                    onDismissUninstalled = onDismissUninstalled
+                )
             }
 
             item(key = "shields_header") {
@@ -449,7 +463,14 @@ fun HomeScreenContent(
                     }
                 }
             } else {
-                shieldList(shields = uiState.activeShields, formatDuration = formatDuration, onAppClick = onAppClick)
+                shieldList(
+                    shields = uiState.activeShields,
+                    formatDuration = formatDuration,
+                    onAppClick = onAppClick,
+                    uninstalledPackages = uiState.uninstalledShieldPackageNames,
+                    onDeleteShield = onDeleteShield,
+                    onDismissUninstalled = onDismissUninstalled
+                )
             }
         }
     }
@@ -1272,7 +1293,10 @@ fun QuickActionCard(
 fun LazyListScope.shieldList(
     shields: List<ShieldEntity>,
     formatDuration: (Long) -> String,
-    onAppClick: (String) -> Unit
+    onAppClick: (String) -> Unit,
+    uninstalledPackages: Set<String> = emptySet(),
+    onDeleteShield: (ShieldEntity) -> Unit = {},
+    onDismissUninstalled: (String) -> Unit = {}
 ) {
     itemsIndexed(
         items = shields,
@@ -1286,6 +1310,14 @@ fun LazyListScope.shieldList(
         }
         Column(modifier = Modifier.animateItem()) {
             ShieldItem(shield = shield, shape = shape, formatDuration = formatDuration, onAppClick = onAppClick)
+            if (shield.packageName in uninstalledPackages) {
+                Spacer(modifier = Modifier.height(4.dp))
+                UninstalledAppCard(
+                    appName = shield.appName,
+                    onDelete = { onDeleteShield(shield) },
+                    onDismissToday = { onDismissUninstalled(shield.packageName) }
+                )
+            }
             if (index < shields.size - 1) {
                 Spacer(modifier = Modifier.height(4.dp))
             }

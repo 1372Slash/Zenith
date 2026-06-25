@@ -113,7 +113,8 @@ data class HomeUiState(
         set(Calendar.SECOND, 0)
         set(Calendar.MILLISECOND, 0)
     }.timeInMillis,
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    val uninstalledShieldPackageNames: Set<String> = emptySet()
 )
 
 sealed class UsageRecord {
@@ -564,6 +565,7 @@ class HomeViewModel(
     private var allShields: List<ShieldEntity> = emptyList()
     private var allHistory: List<DailyUsageEntity> = emptyList()
     private var globalHistory: List<DailyUsageEntity> = emptyList()
+    private var dismissedUninstalledApps: Map<String, String> = emptyMap()
 
     private val _appDetailUiState = MutableStateFlow(AppDetailUiState())
     val appDetailUiState: StateFlow<AppDetailUiState> = _appDetailUiState.asStateFlow()
@@ -756,6 +758,7 @@ class HomeViewModel(
                     activeShields = sortShields(liveShields.filter { it.type == FocusType.SHIELD }, it.shieldSortType),
                     activeGoals = sortShields(liveShields.filter { it.type == FocusType.GOAL }, it.goalSortType)
                 ) }
+                updateUninstalledShieldPackages()
                 val currentPkg = _appDetailUiState.value.packageName
                 if (currentPkg.isNotEmpty()) {
                     val shield = liveShields.find { it.packageName == currentPkg }
@@ -791,6 +794,7 @@ class HomeViewModel(
                 prefGlobalBestStreak = prefs.globalBestStreak
                 preferSystemUsageHistory = prefs.preferSystemUsageHistory
 
+                dismissedUninstalledApps = prefs.dismissedUninstalledApps
                 _uiState.update { it.copy(
                     bedtimeEnabled = prefs.bedtimeEnabled,
                     bedtimeStartTime = prefs.bedtimeStartTime,
@@ -1712,6 +1716,29 @@ class HomeViewModel(
         refreshUsageStats(showLoading = false)
     }
 
+    private fun updateUninstalledShieldPackages() {
+        if (allShields.isEmpty()) return
+        viewModelScope.launch {
+            val pm = context.packageManager
+            val todayStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+            val uninstalled = withContext(Dispatchers.IO) {
+                allShields
+                    .map { it.packageName }
+                    .filter { pkg ->
+                        try {
+                            pm.getApplicationInfo(pkg, 0)
+                            false
+                        } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
+                            true
+                        }
+                    }
+                    .filter { pkg -> dismissedUninstalledApps[pkg] != todayStr }
+                    .toSet()
+            }
+            _uiState.update { it.copy(uninstalledShieldPackageNames = uninstalled) }
+        }
+    }
+
     private fun sortShields(shields: List<ShieldEntity>, sortType: ShieldSortType): List<ShieldEntity> {
         return when (sortType) {
             ShieldSortType.ALPHABETICAL -> shields.sortedBy { it.appName.lowercase() }
@@ -1842,6 +1869,13 @@ class HomeViewModel(
     fun deleteShieldFromDetail() {
         val shield = _appDetailUiState.value.shieldEntity ?: return
         viewModelScope.launch { shieldRepository.deleteShield(shield); _appDetailUiState.update { it.copy(type = null, shieldEntity = null) }; triggerServiceRefresh() }
+    }
+
+    fun deleteShield(shield: ShieldEntity) {
+        viewModelScope.launch {
+            shieldRepository.deleteShield(shield)
+            triggerServiceRefresh()
+        }
     }
 
     private fun triggerServiceRefresh() {

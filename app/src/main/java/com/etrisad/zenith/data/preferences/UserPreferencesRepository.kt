@@ -325,6 +325,7 @@ class UserPreferencesRepository(private val context: Context) {
         val INCENTIVE_LOCK_GOALS_MET_TODAY = booleanPreferencesKey("incentive_lock_goals_met_today")
         val INCENTIVE_LOCK_GOALS_MET_DATE = stringPreferencesKey("incentive_lock_goals_met_date")
         val LAST_WEEKLY_RESET_DATE = longPreferencesKey("last_weekly_reset_date")
+        val DISMISSED_UNINSTALLED_APPS = stringPreferencesKey("dismissed_uninstalled_apps")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = combine(
@@ -462,7 +463,14 @@ class UserPreferencesRepository(private val context: Context) {
             overlaySheetOpacity = settings[PreferencesKeys.OVERLAY_SHEET_OPACITY] ?: 1f,
             overlayFullScreen = settings[PreferencesKeys.OVERLAY_FULL_SCREEN] ?: false,
             overlayCustomHue = settings[PreferencesKeys.OVERLAY_CUSTOM_HUE] ?: 270f,
-            streakRecoveryPerformed = runtime[RuntimeKeys.STREAK_RECOVERY_PERFORMED] ?: false
+            streakRecoveryPerformed = runtime[RuntimeKeys.STREAK_RECOVERY_PERFORMED] ?: false,
+            dismissedUninstalledApps = runtime[RuntimeKeys.DISMISSED_UNINSTALLED_APPS]
+                ?.split(",")
+                ?.filter { it.isNotEmpty() }
+                ?.associate { entry ->
+                    val parts = entry.split(":")
+                    parts[0] to parts.getOrElse(1) { "" }
+                } ?: emptyMap()
         )
     }.distinctUntilChanged()
 
@@ -540,6 +548,16 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setIncentiveLockGoalsMetDate(date: String) {
         context.runtimeDataStore.edit { preferences -> preferences[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_DATE] = date }
+    }
+
+    suspend fun setDismissedUninstalledApp(packageName: String, date: String) {
+        context.runtimeDataStore.edit { preferences ->
+            val current = preferences[RuntimeKeys.DISMISSED_UNINSTALLED_APPS] ?: ""
+            val entries = current.split(",").filter { it.isNotEmpty() }.toMutableList()
+            entries.removeAll { it.startsWith("$packageName:") }
+            entries.add("$packageName:$date")
+            preferences[RuntimeKeys.DISMISSED_UNINSTALLED_APPS] = entries.joinToString(",")
+        }
     }
 
     suspend fun initializeDefaultWhitelist() {
@@ -1682,6 +1700,7 @@ data class UserPreferences(
     val manualResetTimestamps: Map<String, Long> = emptyMap(),
     val gsFlexSettings: GSFlexSettings = GSFlexSettings(),
     val streakRecoveryPerformed: Boolean = false,
+    val dismissedUninstalledApps: Map<String, String> = emptyMap(),
     val incentiveLockEnabled: Boolean = false,
     val incentiveLockDisableRequestTimestamp: Long = 0L,
     val incentiveLockGoalsMetToday: Boolean = false,

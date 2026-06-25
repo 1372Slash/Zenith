@@ -54,7 +54,8 @@ data class FocusUiState(
     val selectedShields: Set<String> = emptySet(),
     val selectedSchedules: Set<Long> = emptySet(),
     val incentiveLockEnabled: Boolean = false,
-    val incentiveLockGoalsMetToday: Boolean = false
+    val incentiveLockGoalsMetToday: Boolean = false,
+    val uninstalledShields: Set<String> = emptySet()
 )
 
 @OptIn(kotlinx.coroutines.FlowPreview::class)
@@ -70,6 +71,7 @@ class FocusViewModel(
     private val _allInstalledApps = MutableStateFlow<List<AppInfo>>(emptyList())
     private var allShields: List<ShieldEntity> = emptyList()
     private var loadAppsJob: kotlinx.coroutines.Job? = null
+    private var dismissedUninstalledApps: Map<String, String> = emptyMap()
 
     init {
         viewModelScope.launch {
@@ -98,6 +100,7 @@ class FocusViewModel(
             preferencesRepository.userPreferencesFlow
                 .flowOn(Dispatchers.Default)
                 .collect { prefs ->
+                    dismissedUninstalledApps = prefs.dismissedUninstalledApps
                     _uiState.update { it.copy(
                         incentiveLockEnabled = prefs.incentiveLockEnabled,
                         incentiveLockGoalsMetToday = prefs.incentiveLockGoalsMetToday
@@ -282,7 +285,20 @@ class FocusViewModel(
                     isLoadingApps = false
                 )
             }
+            updateUninstalledShields()
         }
+    }
+
+    private fun updateUninstalledShields() {
+        if (_allInstalledApps.value.isEmpty()) return
+        val installedPkgs = _allInstalledApps.value.map { it.packageName }.toSet()
+        val todayStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+        val uninstalled = allShields
+            .map { it.packageName }
+            .filter { pkg -> pkg !in installedPkgs }
+            .filter { pkg -> dismissedUninstalledApps[pkg] != todayStr }
+            .toSet()
+        _uiState.update { it.copy(uninstalledShields = uninstalled) }
     }
 
     private suspend fun getTopUsedApps(limit: Int): List<AppInfo> = withContext(Dispatchers.IO) {

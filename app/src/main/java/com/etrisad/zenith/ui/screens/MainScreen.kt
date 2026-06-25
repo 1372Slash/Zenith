@@ -69,6 +69,7 @@ import com.etrisad.zenith.ui.viewmodel.BedtimeViewModel
 import com.etrisad.zenith.ui.viewmodel.BedtimeViewModelFactory
 import com.etrisad.zenith.ui.viewmodel.GracePeriodViewModel
 import com.etrisad.zenith.ui.viewmodel.GracePeriodViewModelFactory
+import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.data.manager.GitHubUpdateManager
 import com.etrisad.zenith.data.remote.model.GitHubRelease
@@ -895,6 +896,7 @@ fun MainScreen(
                     }
                 ) {
                     composable(Screen.Home.route) {
+                        val homeScope = rememberCoroutineScope()
                         HomeScreen(
                             homeViewModel,
                             userPreferencesRepository,
@@ -903,15 +905,34 @@ fun MainScreen(
                             onAppClick = { packageName ->
                                 navController.navigate(Screen.AppDetail.createRoute(packageName))
                             },
-                            onBedtimeClick = { navController.navigate(Screen.Bedtime.route) }
+                            onBedtimeClick = { navController.navigate(Screen.Bedtime.route) },
+                            onDeleteShield = { shield -> homeViewModel.deleteShield(shield) },
+                            onDismissUninstalled = { pkg ->
+                                homeScope.launch {
+                                    userPreferencesRepository.setDismissedUninstalledApp(
+                                        pkg,
+                                        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                                    )
+                                }
+                            }
                         )
                     }
                     composable(Screen.Focus.route) {
+                        val focusScope = rememberCoroutineScope()
                         FocusScreen(
                             focusViewModel,
                             innerPadding,
                             onAppClick = { packageName ->
                                 navController.navigate(Screen.AppDetail.createRoute(packageName))
+                            },
+                            onDeleteShield = { shield -> focusViewModel.deleteShield(shield) },
+                            onDismissUninstalled = { pkg ->
+                                focusScope.launch {
+                                    userPreferencesRepository.setDismissedUninstalledApp(
+                                        pkg,
+                                        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                                    )
+                                }
                             }
                         )
                     }
