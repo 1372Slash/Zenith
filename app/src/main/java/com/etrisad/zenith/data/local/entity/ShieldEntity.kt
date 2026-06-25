@@ -58,5 +58,7 @@ data class ShieldEntity(
     val isGoalCallerSoundEnabled: Boolean = true,
     val goalCallerSoundUri: String? = null,
     @androidx.room.ColumnInfo(defaultValue = "DAILY")
-    val limitPeriod: LimitPeriod = LimitPeriod.DAILY
+    val limitPeriod: LimitPeriod = LimitPeriod.DAILY,
+    @androidx.room.ColumnInfo(defaultValue = "0")
+    val timeAdded: Long = System.currentTimeMillis()
 )

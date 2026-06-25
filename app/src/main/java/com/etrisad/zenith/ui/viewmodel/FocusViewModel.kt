@@ -499,7 +499,8 @@ class FocusViewModel(
                     lastSessionEndTimestamp = existing?.lastSessionEndTimestamp ?: 0L,
                     isPaused = existing?.isPaused ?: false,
                     pauseEndTimestamp = existing?.pauseEndTimestamp ?: 0L,
-                    lastDelayStartTimestamp = existing?.lastDelayStartTimestamp ?: 0L
+                    lastDelayStartTimestamp = existing?.lastDelayStartTimestamp ?: 0L,
+                    timeAdded = existing?.timeAdded?.takeIf { it > 0L } ?: System.currentTimeMillis()
                 )
                 shieldRepository.insertShield(shield)
             } catch (e: Exception) {

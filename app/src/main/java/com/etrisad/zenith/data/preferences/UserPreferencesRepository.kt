@@ -773,6 +773,7 @@ class UserPreferencesRepository(private val context: Context) {
                     val weekStartStr = dateFormat.format(weekCal.time)
                     val weekEnd = Calendar.getInstance().apply { timeInMillis = weekCal.timeInMillis; add(Calendar.DAY_OF_YEAR, 6) }
                     val weekEndStr = dateFormat.format(weekEnd.time)
+                    if (shield.timeAdded > 0 && weekEnd.timeInMillis < shield.timeAdded) break
                     var weekTotal = history.filter { it.date >= weekStartStr && it.date <= weekEndStr }.sumOf { it.usageTimeMillis }
 
                     if (weekTotal == 0L && oldestHistoryDate != null && weekStartStr >= oldestHistoryDate) {
@@ -798,6 +799,7 @@ class UserPreferencesRepository(private val context: Context) {
                 for (i in 1..shieldStreakLimit) {
                     c.timeInMillis = todayStart; c.add(Calendar.DAY_OF_YEAR, -i)
                     val dStr = dateFormat.format(c.time)
+                    if (shield.timeAdded > 0 && c.timeInMillis < shield.timeAdded) break
                     var usage = history.find { it.date == dStr }?.usageTimeMillis
 
                     if (usage == null) {
