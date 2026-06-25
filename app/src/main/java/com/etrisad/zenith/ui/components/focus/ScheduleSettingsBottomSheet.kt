@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.preferences.UserPreferences
@@ -133,7 +134,8 @@ fun ScheduleSettingsBottomSheet(
                     BasicTextField(
                         value = name,
                         onValueChange = { name = it },
-                        textStyle = MaterialTheme.typography.headlineSmall.copy(
+                        textStyle = MaterialTheme.typography.displayLarge.copy(
+                            fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center
@@ -173,7 +175,9 @@ fun ScheduleSettingsBottomSheet(
                         size = ZenithButtonSize.Medium,
                         shape = RoundedCornerShape(topStart = 28.dp, bottomStart = 8.dp, topEnd = 8.dp, bottomEnd = 8.dp),
                         isLast = false,
-                        isDisableWeight = true
+                        isDisableWeight = true,
+                        containerColor = if (isBlock) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f),
+                        contentColor = if (isBlock) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onTertiaryContainer
                     )
                     ZenithButtonWeighted(
                         onClick = { mode = ScheduleMode.ALLOW },
@@ -183,7 +187,9 @@ fun ScheduleSettingsBottomSheet(
                         size = ZenithButtonSize.Medium,
                         shape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 8.dp, topStart = 8.dp, bottomStart = 8.dp),
                         isFirst = false,
-                        isDisableWeight = true
+                        isDisableWeight = true,
+                        containerColor = if (!isBlock) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f),
+                        contentColor = if (!isBlock) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onTertiaryContainer
                     )
                 }
 
@@ -217,8 +223,10 @@ fun ScheduleSettingsBottomSheet(
                                     startTimeState.hour,
                                     startTimeState.minute
                                 ),
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Bold
+                                style = MaterialTheme.typography.displayLarge.copy(
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             )
                         }
                     }
@@ -247,8 +255,10 @@ fun ScheduleSettingsBottomSheet(
                                     endTimeState.hour,
                                     endTimeState.minute
                                 ),
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Bold
+                                style = MaterialTheme.typography.displayLarge.copy(
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             )
                         }
                     }

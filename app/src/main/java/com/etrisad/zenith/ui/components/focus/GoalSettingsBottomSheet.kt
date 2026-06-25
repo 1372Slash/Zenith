@@ -82,7 +82,6 @@ fun GoalSettingsBottomSheet(
     var minuteText by remember { mutableStateOf((initialMinutes % 60).toString()) }
     var remindersEnabled by remember { mutableStateOf(existingShield?.isRemindersEnabled ?: true) }
     var goalReminderPeriodMinutes by remember { mutableIntStateOf(existingShield?.goalReminderPeriodMinutes ?: 120) }
-    var isGoalDropdownExpanded by remember { mutableStateOf(false) }
 
     var selectedPeriod by remember { mutableStateOf(existingShield?.limitPeriod ?: LimitPeriod.DAILY) }
     var isGoalCallerEnabled by remember { mutableStateOf(existingShield?.isGoalCallerEnabled ?: false) }
@@ -215,7 +214,9 @@ fun GoalSettingsBottomSheet(
                                 size = ZenithButtonSize.Medium,
                                 shape = RoundedCornerShape(topStart = 28.dp, bottomStart = 8.dp, topEnd = 8.dp, bottomEnd = 8.dp),
                                 isLast = false,
-                                isDisableWeight = true
+                                isDisableWeight = true,
+                                containerColor = if (isDaily) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f),
+                                contentColor = if (isDaily) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onTertiaryContainer
                             )
                             ZenithButtonWeighted(
                                 onClick = { selectedPeriod = LimitPeriod.WEEKLY },
@@ -225,7 +226,9 @@ fun GoalSettingsBottomSheet(
                                 size = ZenithButtonSize.Medium,
                                 shape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 8.dp, topStart = 8.dp, bottomStart = 8.dp),
                                 isFirst = false,
-                                isDisableWeight = true
+                                isDisableWeight = true,
+                                containerColor = if (!isDaily) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f),
+                                contentColor = if (!isDaily) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onTertiaryContainer
                             )
                         }
 
@@ -258,7 +261,8 @@ fun GoalSettingsBottomSheet(
                                                 hourText = newValue
                                             }
                                         },
-                                        textStyle = MaterialTheme.typography.headlineMedium.copy(
+                                        textStyle = MaterialTheme.typography.displayLarge.copy(
+                                            fontSize = 24.sp,
                                             fontWeight = FontWeight.Bold,
                                             textAlign = TextAlign.Center,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -295,7 +299,8 @@ fun GoalSettingsBottomSheet(
                                                 }
                                             }
                                         },
-                                        textStyle = MaterialTheme.typography.headlineMedium.copy(
+                                        textStyle = MaterialTheme.typography.displayLarge.copy(
+                                            fontSize = 24.sp,
                                             fontWeight = FontWeight.Bold,
                                             textAlign = TextAlign.Center,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -376,51 +381,12 @@ fun GoalSettingsBottomSheet(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        ExposedDropdownMenuBox(
-                            expanded = isGoalDropdownExpanded,
-                            onExpandedChange = { isGoalDropdownExpanded = it }
-                        ) {
-                            Surface(
-                                modifier = Modifier
-                                    .width(150.dp)
-                                    .height(40.dp)
-                                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                onClick = { isGoalDropdownExpanded = true }
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = goalReminderOptions.find { it.second == goalReminderPeriodMinutes }?.first ?: "Custom",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Icon(
-                                        imageVector = if (isGoalDropdownExpanded) Icons.Outlined.ArrowDropUp else Icons.Outlined.ArrowDropDown,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            }
-                            ExposedDropdownMenu(
-                                expanded = isGoalDropdownExpanded,
-                                onDismissRequest = { isGoalDropdownExpanded = false }
-                            ) {
-                                goalReminderOptions.forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text(option.first) },
-                                        onClick = {
-                                            goalReminderPeriodMinutes = option.second
-                                            isGoalDropdownExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
+                        ZenithDropdown(
+                            options = goalReminderOptions,
+                            selectedOption = goalReminderPeriodMinutes,
+                            onOptionSelected = { goalReminderPeriodMinutes = it },
+                            width = 160.dp
+                        )
                     }
                 }
 

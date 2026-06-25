@@ -1,5 +1,6 @@
 package com.etrisad.zenith.ui.components.focus
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.core.Spring
@@ -25,6 +26,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.background
@@ -82,7 +84,6 @@ fun ShieldSettingsBottomSheet(
     var isDelayAppEnabled by remember { mutableStateOf(existingShield?.isDelayAppEnabled ?: false) }
     var maxUses by remember { mutableStateOf(existingShield?.maxUsesPerPeriod?.toString() ?: "5") }
     var refreshPeriodMinutes by remember { mutableIntStateOf(existingShield?.refreshPeriodMinutes ?: 60) }
-    var isDropdownExpanded by remember { mutableStateOf(false) }
     var selectedPeriod by remember { mutableStateOf(existingShield?.limitPeriod ?: LimitPeriod.DAILY) }
 
     val isPreventEdit = remember(existingShield, usageToday) {
@@ -100,6 +101,8 @@ fun ShieldSettingsBottomSheet(
         "Every 12 Hours" to 720,
         "Every 24 Hours" to 1440
     )
+
+    var isLockDetailExpanded by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -191,7 +194,9 @@ fun ShieldSettingsBottomSheet(
                                 size = ZenithButtonSize.Medium,
                                 shape = RoundedCornerShape(topStart = 28.dp, bottomStart = 8.dp, topEnd = 8.dp, bottomEnd = 8.dp),
                                 isLast = false,
-                                isDisableWeight = true
+                                isDisableWeight = true,
+                                containerColor = if (isDaily) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f),
+                                contentColor = if (isDaily) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onTertiaryContainer
                             )
                             ZenithButtonWeighted(
                                 onClick = { selectedPeriod = LimitPeriod.WEEKLY },
@@ -201,7 +206,9 @@ fun ShieldSettingsBottomSheet(
                                 size = ZenithButtonSize.Medium,
                                 shape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 8.dp, topStart = 8.dp, bottomStart = 8.dp),
                                 isFirst = false,
-                                isDisableWeight = true
+                                isDisableWeight = true,
+                                containerColor = if (!isDaily) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f),
+                                contentColor = if (!isDaily) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onTertiaryContainer
                             )
                         }
 
@@ -234,7 +241,8 @@ fun ShieldSettingsBottomSheet(
                                                 hourText = newValue
                                             }
                                         },
-                                        textStyle = MaterialTheme.typography.headlineMedium.copy(
+                                        textStyle = MaterialTheme.typography.displayLarge.copy(
+                                            fontSize = 24.sp,
                                             fontWeight = FontWeight.Bold,
                                             textAlign = TextAlign.Center,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -271,7 +279,8 @@ fun ShieldSettingsBottomSheet(
                                                 }
                                             }
                                         },
-                                        textStyle = MaterialTheme.typography.headlineMedium.copy(
+                                        textStyle = MaterialTheme.typography.displayLarge.copy(
+                                            fontSize = 24.sp,
                                             fontWeight = FontWeight.Bold,
                                             textAlign = TextAlign.Center,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -409,51 +418,12 @@ fun ShieldSettingsBottomSheet(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        ExposedDropdownMenuBox(
-                            expanded = isDropdownExpanded,
-                            onExpandedChange = { isDropdownExpanded = it }
-                        ) {
-                            Surface(
-                                modifier = Modifier
-                                    .width(160.dp)
-                                    .height(40.dp)
-                                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                onClick = { isDropdownExpanded = true }
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = refreshOptions.find { it.second == refreshPeriodMinutes }?.first ?: "Custom",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Icon(
-                                        imageVector = if (isDropdownExpanded) Icons.Outlined.ArrowDropUp else Icons.Outlined.ArrowDropDown,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            }
-                            ExposedDropdownMenu(
-                                expanded = isDropdownExpanded,
-                                onDismissRequest = { isDropdownExpanded = false }
-                            ) {
-                                refreshOptions.forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text(option.first) },
-                                        onClick = {
-                                            refreshPeriodMinutes = option.second
-                                            isDropdownExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
+                        ZenithDropdown(
+                            options = refreshOptions,
+                            selectedOption = refreshPeriodMinutes,
+                            onOptionSelected = { refreshPeriodMinutes = it },
+                            width = 160.dp
+                        )
                     }
                 }
 
@@ -568,39 +538,6 @@ fun ShieldSettingsBottomSheet(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
-
-                if (isPreventEdit) {
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = containerColor
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 16.dp),
-                        shape = RoundedCornerShape(24.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(20.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Lock,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text(
-                                text = "Shield settings are locked because your remaining limit is less than 50%. You can only save changes that make the shield more restrictive (e.g., lower limit) to prevent bypassing.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                }
-
                 Spacer(modifier = Modifier.height(120.dp))
                     }
 
@@ -685,6 +622,52 @@ fun ShieldSettingsBottomSheet(
                     .padding(16.dp)
                     .navigationBarsPadding()
             ) {
+                if (isPreventEdit) {
+                    Card(
+                        onClick = { isLockDetailExpanded = !isLockDetailExpanded },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Lock,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "Settings are currently restricted",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Icon(
+                                    imageVector = if (isLockDetailExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            AnimatedVisibility(visible = isLockDetailExpanded) {
+                                Column {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "Shield settings are locked because your remaining limit is less than 50%. You can only save changes that make the shield more restrictive (e.g., lower limit) to prevent bypassing.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 ZenithButton(
                     onClick = {
                         onSave(

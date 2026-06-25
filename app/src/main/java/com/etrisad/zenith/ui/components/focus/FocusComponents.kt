@@ -25,6 +25,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Check
@@ -458,6 +459,155 @@ fun RowScope.GroupedOptionButton(
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun <T> ZenithDropdown(
+    options: List<Pair<String, T>>,
+    selectedOption: T,
+    onOptionSelected: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    width: Dp = 150.dp
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedText = options.find { it.second == selectedOption }?.first ?: "Select"
+
+    val menuScale by animateFloatAsState(
+        targetValue = if (expanded) 1f else 0.8f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "menuScale"
+    )
+
+    val menuAlpha by animateFloatAsState(
+        targetValue = if (expanded) 1f else 0f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "menuAlpha"
+    )
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier
+    ) {
+        Surface(
+            modifier = Modifier
+                .width(width)
+                .height(44.dp)
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            onClick = { expanded = true }
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = selectedText,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+                
+                val rotation by animateFloatAsState(
+                    targetValue = if (expanded) 180f else 0f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessLow
+                    ),
+                    label = "Rotation"
+                )
+                
+                Icon(
+                    imageVector = Icons.Filled.ArrowDropDown,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .graphicsLayer { rotationZ = rotation },
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .graphicsLayer {
+                    scaleX = menuScale
+                    scaleY = menuScale
+                    alpha = menuAlpha
+                    transformOrigin = TransformOrigin(0.5f, 0f)
+                }
+                .width(width + 40.dp),
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            shape = RoundedCornerShape(16.dp)
+        ) {
+                options.forEach { option ->
+                    val isSelected = option.second == selectedOption
+
+                    val backgroundColor by animateColorAsState(
+                        targetValue = if (isSelected) MaterialTheme.colorScheme.tertiary
+                                      else Color.Transparent,
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                        label = "itemBg"
+                    )
+
+                    val contentColor by animateColorAsState(
+                        targetValue = if (isSelected) MaterialTheme.colorScheme.onTertiary
+                                      else MaterialTheme.colorScheme.onTertiaryContainer,
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                        label = "itemContent"
+                    )
+
+                    DropdownMenuItem(
+                        text = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                AnimatedVisibility(
+                                    visible = isSelected,
+                                    enter = fadeIn() + scaleIn(initialScale = 0.5f),
+                                    exit = fadeOut() + scaleOut(targetScale = 0.5f)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = contentColor
+                                    )
+                                }
+                                if (isSelected) Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = option.first,
+                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = contentColor
+                                )
+                            }
+                        },
+                        onClick = {
+                            onOptionSelected(option.second)
+                            expanded = false
+                        },
+                        modifier = Modifier
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(backgroundColor)
+                    )
+                }
+            }
+        }
+    }
+
 
 @Composable
 fun AppPickerItem(
