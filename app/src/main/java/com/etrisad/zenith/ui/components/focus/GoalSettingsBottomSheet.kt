@@ -23,6 +23,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.graphics.Color
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import com.etrisad.zenith.data.local.entity.LimitPeriod
@@ -30,7 +33,16 @@ import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.ZenithButton
+import com.etrisad.zenith.ui.components.ZenithButtonSize
+import com.etrisad.zenith.ui.components.ZenithButtonType
+import com.etrisad.zenith.ui.components.ZenithButtonWeighted
+import com.etrisad.zenith.ui.components.ZenithGroupedButton
+import com.etrisad.zenith.ui.components.ZenithToggleButtonGroup
+import com.etrisad.zenith.ui.components.ZenithToggleOption
 import com.etrisad.zenith.ui.viewmodel.AppInfo
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.Brush
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
 import androidx.compose.animation.*
@@ -65,11 +77,9 @@ fun GoalSettingsBottomSheet(
     )
 
     val screenHeight = configuration.screenHeightDp.dp
-    val timePickerState = rememberTimePickerState(
-        initialHour = (existingShield?.timeLimitMinutes ?: 60) / 60,
-        initialMinute = (existingShield?.timeLimitMinutes ?: 60) % 60,
-        is24Hour = true
-    )
+    val initialMinutes = existingShield?.timeLimitMinutes ?: 60
+    var hourText by remember { mutableStateOf((initialMinutes / 60).toString()) }
+    var minuteText by remember { mutableStateOf((initialMinutes % 60).toString()) }
     var remindersEnabled by remember { mutableStateOf(existingShield?.isRemindersEnabled ?: true) }
     var goalReminderPeriodMinutes by remember { mutableIntStateOf(existingShield?.goalReminderPeriodMinutes ?: 120) }
     var isGoalDropdownExpanded by remember { mutableStateOf(false) }
@@ -120,171 +130,296 @@ fun GoalSettingsBottomSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = screenHeight * 0.9f)
         ) {
             Column(
-                modifier = Modifier
-                    .weight(1f, fill = false)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp)
+                modifier = Modifier.fillMaxSize()
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    SubcomposeAsyncImage(
-                        model = "app-icon://${appInfo.packageName}",
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(MaterialTheme.shapes.medium),
-                        contentScale = ContentScale.Crop,
-                        error = {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Outlined.Android, contentDescription = null)
+                // Header
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        SubcomposeAsyncImage(
+                            model = "app-icon://${appInfo.packageName}",
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(RoundedCornerShape(20.dp)),
+                            contentScale = ContentScale.Crop,
+                            error = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(72.dp)
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Android,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                }
                             }
-                        }
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
                         Text(
                             text = appInfo.appName,
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Goal Settings",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = " • ",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = "Today: ${formatRemainingTime(usageToday)}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Goal Settings",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Today: ${formatRemainingTime(usageToday)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
+
+                Box(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        val topShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                        val middleShape = RoundedCornerShape(8.dp)
+                        val bottomShape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 28.dp, bottomEnd = 28.dp)
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        ZenithGroupedButton(size = ZenithButtonSize.Medium) {
+                            val isDaily = selectedPeriod == LimitPeriod.DAILY
+                            ZenithButtonWeighted(
+                                onClick = { selectedPeriod = LimitPeriod.DAILY },
+                                text = "Daily",
+                                type = if (isDaily) ZenithButtonType.Filled else ZenithButtonType.Tonal,
+                                selected = isDaily,
+                                size = ZenithButtonSize.Medium,
+                                shape = RoundedCornerShape(topStart = 28.dp, bottomStart = 8.dp, topEnd = 8.dp, bottomEnd = 8.dp),
+                                isLast = false,
+                                isDisableWeight = true
+                            )
+                            ZenithButtonWeighted(
+                                onClick = { selectedPeriod = LimitPeriod.WEEKLY },
+                                text = "Weekly",
+                                type = if (!isDaily) ZenithButtonType.Filled else ZenithButtonType.Tonal,
+                                selected = !isDaily,
+                                size = ZenithButtonSize.Medium,
+                                shape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 8.dp, topStart = 8.dp, bottomStart = 8.dp),
+                                isFirst = false,
+                                isDisableWeight = true
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Surface(
+                                modifier = Modifier.weight(1f),
+                                shape = middleShape,
+                                color = containerColor
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(vertical = 16.dp, horizontal = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "Hours",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    BasicTextField(
+                                        value = hourText,
+                                        onValueChange = { newValue ->
+                                            if (newValue.all { it.isDigit() } && newValue.length <= 2) {
+                                                hourText = newValue
+                                            }
+                                        },
+                                        textStyle = MaterialTheme.typography.headlineMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Center,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        ),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                modifier = Modifier.weight(1f),
+                                shape = middleShape,
+                                color = containerColor
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(vertical = 16.dp, horizontal = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "Minutes",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    BasicTextField(
+                                        value = minuteText,
+                                        onValueChange = { newValue ->
+                                            if (newValue.all { it.isDigit() } && newValue.length <= 2) {
+                                                if (newValue.isEmpty() || (newValue.toIntOrNull() ?: 0) < 60) {
+                                                    minuteText = newValue
+                                                }
+                                            }
+                                        },
+                                        textStyle = MaterialTheme.typography.headlineMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Center,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        ),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        ZenithGroupedButton(size = ZenithButtonSize.Small) {
+                            val presets = when (selectedPeriod) {
+                                LimitPeriod.DAILY -> listOf(30, 60, 120, 240)
+                                LimitPeriod.WEEKLY -> listOf(120, 300, 600, 1200)
+                            }
+                            presets.forEachIndexed { index, preset ->
+                                val isPresetSelected = ((hourText.toIntOrNull() ?: 0) * 60 + (minuteText.toIntOrNull() ?: 0)) == preset
+                                val pShape = when(index) {
+                                    0 -> RoundedCornerShape(bottomStart = 28.dp, topStart = 8.dp, topEnd = 8.dp, bottomEnd = 8.dp)
+                                    presets.lastIndex -> RoundedCornerShape(bottomEnd = 28.dp, topEnd = 8.dp, topStart = 8.dp, bottomStart = 8.dp)
+                                    else -> RoundedCornerShape(8.dp)
+                                }
+                                ZenithButtonWeighted(
+                                    onClick = {
+                                        hourText = (preset / 60).toString()
+                                        minuteText = (preset % 60).toString()
+                                    },
+                                    text = if (preset >= 60) "${preset / 60}h" else "${preset}m",
+                                    type = if (isPresetSelected) ZenithButtonType.Filled else ZenithButtonType.Tonal,
+                                    size = ZenithButtonSize.Small,
+                                    selected = isPresetSelected,
+                                    shape = pShape,
+                                    isFirst = index == 0,
+                                    isLast = index == presets.lastIndex,
+                                    contentScaleEnabled = false
+                                )
+                            }
+                        }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                Text(
-                    text = "Period",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+                PreferenceCategory(title = "Nudges")
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    LimitPeriod.entries.forEach { period ->
-                        FilterChip(
-                            selected = selectedPeriod == period,
-                            onClick = { selectedPeriod = period },
-                            label = {
-                                Text(
-                                    when (period) {
-                                        LimitPeriod.DAILY -> "Daily"
-                                        LimitPeriod.WEEKLY -> "Weekly"
-                                    }
-                                )
-                            },
-                            shape = CircleShape
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = when (selectedPeriod) {
-                        LimitPeriod.DAILY -> "Daily Goal Target (HH:MM)"
-                        LimitPeriod.WEEKLY -> "Weekly Goal Target (HH:MM)"
-                    },
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    TimeInput(
-                        state = timePickerState,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-                ) {
-                    val presets = when (selectedPeriod) {
-                        LimitPeriod.DAILY -> listOf(30, 60, 120, 240)
-                        LimitPeriod.WEEKLY -> listOf(120, 300, 600, 1200)
-                    }
-                    presets.forEach { preset ->
-                        FilterChip(
-                            selected = (timePickerState.hour * 60 + timePickerState.minute) == preset,
-                            onClick = {
-                                timePickerState.hour = preset / 60
-                                timePickerState.minute = preset % 60
-                            },
-                            label = { Text(if (preset >= 60) "${preset / 60}h" else "${preset}m") },
-                            shape = CircleShape
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                ExposedDropdownMenuBox(
-                    expanded = isGoalDropdownExpanded,
-                    onExpandedChange = { isGoalDropdownExpanded = it },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    OutlinedTextField(
-                        value = goalReminderOptions.find { it.second == goalReminderPeriodMinutes }?.first
-                            ?: "Custom",
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Remind of Goal") },
-                        supportingText = { Text("Zenith will nudge you to open this app") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isGoalDropdownExpanded) },
+                CardGroup(shape = RoundedCornerShape(28.dp), containerColor = containerColor) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
-                        leadingIcon = { Icon(Icons.Outlined.Alarm, contentDescription = null) }
-                    )
-                    ExposedDropdownMenu(
-                        expanded = isGoalDropdownExpanded,
-                        onDismissRequest = { isGoalDropdownExpanded = false }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        goalReminderOptions.forEach { option ->
-                            DropdownMenuItem(
-                                text = { Text(option.first) },
-                                onClick = {
-                                    goalReminderPeriodMinutes = option.second
-                                    isGoalDropdownExpanded = false
-                                }
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Alarm,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.size(20.dp)
                             )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Remind of Goal",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Daily target nudges",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        ExposedDropdownMenuBox(
+                            expanded = isGoalDropdownExpanded,
+                            onExpandedChange = { isGoalDropdownExpanded = it }
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .width(150.dp)
+                                    .height(40.dp)
+                                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                onClick = { isGoalDropdownExpanded = true }
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = goalReminderOptions.find { it.second == goalReminderPeriodMinutes }?.first ?: "Custom",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Icon(
+                                        imageVector = if (isGoalDropdownExpanded) Icons.Outlined.ArrowDropUp else Icons.Outlined.ArrowDropDown,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                            ExposedDropdownMenu(
+                                expanded = isGoalDropdownExpanded,
+                                onDismissRequest = { isGoalDropdownExpanded = false }
+                            ) {
+                                goalReminderOptions.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(option.first) },
+                                        onClick = {
+                                            goalReminderPeriodMinutes = option.second
+                                            isGoalDropdownExpanded = false
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -292,10 +427,6 @@ fun GoalSettingsBottomSheet(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 PreferenceCategory(title = "Settings")
-
-                val topShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-                val middleShape = RoundedCornerShape(8.dp)
-                val bottomShape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 28.dp, bottomEnd = 28.dp)
 
                 CardGroup(shape = topShape, containerColor = containerColor) {
                     SettingsToggle(
@@ -486,19 +617,43 @@ fun GoalSettingsBottomSheet(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(120.dp))
+                    }
+
+                    // Top Scroll Gradient
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(24.dp)
+                            .align(Alignment.TopCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(MaterialTheme.colorScheme.surface, Color.Transparent)
+                                )
+                            )
+                    )
+                }
             }
 
+            // Bottom Save Button with Gradient
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, MaterialTheme.colorScheme.surface),
+                            startY = 0f,
+                            endY = 40f
+                        )
+                    )
                     .padding(16.dp)
                     .navigationBarsPadding()
             ) {
                 ZenithButton(
                     onClick = {
                         onSave(
-                            timePickerState.hour * 60 + timePickerState.minute,
+                            ((hourText.toIntOrNull() ?: 0) * 60 + (minuteText.toIntOrNull() ?: 0)).coerceAtMost(10080),
                             remindersEnabled,
                             goalReminderPeriodMinutes,
                             isGoalCallerEnabled,

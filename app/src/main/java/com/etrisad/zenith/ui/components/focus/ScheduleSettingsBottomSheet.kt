@@ -2,7 +2,6 @@ package com.etrisad.zenith.ui.components.focus
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -28,6 +27,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.intl.Locale
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
@@ -35,6 +35,9 @@ import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
+import com.etrisad.zenith.ui.components.ZenithButtonType
+import com.etrisad.zenith.ui.components.ZenithButtonWeighted
+import com.etrisad.zenith.ui.components.ZenithGroupedButton
 import com.etrisad.zenith.ui.components.ZenithToggleButtonGroup
 import com.etrisad.zenith.ui.components.ZenithToggleOption
 import com.etrisad.zenith.ui.viewmodel.FocusUiState
@@ -69,7 +72,6 @@ fun ScheduleSettingsBottomSheet(
     var mode by remember { mutableStateOf(editingSchedule?.mode ?: ScheduleMode.BLOCK) }
     var maxEmergencyUses by remember { mutableStateOf(editingSchedule?.maxEmergencyUses?.toString() ?: "3") }
     var interceptNotifications by remember { mutableStateOf(editingSchedule?.interceptNotifications ?: false) }
-    var isEditingName by remember { mutableStateOf(false) }
 
     val initialStart = editingSchedule?.startTime?.split(":")?.map { it.toInt() } ?: listOf(9, 0)
     val initialEnd = editingSchedule?.endTime?.split(":")?.map { it.toInt() } ?: listOf(17, 0)
@@ -111,68 +113,91 @@ fun ScheduleSettingsBottomSheet(
         ) {
             Column(
                 modifier = Modifier
-                    .weight(1f, fill = false)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp)
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     val packageNames = uiState.selectedAppsForSchedule.toList()
                     MultiAppIconGroup(
                         packageNames = packageNames,
                         totalCount = packageNames.size,
-                        size = 56.dp,
+                        size = 72.dp,
                         modifier = Modifier
                             .clip(CircleShape)
                             .clickable { onEditApps() }
                     )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { isEditingName = !isEditingName }
-                    ) {
-                        if (isEditingName) {
-                            BasicTextField(
-                                value = name,
-                                onValueChange = { name = it },
-                                textStyle = MaterialTheme.typography.headlineSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                ),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        } else {
-                            Text(
-                                text = name,
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Text(
-                            text = "Schedule Settings",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    BasicTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        textStyle = MaterialTheme.typography.headlineSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Schedule Settings",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
                 }
+            }
+
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+            ) {
+                val topShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                val middleShape = RoundedCornerShape(8.dp)
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                ZenithGroupedButton(size = ZenithButtonSize.Medium) {
+                    val isBlock = mode == ScheduleMode.BLOCK
+                    ZenithButtonWeighted(
+                        onClick = { mode = ScheduleMode.BLOCK },
+                        text = "Block",
+                        type = if (isBlock) ZenithButtonType.Filled else ZenithButtonType.Tonal,
+                        selected = isBlock,
+                        size = ZenithButtonSize.Medium,
+                        shape = RoundedCornerShape(topStart = 28.dp, bottomStart = 8.dp, topEnd = 8.dp, bottomEnd = 8.dp),
+                        isLast = false,
+                        isDisableWeight = true
+                    )
+                    ZenithButtonWeighted(
+                        onClick = { mode = ScheduleMode.ALLOW },
+                        text = "Allow",
+                        type = if (!isBlock) ZenithButtonType.Filled else ZenithButtonType.Tonal,
+                        selected = !isBlock,
+                        size = ZenithButtonSize.Medium,
+                        shape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 8.dp, topStart = 8.dp, bottomStart = 8.dp),
+                        isFirst = false,
+                        isDisableWeight = true
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(0.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Surface(
                         onClick = { showStartTimePicker.value = true },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(
-                            topStart = 24.dp,
-                            bottomStart = 24.dp,
-                            topEnd = 8.dp,
-                            bottomEnd = 8.dp
-                        ),
-                        color = containerColor.copy(alpha = 0.6f)
+                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 28.dp, bottomEnd = 8.dp),
+                        color = containerColor
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
@@ -198,18 +223,11 @@ fun ScheduleSettingsBottomSheet(
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(4.dp))
-
                     Surface(
                         onClick = { showEndTimePicker.value = true },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(
-                            topEnd = 24.dp,
-                            bottomEnd = 24.dp,
-                            topStart = 8.dp,
-                            bottomStart = 8.dp
-                        ),
-                        color = containerColor.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 8.dp, bottomEnd = 28.dp),
+                        color = containerColor
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
@@ -238,42 +256,62 @@ fun ScheduleSettingsBottomSheet(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                Text(
-                    text = "Schedule Mode",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+                PreferenceCategory(title = "Limits")
 
-                ZenithToggleButtonGroup(
-                    options = listOf(
-                        ZenithToggleOption(text = "Block", icon = Icons.Outlined.Block),
-                        ZenithToggleOption(text = "Allow", icon = Icons.Outlined.CheckCircleOutline)
-                    ),
-                    selectedIndices = setOf(if (mode == ScheduleMode.BLOCK) 0 else 1),
-                    onToggle = { index -> mode = if (index == 0) ScheduleMode.BLOCK else ScheduleMode.ALLOW },
-                    size = ZenithButtonSize.Medium
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-                OutlinedTextField(
-                    value = maxEmergencyUses,
-                    onValueChange = { if (it.all { char -> char.isDigit() }) maxEmergencyUses = it },
-                    label = { Text("Max Emergency Uses") },
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                    ),
-                    leadingIcon = { Icon(Icons.Outlined.Bolt, contentDescription = null) },
-                    supportingText = {
-                        Text(
-                            if (mode == ScheduleMode.ALLOW)
-                                "Apps not in the list will be limited to this many uses"
-                            else "Selected apps can be used this many times in emergency"
-                        )
+                CardGroup(shape = RoundedCornerShape(28.dp), containerColor = containerColor) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Bolt,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Emergency Uses",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = if (mode == ScheduleMode.ALLOW) "Uses for non-whitelisted apps" else "Uses for blocked apps",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Surface(
+                            modifier = Modifier.width(72.dp).height(40.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                BasicTextField(
+                                    value = maxEmergencyUses,
+                                    onValueChange = { if (it.all { char -> char.isDigit() }) maxEmergencyUses = it },
+                                    textStyle = MaterialTheme.typography.titleMedium.copy(
+                                        textAlign = TextAlign.Center,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
                     }
-                )
+                }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
@@ -303,7 +341,7 @@ fun ScheduleSettingsBottomSheet(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(120.dp))
             }
 
             Column(
@@ -337,20 +375,5 @@ fun ScheduleSettingsBottomSheet(
             }
         }
     }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun TimePickerDialog(
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
-    content: @Composable () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onConfirm) { Text("OK") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-        text = { content() }
-    )
 }
 

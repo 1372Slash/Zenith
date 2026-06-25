@@ -177,7 +177,7 @@ fun RowScope.ZenithButtonWeighted(
         label = "wAnim"
     )
 
-    val finalModifier = if (isDisableWeight) modifier else modifier.weight(animatedWeight)
+    val finalModifier = if (isDisableWeight) modifier.weight(weight) else modifier.weight(animatedWeight)
 
     ZenithButtonCore(
         onClick = {

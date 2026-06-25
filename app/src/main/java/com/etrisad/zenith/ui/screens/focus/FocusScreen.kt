@@ -610,8 +610,9 @@ fun FocusScreenContent(
                         placementSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow)
                     )
                 ) {
+                    val onEdit = { if (isSelectionMode) onToggleScheduleSelection(schedule.id) else onEditSchedule(schedule) }
                     SwipeableItemContainer(
-                        onEdit = { onEditSchedule(schedule) },
+                        onEdit = onEdit,
                         onDelete = { onDeleteSchedule(schedule) },
                         shape = shape,
                         enabled = !isSelectionMode
@@ -619,7 +620,7 @@ fun FocusScreenContent(
                         ScheduleItem(
                             schedule = schedule,
                             shape = shape,
-                            onEdit = { if (isSelectionMode) onToggleScheduleSelection(schedule.id) else onEditSchedule(schedule) },
+                            onEdit = onEdit,
                             onDelete = { onDeleteSchedule(schedule) },
                             onLongClick = { onScheduleLongClick(schedule.id) },
                             isSelectionMode = isSelectionMode,
