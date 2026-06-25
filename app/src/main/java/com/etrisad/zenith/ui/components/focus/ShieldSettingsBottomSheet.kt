@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.background
+import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
@@ -40,7 +41,7 @@ fun ShieldSettingsBottomSheet(
     usageToday: Long,
     existingShield: ShieldEntity?,
     onDismiss: () -> Unit,
-    onSave: (Int, Int, Boolean, Boolean, Boolean, Int, Int, Boolean) -> Unit
+    onSave: (Int, Int, Boolean, Boolean, Boolean, Int, Int, Boolean, LimitPeriod) -> Unit
 ) {
     val configuration = LocalConfiguration.current
     val context = LocalContext.current
@@ -71,6 +72,7 @@ fun ShieldSettingsBottomSheet(
     var maxUses by remember { mutableStateOf(existingShield?.maxUsesPerPeriod?.toString() ?: "5") }
     var refreshPeriodMinutes by remember { mutableIntStateOf(existingShield?.refreshPeriodMinutes ?: 60) }
     var isDropdownExpanded by remember { mutableStateOf(false) }
+    var selectedPeriod by remember { mutableStateOf(existingShield?.limitPeriod ?: LimitPeriod.DAILY) }
 
     val isPreventEdit = remember(existingShield, usageToday) {
         if (existingShield != null) {
@@ -154,7 +156,41 @@ fun ShieldSettingsBottomSheet(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
-                    text = "Daily Time Limit (HH:MM)",
+                    text = "Period",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    LimitPeriod.entries.forEach { period ->
+                        FilterChip(
+                            selected = selectedPeriod == period,
+                            onClick = { selectedPeriod = period },
+                            label = {
+                                Text(
+                                    when (period) {
+                                        LimitPeriod.DAILY -> "Daily"
+                                        LimitPeriod.WEEKLY -> "Weekly"
+                                    }
+                                )
+                            },
+                            shape = CircleShape
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = when (selectedPeriod) {
+                        LimitPeriod.DAILY -> "Daily Time Limit (HH:MM)"
+                        LimitPeriod.WEEKLY -> "Weekly Time Limit (HH:MM)"
+                    },
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
@@ -175,7 +211,10 @@ fun ShieldSettingsBottomSheet(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
                 ) {
-                    val presets = listOf(15, 30, 60, 120)
+                    val presets = when (selectedPeriod) {
+                        LimitPeriod.DAILY -> listOf(15, 30, 60, 120)
+                        LimitPeriod.WEEKLY -> listOf(60, 120, 300, 600)
+                    }
                     presets.forEach { preset ->
                         FilterChip(
                             selected = (timePickerState.hour * 60 + timePickerState.minute) == preset,
@@ -352,7 +391,7 @@ fun ShieldSettingsBottomSheet(
             val canSave = remember(
                 existingShield, isPreventEdit, currentLimit, currentMaxUses, currentMaxEmergency,
                 remindersEnabled, strictModeEnabled, autoQuitEnabled, isDelayAppEnabled,
-                refreshPeriodMinutes
+                refreshPeriodMinutes, selectedPeriod
             ) {
                 if (existingShield == null) {
                     currentLimit > 0
@@ -378,6 +417,7 @@ fun ShieldSettingsBottomSheet(
 
                     val remindersChanged = remindersEnabled != existingShield.isRemindersEnabled
                     val refreshChanged = refreshPeriodMinutes != existingShield.refreshPeriodMinutes
+                    val periodChanged = selectedPeriod != existingShield.limitPeriod
 
                     val hasPositiveChange = limitDecreased || usesDecreased || emergencyDecreased ||
                             strictEnabled || autoQuitEnabledNew || delayEnabledNew || remindersEnabledNew
@@ -385,7 +425,7 @@ fun ShieldSettingsBottomSheet(
                     val hasNegativeChange = limitIncreased || usesIncreased || emergencyIncreased ||
                             strictDisabled || autoQuitDisabled || delayDisabled || (!remindersEnabledNew && remindersChanged)
 
-                    val hasAnyChange = hasPositiveChange || hasNegativeChange || remindersChanged || refreshChanged
+                    val hasAnyChange = hasPositiveChange || hasNegativeChange || remindersChanged || refreshChanged || periodChanged
 
                     if (isPreventEdit) {
                         hasPositiveChange && !hasNegativeChange
@@ -411,7 +451,8 @@ fun ShieldSettingsBottomSheet(
                             autoQuitEnabled,
                             currentMaxUses,
                             refreshPeriodMinutes,
-                            isDelayAppEnabled
+                            isDelayAppEnabled,
+                            selectedPeriod
                         )
                         scope.launch {
                             sheetState.hide()

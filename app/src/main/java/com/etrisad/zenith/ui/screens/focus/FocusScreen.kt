@@ -256,7 +256,7 @@ fun FocusScreen(
                     usageToday = uiState.selectedAppUsageToday,
                     existingShield = existingShield,
                     onDismiss = { viewModel.closeSettingsSheet() },
-                    onSave = { limit, reminders, goalReminder, isCaller, isSound, soundUri ->
+                    onSave = { limit, reminders, goalReminder, isCaller, isSound, soundUri, period ->
                         viewModel.saveFocus(
                             packageName = appInfo.packageName,
                             appName = appInfo.appName,
@@ -271,7 +271,8 @@ fun FocusScreen(
                             isDelayAppEnabled = false,
                             isGoalCallerEnabled = isCaller,
                             isGoalCallerSoundEnabled = isSound,
-                            goalCallerSoundUri = soundUri
+                            goalCallerSoundUri = soundUri,
+                            limitPeriod = period
                         )
                     }
                 )
@@ -281,7 +282,7 @@ fun FocusScreen(
                     usageToday = uiState.selectedAppUsageToday,
                     existingShield = existingShield,
                     onDismiss = { viewModel.closeSettingsSheet() },
-                    onSave = { limit, emergency, reminders, strict, autoQuit, maxUses, refresh, delayApp ->
+                    onSave = { limit, emergency, reminders, strict, autoQuit, maxUses, refresh, delayApp, period ->
                         viewModel.saveFocus(
                             packageName = appInfo.packageName,
                             appName = appInfo.appName,
@@ -293,7 +294,8 @@ fun FocusScreen(
                             maxUsesPerPeriod = maxUses,
                             refreshPeriodMinutes = refresh,
                             goalReminderPeriodMinutes = 120,
-                            isDelayAppEnabled = delayApp
+                            isDelayAppEnabled = delayApp,
+                            limitPeriod = period
                         )
                     }
                 )
@@ -1123,6 +1125,10 @@ fun ShieldConfigItem(
                     val hours = shield.timeLimitMinutes / 60
                     val mins = shield.timeLimitMinutes % 60
                     val typeText = if (shield.type == FocusType.GOAL) "target" else "limit"
+                    val periodText = when (shield.limitPeriod) {
+                        com.etrisad.zenith.data.local.entity.LimitPeriod.DAILY -> "/day"
+                        com.etrisad.zenith.data.local.entity.LimitPeriod.WEEKLY -> "/week"
+                    }
                     val limitText = if (hours > 0) "${hours}h ${mins}m $typeText" else "${mins}m $typeText"
 
                     val statusText = if (shield.type == FocusType.GOAL) {
@@ -1132,7 +1138,7 @@ fun ShieldConfigItem(
                     }
 
                     Text(
-                        text = "$limitText • $statusText",
+                        text = "$limitText$periodText • $statusText",
                         style = MaterialTheme.typography.bodySmall,
                         color = secondaryColor
                     )

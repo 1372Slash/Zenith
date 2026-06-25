@@ -391,7 +391,7 @@ fun AppDetailScreen(
                 usageToday = uiState.todayUsage,
                 existingShield = existingShield,
                 onDismiss = { viewModel.closeSettingsSheet() },
-                onSave = { limit, reminders, goalReminder, isCaller, isSound, soundUri ->
+                onSave = { limit, reminders, goalReminder, isCaller, isSound, soundUri, period ->
                     viewModel.saveFocus(
                         packageName = uiState.packageName,
                         appName = uiState.appName,
@@ -406,7 +406,8 @@ fun AppDetailScreen(
                         isDelayAppEnabled = false,
                         isGoalCallerEnabled = isCaller,
                         isGoalCallerSoundEnabled = isSound,
-                        goalCallerSoundUri = soundUri
+                        goalCallerSoundUri = soundUri,
+                        limitPeriod = period
                     )
                 }
             )
@@ -416,7 +417,7 @@ fun AppDetailScreen(
                 usageToday = uiState.todayUsage,
                 existingShield = existingShield,
                 onDismiss = { viewModel.closeSettingsSheet() },
-                onSave = { limit, emergency, reminders, strict, autoQuit, maxUses, refresh, delayApp ->
+                onSave = { limit, emergency, reminders, strict, autoQuit, maxUses, refresh, delayApp, period ->
                     viewModel.saveFocus(
                         packageName = uiState.packageName,
                         appName = uiState.appName,
@@ -428,7 +429,8 @@ fun AppDetailScreen(
                         maxUsesPerPeriod = maxUses,
                         refreshPeriodMinutes = refresh,
                         goalReminderPeriodMinutes = 120,
-                        isDelayAppEnabled = delayApp
+                        isDelayAppEnabled = delayApp,
+                        limitPeriod = period
                     )
                 }
             )

@@ -19,6 +19,7 @@ import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
+import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
@@ -779,6 +780,18 @@ class ZenithAccessibilityService : AccessibilityService() {
     }
 
     private fun getTotalUsageToday(packageName: String): Long {
+        val shield = SharedMonitoringState.allShieldsCache[packageName]
+        if (shield != null && shield.limitPeriod == LimitPeriod.WEEKLY) {
+            val todayUsage = getSystemUsageToday(packageName)
+            val weeklyTotal = kotlinx.coroutines.runBlocking {
+                try {
+                    shieldRepository.getWeeklyUsageLive(packageName, todayUsage)
+                } catch (_: Exception) { 0L }
+            }
+            if (weeklyTotal > 0) return weeklyTotal
+            return todayUsage
+        }
+
         val currentTime = System.currentTimeMillis()
         val cfg = SharedMonitoringState.performanceConfig
         val cacheDuration = cfg.usageStatsCacheMs.coerceIn(30000L, 3600000L)
@@ -799,6 +812,10 @@ class ZenithAccessibilityService : AccessibilityService() {
             SharedMonitoringState.lastDailyUsageFetchTime = currentTime
         }
 
+        return SharedMonitoringState.dailyUsageCache[packageName] ?: 0L
+    }
+
+    private fun getSystemUsageToday(packageName: String): Long {
         return SharedMonitoringState.dailyUsageCache[packageName] ?: 0L
     }
 

@@ -29,6 +29,12 @@ interface ShieldDao {
     @Query("UPDATE shields SET remainingTimeMillis = timeLimitMinutes * 60 * 1000")
     suspend fun resetAllRemainingTimes()
 
+    @Query("UPDATE shields SET remainingTimeMillis = timeLimitMinutes * 60 * 1000 WHERE limitPeriod = 'DAILY'")
+    suspend fun resetDailyRemainingTimes()
+
+    @Query("UPDATE shields SET remainingTimeMillis = timeLimitMinutes * 60 * 1000 WHERE limitPeriod = 'WEEKLY'")
+    suspend fun resetWeeklyRemainingTimes()
+
     @Delete
     suspend fun deleteShield(shield: ShieldEntity)
 

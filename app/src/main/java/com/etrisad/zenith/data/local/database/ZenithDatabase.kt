@@ -29,7 +29,7 @@ import com.etrisad.zenith.data.local.Converters
         HourlyUsageEntity::class,
         InterceptedNotificationEntity::class
     ],
-    version = 25,
+    version = 26,
     exportSchema = true,
     autoMigrations = [
         androidx.room.AutoMigration(from = 12, to = 13),
@@ -54,6 +54,14 @@ abstract class ZenithDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var INSTANCE: ZenithDatabase? = null
+
+        private val MIGRATION_25_26 = object : Migration(25, 26) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN limitPeriod TEXT NOT NULL DEFAULT 'DAILY'")
+                } catch (_: Exception) {}
+            }
+        }
 
         private val MIGRATION_24_25 = object : Migration(24, 25) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -246,7 +254,7 @@ abstract class ZenithDatabase : RoomDatabase() {
                         MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
                         MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18,
                         MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
-                        MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25
+                        MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26
                     )
                     .setQueryExecutor(Executors.newFixedThreadPool(4))
                     .setTransactionExecutor(Executors.newSingleThreadExecutor())

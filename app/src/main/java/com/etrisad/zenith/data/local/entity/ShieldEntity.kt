@@ -11,6 +11,11 @@ enum class FocusType {
 }
 
 @Keep
+enum class LimitPeriod {
+    DAILY, WEEKLY
+}
+
+@Keep
 @Entity(
     tableName = "shields",
     indices = [Index(value = ["packageName"], unique = true)]
@@ -51,5 +56,7 @@ data class ShieldEntity(
     val isGoalCallerEnabled: Boolean = false,
     @androidx.room.ColumnInfo(defaultValue = "1")
     val isGoalCallerSoundEnabled: Boolean = true,
-    val goalCallerSoundUri: String? = null
+    val goalCallerSoundUri: String? = null,
+    @androidx.room.ColumnInfo(defaultValue = "DAILY")
+    val limitPeriod: LimitPeriod = LimitPeriod.DAILY
 )

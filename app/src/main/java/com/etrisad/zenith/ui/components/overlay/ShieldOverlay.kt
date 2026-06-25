@@ -39,6 +39,7 @@ import coil.request.ImageRequest
 import com.etrisad.zenith.data.CalendarEventProvider
 import com.etrisad.zenith.data.CurrentCalendarEvent
 import com.etrisad.zenith.data.local.entity.FocusType
+import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
@@ -110,9 +111,16 @@ fun ShieldOverlay(
             val detailedUsage = withContext(Dispatchers.IO) {
                 com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm)
             }
-            
+
             val s = shieldRepository.getShieldByPackageNameFlow(packageName).first()
-            val liveAppUsage = detailedUsage.appUsageMap[packageName] ?: 0L
+            val dailyUsage = detailedUsage.appUsageMap[packageName] ?: 0L
+            val liveAppUsage = if (s != null && s.limitPeriod == LimitPeriod.WEEKLY) {
+                withContext(Dispatchers.IO) {
+                    shieldRepository.getWeeklyUsageLive(packageName, dailyUsage.coerceAtMost(timeSinceMidnight))
+                }
+            } else {
+                dailyUsage
+            }
 
             value = ShieldOverlayCombinedState(
                 shield = s ?: shield,
@@ -791,6 +799,7 @@ fun ShieldProgressSection(
     totalGlobalUsageToday: Long,
     userPrefs: UserPreferences
 ) {
+    val periodLabel = if (shield?.limitPeriod == LimitPeriod.WEEKLY) "this week" else "today"
     val totalLimitMillis = shield?.let { it.timeLimitMinutes * 60 * 1000L } ?: 0L
     val remainingMillis = if (totalLimitMillis > 0) (totalLimitMillis - totalUsageToday).coerceAtLeast(0L) else 0L
     val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
@@ -800,7 +809,8 @@ fun ShieldProgressSection(
             totalUsageToday = totalUsageToday,
             totalLimitMillis = totalLimitMillis,
             remainingMillis = remainingMillis,
-            progress = progress
+            progress = progress,
+            limitPeriod = shield?.limitPeriod ?: LimitPeriod.DAILY
         )
     } else {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -817,7 +827,7 @@ fun ShieldProgressSection(
                 TotalUsagePill(totalGlobalUsageToday, userPrefs)
                 if (totalLimitMillis > 0) {
                     Text(
-                        text = "${formatMillis(remainingMillis)} left today",
+                        text = "${formatMillis(remainingMillis)} left $periodLabel",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.align(Alignment.CenterEnd)
@@ -852,7 +862,8 @@ private fun ShieldFullScreenProgress(
     totalUsageToday: Long,
     totalLimitMillis: Long,
     remainingMillis: Long,
-    progress: Float
+    progress: Float,
+    limitPeriod: LimitPeriod = LimitPeriod.DAILY
 ) {
     val animatedProgress = animateFloatAsState(
         targetValue = progress.coerceIn(0f, 1f),
@@ -875,7 +886,7 @@ private fun ShieldFullScreenProgress(
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "used today",
+                    text = if (limitPeriod == LimitPeriod.WEEKLY) "used this week" else "used today",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Medium
@@ -913,7 +924,8 @@ fun ShieldProgressMini(shield: ShieldEntity?, totalUsageToday: Long, totalGlobal
             totalUsageToday = totalUsageToday,
             totalLimitMillis = totalLimitMillis,
             remainingMillis = remainingMillis,
-            progress = progress
+            progress = progress,
+            limitPeriod = shield?.limitPeriod ?: LimitPeriod.DAILY
         )
     } else {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -959,7 +971,8 @@ private fun ShieldFullScreenProgressMini(
     totalUsageToday: Long,
     totalLimitMillis: Long,
     remainingMillis: Long,
-    progress: Float
+    progress: Float,
+    limitPeriod: LimitPeriod = LimitPeriod.DAILY
 ) {
     val animatedProgress = animateFloatAsState(
         targetValue = progress.coerceIn(0f, 1f),
@@ -982,7 +995,7 @@ private fun ShieldFullScreenProgressMini(
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "used today",
+                    text = if (limitPeriod == LimitPeriod.WEEKLY) "used this week" else "used today",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Medium
@@ -1050,7 +1063,8 @@ fun ShieldLandscapeContent(
                 isTimeLimitReached = isTimeLimitReached,
                 refreshTimeLeftMillis = refreshTimeLeftMillis,
                 isIncentiveLocked = isIncentiveLocked,
-                incentiveProgress = incentiveProgress
+                incentiveProgress = incentiveProgress,
+                limitPeriod = shield?.limitPeriod ?: LimitPeriod.DAILY
             )
             if (shield != null && shield.emergencyUseCount > 0) {
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1108,7 +1122,7 @@ fun LimitReachedSection(
         CurrentEventPill(currentEvent = currentEvent)
     }
     Spacer(modifier = Modifier.height(24.dp))
-    LimitReachedContent(isUsesExceeded, isTimeLimitReached, refreshTimeLeftMillis, isIncentiveLocked, incentiveProgress)
+    LimitReachedContent(isUsesExceeded, isTimeLimitReached, refreshTimeLeftMillis, isIncentiveLocked, incentiveProgress, shield?.limitPeriod ?: LimitPeriod.DAILY)
     if (shield != null && shield.emergencyUseCount > 0) {
         Spacer(modifier = Modifier.height(16.dp))
         EmergencyButton(onEmergencyUse = onEmergencyClick, onHoldingChange = onEmergencyHoldingChange)
@@ -1121,7 +1135,8 @@ fun LimitReachedContent(
     isTimeLimitReached: Boolean,
     refreshTimeLeftMillis: Long,
     isIncentiveLocked: Boolean = false,
-    incentiveProgress: Float = 0f
+    incentiveProgress: Float = 0f,
+    limitPeriod: LimitPeriod = LimitPeriod.DAILY
 ) {
     if (isIncentiveLocked) {
         val percentage = (incentiveProgress * 100).toInt()
@@ -1169,7 +1184,7 @@ fun LimitReachedContent(
         )
     } else {
         Text(
-            text = "Daily limit reached.\nCome back tomorrow.",
+            text = if (limitPeriod == LimitPeriod.WEEKLY) "Weekly limit reached.\nCome back next week." else "Daily limit reached.\nCome back tomorrow.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.error,
             fontWeight = FontWeight.Bold,

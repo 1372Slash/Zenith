@@ -124,6 +124,21 @@ class ShieldRepository(
         return hourlyUsageDao.getUsageSince(packageName, date, hour) ?: 0L
     }
 
+    suspend fun getWeeklyUsageForPackage(packageName: String): Long {
+        val cal = java.util.Calendar.getInstance()
+        cal.firstDayOfWeek = java.util.Calendar.MONDAY
+        cal.set(java.util.Calendar.DAY_OF_WEEK, java.util.Calendar.MONDAY)
+        val weekStart = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
+        return dailyUsageDao.getTotalUsageSince(packageName, weekStart)
+    }
+
+    suspend fun getWeeklyUsageLive(packageName: String, todayLiveUsage: Long): Long {
+        val weeklyFromDb = getWeeklyUsageForPackage(packageName)
+        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val todayFromDb = dailyUsageDao.getUsageTimeByDateAndPackage(todayStr, packageName) ?: 0L
+        return weeklyFromDb - todayFromDb + todayLiveUsage
+    }
+
     suspend fun deleteDailyUsageForDate(date: String) {
         dailyUsageDao.deleteUsageForDate(date)
     }
@@ -171,6 +186,14 @@ class ShieldRepository(
 
     suspend fun resetAllRemainingTimes() {
         shieldDao.resetAllRemainingTimes()
+    }
+
+    suspend fun resetDailyRemainingTimes() {
+        shieldDao.resetDailyRemainingTimes()
+    }
+
+    suspend fun resetWeeklyRemainingTimes() {
+        shieldDao.resetWeeklyRemainingTimes()
     }
 
     suspend fun deleteShield(shield: ShieldEntity) {

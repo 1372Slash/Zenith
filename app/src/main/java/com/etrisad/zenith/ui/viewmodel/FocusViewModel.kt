@@ -7,6 +7,7 @@ import android.graphics.drawable.Drawable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.etrisad.zenith.data.local.entity.FocusType
+import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.local.entity.ShieldEntity
@@ -450,7 +451,8 @@ class FocusViewModel(
         isDelayAppEnabled: Boolean = false,
         isGoalCallerEnabled: Boolean = false,
         isGoalCallerSoundEnabled: Boolean = true,
-        goalCallerSoundUri: String? = null
+        goalCallerSoundUri: String? = null,
+        limitPeriod: LimitPeriod = LimitPeriod.DAILY
     ) {
         val type = _uiState.value.selectedFocusType
         viewModelScope.launch {
@@ -466,17 +468,19 @@ class FocusViewModel(
                     } else true
                 } ?: false
 
+                val periodChanged = existing != null && existing.limitPeriod != limitPeriod
                 val shield = ShieldEntity(
                     packageName = packageName,
                     appName = appName,
                     type = type,
                     timeLimitMinutes = timeLimitMinutes,
+                    limitPeriod = limitPeriod,
                     emergencyUseCount = existing?.emergencyUseCount ?: (if (type == FocusType.SHIELD) maxEmergencyUses else 0),
                     maxEmergencyUses = if (type == FocusType.SHIELD) maxEmergencyUses else 0,
                     isRemindersEnabled = isRemindersEnabled,
                     isStrictModeEnabled = if (type == FocusType.SHIELD) isStrictModeEnabled else false,
                     isAutoQuitEnabled = if (type == FocusType.SHIELD) isAutoQuitEnabled else false,
-                    remainingTimeMillis = existing?.remainingTimeMillis ?: (timeLimitMinutes * 60 * 1000L),
+                    remainingTimeMillis = if (periodChanged) timeLimitMinutes * 60 * 1000L else (existing?.remainingTimeMillis ?: (timeLimitMinutes * 60 * 1000L)),
                     lastUsedTimestamp = System.currentTimeMillis(),
                     maxUsesPerPeriod = if (type == FocusType.SHIELD) maxUsesPerPeriod else 0,
                     refreshPeriodMinutes = if (type == FocusType.SHIELD) refreshPeriodMinutes else 0,

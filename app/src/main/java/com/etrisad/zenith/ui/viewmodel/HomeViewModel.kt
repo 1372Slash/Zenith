@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.entity.FocusType
+import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.local.entity.DailyUsageEntity
 import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
 import com.etrisad.zenith.data.repository.ShieldRepository
@@ -1822,14 +1823,17 @@ class HomeViewModel(
         packageName: String, appName: String, timeLimitMinutes: Int, maxEmergencyUses: Int, isRemindersEnabled: Boolean,
         isStrictModeEnabled: Boolean, isAutoQuitEnabled: Boolean, maxUsesPerPeriod: Int, refreshPeriodMinutes: Int,
         goalReminderPeriodMinutes: Int, isDelayAppEnabled: Boolean, isGoalCallerEnabled: Boolean = false,
-        isGoalCallerSoundEnabled: Boolean = true, goalCallerSoundUri: String? = null
+        isGoalCallerSoundEnabled: Boolean = true, goalCallerSoundUri: String? = null,
+        limitPeriod: LimitPeriod = LimitPeriod.DAILY
     ) {
         val type = _appDetailUiState.value.type ?: FocusType.SHIELD
         viewModelScope.launch {
             try {
                 val existing = shieldRepository.getShieldByPackageName(packageName)
-                val shield = existing?.copy(timeLimitMinutes = timeLimitMinutes, maxEmergencyUses = maxEmergencyUses, isRemindersEnabled = isRemindersEnabled, isStrictModeEnabled = isStrictModeEnabled, isAutoQuitEnabled = isAutoQuitEnabled, maxUsesPerPeriod = maxUsesPerPeriod, refreshPeriodMinutes = refreshPeriodMinutes, goalReminderPeriodMinutes = goalReminderPeriodMinutes, isDelayAppEnabled = isDelayAppEnabled, isGoalCallerEnabled = isGoalCallerEnabled, isGoalCallerSoundEnabled = isGoalCallerSoundEnabled, goalCallerSoundUri = goalCallerSoundUri)
-                    ?: ShieldEntity(packageName = packageName, appName = appName, type = type, timeLimitMinutes = timeLimitMinutes, maxEmergencyUses = maxEmergencyUses, isRemindersEnabled = isRemindersEnabled, isStrictModeEnabled = isStrictModeEnabled, isAutoQuitEnabled = isAutoQuitEnabled, maxUsesPerPeriod = maxUsesPerPeriod, refreshPeriodMinutes = refreshPeriodMinutes, goalReminderPeriodMinutes = goalReminderPeriodMinutes, isDelayAppEnabled = isDelayAppEnabled, isGoalCallerEnabled = isGoalCallerEnabled, isGoalCallerSoundEnabled = isGoalCallerSoundEnabled, goalCallerSoundUri = goalCallerSoundUri)
+                val periodChanged = existing != null && existing.limitPeriod != limitPeriod
+                val newRemainingMillis = if (periodChanged) timeLimitMinutes * 60 * 1000L else (existing?.remainingTimeMillis ?: (timeLimitMinutes * 60 * 1000L))
+                val shield = existing?.copy(timeLimitMinutes = timeLimitMinutes, limitPeriod = limitPeriod, remainingTimeMillis = newRemainingMillis, maxEmergencyUses = maxEmergencyUses, isRemindersEnabled = isRemindersEnabled, isStrictModeEnabled = isStrictModeEnabled, isAutoQuitEnabled = isAutoQuitEnabled, maxUsesPerPeriod = maxUsesPerPeriod, refreshPeriodMinutes = refreshPeriodMinutes, goalReminderPeriodMinutes = goalReminderPeriodMinutes, isDelayAppEnabled = isDelayAppEnabled, isGoalCallerEnabled = isGoalCallerEnabled, isGoalCallerSoundEnabled = isGoalCallerSoundEnabled, goalCallerSoundUri = goalCallerSoundUri)
+                    ?: ShieldEntity(packageName = packageName, appName = appName, type = type, timeLimitMinutes = timeLimitMinutes, limitPeriod = limitPeriod, maxEmergencyUses = maxEmergencyUses, isRemindersEnabled = isRemindersEnabled, isStrictModeEnabled = isStrictModeEnabled, isAutoQuitEnabled = isAutoQuitEnabled, maxUsesPerPeriod = maxUsesPerPeriod, refreshPeriodMinutes = refreshPeriodMinutes, goalReminderPeriodMinutes = goalReminderPeriodMinutes, isDelayAppEnabled = isDelayAppEnabled, isGoalCallerEnabled = isGoalCallerEnabled, isGoalCallerSoundEnabled = isGoalCallerSoundEnabled, goalCallerSoundUri = goalCallerSoundUri)
                 shieldRepository.insertShield(shield); triggerServiceRefresh()
             } catch (e: Exception) { android.util.Log.e("HomeViewModel", "Error saving focus: ${e.message}") } finally { closeSettingsSheet() }
         }

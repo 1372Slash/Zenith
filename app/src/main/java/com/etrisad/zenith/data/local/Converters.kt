@@ -26,4 +26,18 @@ class Converters {
             com.etrisad.zenith.data.local.entity.FocusType.SHIELD
         }
     }
+
+    @TypeConverter
+    fun fromLimitPeriod(period: com.etrisad.zenith.data.local.entity.LimitPeriod): String {
+        return period.name
+    }
+
+    @TypeConverter
+    fun toLimitPeriod(value: String): com.etrisad.zenith.data.local.entity.LimitPeriod {
+        return try {
+            com.etrisad.zenith.data.local.entity.LimitPeriod.valueOf(value)
+        } catch (e: Exception) {
+            com.etrisad.zenith.data.local.entity.LimitPeriod.DAILY
+        }
+    }
 }

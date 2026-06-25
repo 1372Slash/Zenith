@@ -48,7 +48,11 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
 
         if (currentHour == 0 && currentMinute < 15) {
             try {
-                database.shieldDao().resetAllRemainingTimes()
+                database.shieldDao().resetDailyRemainingTimes()
+                val cal = Calendar.getInstance()
+                if (cal.get(Calendar.DAY_OF_WEEK) == Calendar.MONDAY) {
+                    database.shieldDao().resetWeeklyRemainingTimes()
+                }
                 val prefsRepo = UserPreferencesRepository(applicationContext)
                 prefsRepo.setIncentiveLockGoalsMetToday(false)
             } catch (_: Exception) {}

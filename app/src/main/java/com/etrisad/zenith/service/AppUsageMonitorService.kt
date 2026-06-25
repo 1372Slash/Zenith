@@ -20,6 +20,7 @@ import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.etrisad.zenith.R
 import com.etrisad.zenith.data.local.entity.FocusType
+import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.preferences.ForegroundNotificationStatusMode
@@ -73,6 +74,7 @@ class AppUsageMonitorService : Service() {
     private var baseUsageAtSessionStart = 0L
     private val allowedApps get() = shieldRepository.allowedApps
     private val lastAllowedRemainingTime = ConcurrentHashMap<String, Long>()
+    private val periodUsageCache = ConcurrentHashMap<String, Long>() // packageName -> period-aware total usage
     private var lastLauncherRefreshTime = 0L
     private val systemZone by lazy { ZoneId.systemDefault() }
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -241,6 +243,7 @@ class AppUsageMonitorService : Service() {
                     }
                     if (shields != null) {
                         SharedMonitoringState.allShieldsCache = shields.associateBy { it.packageName }
+                        refreshPeriodUsageCache()
                     }
 
                     val schedules = kotlinx.coroutines.withTimeoutOrNull(3000) {
@@ -326,11 +329,13 @@ class AppUsageMonitorService : Service() {
             updateStreaks()
             preferencesRepository.refreshGlobalStreak(shieldRepository)
             preferencesRepository.refreshAllAppStreaks(shieldRepository)
-            shieldRepository.resetAllRemainingTimes()
+            shieldRepository.resetDailyRemainingTimes()
+            checkWeeklyReset()
             SharedMonitoringState.notifiedGoals.clear()
             earlyKickManager.reset()
             SharedMonitoringState.dailyUsageCache.clear()
             lastAllowedRemainingTime.clear()
+            periodUsageCache.clear()
             SharedMonitoringState.systemAppCache.clear()
             SharedMonitoringState.launcherPackages = emptySet()
             lastUsageCacheTime = 0L
@@ -347,6 +352,18 @@ class AppUsageMonitorService : Service() {
 
             lastCheckedDayDate = LocalDate.now()
             lastCheckedDayTimestamp = currentTime
+        }
+    }
+
+    private suspend fun checkWeeklyReset() {
+        val prefs = SharedMonitoringState.currentPreferences
+        val lastReset = prefs?.lastWeeklyResetDate ?: 0L
+        val todayStart = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        if (todayStart - lastReset >= 7L * 24 * 60 * 60 * 1000) {
+            shieldRepository.resetWeeklyRemainingTimes()
+            periodUsageCache.clear()
+            preferencesRepository.setLastWeeklyResetDate(todayStart)
+            refreshPeriodUsageCache()
         }
     }
 
@@ -583,6 +600,7 @@ class AppUsageMonitorService : Service() {
                     scheduleScreenOffGoalAlarm()
                 }
                 SharedMonitoringState.updateRestrictedPackages()
+                refreshPeriodUsageCache()
                 refreshForegroundNotification(force = true)
             }
         }
@@ -820,7 +838,16 @@ class AppUsageMonitorService : Service() {
             val systemUsage = detailedUsage.appUsageMap[currentApp] ?: 0L
             val systemGlobal = getFilteredGlobalUsage(detailedUsage.appUsageMap)
 
-            baseUsageAtSessionStart = systemUsage.coerceAtMost(timeSinceMidnight)
+            val shield = currentShieldCache
+            if (shield != null && shield.limitPeriod == LimitPeriod.WEEKLY) {
+                val weeklyTotal = withContext(Dispatchers.IO) {
+                    shieldRepository.getWeeklyUsageLive(currentApp, systemUsage)
+                }
+                baseUsageAtSessionStart = weeklyTotal.coerceAtLeast(0L)
+                periodUsageCache[currentApp] = baseUsageAtSessionStart
+            } else {
+                baseUsageAtSessionStart = systemUsage.coerceAtMost(timeSinceMidnight)
+            }
             cachedTotalUsage = baseUsageAtSessionStart
             baseGlobalUsageAtSessionStart = systemGlobal.coerceAtMost(timeSinceMidnight)
             cachedTotalGlobalUsage = baseGlobalUsageAtSessionStart
@@ -1053,12 +1080,14 @@ class AppUsageMonitorService : Service() {
         if (today != lastCheckedDayDate) {
             withContext(Dispatchers.IO) {
                 com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
-                shieldRepository.resetAllRemainingTimes()
+                shieldRepository.resetDailyRemainingTimes()
+                checkWeeklyReset()
             }
             SharedMonitoringState.notifiedGoals.clear()
             earlyKickManager.reset()
             SharedMonitoringState.dailyUsageCache.clear()
             lastAllowedRemainingTime.clear()
+            periodUsageCache.clear()
             SharedMonitoringState.systemAppCache.clear()
             SharedMonitoringState.launcherPackages = emptySet()
             lastUsageCacheTime = 0L
@@ -1102,6 +1131,18 @@ class AppUsageMonitorService : Service() {
         }
     }
 
+    private fun refreshPeriodUsageCache() {
+        serviceScope.launch {
+            try {
+                val weeklyShields = SharedMonitoringState.allShieldsCache.values.filter { it.limitPeriod == LimitPeriod.WEEKLY }
+                for (shield in weeklyShields) {
+                    val usage = shieldRepository.getWeeklyUsageLive(shield.packageName, 0L)
+                    periodUsageCache[shield.packageName] = usage.coerceAtLeast(0L)
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
     private fun updateUsageTime(packageName: String) {
         if (packageName != currentSessionPackage) return
 
@@ -1109,13 +1150,17 @@ class AppUsageMonitorService : Service() {
         val sessionElapsed = (currentTime - sessionStartTime).coerceAtLeast(0L)
 
         cachedTotalUsage = baseUsageAtSessionStart + sessionElapsed
+        val shield = currentShieldCache
+        if (shield != null && shield.limitPeriod == LimitPeriod.WEEKLY) {
+            periodUsageCache[packageName] = cachedTotalUsage
+        }
         cachedTotalGlobalUsage = baseGlobalUsageAtSessionStart + sessionElapsed
 
-        val shield = currentShieldCache ?: return
+        val currentShield = shield ?: return
         val cfg = SharedMonitoringState.performanceConfig
-        val shieldType = shield.type
+        val shieldType = currentShield.type
 
-        val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+        val limitMillis = currentShield.timeLimitMinutes * 60 * 1000L
         val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
         val isNearLimit = remaining < 60000
         
@@ -1149,10 +1194,18 @@ class AppUsageMonitorService : Service() {
                     val now = System.currentTimeMillis()
                     val timeSinceMidnight = (now - startOfDay).coerceAtLeast(0L)
 
-                    baseUsageAtSessionStart = systemUsage.coerceAtMost(timeSinceMidnight)
+                    val s = currentShieldCache
+                    if (s != null && s.limitPeriod == LimitPeriod.WEEKLY) {
+                        val weeklyBase = periodUsageCache[packageName] ?: (baseUsageAtSessionStart + sessionElapsed)
+                        baseUsageAtSessionStart = weeklyBase
+                        cachedTotalUsage = weeklyBase
+                        periodUsageCache[packageName] = weeklyBase
+                    } else {
+                        baseUsageAtSessionStart = systemUsage.coerceAtMost(timeSinceMidnight)
+                        cachedTotalUsage = baseUsageAtSessionStart
+                    }
                     baseGlobalUsageAtSessionStart = systemGlobal.coerceAtMost(timeSinceMidnight)
                     sessionStartTime = now
-                    cachedTotalUsage = baseUsageAtSessionStart
                     cachedTotalGlobalUsage = baseGlobalUsageAtSessionStart
 
                     if (isGoal) {
@@ -1164,7 +1217,7 @@ class AppUsageMonitorService : Service() {
             }
         }
 
-        updateShieldInDatabase(shield)
+        updateShieldInDatabase(currentShield)
         refreshForegroundNotification()
     }
 
@@ -1211,7 +1264,13 @@ class AppUsageMonitorService : Service() {
                     .atZone(systemZone).toLocalDate()
                 val today = LocalDate.now()
 
-                if (lastUpdateDate != today) {
+                val shouldIncrement = if (shield.limitPeriod == LimitPeriod.WEEKLY) {
+                    lastUpdateDate.with(java.time.DayOfWeek.MONDAY) != today.with(java.time.DayOfWeek.MONDAY)
+                } else {
+                    lastUpdateDate != today
+                }
+
+                if (shouldIncrement) {
                     val newStreak = shield.currentStreak + 1
                     val newBest = maxOf(shield.bestStreak, newStreak)
                     updatedShield = updatedShield.copy(
@@ -1388,12 +1447,14 @@ class AppUsageMonitorService : Service() {
         val todayStr = dateFormatter.format(today)
 
         if (lastCheckStr.isNotEmpty() && lastCheckStr != todayStr) {
-            shieldRepository.resetAllRemainingTimes()
+            shieldRepository.resetDailyRemainingTimes()
+            checkWeeklyReset()
             SharedMonitoringState.notifiedGoals.clear()
             SharedMonitoringState.dailyUsageCache.clear()
             SharedMonitoringState.systemAppCache.clear()
             com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
             lastAllowedRemainingTime.clear()
+            periodUsageCache.clear()
         }
 
         if (lastCheckStr != todayStr) {
@@ -1471,6 +1532,20 @@ class AppUsageMonitorService : Service() {
     private fun getTotalUsageToday(packageName: String): Long {
         if (packageName == currentSessionPackage && cachedTotalUsage > 0) {
             return cachedTotalUsage
+        }
+        val shield = SharedMonitoringState.allShieldsCache[packageName]
+        if (shield != null && shield.limitPeriod != LimitPeriod.DAILY) {
+            val cached = periodUsageCache[packageName]
+            if (cached != null && cached > 0) return cached
+            val loaded = kotlinx.coroutines.runBlocking {
+                try {
+                    shieldRepository.getWeeklyUsageLive(packageName, getSystemUsageToday(packageName))
+                } catch (_: Exception) { 0L }
+            }
+            if (loaded > 0) {
+                periodUsageCache[packageName] = loaded
+                return loaded
+            }
         }
         return getSystemUsageToday(packageName)
     }

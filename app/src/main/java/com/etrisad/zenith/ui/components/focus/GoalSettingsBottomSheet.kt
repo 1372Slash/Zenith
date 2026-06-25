@@ -25,6 +25,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.background
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
+import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
@@ -46,7 +47,7 @@ fun GoalSettingsBottomSheet(
     usageToday: Long,
     existingShield: ShieldEntity?,
     onDismiss: () -> Unit,
-    onSave: (Int, Boolean, Int, Boolean, Boolean, String?) -> Unit
+    onSave: (Int, Boolean, Int, Boolean, Boolean, String?, LimitPeriod) -> Unit
 ) {
     val configuration = LocalConfiguration.current
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -73,6 +74,7 @@ fun GoalSettingsBottomSheet(
     var goalReminderPeriodMinutes by remember { mutableIntStateOf(existingShield?.goalReminderPeriodMinutes ?: 120) }
     var isGoalDropdownExpanded by remember { mutableStateOf(false) }
 
+    var selectedPeriod by remember { mutableStateOf(existingShield?.limitPeriod ?: LimitPeriod.DAILY) }
     var isGoalCallerEnabled by remember { mutableStateOf(existingShield?.isGoalCallerEnabled ?: false) }
     var isGoalCallerSoundEnabled by remember { mutableStateOf(existingShield?.isGoalCallerSoundEnabled ?: true) }
     var goalCallerSoundUri by remember { mutableStateOf(existingShield?.goalCallerSoundUri) }
@@ -179,7 +181,41 @@ fun GoalSettingsBottomSheet(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
-                    text = "Daily Goal Target (HH:MM)",
+                    text = "Period",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    LimitPeriod.entries.forEach { period ->
+                        FilterChip(
+                            selected = selectedPeriod == period,
+                            onClick = { selectedPeriod = period },
+                            label = {
+                                Text(
+                                    when (period) {
+                                        LimitPeriod.DAILY -> "Daily"
+                                        LimitPeriod.WEEKLY -> "Weekly"
+                                    }
+                                )
+                            },
+                            shape = CircleShape
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = when (selectedPeriod) {
+                        LimitPeriod.DAILY -> "Daily Goal Target (HH:MM)"
+                        LimitPeriod.WEEKLY -> "Weekly Goal Target (HH:MM)"
+                    },
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
@@ -200,7 +236,10 @@ fun GoalSettingsBottomSheet(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
                 ) {
-                    val presets = listOf(30, 60, 120, 240)
+                    val presets = when (selectedPeriod) {
+                        LimitPeriod.DAILY -> listOf(30, 60, 120, 240)
+                        LimitPeriod.WEEKLY -> listOf(120, 300, 600, 1200)
+                    }
                     presets.forEach { preset ->
                         FilterChip(
                             selected = (timePickerState.hour * 60 + timePickerState.minute) == preset,
@@ -464,7 +503,8 @@ fun GoalSettingsBottomSheet(
                             goalReminderPeriodMinutes,
                             isGoalCallerEnabled,
                             isGoalCallerSoundEnabled,
-                            goalCallerSoundUri
+                            goalCallerSoundUri,
+                            selectedPeriod
                         )
                         scope.launch {
                             sheetState.hide()
