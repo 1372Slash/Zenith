@@ -254,6 +254,10 @@ class UserPreferencesRepository(private val context: Context) {
         val WEEKLY_INSIGHT_ENABLED = booleanPreferencesKey("weekly_insight_enabled")
         val TREND_MILESTONE_ENABLED = booleanPreferencesKey("trend_milestone_enabled")
         val INCENTIVE_LOCK_ENABLED = booleanPreferencesKey("incentive_lock_enabled")
+        val EYE_CARE_ENABLED = booleanPreferencesKey("eye_care_enabled")
+        val EYE_CARE_WORK_MINUTES = intPreferencesKey("eye_care_work_minutes")
+        val EYE_CARE_REST_SECONDS = intPreferencesKey("eye_care_rest_seconds")
+        val USAGE_GLIMPSE_ENABLED = booleanPreferencesKey("usage_glimpse_enabled")
 
         val OVERLAY_PALETTE_ID = stringPreferencesKey("overlay_palette_id")
         val OVERLAY_SHEET_OPACITY = floatPreferencesKey("overlay_sheet_opacity")
@@ -401,6 +405,10 @@ class UserPreferencesRepository(private val context: Context) {
             weeklyInsightEnabled = settings[PreferencesKeys.WEEKLY_INSIGHT_ENABLED] ?: true,
             trendMilestoneEnabled = settings[PreferencesKeys.TREND_MILESTONE_ENABLED] ?: true,
             incentiveLockEnabled = settings[PreferencesKeys.INCENTIVE_LOCK_ENABLED] ?: false,
+            eyeCareEnabled = settings[PreferencesKeys.EYE_CARE_ENABLED] ?: false,
+            eyeCareWorkMinutes = settings[PreferencesKeys.EYE_CARE_WORK_MINUTES] ?: 20,
+            eyeCareRestSeconds = settings[PreferencesKeys.EYE_CARE_REST_SECONDS] ?: 20,
+            usageGlimpseEnabled = settings[PreferencesKeys.USAGE_GLIMPSE_ENABLED] ?: false,
             incentiveLockDisableRequestTimestamp = runtime[RuntimeKeys.INCENTIVE_LOCK_DISABLE_REQUEST_TIMESTAMP] ?: 0L,
             incentiveLockGoalsMetToday = if (runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_TODAY] != true) false
                 else runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_DATE] == SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
@@ -536,6 +544,22 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setIncentiveLockEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.INCENTIVE_LOCK_ENABLED] = enabled }
+    }
+
+    suspend fun setEyeCareEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.EYE_CARE_ENABLED] = enabled }
+    }
+
+    suspend fun setEyeCareWorkMinutes(minutes: Int) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.EYE_CARE_WORK_MINUTES] = minutes }
+    }
+
+    suspend fun setEyeCareRestSeconds(seconds: Int) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.EYE_CARE_REST_SECONDS] = seconds }
+    }
+
+    suspend fun setUsageGlimpseEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.USAGE_GLIMPSE_ENABLED] = enabled }
     }
 
     suspend fun setIncentiveLockDisableRequestTimestamp(timestamp: Long) {
@@ -1704,6 +1728,10 @@ data class UserPreferences(
     val incentiveLockEnabled: Boolean = false,
     val incentiveLockDisableRequestTimestamp: Long = 0L,
     val incentiveLockGoalsMetToday: Boolean = false,
+    val eyeCareEnabled: Boolean = false,
+    val eyeCareWorkMinutes: Int = 20,
+    val eyeCareRestSeconds: Int = 20,
+    val usageGlimpseEnabled: Boolean = false,
     val overlayPaletteId: String = "dynamic",
     val overlaySheetOpacity: Float = 1f,
     val overlayFullScreen: Boolean = false,

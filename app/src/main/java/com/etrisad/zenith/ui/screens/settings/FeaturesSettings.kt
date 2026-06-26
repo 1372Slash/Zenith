@@ -28,6 +28,7 @@ import com.etrisad.zenith.util.hasCalendarPermission
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithToggleButtonGroup
 import com.etrisad.zenith.ui.components.ZenithToggleOption
+import com.etrisad.zenith.ui.navigation.Screen
 import com.google.accompanist.drawablepainter.rememberDrawablePainter
 
 @Composable
@@ -38,6 +39,8 @@ fun FeaturesSettings(
     onSessionUsageOverlayEnabledChange: (Boolean) -> Unit,
     onSessionUsageOverlaySizeChange: (Int) -> Unit,
     onSessionUsageOverlayOpacityChange: (Int) -> Unit,
+    onUsageGlimpseEnabledChange: (Boolean) -> Unit,
+    onNavigateToEyeCare: () -> Unit,
     onMindfulGatewayEnabledChange: (Boolean) -> Unit,
     onEarlyKickEnabledChange: (Boolean) -> Unit,
     onInterceptAudioFocusEnabledChange: (Boolean) -> Unit,
@@ -106,6 +109,16 @@ fun FeaturesSettings(
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(4.dp))
+        SettingsToggle(
+            title = "Usage Glimpse",
+            description = "Briefly show your total screen time every 5 minutes in a corner HUD",
+            checked = preferences.usageGlimpseEnabled,
+            onCheckedChange = onUsageGlimpseEnabledChange,
+            icon = Icons.Outlined.Visibility,
+            shape = RoundedCornerShape(8.dp)
+        )
 
         Spacer(modifier = Modifier.height(4.dp))
         SettingsToggle(
@@ -270,6 +283,15 @@ fun FeaturesSettings(
             summary = "Set a time window where all apps become unblocked",
             onClick = onNavigateToGracePeriod,
             icon = Icons.Outlined.FreeBreakfast,
+            shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+        SettingsActionItem(
+            title = "Eye Care",
+            summary = "Remind you to look away every ${preferences.eyeCareWorkMinutes} minutes to reduce eye strain",
+            onClick = onNavigateToEyeCare,
+            icon = Icons.Outlined.RemoveRedEye,
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
         )
 

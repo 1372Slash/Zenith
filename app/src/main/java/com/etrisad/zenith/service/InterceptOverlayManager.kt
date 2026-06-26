@@ -25,6 +25,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.etrisad.zenith.ui.components.overlay.BedtimeOverlayContent
+import com.etrisad.zenith.ui.components.overlay.EyeCareOverlayContent
 import com.etrisad.zenith.ui.components.overlay.InterceptOverlayContent
 import com.etrisad.zenith.ui.components.overlay.ScheduleOverlayContent
 import com.etrisad.zenith.ui.components.overlay.WindDownOverlayContent
@@ -348,6 +349,76 @@ class InterceptOverlayManager(
                 }
             }
         }
+        setupAndAddView(composeView, lOwner)
+    }
+
+    fun showEyeCareRestOverlay(
+        durationSeconds: Int,
+        onRestComplete: () -> Unit
+    ) {
+        synchronized(this) {
+            if (isShowing) return
+
+            if (Looper.myLooper() != Looper.getMainLooper()) {
+                mainHandler.post {
+                    showEyeCareRestOverlay(durationSeconds, onRestComplete)
+                }
+                return
+            }
+
+            if (isShowing || overlayView != null) hideOverlay()
+
+            isShowing = true
+            currentPackage = context.packageName
+        }
+
+        recreateOverlay = {
+            showEyeCareRestOverlay(durationSeconds, onRestComplete)
+        }
+
+        val vStore = ViewModelStore()
+        viewModelStore = vStore
+
+        val lOwner = MyLifecycleOwner()
+        lOwner.performRestore(null)
+        lOwner.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+        lifecycleOwner = lOwner
+
+        val composeView = ComposeView(context).apply {
+            setContent {
+                val userPrefs by sharedPrefs.collectAsState(initial = null)
+                val prefs = userPrefs
+
+                val darkTheme = when (prefs?.themeConfig) {
+                    com.etrisad.zenith.data.preferences.ThemeConfig.LIGHT -> false
+                    com.etrisad.zenith.data.preferences.ThemeConfig.DARK -> true
+                    else -> androidx.compose.foundation.isSystemInDarkTheme()
+                }
+
+                val isLandscape = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+                if (prefs != null) {
+                    com.etrisad.zenith.ui.theme.ZenithTheme(
+                        darkTheme = darkTheme,
+                        fontOption = prefs.fontOption,
+                        dynamicColor = prefs.dynamicColor,
+                        expressiveColors = prefs.expressiveColors,
+                        gsFlexSettings = prefs.gsFlexSettings
+                    ) {
+                        EyeCareOverlayContent(
+                            restSeconds = durationSeconds,
+                            onRestComplete = {
+                                onRestComplete()
+                                hideOverlay()
+                            },
+                            userPrefs = prefs,
+                            isLandscape = isLandscape
+                        )
+                    }
+                }
+            }
+        }
+
         setupAndAddView(composeView, lOwner)
     }
 

@@ -43,6 +43,7 @@ fun ZenithHeader(
         currentRoute == Screen.UsageStats.route || 
         currentRoute == Screen.Bedtime.route ||
         currentRoute == Screen.GracePeriod.route ||
+        currentRoute == Screen.EyeCare.route ||
         currentRoute == Screen.DatabaseDebug.route ||
         currentRoute == Screen.DataRepairment.route ||
         currentRoute == Screen.FontTest.route ||
@@ -126,6 +127,7 @@ fun ZenithHeader(
                 currentRoute == Screen.UsageStats.route -> "Usage Stats"
                 currentRoute == Screen.Bedtime.route -> "Bedtime"
                 currentRoute == Screen.GracePeriod.route -> "Grace Period"
+                currentRoute == Screen.EyeCare.route -> "Eye Care"
                 currentRoute == Screen.DatabaseDebug.route -> "Database"
                 currentRoute == Screen.DataRepairment.route -> "Data Repairment"
                 currentRoute == Screen.FontTest.route -> "M3 Expressive Editor"

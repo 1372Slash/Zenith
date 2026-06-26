@@ -191,6 +191,8 @@ fun SettingsCategoryScreen(
                         onSessionUsageOverlayEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setSessionUsageOverlayEnabled(enabled) } },
                         onSessionUsageOverlaySizeChange = { size -> coroutineScope.launch { preferencesRepository.setSessionUsageOverlaySize(size) } },
                         onSessionUsageOverlayOpacityChange = { opacity -> coroutineScope.launch { preferencesRepository.setSessionUsageOverlayOpacity(opacity) } },
+                        onUsageGlimpseEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setUsageGlimpseEnabled(enabled) } },
+                        onNavigateToEyeCare = { navController.navigate(Screen.EyeCare.route) },
                         onMindfulGatewayEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setMindfulGatewayEnabled(enabled) } },
                         onEarlyKickEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setEarlyKickEnabled(enabled) } },
                         onInterceptAudioFocusEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setInterceptAudioFocusEnabled(enabled) } },
@@ -340,6 +342,29 @@ fun SettingsCategoryScreen(
                             coroutineScope.launch {
                                 val todayStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
                                 app.shieldRepository.insertDailyUsage(com.etrisad.zenith.data.local.entity.DailyUsageEntity(packageName = pkg, date = todayStr, usageTimeMillis = time))
+                            }
+                        },
+                        onTestUsageGlimpse = {
+                            val isDark = when (preferences.themeConfig) {
+                                com.etrisad.zenith.data.preferences.ThemeConfig.LIGHT -> false
+                                com.etrisad.zenith.data.preferences.ThemeConfig.DARK -> true
+                                else -> {
+                                    val nightModeFlags = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+                                    nightModeFlags == android.content.res.Configuration.UI_MODE_NIGHT_YES
+                                }
+                            }
+                            val glimpseManager = com.etrisad.zenith.ui.components.overlay.UsageGlimpseOverlayManager(context)
+                            glimpseManager.show(
+                                usageTodayMillis = 3600000L,
+                                isDark = isDark,
+                                fontOption = preferences.fontOption,
+                                dynamicColor = preferences.dynamicColor,
+                                expressiveColors = preferences.expressiveColors,
+                                gsFlexSettings = preferences.gsFlexSettings
+                            )
+                            coroutineScope.launch {
+                                kotlinx.coroutines.delay(5000L)
+                                glimpseManager.hide()
                             }
                         }
                     )

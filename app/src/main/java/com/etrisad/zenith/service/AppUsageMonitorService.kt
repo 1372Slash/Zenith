@@ -28,6 +28,7 @@ import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.ui.components.overlay.SessionUsageOverlayManager
+import com.etrisad.zenith.ui.components.overlay.UsageGlimpseOverlayManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -97,6 +98,20 @@ class AppUsageMonitorService : Service() {
     @Volatile
     private var lastHUDUpdateTime = 0L
     private val HUD_UPDATE_INTERVAL = 1000L
+
+    private var usageGlimpseManager: UsageGlimpseOverlayManager? = null
+    private var usageGlimpseJob: kotlinx.coroutines.Job? = null
+    @Volatile
+    private var lastGlimpseShowTime = 0L
+    private val GLIMPSE_INTERVAL_MS = 5 * 60 * 1000L
+    private val GLIMPSE_DISPLAY_MS = 5000L
+
+    @Volatile
+    private var eyeCareCumulativeSeconds = 0
+    @Volatile
+    private var eyeCareOnBreak = false
+    private var eyeCareJob: kotlinx.coroutines.Job? = null
+
     private var lastUsageCacheTime = 0L
 
     private var lastMonitoringError: String? = null
@@ -170,6 +185,9 @@ class AppUsageMonitorService : Service() {
                     overlayActionHandler.cancelPendingTimers()
                     Log.d("Zenith_SCREEN", "Calling hideAllHUDViews() due to SCREEN OFF")
                     sessionUsageOverlayManager.hideAllHUDViews()
+                    stopEyeCareTimer()
+                    usageGlimpseManager?.hide()
+                    usageGlimpseJob?.cancel()
                     scheduleScreenOffGoalAlarm()
                     Log.w("ZenithAUMS", "SCREEN OFF: monitoring cancelled")
                 }
@@ -388,6 +406,8 @@ class AppUsageMonitorService : Service() {
             getTotalUsageToday = { pkg -> getTotalUsageToday(pkg) },
             getTotalGlobalUsageToday = { getTotalGlobalUsageToday() },
         )
+
+        usageGlimpseManager = UsageGlimpseOverlayManager(this)
 
         launchCollectors()
         createMonitorNotificationChannel()
@@ -688,6 +708,9 @@ class AppUsageMonitorService : Service() {
                 }
         }
 
+        startEyeCareTimer()
+        startUsageGlimpseTimer()
+
         monitoringJob?.cancel()
         monitoringJob = serviceScope.launch(Dispatchers.Default) {
             var maintenanceTick = 0L
@@ -749,6 +772,85 @@ class AppUsageMonitorService : Service() {
                 delay(delayTime)
             }
         }
+    }
+
+    private fun startUsageGlimpseTimer() {
+        usageGlimpseJob?.cancel()
+        usageGlimpseJob = serviceScope.launch {
+            while (true) {
+                delay(GLIMPSE_INTERVAL_MS)
+                if (!isScreenOn) continue
+                val prefs = SharedMonitoringState.currentPreferences ?: continue
+                if (!prefs.usageGlimpseEnabled) continue
+
+                val now = System.currentTimeMillis()
+                if (now - lastGlimpseShowTime < GLIMPSE_INTERVAL_MS) continue
+                lastGlimpseShowTime = now
+
+                val totalUsage = getTotalGlobalUsageToday()
+                val isDark = when (prefs.themeConfig) {
+                    com.etrisad.zenith.data.preferences.ThemeConfig.LIGHT -> false
+                    com.etrisad.zenith.data.preferences.ThemeConfig.DARK -> true
+                    else -> {
+                        val nightModeFlags = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+                        nightModeFlags == android.content.res.Configuration.UI_MODE_NIGHT_YES
+                    }
+                }
+
+                usageGlimpseManager?.show(
+                    usageTodayMillis = totalUsage,
+                    isDark = isDark,
+                    fontOption = prefs.fontOption,
+                    dynamicColor = prefs.dynamicColor,
+                    expressiveColors = prefs.expressiveColors,
+                    gsFlexSettings = prefs.gsFlexSettings
+                )
+                delay(GLIMPSE_DISPLAY_MS)
+                usageGlimpseManager?.hide()
+            }
+        }
+    }
+
+    private fun startEyeCareTimer() {
+        eyeCareJob?.cancel()
+        eyeCareCumulativeSeconds = 0
+        eyeCareOnBreak = false
+
+        eyeCareJob = serviceScope.launch {
+            while (true) {
+                delay(1000)
+                if (!isScreenOn) continue
+                val prefs = SharedMonitoringState.currentPreferences ?: continue
+                if (!prefs.eyeCareEnabled) {
+                    eyeCareCumulativeSeconds = 0
+                    continue
+                }
+                if (eyeCareOnBreak) continue
+
+                eyeCareCumulativeSeconds++
+                val workSeconds = prefs.eyeCareWorkMinutes * 60
+                if (eyeCareCumulativeSeconds >= workSeconds) {
+                    eyeCareOnBreak = true
+                    eyeCareCumulativeSeconds = 0
+
+                    withContext(Dispatchers.Main) {
+                        overlayManager.showEyeCareRestOverlay(
+                            durationSeconds = prefs.eyeCareRestSeconds,
+                            onRestComplete = {
+                                eyeCareOnBreak = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stopEyeCareTimer() {
+        eyeCareJob?.cancel()
+        eyeCareJob = null
+        eyeCareCumulativeSeconds = 0
+        eyeCareOnBreak = false
     }
 
     private suspend fun logError(t: Throwable) {
@@ -1913,6 +2015,9 @@ class AppUsageMonitorService : Service() {
         try {
             unregisterReceiver(screenStateReceiver)
         } catch (_: Exception) {}
+        stopEyeCareTimer()
+        usageGlimpseJob?.cancel()
+        usageGlimpseManager?.hide()
         serviceJob.cancel()
     }
 

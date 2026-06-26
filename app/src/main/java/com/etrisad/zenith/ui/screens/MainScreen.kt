@@ -62,6 +62,7 @@ import com.etrisad.zenith.ui.screens.home.HomeScreen
 import com.etrisad.zenith.ui.screens.home.UsageStatsScreen
 import com.etrisad.zenith.ui.screens.bedtime.BedtimeScreen
 import com.etrisad.zenith.ui.screens.graceperiod.GracePeriodScreen
+import com.etrisad.zenith.ui.screens.settings.EyeCareScreen
 import com.etrisad.zenith.ui.screens.settings.SettingsScreen
 import com.etrisad.zenith.ui.viewmodel.FocusViewModel
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
@@ -136,6 +137,7 @@ fun MainScreen(
         currentRoute == Screen.UsageStats.route ||
                 currentRoute == Screen.Bedtime.route ||
                 currentRoute == Screen.GracePeriod.route ||
+                currentRoute == Screen.EyeCare.route ||
                 currentRoute == Screen.DatabaseDebug.route ||
                 currentRoute == Screen.DataRepairment.route ||
                 currentRoute == Screen.FontTest.route ||
@@ -176,6 +178,8 @@ fun MainScreen(
     var showPauseSheet by remember { mutableStateOf(false) }
     var gracePeriodSwitchVisible by remember { mutableStateOf(false) }
     var gracePeriodSwitchInLayout by remember { mutableStateOf(false) }
+    var eyeCareSwitchVisible by remember { mutableStateOf(false) }
+    var eyeCareSwitchInLayout by remember { mutableStateOf(false) }
     val performanceBackInterceptor = remember { mutableStateOf<() -> Boolean>({ false }) }
 
     var showBatchDeleteSheet by remember { mutableStateOf(false) }
@@ -221,6 +225,28 @@ fun MainScreen(
             if (gracePeriodSwitchInLayout) {
                 delay(1500)
                 gracePeriodSwitchInLayout = false
+            }
+        }
+    }
+
+    LaunchedEffect(currentRoute, preferences.eyeCareEnabled) {
+        val isEyeCareScreen = currentRoute == Screen.EyeCare.route
+        val shouldShow = isEyeCareScreen && preferences.eyeCareEnabled
+
+        if (shouldShow) {
+            if (!eyeCareSwitchInLayout) {
+                eyeCareSwitchInLayout = true
+                delay(1200)
+            }
+            eyeCareSwitchVisible = true
+        } else {
+            if (eyeCareSwitchVisible) {
+                eyeCareSwitchVisible = false
+                delay(800)
+            }
+            if (eyeCareSwitchInLayout) {
+                delay(1500)
+                eyeCareSwitchInLayout = false
             }
         }
     }
@@ -369,6 +395,8 @@ fun MainScreen(
         val showNavRail =
             currentRoute != Screen.UsageStats.route &&
                     currentRoute != Screen.Bedtime.route &&
+                    currentRoute != Screen.GracePeriod.route &&
+                    currentRoute != Screen.EyeCare.route &&
                     currentRoute != Screen.DatabaseDebug.route &&
                     currentRoute != Screen.DataRepairment.route &&
                     currentRoute != Screen.FontTest.route &&
@@ -690,6 +718,71 @@ fun MainScreen(
                                     }
                                 }
                             }
+                            if (eyeCareSwitchInLayout) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(end = 16.dp)
+                                        .width(52.dp)
+                                        .height(32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = eyeCareSwitchVisible,
+                                        enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
+                                                slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+                                        exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                                    ) {
+                                        Switch(
+                                            checked = preferences.eyeCareEnabled,
+                                            onCheckedChange = {
+                                                scope.launch {
+                                                    userPreferencesRepository.setEyeCareEnabled(!preferences.eyeCareEnabled)
+                                                }
+                                            },
+                                            thumbContent = {
+                                                val thumbSize by animateDpAsState(
+                                                    targetValue = if (preferences.eyeCareEnabled) 28.dp else 24.dp,
+                                                    animationSpec = spring(
+                                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                        stiffness = Spring.StiffnessMediumLow
+                                                    ),
+                                                    label = "thumb_size"
+                                                )
+                                                val iconColor by animateColorAsState(
+                                                    targetValue = if (preferences.eyeCareEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                                                    label = "switch_icon_color"
+                                                )
+                                                Box(
+                                                    modifier = Modifier.size(thumbSize),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    AnimatedContent(
+                                                        targetState = preferences.eyeCareEnabled,
+                                                        transitionSpec = {
+                                                            (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                                    scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
+                                                                .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                                        scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
+                                                        },
+                                                        label = "switch_icon_anim"
+                                                    ) { isChecked ->
+                                                        Icon(
+                                                            imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
+                                                            tint = iconColor
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 )
@@ -771,6 +864,7 @@ fun MainScreen(
                             targetRoute == Screen.UsageStats.route ||
                                     targetRoute == Screen.Bedtime.route ||
                                     targetRoute == Screen.GracePeriod.route ||
+                                    targetRoute == Screen.EyeCare.route ||
                                     targetRoute == Screen.DatabaseDebug.route ||
                                     targetRoute == Screen.DataRepairment.route ||
                                     targetRoute == Screen.FontTest.route ||
@@ -783,6 +877,7 @@ fun MainScreen(
                             initialRoute == Screen.UsageStats.route ||
                                     initialRoute == Screen.Bedtime.route ||
                                     initialRoute == Screen.GracePeriod.route ||
+                                    initialRoute == Screen.EyeCare.route ||
                                     initialRoute == Screen.DatabaseDebug.route ||
                                     initialRoute == Screen.DataRepairment.route ||
                                     initialRoute == Screen.FontTest.route ||
@@ -827,6 +922,7 @@ fun MainScreen(
                             targetRoute == Screen.UsageStats.route ||
                                     targetRoute == Screen.Bedtime.route ||
                                     targetRoute == Screen.GracePeriod.route ||
+                                    targetRoute == Screen.EyeCare.route ||
                                     targetRoute == Screen.DatabaseDebug.route ||
                                     targetRoute == Screen.DataRepairment.route ||
                                     targetRoute == Screen.FontTest.route ||
@@ -840,6 +936,7 @@ fun MainScreen(
                             initialRoute == Screen.UsageStats.route ||
                                     initialRoute == Screen.Bedtime.route ||
                                     initialRoute == Screen.GracePeriod.route ||
+                                    initialRoute == Screen.EyeCare.route ||
                                     initialRoute == Screen.DatabaseDebug.route ||
                                     initialRoute == Screen.DataRepairment.route ||
                                     initialRoute == Screen.FontTest.route ||
@@ -951,6 +1048,13 @@ fun MainScreen(
                     composable(Screen.GracePeriod.route) {
                         GracePeriodScreen(gracePeriodViewModel, innerPadding)
                     }
+                    composable(Screen.EyeCare.route) {
+                        EyeCareScreen(
+                            preferences = preferences,
+                            preferencesRepository = userPreferencesRepository,
+                            innerPadding = innerPadding
+                        )
+                    }
                     composable(Screen.UsageStats.route) {
                         UsageStatsScreen(
                             viewModel = homeViewModel,
@@ -1041,6 +1145,7 @@ fun MainScreen(
                     currentRoute != Screen.UsageStats.route &&
                             currentRoute != Screen.Bedtime.route &&
                             currentRoute != Screen.GracePeriod.route &&
+                            currentRoute != Screen.EyeCare.route &&
                             currentRoute != Screen.DatabaseDebug.route &&
                             currentRoute != Screen.DataRepairment.route &&
                             currentRoute != Screen.FontTest.route &&
