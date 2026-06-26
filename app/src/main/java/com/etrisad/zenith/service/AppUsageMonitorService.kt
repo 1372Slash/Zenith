@@ -354,6 +354,7 @@ class AppUsageMonitorService : Service() {
             SharedMonitoringState.dailyUsageCache.clear()
             lastAllowedRemainingTime.clear()
             periodUsageCache.clear()
+            refreshPeriodUsageCache()
             SharedMonitoringState.systemAppCache.clear()
             SharedMonitoringState.launcherPackages = emptySet()
             lastUsageCacheTime = 0L
@@ -376,8 +377,11 @@ class AppUsageMonitorService : Service() {
     private suspend fun checkWeeklyReset() {
         val prefs = SharedMonitoringState.currentPreferences
         val lastReset = prefs?.lastWeeklyResetDate ?: 0L
+        val now = Calendar.getInstance()
+        val isMonday = now.get(Calendar.DAY_OF_WEEK) == Calendar.MONDAY
         val todayStart = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        if (todayStart - lastReset >= 7L * 24 * 60 * 60 * 1000) {
+
+        if (isMonday && todayStart != lastReset) {
             shieldRepository.resetWeeklyRemainingTimes()
             periodUsageCache.clear()
             preferencesRepository.setLastWeeklyResetDate(todayStart)
@@ -1192,6 +1196,7 @@ class AppUsageMonitorService : Service() {
             SharedMonitoringState.dailyUsageCache.clear()
             lastAllowedRemainingTime.clear()
             periodUsageCache.clear()
+            refreshPeriodUsageCache()
             SharedMonitoringState.systemAppCache.clear()
             SharedMonitoringState.launcherPackages = emptySet()
             lastUsageCacheTime = 0L

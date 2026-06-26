@@ -812,10 +812,10 @@ class UserPreferencesRepository(private val context: Context) {
                 }
                 for (i in 1..shieldStreakLimit) {
                     weekCal.add(Calendar.DAY_OF_YEAR, -7)
+                    if (shield.timeAdded > 0L && weekCal.timeInMillis + 6 * 86400000L < shield.timeAdded) break
                     val weekStartStr = dateFormat.format(weekCal.time)
                     val weekEnd = Calendar.getInstance().apply { timeInMillis = weekCal.timeInMillis; add(Calendar.DAY_OF_YEAR, 6) }
                     val weekEndStr = dateFormat.format(weekEnd.time)
-                    if (shield.timeAdded > 0 && weekEnd.timeInMillis < shield.timeAdded) break
                     var weekTotal = history.filter { it.date >= weekStartStr && it.date <= weekEndStr }.sumOf { it.usageTimeMillis }
 
                     if (weekTotal == 0L && oldestHistoryDate != null && weekStartStr >= oldestHistoryDate) {
@@ -840,8 +840,8 @@ class UserPreferencesRepository(private val context: Context) {
                 val c = Calendar.getInstance()
                 for (i in 1..shieldStreakLimit) {
                     c.timeInMillis = todayStart; c.add(Calendar.DAY_OF_YEAR, -i)
+                    if (shield.timeAdded > 0L && c.timeInMillis < shield.timeAdded) break
                     val dStr = dateFormat.format(c.time)
-                    if (shield.timeAdded > 0 && c.timeInMillis < shield.timeAdded) break
                     var usage = history.find { it.date == dStr }?.usageTimeMillis
 
                     if (usage == null) {
@@ -933,7 +933,7 @@ class UserPreferencesRepository(private val context: Context) {
                 shieldRepository.updateShield(shield.copy(
                     currentStreak = currentStreak,
                     bestStreak = maxOf(bestStreak, currentStreak),
-                    remainingTimeMillis = if (shield.type == FocusType.GOAL) (limitMillis - todayUsage).coerceAtLeast(0L) else shield.remainingTimeMillis,
+                    remainingTimeMillis = (limitMillis - todayUsage).coerceAtLeast(0L),
                     lastStreakUpdateTimestamp = if (isSuccessToday && (shield.type == FocusType.GOAL || todayUsage > 0)) now else shield.lastStreakUpdateTimestamp
                 ))
             } else {
@@ -990,7 +990,7 @@ class UserPreferencesRepository(private val context: Context) {
                 shieldRepository.updateShield(shield.copy(
                     currentStreak = currentStreak,
                     bestStreak = maxOf(bestStreak, currentStreak),
-                    remainingTimeMillis = if (shield.type == FocusType.GOAL) (limitMillis - todayUsage).coerceAtLeast(0L) else shield.remainingTimeMillis,
+                    remainingTimeMillis = (limitMillis - todayUsage).coerceAtLeast(0L),
                     lastStreakUpdateTimestamp = if (isSuccessToday && (shield.type == FocusType.GOAL || todayUsage > 0)) now else shield.lastStreakUpdateTimestamp
                 ))
             }
@@ -1553,6 +1553,7 @@ class UserPreferencesRepository(private val context: Context) {
             val recoveryShieldLimit = (shield.currentStreak + 30).coerceAtMost(90)
             for (i in 1..recoveryShieldLimit) {
                 val c = Calendar.getInstance().apply { timeInMillis = todayStart; add(Calendar.DAY_OF_YEAR, -i) }
+                if (shield.timeAdded > 0L && c.timeInMillis < shield.timeAdded) break
                 val dStr = dateFormat.format(c.time)
                 var usage = history.find { it.date == dStr }?.usageTimeMillis
                 if (usage == null) {
