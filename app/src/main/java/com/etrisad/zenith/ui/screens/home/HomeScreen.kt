@@ -80,6 +80,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.Calendar
 import kotlin.math.abs
+import kotlin.math.pow
 
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.style.LineHeightStyle
@@ -1154,6 +1155,8 @@ fun QuickActionsSection(
     onStatsClick: () -> Unit
 ) {
     var showRemainingTime by remember { mutableStateOf(false) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val densityScale = 1f / density.density.pow(0.2f)
     
     LaunchedEffect(bedtimeStatus.isActive) {
         if (bedtimeStatus.isActive) {
@@ -1169,7 +1172,7 @@ fun QuickActionsSection(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(vertical = 8.dp * densityScale),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1192,15 +1195,14 @@ fun QuickActionsSection(
             onClick = onBedtimeClick,
             content = if (bedtimeStatus.isActive) {
                 {
-                    val density = androidx.compose.ui.platform.LocalDensity.current
                     CircularWavyProgressIndicator(
                         progress = { bedtimeStatus.progress },
-                        modifier = Modifier.size(32.dp),
+                        modifier = Modifier.size(32.dp * densityScale),
                         color = MaterialTheme.colorScheme.primary,
                         trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        stroke = Stroke(width = with(density) { 3.dp.toPx() }),
-                        trackStroke = Stroke(width = with(density) { 3.dp.toPx() }),
-                        wavelength = 8.dp
+                        stroke = Stroke(width = with(density) { 3.dp.toPx() } * densityScale),
+                        trackStroke = Stroke(width = with(density) { 3.dp.toPx() } * densityScale),
+                        wavelength = 8.dp * densityScale
                     )
                 }
             } else null
@@ -1217,6 +1219,8 @@ fun QuickActionCard(
 ) {
     val context = LocalContext.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val densityScale = 1f / density.density.pow(0.2f)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -1233,8 +1237,8 @@ fun QuickActionCard(
     ) {
         Surface(
             modifier = Modifier
-                .width(82.dp)
-                .height(60.dp)
+                .width(82.dp * densityScale)
+                .height(60.dp * densityScale)
                 .graphicsLayer(scaleX = scale, scaleY = scale)
                 .clip(CircleShape)
                 .clickable(
@@ -1263,13 +1267,13 @@ fun QuickActionCard(
                     Icon(
                         imageVector = icon,
                         contentDescription = label,
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(24.dp * densityScale),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
         }
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(6.dp * densityScale))
         AnimatedContent(
             targetState = label,
             transitionSpec = {
