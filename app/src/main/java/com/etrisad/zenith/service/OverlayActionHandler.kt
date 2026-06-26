@@ -543,9 +543,9 @@ class OverlayActionHandler(
         val prefs = SharedMonitoringState.currentPreferences
         val isBedtimeOrWindDown = SharedMonitoringState.isBedtimeActive || (SharedMonitoringState.isWindDownActive && prefs?.bedtimeWindDownEnabled == true)
 
-        if (packageName in SharedMonitoringState.whitelistedPackages && packageName !in SharedMonitoringState.restrictedPackages) return true
+        if (packageName in SharedMonitoringState.whitelistedPackages) return true
 
-        if (isBedtimeOrWindDown && packageName in SharedMonitoringState.bedtimeWhitelistedPackages && packageName !in SharedMonitoringState.restrictedPackages) return true
+        if (isBedtimeOrWindDown && packageName in SharedMonitoringState.bedtimeWhitelistedPackages) return true
 
         if (isKeyboardApp(packageName)) return true
 
@@ -567,7 +567,7 @@ class OverlayActionHandler(
         return if (isSystem) {
             if (packageName.contains("car.mode", ignoreCase = true)) true
             else if (isBedtimeOrWindDown) packageName !in SharedMonitoringState.restrictedPackages
-            else !(packageName in SharedMonitoringState.restrictedPackages || SharedMonitoringState.hasGlobalAllowSchedule || (prefs?.mindfulGatewayEnabled == true))
+            else !(packageName in SharedMonitoringState.restrictedPackages || SharedMonitoringState.hasGlobalAllowSchedule)
         } else false
     }
 

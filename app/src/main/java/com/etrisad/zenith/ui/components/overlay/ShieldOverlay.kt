@@ -86,7 +86,7 @@ fun ShieldOverlay(
     )
 
     val combinedStateState = produceState(
-        initialValue = ShieldOverlayCombinedState(shield, totalUsageToday, totalGlobalUsageToday, shield != null),
+        initialValue = ShieldOverlayCombinedState(shield, totalUsageToday, totalGlobalUsageToday, false),
         packageName,
         shield
     ) {

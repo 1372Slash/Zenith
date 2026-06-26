@@ -694,6 +694,8 @@ class ZenithAccessibilityService : AccessibilityService() {
         if (isOverlayCheckInProgress) return
         isOverlayCheckInProgress = true
         try {
+            if (targetPackageName in SharedMonitoringState.whitelistedPackages) return
+
             if (targetPackageName != lastForegroundApp) {
                 val actualPkg = withContext(Dispatchers.Main) {
                     rootInActiveWindow?.packageName?.toString()

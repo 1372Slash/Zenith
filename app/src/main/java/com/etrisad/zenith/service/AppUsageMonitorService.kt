@@ -413,6 +413,8 @@ class AppUsageMonitorService : Service() {
 
         lastCheckedDayDate = LocalDate.now()
 
+        com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
+
         serviceScope.launch {
             preferencesRepository.userPreferencesFlow.first()
             com.etrisad.zenith.util.AlarmTasksSchedulingHelper.scheduleMidnightResetTask(this@AppUsageMonitorService)
@@ -1400,6 +1402,8 @@ class AppUsageMonitorService : Service() {
     private var lastKickTime = 0L
 
     private suspend fun checkIfAppIsShielded(targetPackageName: String) {
+        if (targetPackageName in SharedMonitoringState.whitelistedPackages) return
+
         val allowedUntil = allowedApps[targetPackageName] ?: 0L
         if (System.currentTimeMillis() < allowedUntil) return
 

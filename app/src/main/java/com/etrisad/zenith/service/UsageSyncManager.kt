@@ -341,17 +341,23 @@ class UsageSyncManager(
         val goalPkgs = allShields.asSequence().filter { it.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL }.map { it.packageName }.toSet()
 
         dates.forEach { date ->
-            val hourlyData = repository.getHourlyUsageForDateSync(date)
-            if (hourlyData.isEmpty()) return@forEach
+            val todayDateStr = dateFormat.format(Date(now))
+            val isToday = date == todayDateStr
 
             val existingDaily = repository.getDailyUsagesForDateSync(date)
             val existingDailyMap = existingDaily.associateBy { it.packageName }
+
+            if (!isToday && existingDailyMap["TOTAL"]?.usageTimeMillis ?: 0L > 0) {
+                return@forEach
+            }
+
+            val hourlyData = repository.getHourlyUsageForDateSync(date)
+            if (hourlyData.isEmpty()) return@forEach
 
             val appTotals = hourlyData.filter { it.packageName != "TOTAL" }
                 .groupBy { it.packageName }
                 .mapValues { it.value.sumOf { h -> h.usageTimeMillis } }
 
-            val todayDateStr = dateFormat.format(Date(now))
             var totalTime = appTotals.values.sum()
 
             val timeSinceMidnight = if (date == todayDateStr) {
