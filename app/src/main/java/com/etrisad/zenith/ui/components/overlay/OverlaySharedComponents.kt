@@ -114,6 +114,7 @@ fun generateDynamicColorScheme(seed: Color, isDark: Boolean, currentScheme: Colo
         surface 
     }
     val surfaceContainerHigh = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isMonochrome) 0f else sat * 0.35f, if (isDark) 0.24f else 0.9f)))
+    val surfaceContainerHighest = surfaceContainerHigh.copy(alpha = 0.9f)
 
     val secondaryContainerV = if (isDark) 0.25f else 0.92f
     val secondaryContainerSat = if (isMonochrome) 0f else (sat * 0.3f).coerceIn(0.1f, 0.25f)
@@ -122,6 +123,15 @@ fun generateDynamicColorScheme(seed: Color, isDark: Boolean, currentScheme: Colo
     val tertiaryContainerV = if (isDark) 0.25f else 0.92f
     val tertiaryContainerSat = if (isMonochrome) 0f else (tertiarySat * 0.6f).coerceIn(0.1f, 0.25f)
     val tertiaryContainer = Color(android.graphics.Color.HSVToColor(floatArrayOf(tertiaryHue, tertiaryContainerSat, tertiaryContainerV)))
+
+    val outlineVariantHue = (hue + 30f) % 360f
+    val outlineVariantSat = if (isMonochrome) 0f else (sat * 0.15f).coerceIn(0.03f, 0.08f)
+    val outlineVariantV = if (isDark) 0.35f else 0.85f
+    val outlineVariantColor = Color(android.graphics.Color.HSVToColor(floatArrayOf(outlineVariantHue, outlineVariantSat, outlineVariantV)))
+
+    val surfaceVariantSat = if (isMonochrome) 0f else (sat * 0.3f).coerceIn(0.08f, 0.18f)
+    val surfaceVariantV = if (isDark) 0.18f else 0.94f
+    val surfaceVariantColor = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, surfaceVariantSat, surfaceVariantV)))
 
     return currentScheme.copy(
         primary = primary,
@@ -141,13 +151,14 @@ fun generateDynamicColorScheme(seed: Color, isDark: Boolean, currentScheme: Colo
 
         surface = surface,
         onSurface = if (isDark) Color.White else Color.Black,
-        surfaceVariant = surfaceContainer,
+        surfaceVariant = surfaceVariantColor,
         onSurfaceVariant = if (isDark) Color.LightGray else Color.DarkGray,
         surfaceContainerLowest = surfaceContainerLowest,
         surfaceContainerLow = surfaceContainerLow,
         surfaceContainer = surfaceContainer,
         surfaceContainerHigh = surfaceContainerHigh,
-        surfaceContainerHighest = surfaceContainerHigh.copy(alpha = 0.9f)
+        surfaceContainerHighest = surfaceContainerHighest,
+        outlineVariant = outlineVariantColor
     )
 }
 
