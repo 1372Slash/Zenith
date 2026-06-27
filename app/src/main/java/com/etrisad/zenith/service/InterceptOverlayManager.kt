@@ -817,7 +817,6 @@ class InterceptOverlayManager(
                 windowManager.removeViewImmediate(viewToRemove)
                 vStoreToClear?.clear()
             } catch (_: Exception) {
-                // View was already removed by system
             }
         }
     }

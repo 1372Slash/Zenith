@@ -1,6 +1,7 @@
 package com.etrisad.zenith.service
 
 import android.app.KeyguardManager
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
@@ -43,6 +44,8 @@ class AppGoalOverlayActivity : ComponentActivity() {
         
         activePackageNames.addAll(packageList)
         playGoalSound(packageList.firstOrNull())
+
+        (getSystemService(NOTIFICATION_SERVICE) as? NotificationManager)?.cancel(2000)
 
         setShowWhenLocked(true)
         setTurnScreenOn(true)

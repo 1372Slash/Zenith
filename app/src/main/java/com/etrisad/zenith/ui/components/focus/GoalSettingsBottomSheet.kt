@@ -137,7 +137,6 @@ fun GoalSettingsBottomSheet(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Header
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -585,8 +584,6 @@ fun GoalSettingsBottomSheet(
 
                 Spacer(modifier = Modifier.height(120.dp))
                     }
-
-                    // Top Scroll Gradient
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -600,8 +597,6 @@ fun GoalSettingsBottomSheet(
                     )
                 }
             }
-
-            // Bottom Save Button with Gradient
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

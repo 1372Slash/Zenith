@@ -117,7 +117,6 @@ fun ShieldSettingsBottomSheet(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Header
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -540,8 +539,6 @@ fun ShieldSettingsBottomSheet(
 
                 Spacer(modifier = Modifier.height(120.dp))
                     }
-
-                    // Top Scroll Gradient
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -606,8 +603,6 @@ fun ShieldSettingsBottomSheet(
                     }
                 }
             }
-
-            // Bottom Save Button with Gradient
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

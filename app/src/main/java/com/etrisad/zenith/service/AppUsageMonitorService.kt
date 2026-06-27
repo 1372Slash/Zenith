@@ -76,7 +76,7 @@ class AppUsageMonitorService : Service() {
     private var baseUsageAtSessionStart = 0L
     private val allowedApps get() = shieldRepository.allowedApps
     private val lastAllowedRemainingTime = ConcurrentHashMap<String, Long>()
-    private val periodUsageCache = ConcurrentHashMap<String, Long>() // packageName -> period-aware total usage
+    private val periodUsageCache = ConcurrentHashMap<String, Long>()
     private var lastLauncherRefreshTime = 0L
     private val systemZone by lazy { ZoneId.systemDefault() }
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -578,7 +578,7 @@ class AppUsageMonitorService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(this, channelId)
+        val builder = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Time for ${firstGoal.appName}?")
             .setContentText("Your goal setting suggests it's time to open ${firstGoal.appName} and make some progress!")
             .setSmallIcon(R.drawable.ic_flag)
@@ -586,9 +586,12 @@ class AppUsageMonitorService : Service() {
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setFullScreenIntent(pendingIntent, true)
             .setAutoCancel(true)
-            .build()
 
-        manager.notify(2000, notification)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            builder.setTimeoutAfter(5000L)
+        }
+
+        manager.notify(2000, builder.build())
     }
 
     private fun createGoalNotificationChannel() {

@@ -805,7 +805,6 @@ class UserPreferencesRepository(private val context: Context) {
             val shieldStreakLimit = (shield.currentStreak + 30).coerceAtMost(90)
 
             if (isWeekly) {
-                // Count past complete weeks (Mon-Sun)
                 val weekCal = Calendar.getInstance().apply {
                     timeInMillis = todayStart
                     firstDayOfWeek = Calendar.MONDAY

@@ -559,7 +559,6 @@ class ZenithService : AccessibilityService() {
         }
 
         if (shouldBypassBlocking(currentApp)) {
-            // Don't change state for transient system UI overlays (volume panel, keyboard, etc.)
             if (InterceptOverlayManager.isShowing && (InterceptOverlayManager.isSystemUiPackage(currentApp) || isKeyboardApp(currentApp))) {
                 Log.d("Zenith_HPC", "Bypass branch SKIPPED for transient system UI: $currentApp")
                 return
