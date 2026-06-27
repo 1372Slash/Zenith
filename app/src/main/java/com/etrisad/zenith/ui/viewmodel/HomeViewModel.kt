@@ -609,125 +609,6 @@ class HomeViewModel(
         }
     }
 
-    private fun updateUiStateFromDatabase(
-        shields: List<ShieldEntity>,
-        usage: List<DailyUsageEntity>,
-        global: List<DailyUsageEntity>,
-        prefs: UserPreferences,
-        fallbackMap: Map<String, List<UsageRecord.Live>>
-    ) {
-        val dateFormat = getDateFormat()
-        val todayStr = dateFormat.format(Date())
-        val selectedDate = _uiState.value.selectedDateMillis
-        val selectedDateStr = dateFormat.format(Date(selectedDate))
-        val selectedDayUsage = usage.filter { it.date == selectedDateStr }
-        val dbApps = selectedDayUsage.filter { it.packageName !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL") }
-        val fallbackDayApps = fallbackMap[selectedDateStr]?.filter { it.packageName != "TOTAL" } ?: emptyList()
-        val mergedAppMap = mutableMapOf<String, Long>()
-        dbApps.forEach { mergedAppMap[it.packageName] = it.usageTimeMillis }
-        if (prefs.preferSystemUsageHistory) {
-            fallbackDayApps.forEach { record ->
-                mergedAppMap[record.packageName] = maxOf(mergedAppMap[record.packageName] ?: 0L, record.usageTimeMillis)
-            }
-        }
-
-        val allApps = mergedAppMap.entries.sortedByDescending { it.value }.map { (pkg, time) ->
-            val cached = appInfoCache[pkg]
-            val existing = _uiState.value.allAppsUsage.find { it.packageName == pkg }
-            AppUsageInfo(
-                packageName = pkg,
-                appName = cached ?: pkg,
-                totalTimeVisible = time,
-                hasDatabaseRecord = dbApps.any { it.packageName == pkg },
-                hasSystemData = fallbackDayApps.any { it.packageName == pkg },
-                sessionCount = existing?.sessionCount ?: (if (time > 4000) 1 else 0),
-                lastTimeUsed = existing?.lastTimeUsed ?: 0L
-            )
-        }
-
-        val totalFromDb = selectedDayUsage.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
-        val totalFromFallback = if (prefs.preferSystemUsageHistory) {
-            fallbackMap[selectedDateStr]?.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
-        } else 0L
-        val currentTotal = mergedAppMap.values.sum()
-
-        val shieldTotal = selectedDayUsage.find { it.packageName == "SHIELD_TOTAL" }?.usageTimeMillis ?: 0L
-        val goalTotal = selectedDayUsage.find { it.packageName == "GOAL_TOTAL" }?.usageTimeMillis ?: 0L
-        val otherTotal = selectedDayUsage.find { it.packageName == "OTHER_TOTAL" }?.usageTimeMillis ?: 0L
-
-        val isSelectedDayToday = selectedDateStr == todayStr
-
-        val historyList = (0 until 21).map { i ->
-            val dStart = getMidnight(i)
-            val dStr = dateFormat.format(Date(dStart))
-            val dbEntry = global.find { it.date == dStr }
-            val hasSys = fallbackMap[dStr] != null
-            val fallbackTotal = if (prefs.preferSystemUsageHistory) {
-                fallbackMap[dStr]?.find { it.packageName == "TOTAL" }?.usageTimeMillis
-            } else null
-
-            DailyUsage(
-                date = dStart,
-                totalTime = dbEntry?.usageTimeMillis ?: fallbackTotal ?: 0L,
-                hasDatabaseRecord = dbEntry != null,
-                hasSystemData = hasSys,
-                isLive = i == 0
-            )
-        }
-
-        val targetMillis = prefs.screenTimeTargetMinutes * 60 * 1000L
-        val historyByDate = usage.filter { it.packageName !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL") }.groupBy { it.date }
-        val snapshotStamps = (0 until 21).map { i ->
-            val dStart = getMidnight(i)
-            val dStr = dateFormat.format(Date(dStart))
-            val dbDayApps = historyByDate[dStr] ?: emptyList()
-
-            val topPkgEntry = if (dbDayApps.isNotEmpty()) {
-                val top = dbDayApps.maxByOrNull { it.usageTimeMillis }
-                top?.packageName to top?.usageTimeMillis
-            } else if (prefs.preferSystemUsageHistory) {
-                val fallbackTop = fallbackMap[dStr]?.filter { it.packageName != "TOTAL" }?.maxByOrNull { it.usageTimeMillis }
-                fallbackTop?.packageName to fallbackTop?.usageTimeMillis
-            } else null
-
-            val topPkg = topPkgEntry?.first
-            val usageT = topPkgEntry?.second ?: 0L
-            val hasDb = dbDayApps.isNotEmpty()
-            val hasSys = fallbackMap[dStr] != null
-
-            if (topPkg != null) {
-                val cached = appInfoCache[topPkg]
-                AppUsageInfo(
-                    packageName = topPkg,
-                    appName = cached ?: topPkg,
-                    totalTimeVisible = usageT,
-                    hasDatabaseRecord = hasDb,
-                    hasSystemData = hasSys,
-                    isLive = i == 0
-                )
-            } else {
-                AppUsageInfo("", "", 0L, hasDatabaseRecord = hasDb, hasSystemData = hasSys, isLive = i == 0)
-            }
-        }
-
-        _uiState.update { state ->
-            val shouldStillLoad = state.isLoading && fallbackMap.isEmpty() && isSelectedDayToday
-
-            state.copy(
-                totalScreenTime = currentTotal,
-                allAppsUsage = allApps,
-                topApps = allApps.take(5),
-                shieldUsage = maxOf(state.shieldUsage, shieldTotal),
-                goalUsage = maxOf(state.goalUsage, goalTotal),
-                otherUsage = maxOf(state.otherUsage, otherTotal),
-                dailyUsageHistory = historyList.reversed(),
-                snapshotStamps = snapshotStamps.reversed(),
-                targetMillis = targetMillis,
-                isLoading = shouldStillLoad
-            )
-        }
-    }
-
     private fun setupDataObservers() {
         var lastPreferSystem: Boolean? = null
         var lastOnboardingCompleted: Boolean? = null
@@ -778,9 +659,8 @@ class HomeViewModel(
             combine(
                 shieldRepository.getRecentUsage(21),
                 shieldRepository.getLastNDaysGlobalUsage(60),
-                userPreferencesRepository.userPreferencesFlow,
-                _globalFallbackMap
-            ) { usage, global, prefs, fallbackMap ->
+                userPreferencesRepository.userPreferencesFlow
+            ) { usage, global, prefs ->
                 val forceUpdate = (lastPreferSystem != null && lastPreferSystem != prefs.preferSystemUsageHistory) ||
                         (lastOnboardingCompleted != null && lastOnboardingCompleted != prefs.onboardingStatsCompleted)
 
@@ -802,7 +682,6 @@ class HomeViewModel(
                     bedtimeDays = prefs.bedtimeDays
                 ) }
 
-                updateUiStateFromDatabase(allShields, usage, global, prefs, fallbackMap)
                 forceUpdate
             }.debounce(2000).collect { forceUpdate ->
                 try {
@@ -1573,25 +1452,42 @@ class HomeViewModel(
         }
         val (liveStreak, finalBestStreak) = userPreferencesRepository.refreshGlobalStreak(shieldRepository)
 
-        _uiState.update { state -> state.copy(
-            totalScreenTime      = selectedDayTotal,
-            yesterdayScreenTime  = totalYesterday,
-            percentageChange     = percentageChange,
-            dailyUsageHistory    = history.reversed(),
-            hourlyUsage          = hourlyUsage,
-            snapshotStamps       = snapshotStamps.reversed(),
-            topApps              = if (topApps.isEmpty() && isSelectedToday) state.topApps else topApps,
-            allAppsUsage         = if (allAppsUsage.isEmpty() && isSelectedToday) state.allAppsUsage else allAppsUsage,
-            shieldUsage          = finalShieldUsage,
-            goalUsage            = finalGoalUsage,
-            otherUsage           = finalOtherUsage,
-            activeShields = sortShields(liveShields.filter { it.type == FocusType.SHIELD }, state.shieldSortType),
-            activeGoals   = sortShields(liveShields.filter { it.type == FocusType.GOAL }, state.goalSortType),
-            globalCurrentStreak = liveStreak,
-            globalBestStreak = finalBestStreak,
-            targetMillis = currentTargetMinutes * 60 * 1000L,
-            isLoading = false
-        ) }
+        val prevState = _uiState.value
+        val todayChanged = kotlin.math.abs(prevState.totalScreenTime - selectedDayTotal) >= 2000L
+        val prevToday = prevState.dailyUsageHistory.firstOrNull()
+        val curToday = history.reversed().firstOrNull()
+        val todayBarChanged = prevToday?.totalTime != curToday?.totalTime
+
+        if (!todayChanged && !todayBarChanged) {
+            _uiState.update { state -> state.copy(
+                hourlyUsage      = hourlyUsage,
+                activeShields    = sortShields(liveShields.filter { it.type == FocusType.SHIELD }, state.shieldSortType),
+                activeGoals      = sortShields(liveShields.filter { it.type == FocusType.GOAL }, state.goalSortType),
+                globalCurrentStreak = liveStreak,
+                globalBestStreak = finalBestStreak,
+                isLoading        = false
+            ) }
+        } else {
+            _uiState.update { state -> state.copy(
+                totalScreenTime      = selectedDayTotal,
+                yesterdayScreenTime  = totalYesterday,
+                percentageChange     = percentageChange,
+                dailyUsageHistory    = history.reversed(),
+                hourlyUsage          = hourlyUsage,
+                snapshotStamps       = snapshotStamps.reversed(),
+                topApps              = if (topApps.isEmpty() && isSelectedToday) state.topApps else topApps,
+                allAppsUsage         = if (allAppsUsage.isEmpty() && isSelectedToday) state.allAppsUsage else allAppsUsage,
+                shieldUsage          = finalShieldUsage,
+                goalUsage            = finalGoalUsage,
+                otherUsage           = finalOtherUsage,
+                activeShields = sortShields(liveShields.filter { it.type == FocusType.SHIELD }, state.shieldSortType),
+                activeGoals   = sortShields(liveShields.filter { it.type == FocusType.GOAL }, state.goalSortType),
+                globalCurrentStreak = liveStreak,
+                globalBestStreak = finalBestStreak,
+                targetMillis = currentTargetMinutes * 60 * 1000L,
+                isLoading = false
+            ) }
+        }
 
     }
 

@@ -106,10 +106,17 @@ object ScreenUsageHelper {
                 lastUsedMap[pkg] = stats.lastTimeUsed
             }
 
-            val result = buildResult(currentTime, todayStart, zoneId, includeHourly, lastUsedMap, aggregatedStats)
-            lastResult = result
+            val rawResult = buildResult(currentTime, todayStart, zoneId, includeHourly, lastUsedMap, aggregatedStats)
+            val rounded = rawResult.copy(
+                appUsageMap = rawResult.appUsageMap.mapValues { (it.value / 1000L) * 1000L },
+                hourlyUsageMap = rawResult.hourlyUsageMap.mapValues { hEntry ->
+                    hEntry.value.mapValues { (it.value / 1000L) * 1000L }
+                },
+                totalGlobalUsage = (rawResult.totalGlobalUsage / 1000L) * 1000L
+            )
+            lastResult = rounded
             lastQueryTime = currentTime
-            return result
+            return rounded
         }
     }
 
