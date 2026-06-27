@@ -70,6 +70,7 @@ fun ZenithButton(
     text: String? = null,
     icon: ImageVector? = null,
     enabled: Boolean = true,
+    onDisabledClick: (() -> Unit)? = null,
     isLoading: Boolean = false,
     loadingProgress: Float? = null,
     backgroundProgress: Float? = null,
@@ -103,6 +104,7 @@ fun ZenithButton(
         text = text,
         icon = icon,
         enabled = enabled,
+        onDisabledClick = onDisabledClick,
         isLoading = isLoading,
         loadingProgress = loadingProgress,
         backgroundProgress = backgroundProgress,
@@ -138,6 +140,7 @@ fun RowScope.ZenithButtonWeighted(
     text: String? = null,
     icon: ImageVector? = null,
     enabled: Boolean = true,
+    onDisabledClick: (() -> Unit)? = null,
     isLoading: Boolean = false,
     loadingProgress: Float? = null,
     backgroundProgress: Float? = null,
@@ -194,6 +197,7 @@ fun RowScope.ZenithButtonWeighted(
         text = text,
         icon = icon,
         enabled = enabled,
+        onDisabledClick = onDisabledClick,
         isLoading = isLoading,
         loadingProgress = loadingProgress,
         backgroundProgress = backgroundProgress,
@@ -229,6 +233,7 @@ private fun ZenithButtonCore(
     text: String?,
     icon: ImageVector?,
     enabled: Boolean,
+    onDisabledClick: (() -> Unit)? = null,
     isLoading: Boolean,
     loadingProgress: Float?,
     backgroundProgress: Float?,
@@ -402,6 +407,7 @@ private fun ZenithButtonCore(
     Surface(
         onClick = {
             if (!enabled) {
+                onDisabledClick?.invoke()
                 scope.launch {
                     val intensity = with(density) { 6.dp.toPx() }
                     shakeOffset.animateTo(intensity, spring(stiffness = 10000f))

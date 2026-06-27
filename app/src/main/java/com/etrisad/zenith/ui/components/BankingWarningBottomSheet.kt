@@ -1,5 +1,12 @@
 package com.etrisad.zenith.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.service.SharedMonitoringState
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,6 +38,8 @@ fun BankingWarningBottomSheet(
 
     var understandChecked by remember { mutableStateOf(false) }
     var dontShowAgainChecked by remember { mutableStateOf(false) }
+    var showError by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val installedBankingApps = remember {
         val allInstalled = context.packageManager.getInstalledApplications(0)
@@ -262,21 +272,52 @@ fun BankingWarningBottomSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            Row(
+            val surfaceColor by animateColorAsState(
+                targetValue = if (showError) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface,
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = 600f),
+                label = "errorBg"
+            )
+
+            Surface(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                shape = RoundedCornerShape(12.dp),
+                color = surfaceColor
             ) {
-                Checkbox(
-                    checked = understandChecked,
-                    onCheckedChange = { understandChecked = it }
-                )
-                Spacer(modifier = Modifier.width(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(end = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = understandChecked,
+                        onCheckedChange = {
+                            understandChecked = it
+                            showError = false
+                        }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = buildAnnotatedString {
+                            append("I have read and understand the above. I accept the risks of using Zenith alongside my banking apps.")
+                            append(" ")
+                            withStyle(SpanStyle(color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)) { append("*") }
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+            AnimatedVisibility(
+                visible = showError,
+                enter = fadeIn(animationSpec = spring(dampingRatio = 0.8f, stiffness = 600f)) + slideInVertically { it / 2 },
+                exit = fadeOut(animationSpec = spring(dampingRatio = 0.8f, stiffness = 600f)) + slideOutVertically { it / 2 }
+            ) {
                 Text(
-                    text = buildAnnotatedString {
-                        append("I have read and understand the above. I accept the risks of using Zenith alongside my banking apps.")
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f)
+                    text = "Please check this box before proceeding",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                 )
             }
 
@@ -302,7 +343,12 @@ fun BankingWarningBottomSheet(
 
             ZenithGroupedButton(size = ZenithButtonSize.Large) {
                 ZenithButtonWeighted(
-                    onClick = onDismiss,
+                    onClick = {
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                        }
+                    },
                     text = "Back",
                     type = ZenithButtonType.Outlined,
                     isLast = false,
@@ -310,6 +356,7 @@ fun BankingWarningBottomSheet(
                 )
                 ZenithButtonWeighted(
                     onClick = {
+                        showError = false
                         if (dontShowAgainChecked) {
                             onDontShowAgain()
                         }
@@ -319,7 +366,8 @@ fun BankingWarningBottomSheet(
                     type = ZenithButtonType.Filled,
                     isFirst = false,
                     size = ZenithButtonSize.ExtraLarge,
-                    enabled = understandChecked
+                    enabled = understandChecked,
+                    onDisabledClick = { showError = true }
                 )
             }
 
