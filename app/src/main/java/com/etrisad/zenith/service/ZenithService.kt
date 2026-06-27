@@ -729,7 +729,6 @@ class ZenithService : AccessibilityService() {
             .setSmallIcon(R.drawable.ic_flag)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
-            .setGroup("zenith_goals")
             .build()
 
         try {

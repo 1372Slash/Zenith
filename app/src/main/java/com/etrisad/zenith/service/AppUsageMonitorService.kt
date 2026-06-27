@@ -543,7 +543,6 @@ class AppUsageMonitorService : Service() {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
-            .setGroup("zenith_goals")
             .build()
 
         manager.notify(goal.packageName.hashCode() + 1000, notification)
@@ -1445,7 +1444,6 @@ class AppUsageMonitorService : Service() {
             .setSmallIcon(R.drawable.ic_flag)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
-            .setGroup("zenith_goals")
             .build()
 
         manager.notify(packageName.hashCode(), notification)
