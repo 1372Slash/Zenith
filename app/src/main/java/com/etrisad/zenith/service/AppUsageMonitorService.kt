@@ -1534,9 +1534,25 @@ class AppUsageMonitorService : Service() {
         val effectiveShield = if (isMindfulGateway) overlayActionHandler.getMindfulShield(targetPackageName, appName) else shield
 
         if (effectiveShield != null && !InterceptOverlayManager.isShowing) {
-            val totalUsageToday = getTotalUsageToday(targetPackageName)
+            if (effectiveShield.type == FocusType.GOAL) {
+                updateUsageTime(targetPackageName)
+                com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
+                lastUsageCacheTime = 0L
+                SharedMonitoringState.lastDailyUsageFetchTime = 0L
+            }
+            var totalUsageToday = getTotalUsageToday(targetPackageName)
             val totalGlobalUsageToday = getTotalGlobalUsageToday()
             val delayDurationSeconds = if (isMindfulGateway) 0 else prefs.delayAppDurationSeconds
+
+            if (effectiveShield.type == FocusType.GOAL) {
+                val hudSeconds = sessionUsageOverlayManager.getHUDElapsedSeconds(targetPackageName)
+                if (hudSeconds != null) {
+                    val hudMillis = hudSeconds * 1000L
+                    if (hudMillis > totalUsageToday) {
+                        totalUsageToday = hudMillis
+                    }
+                }
+            }
 
             currentShieldCache = if (isMindfulGateway) null else effectiveShield
 
@@ -1548,7 +1564,13 @@ class AppUsageMonitorService : Service() {
                 totalUsageToday = totalUsageToday,
                 totalGlobalUsageToday = totalGlobalUsageToday,
                 updateShieldCache = { updated -> currentShieldCache = updated },
-                getTotalUsageTodayFn = { getTotalUsageToday(targetPackageName) },
+                getTotalUsageTodayFn = {
+                    updateUsageTime(targetPackageName)
+                    com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
+                    lastUsageCacheTime = 0L
+                    SharedMonitoringState.lastDailyUsageFetchTime = 0L
+                    getTotalUsageToday(targetPackageName)
+                },
             )
         }
     }

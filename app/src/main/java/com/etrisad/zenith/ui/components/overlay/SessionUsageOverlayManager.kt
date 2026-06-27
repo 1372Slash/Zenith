@@ -464,6 +464,13 @@ class SessionUsageOverlayManager(
         }
     }
 
+    fun getHUDElapsedSeconds(packageName: String): Int? {
+        synchronized(activeSessions) {
+            return activeSessions.find { it.packageName == packageName && it.isGoal }
+                ?.let { it.secondsElapsedState.intValue }
+        }
+    }
+
     fun updateForegroundApp(packageName: String, force: Boolean = false) {
         if (packageName.isEmpty() || SYSTEM_UI_PACKAGES.contains(packageName)) return
         if (!force && currentForegroundPackage == packageName) return
