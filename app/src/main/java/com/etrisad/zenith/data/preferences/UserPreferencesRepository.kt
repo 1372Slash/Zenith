@@ -249,6 +249,7 @@ class UserPreferencesRepository(private val context: Context) {
         val REFRESH_ON_OPEN_USAGE_STATS = booleanPreferencesKey("refresh_on_open_usage_stats")
         val CHECK_UPDATE_ON_START = booleanPreferencesKey("check_update_on_start")
         val BATTERY_STATS_RESET_ENABLED = booleanPreferencesKey("battery_stats_reset_enabled")
+        val BANKING_WARNING_DISMISSED = booleanPreferencesKey("banking_warning_dismissed")
         val SHOW_CURRENT_EVENT = booleanPreferencesKey("show_current_event")
         val DAILY_RECAP_ENABLED = booleanPreferencesKey("daily_recap_enabled")
         val WEEKLY_INSIGHT_ENABLED = booleanPreferencesKey("weekly_insight_enabled")
@@ -400,6 +401,7 @@ class UserPreferencesRepository(private val context: Context) {
             refreshOnOpenUsageStats = settings[PreferencesKeys.REFRESH_ON_OPEN_USAGE_STATS] ?: false,
             checkUpdateOnStart = settings[PreferencesKeys.CHECK_UPDATE_ON_START] ?: false,
             batteryStatsResetEnabled = settings[PreferencesKeys.BATTERY_STATS_RESET_ENABLED] ?: false,
+            bankingWarningDismissed = settings[PreferencesKeys.BANKING_WARNING_DISMISSED] ?: false,
             showCurrentEvent = settings[PreferencesKeys.SHOW_CURRENT_EVENT] ?: false,
             dailyRecapEnabled = settings[PreferencesKeys.DAILY_RECAP_ENABLED] ?: true,
             weeklyInsightEnabled = settings[PreferencesKeys.WEEKLY_INSIGHT_ENABLED] ?: true,
@@ -1339,6 +1341,10 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.BATTERY_STATS_RESET_ENABLED] = enabled }
     }
 
+    suspend fun setBankingWarningDismissed(dismissed: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.BANKING_WARNING_DISMISSED] = dismissed }
+    }
+
     suspend fun setShowCurrentEvent(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.SHOW_CURRENT_EVENT] = enabled }
     }
@@ -1729,6 +1735,7 @@ data class UserPreferences(
     val incentiveLockEnabled: Boolean = false,
     val incentiveLockDisableRequestTimestamp: Long = 0L,
     val incentiveLockGoalsMetToday: Boolean = false,
+    val bankingWarningDismissed: Boolean = false,
     val eyeCareEnabled: Boolean = false,
     val eyeCareWorkMinutes: Int = 20,
     val eyeCareRestSeconds: Int = 20,

@@ -157,8 +157,8 @@ class AppUsageMonitorService : Service() {
                             delay(300)
                             if (isScreenOn && !shouldBypassBlocking(currentApp)) {
                                 checkBlockingInstant(currentApp, currentShieldCache)
-                                if (ZenithAccessibilityService.isServiceRunning) {
-                                    ZenithAccessibilityService.lastEventTime = 0L
+                                if (ZenithService.isServiceRunning) {
+                                    ZenithService.lastEventTime = 0L
                                 }
                             }
                         }
@@ -728,7 +728,7 @@ class AppUsageMonitorService : Service() {
                     lastLoopTick = System.currentTimeMillis()
 
                     if (isScreenOn) {
-                        if (!ZenithAccessibilityService.isServiceRunning) {
+                        if (!ZenithService.isServiceRunning) {
                             val currentApp = getForegroundApp()
                             if (currentApp != null && currentApp != AppStateHolder.foregroundApp.value) {
                                 AppStateHolder.foregroundApp.value = currentApp
@@ -736,7 +736,7 @@ class AppUsageMonitorService : Service() {
                         }
 
                         if (!InterceptOverlayManager.isShowing) {
-                            val currentApp = if (ZenithAccessibilityService.isServiceRunning) {
+                            val currentApp = if (ZenithService.isServiceRunning) {
                                 lastForegroundApp
                             } else {
                                 getForegroundApp()
@@ -768,7 +768,7 @@ class AppUsageMonitorService : Service() {
                 val delayTime = computeMonitoringDelay()
                 if (delayTime < 30000) {
                     val fg = lastForegroundApp
-                    Log.w("ZenithAUMS", "SHORT DELAY: ${delayTime}ms | cfg=${SharedMonitoringState.performanceConfig.monDefault} | shield=${currentShieldCache?.packageName} | allowed=${if (fg != null) allowedApps[fg] else null} | a11y=${ZenithAccessibilityService.isServiceRunning} | psm=${AppStateHolder.isPowerSaveMode.value} | overlay=${InterceptOverlayManager.isShowing}")
+                    Log.w("ZenithAUMS", "SHORT DELAY: ${delayTime}ms | cfg=${SharedMonitoringState.performanceConfig.monDefault} | shield=${currentShieldCache?.packageName} | allowed=${if (fg != null) allowedApps[fg] else null} | a11y=${ZenithService.isServiceRunning} | psm=${AppStateHolder.isPowerSaveMode.value} | overlay=${InterceptOverlayManager.isShowing}")
                 }
                 val cycleMs = System.currentTimeMillis() - lastLoopTick
                 if (cycleMs > 80) {
@@ -901,13 +901,13 @@ class AppUsageMonitorService : Service() {
         }
 
         if (shouldBypassBlocking(currentApp)) {
-            if (!ZenithAccessibilityService.isServiceRunning) {
+            if (!ZenithService.isServiceRunning) {
                 overlayManager.checkAndHide(currentApp)
             }
             return
         }
 
-        if (!ZenithAccessibilityService.isServiceRunning) {
+        if (!ZenithService.isServiceRunning) {
             overlayManager.checkAndHide(currentApp)
         }
         if (InterceptOverlayManager.isShowing) {
@@ -961,7 +961,7 @@ class AppUsageMonitorService : Service() {
             baseGlobalUsageAtSessionStart = systemGlobal.coerceAtMost(timeSinceMidnight)
             cachedTotalGlobalUsage = baseGlobalUsageAtSessionStart
 
-            if (!shouldBypassBlocking(currentApp) && !ZenithAccessibilityService.isServiceRunning) {
+            if (!shouldBypassBlocking(currentApp) && !ZenithService.isServiceRunning) {
                 checkBlockingInstant(currentApp, currentShieldCache)
             }
         }
@@ -981,7 +981,7 @@ class AppUsageMonitorService : Service() {
 
         if (shouldBypassBlocking(currentApp)) return
 
-        if (ZenithAccessibilityService.isServiceRunning && !InterceptOverlayManager.isShowing) {
+        if (ZenithService.isServiceRunning && !InterceptOverlayManager.isShowing) {
             val shield = currentShieldCache
             val isAppPaused = shield != null && isPaused(shield)
             val allowedUntilVal = allowedApps[currentApp]
@@ -1039,7 +1039,7 @@ class AppUsageMonitorService : Service() {
         val isAppPaused = shieldForPauseCheck != null && isPaused(shieldForPauseCheck)
 
         val allowedUntilVal = allowedApps[currentApp]
-        if (!isAppPaused && allowedUntilVal != null && allowedUntilVal > currentTime && !ZenithAccessibilityService.isServiceRunning) {
+        if (!isAppPaused && allowedUntilVal != null && allowedUntilVal > currentTime && !ZenithService.isServiceRunning) {
             val prefs = SharedMonitoringState.currentPreferences
             if (prefs?.sessionUsageOverlayEnabled == true) {
                 val remainingMinutes = ((allowedUntilVal - currentTime) / 60000L).toInt().coerceAtLeast(1)
@@ -1091,7 +1091,7 @@ class AppUsageMonitorService : Service() {
         val isBedtimeBlocking = SharedMonitoringState.isBedtimeActive || (SharedMonitoringState.isWindDownActive && SharedMonitoringState.currentPreferences?.bedtimeWindDownEnabled == true)
         val shouldCheckSchedules = (isBedtimeBlocking && currentApp !in SharedMonitoringState.bedtimeWhitelistedPackages) || (allowedUntilVal == null || currentTime > allowedUntilVal)
 
-        if (!isAppPaused && shouldCheckSchedules && !InterceptOverlayManager.isShowing && !ZenithAccessibilityService.isServiceRunning) {
+        if (!isAppPaused && shouldCheckSchedules && !InterceptOverlayManager.isShowing && !ZenithService.isServiceRunning) {
             if (checkSchedules(currentApp)) {
                 lastForegroundApp = currentApp
                 return
@@ -1132,7 +1132,7 @@ class AppUsageMonitorService : Service() {
         
         if (!isScreenOn) return cfg.screenOffDelay
 
-        if (ZenithAccessibilityService.isServiceRunning && !InterceptOverlayManager.isShowing) {
+        if (ZenithService.isServiceRunning && !InterceptOverlayManager.isShowing) {
             return cfg.a11yActiveDelay
         }
 
@@ -1147,7 +1147,7 @@ class AppUsageMonitorService : Service() {
         }
 
         return try {
-            if (ZenithAccessibilityService.isServiceRunning) {
+            if (ZenithService.isServiceRunning) {
                 cfg.a11yActiveDelay
             } else if (AppStateHolder.isPowerSaveMode.value) {
                 cfg.monPowerSave
@@ -1222,7 +1222,7 @@ class AppUsageMonitorService : Service() {
     }
 
     private suspend fun checkBlockingInstant(currentApp: String, shield: ShieldEntity?) {
-        if (ZenithAccessibilityService.isServiceRunning) return
+        if (ZenithService.isServiceRunning) return
         
         val currentTime = System.currentTimeMillis()
         val isAppPaused = shield != null && isPaused(shield)

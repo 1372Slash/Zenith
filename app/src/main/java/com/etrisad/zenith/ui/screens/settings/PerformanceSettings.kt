@@ -48,6 +48,9 @@ import com.etrisad.zenith.ui.components.ZenithButtonWeighted
 import com.etrisad.zenith.ui.components.ZenithGroupedButton
 import com.etrisad.zenith.ui.components.focus.PreferenceCategory
 import com.etrisad.zenith.ui.screens.settings.SettingsToggle
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.service.SharedMonitoringState
+import com.etrisad.zenith.ui.components.BankingWarningBottomSheet
 import com.etrisad.zenith.util.isAccessibilityServiceEnabled
 import kotlinx.coroutines.launch
 
@@ -56,6 +59,8 @@ fun PerformanceSettings(
     preferences: UserPreferences,
     selectedLevel: PerformanceLevel,
     onSelectLevel: (PerformanceLevel) -> Unit,
+    preferencesRepository: UserPreferencesRepository? = null,
+    coroutineScope: kotlinx.coroutines.CoroutineScope? = null,
 ) {
     val allLevels = PerformanceLevel.values()
     var pendingBatteryLevel by remember { mutableStateOf<PerformanceLevel?>(null) }
@@ -181,6 +186,7 @@ fun PerformanceTuningPanel(
     onRegisterApplyAction: ((() -> Unit) -> Unit)? = null,
     onResetPerfMonDelays: (() -> Unit)? = null,
     onAccessibilityRequiredChange: (Boolean) -> Unit = {},
+    preferencesRepository: UserPreferencesRepository? = null,
 ) {
     val scope = rememberCoroutineScope()
     var tuningExpanded by remember { mutableStateOf(selectedLevel == PerformanceLevel.CUSTOM) }
@@ -335,6 +341,14 @@ fun PerformanceTuningPanel(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var hasAccessibility by remember { mutableStateOf(isAccessibilityServiceEnabled(context)) }
+    var showBankingWarning by remember { mutableStateOf(false) }
+
+    val installedBankingApps = remember {
+        val allInstalled = context.packageManager.getInstalledApplications(0)
+            .map { it.packageName }
+            .toSet()
+        SharedMonitoringState.FINANCIAL_APPS.filter { it in allInstalled }
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -386,10 +400,14 @@ fun PerformanceTuningPanel(
                       else "Detect app launches instantly for peak performance",
         isGranted = hasAccessibility,
         onClick = {
-            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (!preferences.bankingWarningDismissed) {
+                showBankingWarning = true
+            } else {
+                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
             }
-            context.startActivity(intent)
         },
         icon = Icons.Outlined.AccessibilityNew,
         position = TuningGroupPosition.Top
@@ -404,6 +422,24 @@ fun PerformanceTuningPanel(
         shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
     )
     Spacer(modifier = Modifier.height(16.dp))
+
+    if (showBankingWarning) {
+        BankingWarningBottomSheet(
+            onDismiss = { showBankingWarning = false },
+            onProceed = {
+                showBankingWarning = false
+                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            },
+            onDontShowAgain = {
+                scope.launch {
+                    preferencesRepository?.setBankingWarningDismissed(true)
+                }
+            }
+        )
+    }
 
     PreferenceCategory(title = "Custom Tuning")
 

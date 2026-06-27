@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.service.AppUsageMonitorService
+import com.etrisad.zenith.service.SharedMonitoringState
 import com.etrisad.zenith.util.canScheduleExactAlarms
 import com.etrisad.zenith.util.hasCalendarPermission
 import com.etrisad.zenith.util.hasNotificationPermission
@@ -82,6 +83,14 @@ fun PermissionBottomSheet(
     
     var stabilityExpanded by remember { mutableStateOf(false) }
     var optionalExpanded by remember { mutableStateOf(false) }
+    var showBankingWarning by remember { mutableStateOf(false) }
+
+    val installedBankingApps = remember {
+        val allInstalled = context.packageManager.getInstalledApplications(0)
+            .map { it.packageName }
+            .toSet()
+        SharedMonitoringState.FINANCIAL_APPS.filter { it in allInstalled }
+    }
 
     val optionalAllGranted = if (preferences.accessibilityRequired) hasNotificationListener else (hasAccessibility && hasNotificationListener)
     val stabilityAllGranted = !isBatteryOptimized && canExactAlarm
@@ -250,7 +259,13 @@ fun PermissionBottomSheet(
                     title = "Accessibility Service",
                     description = "To detect app launches instantly",
                     isGranted = hasAccessibility,
-                    onClick = { openAccessibilitySettings(context) },
+                    onClick = {
+                        if (!preferences.bankingWarningDismissed) {
+                            showBankingWarning = true
+                        } else {
+                            openAccessibilitySettings(context)
+                        }
+                    },
                     icon = Icons.Outlined.AccessibilityNew,
                     position = GroupPosition.Bottom
                 )
@@ -271,7 +286,13 @@ fun PermissionBottomSheet(
                             title = "Accessibility Service",
                             description = "To detect app launches instantly",
                             isGranted = hasAccessibility,
-                            onClick = { openAccessibilitySettings(context) },
+                            onClick = {
+                                if (!preferences.bankingWarningDismissed) {
+                                    showBankingWarning = true
+                                } else {
+                                    openAccessibilitySettings(context)
+                                }
+                            },
                             icon = Icons.Outlined.AccessibilityNew,
                             position = GroupPosition.Top,
                             isInsideCollapse = true
@@ -392,6 +413,21 @@ fun PermissionBottomSheet(
                 }
             }
         }
+    }
+
+    if (showBankingWarning) {
+        BankingWarningBottomSheet(
+            onDismiss = { showBankingWarning = false },
+            onProceed = {
+                showBankingWarning = false
+                openAccessibilitySettings(context)
+            },
+            onDontShowAgain = {
+                scope.launch {
+                    preferencesRepository.setBankingWarningDismissed(true)
+                }
+            }
+        )
     }
 }
 

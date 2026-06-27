@@ -32,8 +32,8 @@ class ZenithHeartbeatReceiver : BroadcastReceiver() {
                     android.util.Log.w("ZenithHeartbeat", "Failed to start service: ${e.message}")
                 }
 
-                if (ZenithAccessibilityService.isServiceRunning) {
-                    val accessIntent = Intent(context, ZenithAccessibilityService::class.java).apply {
+                if (ZenithService.isServiceRunning) {
+                    val accessIntent = Intent(context, ZenithService::class.java).apply {
                         this.action = "com.etrisad.zenith.action.REFRESH_DATA"
                     }
                     try {

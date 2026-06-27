@@ -22,7 +22,7 @@ fun hasAllPermissions(context: Context): Boolean {
 }
 
 fun isAccessibilityServiceEnabled(context: Context): Boolean {
-    val expectedId = android.content.ComponentName(context.packageName, "com.etrisad.zenith.service.ZenithAccessibilityService").flattenToString()
+    val expectedId = android.content.ComponentName(context.packageName, "com.etrisad.zenith.service.ZenithService").flattenToString()
     val enabledServices = android.provider.Settings.Secure.getString(
         context.contentResolver,
         android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES

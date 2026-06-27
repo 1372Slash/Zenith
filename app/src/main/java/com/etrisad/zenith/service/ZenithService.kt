@@ -36,7 +36,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class ZenithAccessibilityService : AccessibilityService() {
+class ZenithService : AccessibilityService() {
 
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
@@ -80,7 +80,7 @@ class ZenithAccessibilityService : AccessibilityService() {
             set(value) { field = value; AppStateHolder.isAccessibilityServiceRunning.value = value }
         @Volatile
         var lastEventTime = 0L
-        private var instance: ZenithAccessibilityService? = null
+        private var instance: ZenithService? = null
         const val BEDTIME_CHANNEL_ID = "zenith_bedtime_channel"
         const val WIND_DOWN_NOTIFICATION_ID = 2001
     }
@@ -149,11 +149,29 @@ class ZenithAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun isAnyFinancialAppInstalled(): Boolean {
+        return SharedMonitoringState.FINANCIAL_APPS.any { pkg ->
+            try {
+                packageManager.getPackageInfo(pkg, 0)
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        isServiceRunning = true
         lastEventTime = System.currentTimeMillis()
+
+        if (isAnyFinancialAppInstalled()) {
+            showFinancialAppPreventionNotification()
+            disableSelf()
+            return
+        }
+
+        isServiceRunning = true
 
         val app = application as com.etrisad.zenith.ZenithApplication
         shieldRepository = app.shieldRepository
@@ -461,6 +479,39 @@ class ZenithAccessibilityService : AccessibilityService() {
             overlayManager.checkAndHide(packageName)
             packageChangeFlow.tryEmit(packageName)
         }
+    }
+
+    private fun showFinancialAppPreventionNotification() {
+        val channelId = "zenith_banking_channel"
+        if (notificationManager.getNotificationChannel(channelId) == null) {
+            val channel = NotificationChannel(
+                channelId, "Banking App Compatibility", NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Notifications when Zenith disables accessibility for banking app compatibility"
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val openSettingsIntent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Accessibility Paused")
+            .setContentText("A banking app is installed. Zenith paused accessibility to avoid detection. Monitoring continues via usage stats.")
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    this, 1, openSettingsIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+            )
+            .build()
+
+        try {
+            notificationManager.notify(3002, notification)
+        } catch (_: Exception) {}
     }
 
     private fun showFinancialAppNotification(packageName: String) {
@@ -1062,7 +1113,7 @@ class ZenithAccessibilityService : AccessibilityService() {
             SharedMonitoringState.systemAppCache.clear()
             serviceScope.launch {
                 try {
-                    ZenithDatabase.getDatabase(this@ZenithAccessibilityService).openHelper.writableDatabase.execSQL("PRAGMA shrink_memory")
+                    ZenithDatabase.getDatabase(this@ZenithService).openHelper.writableDatabase.execSQL("PRAGMA shrink_memory")
                 } catch (_: Exception) {}
             }
         }

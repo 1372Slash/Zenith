@@ -42,7 +42,7 @@
         </service>
 
         <service
-            android:name=".service.ZenithAccessibilityService"
+            android:name=".service.ZenithService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="false">
             <intent-filter>

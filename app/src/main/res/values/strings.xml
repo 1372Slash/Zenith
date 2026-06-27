@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">Zenith</string>
-    <string name="accessibility_service_description">Zenith uses this service to monitor which apps are open and show focus shields when your time limit is reached.</string>
+    <string name="accessibility_service_description">Helps Zenith identify the currently active application for digital wellbeing features.</string>
     <string name="global_streak_widget_description">Track your total focused days across all apps.</string>
     <string name="app_streak_widget_description">Track your focus streak for a specific app.</string>
 </resources>
