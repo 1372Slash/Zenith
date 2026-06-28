@@ -353,6 +353,7 @@ class AppUsageMonitorService : Service() {
             earlyKickManager.reset()
             SharedMonitoringState.dailyUsageCache.clear()
             lastAllowedRemainingTime.clear()
+            lastKnownPackageUsage.clear()
             periodUsageCache.clear()
             refreshPeriodUsageCache()
             SharedMonitoringState.systemAppCache.clear()
@@ -1180,6 +1181,7 @@ class AppUsageMonitorService : Service() {
             earlyKickManager.reset()
             SharedMonitoringState.dailyUsageCache.clear()
             lastAllowedRemainingTime.clear()
+            lastKnownPackageUsage.clear()
             periodUsageCache.clear()
             refreshPeriodUsageCache()
             SharedMonitoringState.systemAppCache.clear()
@@ -1728,6 +1730,7 @@ class AppUsageMonitorService : Service() {
         cachedForegroundApp = null
         cachedForegroundAppTime = 0L
         lastEventQueryTime = 0L
+        if (lastKnownPackageUsage.size > 20) lastKnownPackageUsage.clear()
         val intent = Intent(Intent.ACTION_MAIN)
         intent.addCategory(Intent.CATEGORY_HOME)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
