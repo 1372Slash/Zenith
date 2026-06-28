@@ -602,35 +602,38 @@ class OverlayActionHandler(
             return false
         }
 
-        val now = System.currentTimeMillis()
-        val currentTotalMinutes = synchronized(reusableCalendar) {
-            reusableCalendar.timeInMillis = now
-            reusableCalendar.get(Calendar.HOUR_OF_DAY) * 60 + reusableCalendar.get(Calendar.MINUTE)
-        }
-
-        for (ps in SharedMonitoringState.parsedSchedulesCache) {
-            val isInInterval = if (ps.startMinutes <= ps.endMinutes) {
-                currentTotalMinutes in ps.startMinutes..ps.endMinutes
-            } else {
-                currentTotalMinutes >= ps.startMinutes || currentTotalMinutes <= ps.endMinutes
+        val schedules = SharedMonitoringState.parsedSchedulesCache
+        if (schedules.isNotEmpty()) {
+            val now = System.currentTimeMillis()
+            val currentTotalMinutes = synchronized(reusableCalendar) {
+                reusableCalendar.timeInMillis = now
+                reusableCalendar.get(Calendar.HOUR_OF_DAY) * 60 + reusableCalendar.get(Calendar.MINUTE)
             }
 
-            if (isInInterval) {
-                when (ps.mode) {
-                    ScheduleMode.BLOCK -> {
-                        if (packageName in ps.packageNames) {
-                            val originalSchedule = SharedMonitoringState.activeSchedules.find { it.id == ps.id } ?: return false
-                            val totalGlobalUsageToday = getTotalGlobalUsageToday()
-                            showScheduleOverlay(packageName, originalSchedule, totalGlobalUsageToday, updateShieldCache, recheckSchedules)
-                            return true
+            for (ps in schedules) {
+                val isInInterval = if (ps.startMinutes <= ps.endMinutes) {
+                    currentTotalMinutes in ps.startMinutes..ps.endMinutes
+                } else {
+                    currentTotalMinutes >= ps.startMinutes || currentTotalMinutes <= ps.endMinutes
+                }
+
+                if (isInInterval) {
+                    when (ps.mode) {
+                        ScheduleMode.BLOCK -> {
+                            if (packageName in ps.packageNames) {
+                                val originalSchedule = SharedMonitoringState.activeSchedules.find { it.id == ps.id } ?: return false
+                                val totalGlobalUsageToday = getTotalGlobalUsageToday()
+                                showScheduleOverlay(packageName, originalSchedule, totalGlobalUsageToday, updateShieldCache, recheckSchedules)
+                                return true
+                            }
                         }
-                    }
-                    ScheduleMode.ALLOW -> {
-                        if (packageName !in ps.packageNames) {
-                            val originalSchedule = SharedMonitoringState.activeSchedules.find { it.id == ps.id } ?: return false
-                            val totalGlobalUsageToday = getTotalGlobalUsageToday()
-                            showScheduleOverlay(packageName, originalSchedule, totalGlobalUsageToday, updateShieldCache, recheckSchedules)
-                            return true
+                        ScheduleMode.ALLOW -> {
+                            if (packageName !in ps.packageNames) {
+                                val originalSchedule = SharedMonitoringState.activeSchedules.find { it.id == ps.id } ?: return false
+                                val totalGlobalUsageToday = getTotalGlobalUsageToday()
+                                showScheduleOverlay(packageName, originalSchedule, totalGlobalUsageToday, updateShieldCache, recheckSchedules)
+                                return true
+                            }
                         }
                     }
                 }

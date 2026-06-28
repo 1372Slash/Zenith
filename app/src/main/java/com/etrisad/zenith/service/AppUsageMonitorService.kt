@@ -1162,6 +1162,9 @@ class AppUsageMonitorService : Service() {
         if (shield != null) {
             return if (shield.type == FocusType.GOAL) cfg.monGoalFar else cfg.monShieldFar
         }
+        if (SharedMonitoringState.parsedSchedulesCache.isEmpty() && !SharedMonitoringState.isBedtimeActive) {
+            return 15000L
+        }
         return cfg.monDefault
     }
 
