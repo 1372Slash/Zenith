@@ -591,6 +591,17 @@ class AppUsageMonitorService : Service() {
         }
 
         manager.notify(2000, builder.build())
+
+        if (!isScreenOn) {
+            val directIntent = Intent(this, AppGoalOverlayActivity::class.java).apply {
+                putStringArrayListExtra(
+                    AppGoalOverlayActivity.EXTRA_PACKAGE_NAMES,
+                    ArrayList(goals.map { it.packageName })
+                )
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            }
+            startActivity(directIntent)
+        }
     }
 
     private fun createGoalNotificationChannel() {
