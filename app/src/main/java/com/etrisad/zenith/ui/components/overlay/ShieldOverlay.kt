@@ -168,6 +168,8 @@ fun ShieldOverlay(
         }
     }
 
+    var bonusConsumedThisSession by remember { mutableStateOf(false) }
+
     val isIncentiveBlocked = isIncentiveActive && (incentiveTier == IncentiveTier.LOCKED || (incentiveTier.bonusUses < Int.MAX_VALUE && bonusUsesLeft <= 0))
 
     val isDelayEnabled = currentShield != null && currentShield.isDelayAppEnabled && currentShield.type == FocusType.SHIELD
@@ -419,12 +421,12 @@ fun ShieldOverlay(
                 bonusUsesLeft = bonusUsesLeft,
                 incentiveProgress = incentiveProgress,
                 isIncentiveBlocked = isIncentiveBlocked,
+                bonusConsumedThisSession = bonusConsumedThisSession,
                 onConsumeBonusUse = {
                     scope.launch {
                         if (shieldRepository.consumeIncentiveBonusUse()) {
-                            showContent = false
-                            delay(400)
-                            currentOnAllowUse(9999, isEmergencyUnlocked)
+                            bonusUsesLeft--
+                            bonusConsumedThisSession = true
                         }
                     }
                 },
@@ -470,12 +472,12 @@ fun ShieldOverlay(
                 bonusUsesLeft = bonusUsesLeft,
                 incentiveProgress = incentiveProgress,
                 isIncentiveBlocked = isIncentiveBlocked,
+                bonusConsumedThisSession = bonusConsumedThisSession,
                 onConsumeBonusUse = {
                     scope.launch {
                         if (shieldRepository.consumeIncentiveBonusUse()) {
-                            showContent = false
-                            delay(400)
-                            currentOnAllowUse(9999, isEmergencyUnlocked)
+                            bonusUsesLeft--
+                            bonusConsumedThisSession = true
                         }
                     }
                 },
@@ -526,6 +528,7 @@ fun PortraitInterceptLayout(
     bonusUsesLeft: Int = 0,
     incentiveProgress: Float = 0f,
     isIncentiveBlocked: Boolean = false,
+    bonusConsumedThisSession: Boolean = false,
     onConsumeBonusUse: () -> Unit = {},
     autoKickProgress: () -> Float,
     onEmergencyClick: () -> Unit,
@@ -641,7 +644,7 @@ fun PortraitInterceptLayout(
                     onEmergencyHoldingChange = onEmergencyHoldingChange
                 )
             } else {
-                if (incentiveTier != null && !incentiveTier.isUnlocked && incentiveTier.bonusUses < Int.MAX_VALUE && bonusUsesLeft > 0) {
+                if (incentiveTier != null && !incentiveTier.isUnlocked && incentiveTier.bonusUses < Int.MAX_VALUE && bonusUsesLeft > 0 && !bonusConsumedThisSession) {
                     IncentiveBonusUseSection(
                         incentiveTier = incentiveTier,
                         bonusUsesLeft = bonusUsesLeft,
@@ -702,6 +705,7 @@ fun LandscapeInterceptLayout(
     bonusUsesLeft: Int = 0,
     incentiveProgress: Float = 0f,
     isIncentiveBlocked: Boolean = false,
+    bonusConsumedThisSession: Boolean = false,
     onConsumeBonusUse: () -> Unit = {},
     autoKickProgress: () -> Float,
     onEmergencyClick: () -> Unit,
@@ -842,6 +846,7 @@ fun LandscapeInterceptLayout(
                     bonusUsesLeft = bonusUsesLeft,
                     incentiveProgress = incentiveProgress,
                     isIncentiveBlocked = isIncentiveBlocked,
+                    bonusConsumedThisSession = bonusConsumedThisSession,
                     onConsumeBonusUse = onConsumeBonusUse,
                     autoKickProgress = autoKickProgress,
                     onEmergencyClick = onEmergencyClick,
@@ -1103,6 +1108,7 @@ fun ShieldLandscapeContent(
     bonusUsesLeft: Int = 0,
     incentiveProgress: Float = 0f,
     isIncentiveBlocked: Boolean = false,
+    bonusConsumedThisSession: Boolean = false,
     onConsumeBonusUse: () -> Unit = {},
     autoKickProgress: () -> Float,
     onEmergencyClick: () -> Unit,
@@ -1144,7 +1150,7 @@ fun ShieldLandscapeContent(
             CloseAppTextButton(onCloseApp, autoKickProgress, size = ZenithButtonSize.Large)
         }
     } else {
-        if (incentiveTier != null && !incentiveTier.isUnlocked && incentiveTier.bonusUses < Int.MAX_VALUE && bonusUsesLeft > 0) {
+        if (incentiveTier != null && !incentiveTier.isUnlocked && incentiveTier.bonusUses < Int.MAX_VALUE && bonusUsesLeft > 0 && !bonusConsumedThisSession) {
             IncentiveBonusUseSection(
                 incentiveTier = incentiveTier,
                 bonusUsesLeft = bonusUsesLeft,
