@@ -42,6 +42,7 @@ object SharedMonitoringState {
     val systemAppCache = ConcurrentHashMap<String, Boolean>()
     val dailyUsageCache = ConcurrentHashMap<String, Long>()
     val notifiedGoals = ConcurrentHashMap.newKeySet<String>()
+    val lastKnownPackageUsage = ConcurrentHashMap<String, Long>()
     @Volatile var activeSchedules = listOf<com.etrisad.zenith.data.local.entity.ScheduleEntity>()
     @Volatile var performanceLevel: PerformanceLevel = PerformanceLevel.BALANCED
     @Volatile var performanceConfig: PerformanceConfig = PerformanceConfig()

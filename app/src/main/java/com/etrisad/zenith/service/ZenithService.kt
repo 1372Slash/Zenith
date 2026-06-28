@@ -703,9 +703,32 @@ class ZenithService : AccessibilityService() {
             val effectiveShield = if (isMindfulGateway) overlayActionHandler.getMindfulShield(targetPackageName, appName) else shield
 
             if (effectiveShield != null && !InterceptOverlayManager.isShowing) {
-                val totalUsageToday = getTotalUsageToday(targetPackageName)
+                if (effectiveShield.type == FocusType.GOAL) {
+                    val limitMillis = effectiveShield.timeLimitMinutes * 60 * 1000L
+                    if (SharedMonitoringState.notifiedGoals.contains(targetPackageName)) return
+
+                    com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
+                    lastUsageCacheTime = 0L
+                    SharedMonitoringState.lastDailyUsageFetchTime = 0L
+                }
+                var totalUsageToday = getTotalUsageToday(targetPackageName)
                 val totalGlobalUsageToday = getTotalGlobalUsageToday()
                 val delayDurationSeconds = if (isMindfulGateway) 0 else prefs.delayAppDurationSeconds
+
+                if (effectiveShield.type == FocusType.GOAL) {
+                    val hudSeconds = sessionUsageOverlayManager.getHUDElapsedSeconds(targetPackageName)
+                    if (hudSeconds != null) {
+                        val hudMillis = hudSeconds * 1000L
+                        if (hudMillis > totalUsageToday) {
+                            totalUsageToday = hudMillis
+                        }
+                    }
+                    val limitMillis = effectiveShield.timeLimitMinutes * 60 * 1000L
+                    if (totalUsageToday >= limitMillis) {
+                        SharedMonitoringState.notifiedGoals.add(targetPackageName)
+                        return
+                    }
+                }
 
                 overlayActionHandler.showShieldOverlay(
                     targetPackageName = targetPackageName,
@@ -715,7 +738,16 @@ class ZenithService : AccessibilityService() {
                     totalUsageToday = totalUsageToday,
                     totalGlobalUsageToday = totalGlobalUsageToday,
                     updateShieldCache = { updated -> currentShieldCache = updated },
-                    getTotalUsageTodayFn = { getTotalUsageToday(targetPackageName) },
+                    getTotalUsageTodayFn = {
+                        if (effectiveShield.type == FocusType.GOAL && SharedMonitoringState.notifiedGoals.contains(targetPackageName)) {
+                            Long.MAX_VALUE
+                        } else {
+                            com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
+                            lastUsageCacheTime = 0L
+                            SharedMonitoringState.lastDailyUsageFetchTime = 0L
+                            getTotalUsageToday(targetPackageName)
+                        }
+                    },
                 )
             }
         } finally {
@@ -771,6 +803,8 @@ class ZenithService : AccessibilityService() {
     }
 
     private fun getTotalUsageToday(packageName: String): Long {
+        val saved = SharedMonitoringState.lastKnownPackageUsage[packageName]
+        if (saved != null && saved > 0L) return saved
         val shield = SharedMonitoringState.allShieldsCache[packageName]
         if (shield != null && shield.limitPeriod == LimitPeriod.WEEKLY) {
             val todayUsage = getSystemUsageToday(packageName)

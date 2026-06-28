@@ -72,7 +72,6 @@ class AppUsageMonitorService : Service() {
     private var cachedTotalUsage = 0L
     @Volatile
     private var sessionStartTime = 0L
-    private val lastKnownPackageUsage = mutableMapOf<String, Long>()
     @Volatile
     private var baseUsageAtSessionStart = 0L
     private val allowedApps get() = shieldRepository.allowedApps
@@ -353,7 +352,7 @@ class AppUsageMonitorService : Service() {
             earlyKickManager.reset()
             SharedMonitoringState.dailyUsageCache.clear()
             lastAllowedRemainingTime.clear()
-            lastKnownPackageUsage.clear()
+            SharedMonitoringState.lastKnownPackageUsage.clear()
             periodUsageCache.clear()
             refreshPeriodUsageCache()
             SharedMonitoringState.systemAppCache.clear()
@@ -879,7 +878,7 @@ class AppUsageMonitorService : Service() {
             }
             lastForegroundApp?.let { oldPkg ->
                 if (oldPkg.isNotEmpty() && oldPkg != currentApp && cachedTotalUsage > 0L) {
-                    lastKnownPackageUsage[oldPkg] = cachedTotalUsage
+                    SharedMonitoringState.lastKnownPackageUsage[oldPkg] = cachedTotalUsage
                 }
             }
             currentShieldCache = null
@@ -923,7 +922,7 @@ class AppUsageMonitorService : Service() {
         if (isNewSession) {
             lastForegroundApp?.let { oldPkg ->
                 if (oldPkg.isNotEmpty() && oldPkg != currentApp && cachedTotalUsage > 0L) {
-                    lastKnownPackageUsage[oldPkg] = cachedTotalUsage
+                    SharedMonitoringState.lastKnownPackageUsage[oldPkg] = cachedTotalUsage
                 }
             }
             currentShieldCache = SharedMonitoringState.allShieldsCache[currentApp]
@@ -1184,7 +1183,7 @@ class AppUsageMonitorService : Service() {
             earlyKickManager.reset()
             SharedMonitoringState.dailyUsageCache.clear()
             lastAllowedRemainingTime.clear()
-            lastKnownPackageUsage.clear()
+            SharedMonitoringState.lastKnownPackageUsage.clear()
             periodUsageCache.clear()
             refreshPeriodUsageCache()
             SharedMonitoringState.systemAppCache.clear()
@@ -1676,7 +1675,7 @@ class AppUsageMonitorService : Service() {
         if (packageName == currentSessionPackage && cachedTotalUsage > 0) {
             return cachedTotalUsage
         }
-        val saved = lastKnownPackageUsage[packageName]
+        val saved = SharedMonitoringState.lastKnownPackageUsage[packageName]
         if (saved != null && saved > 0L) return saved
         val shield = SharedMonitoringState.allShieldsCache[packageName]
         if (shield != null && shield.limitPeriod != LimitPeriod.DAILY) {
@@ -1738,7 +1737,7 @@ class AppUsageMonitorService : Service() {
         cachedForegroundApp = null
         cachedForegroundAppTime = 0L
         lastEventQueryTime = 0L
-        if (lastKnownPackageUsage.size > 20) lastKnownPackageUsage.clear()
+        if (SharedMonitoringState.lastKnownPackageUsage.size > 20) SharedMonitoringState.lastKnownPackageUsage.clear()
         val intent = Intent(Intent.ACTION_MAIN)
         intent.addCategory(Intent.CATEGORY_HOME)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
