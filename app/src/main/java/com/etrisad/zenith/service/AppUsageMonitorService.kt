@@ -600,7 +600,16 @@ class AppUsageMonitorService : Service() {
                 )
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             }
-            startActivity(directIntent)
+            val wakePendingIntent = PendingIntent.getActivity(
+                this, 1002, directIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val alarmManager = getSystemService(android.content.Context.ALARM_SERVICE) as AlarmManager
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                System.currentTimeMillis() + 100,
+                wakePendingIntent
+            )
         }
     }
 
