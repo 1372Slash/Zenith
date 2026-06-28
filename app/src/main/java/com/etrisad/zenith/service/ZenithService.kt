@@ -704,29 +704,31 @@ class ZenithService : AccessibilityService() {
 
             if (effectiveShield != null && !InterceptOverlayManager.isShowing) {
                 if (effectiveShield.type == FocusType.GOAL) {
-                    val limitMillis = effectiveShield.timeLimitMinutes * 60 * 1000L
-                    if (SharedMonitoringState.notifiedGoals.contains(targetPackageName)) return
-
-                    com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
-                    lastUsageCacheTime = 0L
-                    SharedMonitoringState.lastDailyUsageFetchTime = 0L
+                    if (!SharedMonitoringState.notifiedGoals.contains(targetPackageName)) {
+                        com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
+                        lastUsageCacheTime = 0L
+                        SharedMonitoringState.lastDailyUsageFetchTime = 0L
+                    }
                 }
                 var totalUsageToday = getTotalUsageToday(targetPackageName)
                 val totalGlobalUsageToday = getTotalGlobalUsageToday()
                 val delayDurationSeconds = if (isMindfulGateway) 0 else prefs.delayAppDurationSeconds
 
                 if (effectiveShield.type == FocusType.GOAL) {
-                    val hudSeconds = sessionUsageOverlayManager.getHUDElapsedSeconds(targetPackageName)
-                    if (hudSeconds != null) {
-                        val hudMillis = hudSeconds * 1000L
-                        if (hudMillis > totalUsageToday) {
-                            totalUsageToday = hudMillis
-                        }
-                    }
                     val limitMillis = effectiveShield.timeLimitMinutes * 60 * 1000L
-                    if (totalUsageToday >= limitMillis) {
-                        SharedMonitoringState.notifiedGoals.add(targetPackageName)
-                        return
+                    if (SharedMonitoringState.notifiedGoals.contains(targetPackageName)) {
+                        totalUsageToday = limitMillis
+                    } else {
+                        val hudSeconds = sessionUsageOverlayManager.getHUDElapsedSeconds(targetPackageName)
+                        if (hudSeconds != null) {
+                            val hudMillis = hudSeconds * 1000L
+                            if (hudMillis > totalUsageToday) {
+                                totalUsageToday = hudMillis
+                            }
+                        }
+                        if (totalUsageToday >= limitMillis) {
+                            SharedMonitoringState.notifiedGoals.add(targetPackageName)
+                        }
                     }
                 }
 
