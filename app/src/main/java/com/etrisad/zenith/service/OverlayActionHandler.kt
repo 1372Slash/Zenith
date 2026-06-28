@@ -282,7 +282,13 @@ class OverlayActionHandler(
                     totalUsageToday = getTotalUsageToday(targetPackageName),
                     totalGlobalUsageToday = getTotalGlobalUsageToday(),
                     updateShieldCache = {},
-                    getTotalUsageTodayFn = { getTotalUsageToday(targetPackageName) }
+                    getTotalUsageTodayFn = {
+                        if (shield.type == FocusType.GOAL && SharedMonitoringState.notifiedGoals.contains(targetPackageName)) {
+                            Long.MAX_VALUE
+                        } else {
+                            getTotalUsageToday(targetPackageName)
+                        }
+                    }
                 )
             }
         }

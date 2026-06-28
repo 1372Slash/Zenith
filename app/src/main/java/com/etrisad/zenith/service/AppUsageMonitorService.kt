@@ -1285,6 +1285,7 @@ class AppUsageMonitorService : Service() {
 
             serviceScope.launch {
                 try {
+                    if (packageName != currentSessionPackage) return@launch
                     val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
 
                     val systemUsage = detailedUsage.appUsageMap[packageName] ?: 0L
@@ -1568,11 +1569,15 @@ class AppUsageMonitorService : Service() {
                 totalGlobalUsageToday = totalGlobalUsageToday,
                 updateShieldCache = { updated -> currentShieldCache = updated },
                 getTotalUsageTodayFn = {
-                    updateUsageTime(targetPackageName)
-                    com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
-                    lastUsageCacheTime = 0L
-                    SharedMonitoringState.lastDailyUsageFetchTime = 0L
-                    getTotalUsageToday(targetPackageName)
+                    if (effectiveShield.type == FocusType.GOAL && SharedMonitoringState.notifiedGoals.contains(targetPackageName)) {
+                        Long.MAX_VALUE
+                    } else {
+                        updateUsageTime(targetPackageName)
+                        com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
+                        lastUsageCacheTime = 0L
+                        SharedMonitoringState.lastDailyUsageFetchTime = 0L
+                        getTotalUsageToday(targetPackageName)
+                    }
                 },
             )
         }
