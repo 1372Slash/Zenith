@@ -518,7 +518,7 @@ class FocusViewModel(
                     lastDelayStartTimestamp = existing?.lastDelayStartTimestamp ?: 0L,
                     timeAdded = existing?.timeAdded?.takeIf { it > 0L } ?: System.currentTimeMillis()
                 )
-                shieldRepository.insertShield(shield)
+                shieldRepository.insertShield(shield); com.etrisad.zenith.service.SharedMonitoringState.notifiedGoals.remove(packageName)
             } catch (e: Exception) {
                 android.util.Log.e("FocusViewModel", "Error saving focus: ${e.message}")
             } finally {
