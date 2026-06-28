@@ -283,7 +283,7 @@ fun FeaturesSettings(
             summary = "Set a time window where all apps become unblocked",
             onClick = onNavigateToGracePeriod,
             icon = Icons.Outlined.FreeBreakfast,
-            shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+            shape = RoundedCornerShape(8.dp)
         )
 
         Spacer(modifier = Modifier.height(4.dp))
