@@ -421,6 +421,9 @@ class SessionUsageOverlayManager(
                 if (packageName == null || session.packageName == packageName) {
                     session.timerJob?.cancel()
                     session.hudInstance?.let { destroyHUDInstance(it, session.packageName) }
+                    if (session.isGoal && session.secondsElapsedState.intValue >= session.totalSeconds) {
+                        com.etrisad.zenith.service.SharedMonitoringState.notifiedGoals.add(session.packageName)
+                    }
                     session.onSessionEnd()
                     iterator.remove()
                     if (packageName != null) break
@@ -434,8 +437,10 @@ class SessionUsageOverlayManager(
             activeSessions.find { it.packageName == packageName }?.let { session ->
                 if (session.isGoal) {
                     val seconds = (usageMillis / 1000).toInt()
-                    session.lastReportedUsageSeconds = seconds
-                    session.secondsElapsedState.intValue = seconds
+                    if (seconds > session.secondsElapsedState.intValue) {
+                        session.lastReportedUsageSeconds = seconds
+                        session.secondsElapsedState.intValue = seconds
+                    }
                 }
             }
         }
