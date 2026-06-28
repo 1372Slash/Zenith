@@ -474,12 +474,6 @@ fun FocusScreenContent(
                             uiState.incentiveProgress < 0.75f -> "Moderate Access"
                             else -> "Almost Unlocked"
                         }
-                        val shortTier = when {
-                            uiState.incentiveProgress < 0.25f -> "locked"
-                            uiState.incentiveProgress < 0.5f -> "limited"
-                            uiState.incentiveProgress < 0.75f -> "moderate"
-                            else -> "almost"
-                        }
                         val animatedProgress by animateFloatAsState(
                             targetValue = uiState.incentiveProgress,
                             animationSpec = spring(dampingRatio = 0.5f, stiffness = 100f),
