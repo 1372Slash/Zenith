@@ -72,6 +72,7 @@ class AppUsageMonitorService : Service() {
     private var cachedTotalUsage = 0L
     @Volatile
     private var sessionStartTime = 0L
+    private val lastKnownPackageUsage = mutableMapOf<String, Long>()
     @Volatile
     private var baseUsageAtSessionStart = 0L
     private val allowedApps get() = shieldRepository.allowedApps
@@ -115,8 +116,6 @@ class AppUsageMonitorService : Service() {
 
     private var lastUsageCacheTime = 0L
 
-    private var lastMonitoringError: String? = null
-    private var lastMonitoringErrorTime = 0L
     private var foregroundNotificationStarted = false
     private var lastNotificationRefreshTime = 0L
     private var lastNotificationText: String? = null
@@ -676,6 +675,8 @@ class AppUsageMonitorService : Service() {
 
                 updateBedtimeStatus(preferences)
                 updateGracePeriodStatus(preferences)
+                if (preferences.eyeCareEnabled) startEyeCareTimer() else stopEyeCareTimer()
+                if (preferences.usageGlimpseEnabled) startUsageGlimpseTimer() else usageGlimpseJob?.cancel()
                 refreshForegroundNotification(force = true)
             }
         }
@@ -687,7 +688,6 @@ class AppUsageMonitorService : Service() {
             return
         }
         startMonitoringCount++
-        Log.w("ZenithAUMS", "startMonitoring() called #$startMonitoringCount | active=$monitoringLoopActive | tickAge=${System.currentTimeMillis() - lastLoopTick}")
         if (monitoringLoopActive && System.currentTimeMillis() - lastLoopTick < 60000) return
         monitoringLoopActive = true
         
@@ -715,9 +715,6 @@ class AppUsageMonitorService : Service() {
                 }
         }
 
-        startEyeCareTimer()
-        startUsageGlimpseTimer()
-
         monitoringJob?.cancel()
         monitoringJob = serviceScope.launch(Dispatchers.Default) {
             var maintenanceTick = 0L
@@ -730,7 +727,9 @@ class AppUsageMonitorService : Service() {
                     lastLoopTick = System.currentTimeMillis()
 
                     if (isScreenOn) {
-                        if (!ZenithService.isServiceRunning) {
+                        val a11yRunning = ZenithService.isServiceRunning
+
+                        if (!a11yRunning) {
                             val currentApp = getForegroundApp()
                             if (currentApp != null && currentApp != AppStateHolder.foregroundApp.value) {
                                 AppStateHolder.foregroundApp.value = currentApp
@@ -738,13 +737,10 @@ class AppUsageMonitorService : Service() {
                         }
 
                         if (!InterceptOverlayManager.isShowing) {
-                            val currentApp = if (ZenithService.isServiceRunning) {
-                                lastForegroundApp
+                            if (a11yRunning) {
+                                lastForegroundApp?.let { app -> monitoringTick(app) }
                             } else {
-                                getForegroundApp()
-                            }
-                            if (currentApp != null) {
-                                monitoringTick(currentApp)
+                                getForegroundApp()?.let { app -> monitoringTick(app) }
                             }
                         }
                     }
@@ -752,31 +748,21 @@ class AppUsageMonitorService : Service() {
                     val elapsedMinutes = (lastLoopTick - startTime) / 60_000L
                     if (elapsedMinutes > maintenanceTick) {
                         maintenanceTick = elapsedMinutes
-                        val cfg = SharedMonitoringState.performanceConfig
                         if (isScreenOn) {
-                            if (SharedMonitoringState.launcherPackages.isEmpty() || lastLoopTick - lastLauncherRefreshTime > cfg.launcherCacheMs) {
+                            if (SharedMonitoringState.launcherPackages.isEmpty() || lastLoopTick - lastLauncherRefreshTime > 3_600_000L) {
                                 refreshLauncherCache()
                             }
-                            if (maintenanceTick % cfg.dayChangeTick == 0L) checkDayChangePeriodic()
+                            if (maintenanceTick % 3L == 0L) checkDayChangePeriodic()
                             if (maintenanceTick % 5L == 0L) SharedMonitoringState.performPeriodicCleanup()
                         }
-                        if (maintenanceTick % cfg.goalReminderTick == 0L) checkGoalReminders()
+                        if (maintenanceTick % 3L == 0L) checkGoalReminders()
                     }
                 } catch (t: Throwable) {
                     if (t is kotlinx.coroutines.CancellationException) throw t
                     logError(t)
                 }
 
-                val delayTime = computeMonitoringDelay()
-                if (delayTime < 30000) {
-                    val fg = lastForegroundApp
-                    Log.w("ZenithAUMS", "SHORT DELAY: ${delayTime}ms | cfg=${SharedMonitoringState.performanceConfig.monDefault} | shield=${currentShieldCache?.packageName} | allowed=${if (fg != null) allowedApps[fg] else null} | a11y=${ZenithService.isServiceRunning} | psm=${AppStateHolder.isPowerSaveMode.value} | overlay=${InterceptOverlayManager.isShowing}")
-                }
-                val cycleMs = System.currentTimeMillis() - lastLoopTick
-                if (cycleMs > 80) {
-                    Log.w("ZenithAUMS", "SLOW CYCLE: ${cycleMs}ms | shield=${currentShieldCache?.packageName}")
-                }
-                delay(delayTime)
+                delay(computeMonitoringDelay())
             }
         }
     }
@@ -861,13 +847,8 @@ class AppUsageMonitorService : Service() {
     }
 
     private suspend fun logError(t: Throwable) {
-        val currentTime = System.currentTimeMillis()
-        if (t.message != lastMonitoringError || currentTime - lastMonitoringErrorTime > 30000) {
-            Log.e("ZenithAUMS", "Critical error: ${t.message}", t)
-            lastMonitoringError = t.message
-            lastMonitoringErrorTime = currentTime
-        }
-        if (t is OutOfMemoryError) delay(10000) else delay(2000)
+        Log.e("ZenithAUMS", "Error: ${t.message}")
+        delay(if (t is OutOfMemoryError) 5000 else 500)
     }
 
     private suspend fun handleForegroundChange(currentApp: String) {
@@ -893,6 +874,11 @@ class AppUsageMonitorService : Service() {
                             }
                         }
                     }
+                }
+            }
+            lastForegroundApp?.let { oldPkg ->
+                if (oldPkg.isNotEmpty() && oldPkg != currentApp && cachedTotalUsage > 0L) {
+                    lastKnownPackageUsage[oldPkg] = cachedTotalUsage
                 }
             }
             currentShieldCache = null
@@ -934,34 +920,44 @@ class AppUsageMonitorService : Service() {
         } catch (_: Exception) {}
 
         if (isNewSession) {
+            lastForegroundApp?.let { oldPkg ->
+                if (oldPkg.isNotEmpty() && oldPkg != currentApp && cachedTotalUsage > 0L) {
+                    lastKnownPackageUsage[oldPkg] = cachedTotalUsage
+                }
+            }
             currentShieldCache = SharedMonitoringState.allShieldsCache[currentApp]
             lastUsageFetchTime = 0L
             lastHUDUpdateTime = 0L
             sessionStartTime = currentTime
             currentSessionPackage = currentApp
 
-            val startOfDay = SharedMonitoringState.getStartOfDay()
-            val timeSinceMidnight = (currentTime - startOfDay).coerceAtLeast(0L)
-
-            val detailedUsage = withContext(Dispatchers.IO) {
-                com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
-            }
-            val systemUsage = detailedUsage.appUsageMap[currentApp] ?: 0L
-            val systemGlobal = getFilteredGlobalUsage(detailedUsage.appUsageMap)
-
             val shield = currentShieldCache
-            if (shield != null && shield.limitPeriod == LimitPeriod.WEEKLY) {
-                val weeklyTotal = withContext(Dispatchers.IO) {
-                    shieldRepository.getWeeklyUsageLive(currentApp, systemUsage)
+            if (shield != null) {
+                val startOfDay = SharedMonitoringState.getStartOfDay()
+                val timeSinceMidnight = (currentTime - startOfDay).coerceAtLeast(0L)
+
+                val detailedUsage = withContext(Dispatchers.IO) {
+                    com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
                 }
-                baseUsageAtSessionStart = weeklyTotal.coerceAtLeast(0L)
-                periodUsageCache[currentApp] = baseUsageAtSessionStart
+                val systemUsage = detailedUsage.appUsageMap[currentApp] ?: 0L
+                val systemGlobal = getFilteredGlobalUsage(detailedUsage.appUsageMap)
+
+                if (shield.limitPeriod == LimitPeriod.WEEKLY) {
+                    val weeklyTotal = withContext(Dispatchers.IO) {
+                        shieldRepository.getWeeklyUsageLive(currentApp, systemUsage)
+                    }
+                    baseUsageAtSessionStart = weeklyTotal.coerceAtLeast(0L)
+                    periodUsageCache[currentApp] = baseUsageAtSessionStart
+                } else {
+                    baseUsageAtSessionStart = systemUsage.coerceAtMost(timeSinceMidnight)
+                }
+                cachedTotalUsage = baseUsageAtSessionStart
+                baseGlobalUsageAtSessionStart = systemGlobal.coerceAtMost(timeSinceMidnight)
+                cachedTotalGlobalUsage = baseGlobalUsageAtSessionStart
             } else {
-                baseUsageAtSessionStart = systemUsage.coerceAtMost(timeSinceMidnight)
+                baseUsageAtSessionStart = 0L
+                cachedTotalUsage = 0L
             }
-            cachedTotalUsage = baseUsageAtSessionStart
-            baseGlobalUsageAtSessionStart = systemGlobal.coerceAtMost(timeSinceMidnight)
-            cachedTotalGlobalUsage = baseGlobalUsageAtSessionStart
 
             if (!shouldBypassBlocking(currentApp) && !ZenithService.isServiceRunning) {
                 checkBlockingInstant(currentApp, currentShieldCache)
@@ -1128,58 +1124,44 @@ class AppUsageMonitorService : Service() {
 
     private fun computeMonitoringDelay(): Long {
         val cfg = SharedMonitoringState.performanceConfig
-        val currentApp = lastForegroundApp
-        val allowedUntil = currentApp?.let { allowedApps[it] } ?: 0L
         val currentTime = System.currentTimeMillis()
         
         if (!isScreenOn) return cfg.screenOffDelay
+
+        if (AppStateHolder.isPowerSaveMode.value) return cfg.monPowerSave
+        if (InterceptOverlayManager.isShowing) return cfg.monOverlayShowing
+
+        val currentApp = lastForegroundApp
+        val allowedUntil = currentApp?.let { allowedApps[it] } ?: 0L
+        if (allowedUntil > currentTime) {
+            val remaining = allowedUntil - currentTime
+            return when {
+                remaining < 10000 -> 1000L
+                remaining < 60000 -> 3000L
+                else -> 10000L
+            }
+        }
+
+        val shield = currentShieldCache
+        if (shield != null) {
+            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+            val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
+            if (remaining < 60000 || remaining < 600000) {
+                return when {
+                    remaining < 60000 -> if (shield.type == FocusType.GOAL) cfg.monGoalNear else cfg.monShieldNear
+                    else -> if (shield.type == FocusType.GOAL) cfg.monGoalMid else cfg.monShieldMid
+                }
+            }
+        }
 
         if (ZenithService.isServiceRunning && !InterceptOverlayManager.isShowing) {
             return cfg.a11yActiveDelay
         }
 
-        if (allowedUntil > currentTime) {
-            val remaining = allowedUntil - currentTime
-            val baseDelay = when {
-                remaining < 10000 -> 1000L
-                remaining < 60000 -> 5000L
-                else -> 15000L
-            }
-            return baseDelay.coerceAtLeast(cfg.monDefault / 2)
+        if (shield != null) {
+            return if (shield.type == FocusType.GOAL) cfg.monGoalFar else cfg.monShieldFar
         }
-
-        return try {
-            if (ZenithService.isServiceRunning) {
-                cfg.a11yActiveDelay
-            } else if (AppStateHolder.isPowerSaveMode.value) {
-                cfg.monPowerSave
-            } else if (InterceptOverlayManager.isShowing) {
-                cfg.monOverlayShowing
-            } else {
-                when {
-                    currentShieldCache != null -> {
-                        val shield = currentShieldCache!!
-                        val limitMillis = shield.timeLimitMinutes * 60 * 1000L
-                        val remaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
-                        if (shield.type == FocusType.GOAL) {
-                            when {
-                                remaining < 60000 -> cfg.monGoalNear
-                                remaining < 300000 -> cfg.monGoalMid
-                                else -> cfg.monGoalFar
-                            }
-                        } else {
-                            when {
-                                remaining > 3600000 -> cfg.monShieldVeryFar
-                                remaining > 600000 -> cfg.monShieldFar
-                                remaining > 60000 -> cfg.monShieldMid
-                                else -> cfg.monShieldNear
-                            }
-                        }
-                    }
-                    else -> cfg.monDefault
-                }
-            }
-        } catch (_: Exception) { 1200L }
+        return cfg.monDefault
     }
 
     private suspend fun checkDayChangePeriodic() {
@@ -1313,10 +1295,16 @@ class AppUsageMonitorService : Service() {
                         cachedTotalUsage = weeklyBase
                         periodUsageCache[packageName] = weeklyBase
                     } else {
-                        baseUsageAtSessionStart = systemUsage.coerceAtMost(timeSinceMidnight)
+                        val systemBase = systemUsage.coerceAtMost(timeSinceMidnight)
+                        if (systemBase > baseUsageAtSessionStart) {
+                            baseUsageAtSessionStart = systemBase
+                        }
                         cachedTotalUsage = baseUsageAtSessionStart
                     }
-                    baseGlobalUsageAtSessionStart = systemGlobal.coerceAtMost(timeSinceMidnight)
+                    val globalBase = systemGlobal.coerceAtMost(timeSinceMidnight)
+                    if (globalBase > baseGlobalUsageAtSessionStart) {
+                        baseGlobalUsageAtSessionStart = globalBase
+                    }
                     sessionStartTime = now
                     cachedTotalGlobalUsage = baseGlobalUsageAtSessionStart
 
@@ -1535,6 +1523,9 @@ class AppUsageMonitorService : Service() {
 
         if (effectiveShield != null && !InterceptOverlayManager.isShowing) {
             if (effectiveShield.type == FocusType.GOAL) {
+                val limitMillis = effectiveShield.timeLimitMinutes * 60 * 1000L
+                if (SharedMonitoringState.notifiedGoals.contains(targetPackageName)) return
+
                 updateUsageTime(targetPackageName)
                 com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
                 lastUsageCacheTime = 0L
@@ -1551,6 +1542,11 @@ class AppUsageMonitorService : Service() {
                     if (hudMillis > totalUsageToday) {
                         totalUsageToday = hudMillis
                     }
+                }
+                val limitMillis = effectiveShield.timeLimitMinutes * 60 * 1000L
+                if (totalUsageToday >= limitMillis) {
+                    SharedMonitoringState.notifiedGoals.add(targetPackageName)
+                    return
                 }
             }
 
@@ -1668,6 +1664,8 @@ class AppUsageMonitorService : Service() {
         if (packageName == currentSessionPackage && cachedTotalUsage > 0) {
             return cachedTotalUsage
         }
+        val saved = lastKnownPackageUsage[packageName]
+        if (saved != null && saved > 0L) return saved
         val shield = SharedMonitoringState.allShieldsCache[packageName]
         if (shield != null && shield.limitPeriod != LimitPeriod.DAILY) {
             val cached = periodUsageCache[packageName]
@@ -1925,7 +1923,9 @@ class AppUsageMonitorService : Service() {
 
     private fun getForegroundApp(): String? {
         val time = System.currentTimeMillis()
-        if (time - cachedForegroundAppTime < 2000 && cachedForegroundApp != null) {
+        val shieldForCached = cachedForegroundApp?.let { SharedMonitoringState.allShieldsCache[it] }
+        val cacheMs = if (shieldForCached != null) 2000L else 5000L
+        if (time - cachedForegroundAppTime < cacheMs && cachedForegroundApp != null) {
             return cachedForegroundApp
         }
 
