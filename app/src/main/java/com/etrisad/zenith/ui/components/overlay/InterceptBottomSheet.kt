@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.preferences.ThemeConfig
 import com.etrisad.zenith.data.preferences.UserPreferences
 
@@ -35,6 +36,8 @@ fun InterceptBottomSheet(
     dragHandleMaxUses: Int? = null,
     dragHandleEmergencyCount: Int? = null,
     dragHandleIsIncentiveLocked: Boolean = false,
+    dragHandleIncentiveTier: IncentiveTier? = null,
+    dragHandleBonusUsesLeft: Int = 0,
     sheetContentAlpha: Float = 1f,
     contentKey: Any? = Unit,
     content: @Composable ColumnScope.(key: Any?) -> Unit
@@ -169,7 +172,9 @@ fun InterceptBottomSheet(
                                 currentUses = if (isLandscape) null else dragHandleCurrentUses,
                                 maxUses = if (isLandscape) null else dragHandleMaxUses,
                                 emergencyCount = if (isLandscape) null else dragHandleEmergencyCount,
-                                isIncentiveLocked = if (isLandscape) false else dragHandleIsIncentiveLocked
+                                isIncentiveLocked = if (isLandscape) false else dragHandleIsIncentiveLocked,
+                                incentiveTier = if (isLandscape) null else dragHandleIncentiveTier,
+                                bonusUsesLeft = if (isLandscape) 0 else dragHandleBonusUsesLeft
                             )
                             Box(
                                 modifier = Modifier.then(

@@ -40,7 +40,8 @@ class ZenithApplication : Application(), ImageLoaderFactory {
                 database.scheduleDao(),
                 database.dailyUsageDao(),
                 database.hourlyUsageDao(),
-                database
+                database,
+                userPreferencesRepository
             )
         } catch (e: Exception) {
             android.util.Log.e("ZenithApp", "Failed to initialize DB, trying destructive rebuild", e)
@@ -51,7 +52,8 @@ class ZenithApplication : Application(), ImageLoaderFactory {
                 database.scheduleDao(),
                 database.dailyUsageDao(),
                 database.hourlyUsageDao(),
-                database
+                database,
+                userPreferencesRepository
             )
         }
     }

@@ -193,7 +193,7 @@ fun FeaturesSettings(
 
         SettingsToggle(
             title = "Incentive Lock",
-            description = "Require 100% goal completion for all apps before allowing free use of shielded apps",
+            description = "Progressively unlock shields as you complete app goals. Bonus uses are awarded at 25% and 50% progress.",
             checked = preferences.incentiveLockEnabled,
             onCheckedChange = { enabled ->
                 if (enabled) {

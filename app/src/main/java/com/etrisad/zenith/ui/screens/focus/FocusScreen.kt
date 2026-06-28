@@ -467,37 +467,107 @@ fun FocusScreenContent(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                     )
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Lock,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.size(24.dp)
-                            )
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        val tierLabel = when {
+                            uiState.incentiveProgress < 0.25f -> "Locked"
+                            uiState.incentiveProgress < 0.5f -> "Limited Access"
+                            uiState.incentiveProgress < 0.75f -> "Moderate Access"
+                            else -> "Almost Unlocked"
                         }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
+                        val shortTier = when {
+                            uiState.incentiveProgress < 0.25f -> "locked"
+                            uiState.incentiveProgress < 0.5f -> "limited"
+                            uiState.incentiveProgress < 0.75f -> "moderate"
+                            else -> "almost"
+                        }
+                        val animatedProgress by animateFloatAsState(
+                            targetValue = uiState.incentiveProgress,
+                            animationSpec = spring(dampingRatio = 0.5f, stiffness = 100f),
+                            label = "IncentiveProgress"
+                        )
+                        val percentage = (uiState.incentiveProgress * 100).toInt()
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier.matchParentSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Lock,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                if (uiState.incentiveTier.bonusUses < Int.MAX_VALUE) {
+                                    val total = uiState.incentiveTier.bonusUses
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (uiState.bonusUsesLeft > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.surfaceVariant,
+                                        tonalElevation = 2.dp,
+                                        shadowElevation = 2.dp,
+                                        modifier = Modifier
+                                            .align(Alignment.BottomCenter)
+                                            .offset(y = 3.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Timer,
+                                                contentDescription = "Bonus",
+                                                modifier = Modifier.size(10.dp),
+                                                tint = if (uiState.bonusUsesLeft > 0) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = "${uiState.bonusUsesLeft}/$total",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontSize = 8.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (uiState.bonusUsesLeft > 0) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(start = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Shields: $tierLabel",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Complete your app goals to earn shield access.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Shields are currently locked",
-                                style = MaterialTheme.typography.titleSmall,
+                                text = "$percentage%",
+                                style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Reach 100% on all your app goals to unlock your shielded apps and use them freely!",
-                                style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        LinearWavyProgressIndicator(
+                            progress = { animatedProgress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(10.dp),
+                            color = MaterialTheme.colorScheme.tertiary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
                     }
                 }
             }

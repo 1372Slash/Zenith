@@ -11,6 +11,7 @@ import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.local.entity.ShieldEntity
+import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +56,9 @@ data class FocusUiState(
     val selectedSchedules: Set<Long> = emptySet(),
     val incentiveLockEnabled: Boolean = false,
     val incentiveLockGoalsMetToday: Boolean = false,
+    val incentiveProgress: Float = 0f,
+    val incentiveTier: IncentiveTier = IncentiveTier.UNLOCKED,
+    val bonusUsesLeft: Int = 0,
     val uninstalledShields: Set<String> = emptySet()
 )
 
@@ -109,6 +113,21 @@ class FocusViewModel(
                         lastWhitelist = prefs.whitelistedPackages
                         loadInstalledApps()
                     }
+                }
+        }
+        viewModelScope.launch {
+            shieldRepository.getIncentiveGoalProgress()
+                .flowOn(Dispatchers.Default)
+                .collect { progress ->
+                    val tier = IncentiveTier.fromProgress(progress)
+                    val bonusLeft = if (tier.bonusUses < Int.MAX_VALUE) {
+                        shieldRepository.getIncentiveBonusUsesLeft()
+                    } else 0
+                    _uiState.update { it.copy(
+                        incentiveProgress = progress,
+                        incentiveTier = tier,
+                        bonusUsesLeft = bonusLeft
+                    ) }
                 }
         }
         startRealTimeUpdates()

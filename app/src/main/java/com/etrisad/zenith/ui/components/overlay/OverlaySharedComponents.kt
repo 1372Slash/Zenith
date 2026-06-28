@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.toArgb
 import com.etrisad.zenith.data.CurrentCalendarEvent
+import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
@@ -289,7 +290,9 @@ fun OverlayDragHandleWithIndicators(
     currentUses: Int? = null,
     maxUses: Int? = null,
     emergencyCount: Int? = null,
-    isIncentiveLocked: Boolean = false
+    isIncentiveLocked: Boolean = false,
+    incentiveTier: IncentiveTier? = null,
+    bonusUsesLeft: Int = 0
 ) {
     Row(
         modifier = modifier
@@ -300,17 +303,41 @@ fun OverlayDragHandleWithIndicators(
     ) {
         Box(modifier = Modifier.weight(1f)) {
             if (isIncentiveLocked) {
+                val tier = incentiveTier ?: IncentiveTier.LOCKED
+                val displayText = when {
+                    tier == IncentiveTier.LOCKED -> "Locked"
+                    tier.bonusUses < Int.MAX_VALUE -> "$bonusUsesLeft left"
+                    else -> "Unlocked"
+                }
+                val icon = when {
+                    tier == IncentiveTier.LOCKED -> Icons.Outlined.Lock
+                    tier == IncentiveTier.LIMITED -> Icons.Outlined.Lock
+                    tier == IncentiveTier.MODERATE -> Icons.Outlined.Timer
+                    else -> Icons.Outlined.Bolt
+                }
+                val container = when {
+                    tier == IncentiveTier.LOCKED -> MaterialTheme.colorScheme.errorContainer
+                    tier.bonusUses < Int.MAX_VALUE && bonusUsesLeft <= 0 -> MaterialTheme.colorScheme.errorContainer
+                    tier.bonusUses < Int.MAX_VALUE -> MaterialTheme.colorScheme.tertiaryContainer
+                    else -> MaterialTheme.colorScheme.surfaceContainerHigh
+                }
+                val content = when {
+                    tier == IncentiveTier.LOCKED -> MaterialTheme.colorScheme.error
+                    tier.bonusUses < Int.MAX_VALUE && bonusUsesLeft <= 0 -> MaterialTheme.colorScheme.error
+                    tier.bonusUses < Int.MAX_VALUE -> MaterialTheme.colorScheme.onTertiaryContainer
+                    else -> MaterialTheme.colorScheme.primary
+                }
                 ZenithButton(
                     onClick = { },
-                    text = "Lock",
-                    icon = Icons.Outlined.Lock,
+                    text = displayText,
+                    icon = icon,
                     type = ZenithButtonType.Tonal,
                     size = ZenithButtonSize.Small,
                     modifier = Modifier.padding(start = 16.dp).widthIn(max = 110.dp),
                     isDisableWeight = true,
                     isDisableExpand = true,
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.error
+                    containerColor = container,
+                    contentColor = content
                 )
             } else if (currentUses != null && maxUses != null) {
                 ZenithButton(

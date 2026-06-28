@@ -329,6 +329,8 @@ class UserPreferencesRepository(private val context: Context) {
         val INCENTIVE_LOCK_DISABLE_REQUEST_TIMESTAMP = longPreferencesKey("incentive_lock_disable_request_timestamp")
         val INCENTIVE_LOCK_GOALS_MET_TODAY = booleanPreferencesKey("incentive_lock_goals_met_today")
         val INCENTIVE_LOCK_GOALS_MET_DATE = stringPreferencesKey("incentive_lock_goals_met_date")
+        val INCENTIVE_BONUS_USES_USED = intPreferencesKey("incentive_bonus_uses_used")
+        val INCENTIVE_BONUS_USES_DATE = stringPreferencesKey("incentive_bonus_uses_date")
         val LAST_WEEKLY_RESET_DATE = longPreferencesKey("last_weekly_reset_date")
         val DISMISSED_UNINSTALLED_APPS = stringPreferencesKey("dismissed_uninstalled_apps")
     }
@@ -414,6 +416,11 @@ class UserPreferencesRepository(private val context: Context) {
             incentiveLockDisableRequestTimestamp = runtime[RuntimeKeys.INCENTIVE_LOCK_DISABLE_REQUEST_TIMESTAMP] ?: 0L,
             incentiveLockGoalsMetToday = if (runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_TODAY] != true) false
                 else runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_DATE] == SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
+            incentiveBonusUsesUsed = {
+                val date = runtime[RuntimeKeys.INCENTIVE_BONUS_USES_DATE] ?: ""
+                val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                if (date != today) 0 else (runtime[RuntimeKeys.INCENTIVE_BONUS_USES_USED] ?: 0)
+            }(),
             performanceLevel = PerformanceLevel.valueOf(settings[PreferencesKeys.PERFORMANCE_LEVEL] ?: PerformanceLevel.BALANCED.name),
             perfA11yActiveDelay = settings[PreferencesKeys.PERF_A11Y_ACTIVE_DELAY] ?: PerformanceConfig().a11yActiveDelay,
             perfA11yInactiveDelay = settings[PreferencesKeys.PERF_A11Y_INACTIVE_DELAY] ?: PerformanceConfig().a11yInactiveDelay,
@@ -574,6 +581,25 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setIncentiveLockGoalsMetDate(date: String) {
         context.runtimeDataStore.edit { preferences -> preferences[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_DATE] = date }
+    }
+
+    suspend fun setIncentiveBonusUsesUsed(uses: Int) {
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        context.runtimeDataStore.edit { preferences ->
+            preferences[RuntimeKeys.INCENTIVE_BONUS_USES_USED] = uses
+            preferences[RuntimeKeys.INCENTIVE_BONUS_USES_DATE] = today
+        }
+    }
+
+    suspend fun resetIncentiveBonusUsesIfNeeded() {
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        context.runtimeDataStore.edit { preferences ->
+            val savedDate = preferences[RuntimeKeys.INCENTIVE_BONUS_USES_DATE] ?: ""
+            if (savedDate != today) {
+                preferences[RuntimeKeys.INCENTIVE_BONUS_USES_USED] = 0
+                preferences[RuntimeKeys.INCENTIVE_BONUS_USES_DATE] = today
+            }
+        }
     }
 
     suspend fun setDismissedUninstalledApp(packageName: String, date: String) {
@@ -1734,6 +1760,7 @@ data class UserPreferences(
     val incentiveLockEnabled: Boolean = false,
     val incentiveLockDisableRequestTimestamp: Long = 0L,
     val incentiveLockGoalsMetToday: Boolean = false,
+    val incentiveBonusUsesUsed: Int = 0,
     val bankingWarningDismissed: Boolean = false,
     val eyeCareEnabled: Boolean = false,
     val eyeCareWorkMinutes: Int = 20,

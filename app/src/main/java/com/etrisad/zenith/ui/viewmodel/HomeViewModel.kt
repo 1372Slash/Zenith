@@ -16,6 +16,7 @@ import com.etrisad.zenith.data.local.entity.DailyUsageEntity
 import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.service.UsageSyncManager
 import kotlinx.coroutines.*
@@ -114,7 +115,10 @@ data class HomeUiState(
         set(Calendar.MILLISECOND, 0)
     }.timeInMillis,
     val isLoading: Boolean = true,
-    val uninstalledShieldPackageNames: Set<String> = emptySet()
+    val uninstalledShieldPackageNames: Set<String> = emptySet(),
+    val incentiveProgress: Float = 0f,
+    val incentiveTier: IncentiveTier = IncentiveTier.UNLOCKED,
+    val bonusUsesLeft: Int = 0
 )
 
 sealed class UsageRecord {
@@ -640,6 +644,16 @@ class HomeViewModel(
                     activeGoals = sortShields(liveShields.filter { it.type == FocusType.GOAL }, it.goalSortType)
                 ) }
                 updateUninstalledShieldPackages()
+                val currentIncentiveProgress = shieldRepository.getIncentiveGoalProgress().first()
+                val currentIncentiveTier = IncentiveTier.fromProgress(currentIncentiveProgress)
+                val currentBonusUsesLeft = if (currentIncentiveTier.bonusUses < Int.MAX_VALUE) {
+                    shieldRepository.getIncentiveBonusUsesLeft()
+                } else 0
+                _uiState.update { it.copy(
+                    incentiveProgress = currentIncentiveProgress,
+                    incentiveTier = currentIncentiveTier,
+                    bonusUsesLeft = currentBonusUsesLeft
+                ) }
                 val currentPkg = _appDetailUiState.value.packageName
                 if (currentPkg.isNotEmpty()) {
                     val shield = liveShields.find { it.packageName == currentPkg }

@@ -41,6 +41,7 @@ import com.etrisad.zenith.data.CurrentCalendarEvent
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.local.entity.ShieldEntity
+import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.ZenithButton
@@ -154,7 +155,20 @@ fun ShieldOverlay(
     val incentiveProgress by produceState(initialValue = 0f) {
         shieldRepository.getIncentiveGoalProgress().collect { value = it }
     }
-    val isIncentiveLocked = userPrefs.incentiveLockEnabled && !userPrefs.incentiveLockGoalsMetToday && isRealShield && currentShield?.type == FocusType.SHIELD
+    val incentiveTier = remember(incentiveProgress) { IncentiveTier.fromProgress(incentiveProgress) }
+    val isIncentiveActive = userPrefs.incentiveLockEnabled && !userPrefs.incentiveLockGoalsMetToday && isRealShield && currentShield?.type == FocusType.SHIELD
+
+    var bonusUsesLeft by remember { mutableIntStateOf(Int.MAX_VALUE) }
+    LaunchedEffect(isIncentiveActive, incentiveTier, userPrefs.incentiveBonusUsesUsed) {
+        if (isIncentiveActive && incentiveTier.bonusUses < Int.MAX_VALUE) {
+            val left = shieldRepository.getIncentiveBonusUsesLeft()
+            bonusUsesLeft = left
+        } else {
+            bonusUsesLeft = Int.MAX_VALUE
+        }
+    }
+
+    val isIncentiveBlocked = isIncentiveActive && (incentiveTier == IncentiveTier.LOCKED || (incentiveTier.bonusUses < Int.MAX_VALUE && bonusUsesLeft <= 0))
 
     val isDelayEnabled = currentShield != null && currentShield.isDelayAppEnabled && currentShield.type == FocusType.SHIELD
     
@@ -180,7 +194,7 @@ fun ShieldOverlay(
         if (isPeriodExpired) 0 else (currentShield?.currentPeriodUses ?: 0)
     }
     val maxUses = currentShield?.maxUsesPerPeriod ?: 5
-    val isUsesExceeded = remember(currentUses, maxUses, isIncentiveLocked) { isIncentiveLocked || currentUses >= maxUses }
+    val isUsesExceeded = remember(currentUses, maxUses, isIncentiveBlocked) { isIncentiveBlocked || currentUses >= maxUses }
     val isTimeLimitReached = remember(currentTotalUsageToday, currentShield) {
         currentShield != null && currentShield.timeLimitMinutes > 0 && currentTotalUsageToday >= (currentShield.timeLimitMinutes * 60 * 1000L)
     }
@@ -193,11 +207,11 @@ fun ShieldOverlay(
         }
     }
 
-    val isBlocked by remember(isUsesExceeded, isTimeLimitReached, remainingMinutes, isEmergencyUnlocked, currentShield?.type, isIncentiveLocked) {
+    val isBlocked by remember(isUsesExceeded, isTimeLimitReached, remainingMinutes, isEmergencyUnlocked, currentShield?.type, isIncentiveBlocked) {
         derivedStateOf {
             val effectivelyTimeReached = isTimeLimitReached || (remainingMinutes != null && remainingMinutes <= 0)
             val baseBlocked = (isUsesExceeded || effectivelyTimeReached) && !isEmergencyUnlocked
-            baseBlocked && (currentShield?.type == FocusType.SHIELD || (isIncentiveLocked && currentShield == null))
+            baseBlocked && (currentShield?.type == FocusType.SHIELD || (isIncentiveBlocked && currentShield == null))
         }
     }
 
@@ -376,7 +390,9 @@ fun ShieldOverlay(
         dragHandleCurrentUses = if (currentShield?.type == FocusType.SHIELD) currentUses else null,
         dragHandleMaxUses = if (currentShield?.type == FocusType.SHIELD) maxUses else null,
         dragHandleEmergencyCount = if (currentShield?.type == FocusType.SHIELD) currentShield.emergencyUseCount else null,
-        dragHandleIsIncentiveLocked = isIncentiveLocked
+        dragHandleIsIncentiveLocked = isIncentiveActive && !incentiveTier.isUnlocked,
+        dragHandleIncentiveTier = if (isIncentiveActive) incentiveTier else null,
+        dragHandleBonusUsesLeft = bonusUsesLeft
     ) { _ ->
         if (isLandscape) {
             LandscapeInterceptLayout(
@@ -399,8 +415,19 @@ fun ShieldOverlay(
                 refreshTimeLeftMillis = refreshTimeLeftMillis,
                 currentUses = currentUses,
                 maxUses = maxUses,
-                isIncentiveLocked = isIncentiveLocked,
+                incentiveTier = if (isIncentiveActive) incentiveTier else null,
+                bonusUsesLeft = bonusUsesLeft,
                 incentiveProgress = incentiveProgress,
+                isIncentiveBlocked = isIncentiveBlocked,
+                onConsumeBonusUse = {
+                    scope.launch {
+                        if (shieldRepository.consumeIncentiveBonusUse()) {
+                            showContent = false
+                            delay(400)
+                            currentOnAllowUse(9999, isEmergencyUnlocked)
+                        }
+                    }
+                },
                 autoKickProgress = { autoKickProgress.value },
                 onEmergencyHoldingChange = { isEmergencyHolding = it },
                 onEmergencyClick = { isEmergencyUnlocked = true },
@@ -439,8 +466,19 @@ fun ShieldOverlay(
                 refreshTimeLeftMillis = refreshTimeLeftMillis,
                 currentUses = currentUses,
                 maxUses = maxUses,
-                isIncentiveLocked = isIncentiveLocked,
+                incentiveTier = if (isIncentiveActive) incentiveTier else null,
+                bonusUsesLeft = bonusUsesLeft,
                 incentiveProgress = incentiveProgress,
+                isIncentiveBlocked = isIncentiveBlocked,
+                onConsumeBonusUse = {
+                    scope.launch {
+                        if (shieldRepository.consumeIncentiveBonusUse()) {
+                            showContent = false
+                            delay(400)
+                            currentOnAllowUse(9999, isEmergencyUnlocked)
+                        }
+                    }
+                },
                 autoKickProgress = { autoKickProgress.value },
                 onEmergencyHoldingChange = { isEmergencyHolding = it },
                 onEmergencyClick = { isEmergencyUnlocked = true },
@@ -484,8 +522,11 @@ fun PortraitInterceptLayout(
     refreshTimeLeftMillis: Long,
     currentUses: Int,
     maxUses: Int,
-    isIncentiveLocked: Boolean = false,
+    incentiveTier: IncentiveTier? = null,
+    bonusUsesLeft: Int = 0,
     incentiveProgress: Float = 0f,
+    isIncentiveBlocked: Boolean = false,
+    onConsumeBonusUse: () -> Unit = {},
     autoKickProgress: () -> Float,
     onEmergencyClick: () -> Unit,
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
@@ -590,28 +631,40 @@ fun PortraitInterceptLayout(
                     isTimeLimitReached = effectivelyTimeReached,
                     refreshTimeLeftMillis = refreshTimeLeftMillis,
                     shield = shield,
-                    isIncentiveLocked = isIncentiveLocked,
+                    incentiveTier = incentiveTier,
+                    bonusUsesLeft = bonusUsesLeft,
                     incentiveProgress = incentiveProgress,
+                    isIncentiveBlocked = isIncentiveBlocked,
                     currentEvent = currentEvent,
+                    onConsumeBonusUse = onConsumeBonusUse,
                     onEmergencyClick = onEmergencyClick,
                     onEmergencyHoldingChange = onEmergencyHoldingChange
                 )
             } else {
-                val minutesToDisplay = if (isEmergencyUnlocked) null else currentRemainingMinutes
+                if (incentiveTier != null && !incentiveTier.isUnlocked && incentiveTier.bonusUses < Int.MAX_VALUE && bonusUsesLeft > 0) {
+                    IncentiveBonusUseSection(
+                        incentiveTier = incentiveTier,
+                        bonusUsesLeft = bonusUsesLeft,
+                        incentiveProgress = incentiveProgress,
+                        onConsumeBonusUse = onConsumeBonusUse
+                    )
+                } else {
+                    val minutesToDisplay = if (isEmergencyUnlocked) null else currentRemainingMinutes
 
-                AnimatedContent(
-                    targetState = isDelaying,
-                    transitionSpec = {
-                        (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
-                         scaleIn(initialScale = 0.92f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)))
-                            .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)))
-                    },
-                    label = "delayContent"
-                ) { delaying ->
-                    if (delaying) {
-                        DelayInProgressSection(randomMessage, delayProgressAnimatable, delayDurationSeconds, currentEvent)
-                    } else {
-                        DurationSelectionSection(minutesToDisplay, isEmergencyUnlocked, onAllowUse)
+                    AnimatedContent(
+                        targetState = isDelaying,
+                        transitionSpec = {
+                            (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                             scaleIn(initialScale = 0.92f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)))
+                                .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)))
+                        },
+                        label = "delayContent"
+                    ) { delaying ->
+                        if (delaying) {
+                            DelayInProgressSection(randomMessage, delayProgressAnimatable, delayDurationSeconds, currentEvent)
+                        } else {
+                            DurationSelectionSection(minutesToDisplay, isEmergencyUnlocked, onAllowUse)
+                        }
                     }
                 }
             }
@@ -645,8 +698,11 @@ fun LandscapeInterceptLayout(
     refreshTimeLeftMillis: Long,
     currentUses: Int,
     maxUses: Int,
-    isIncentiveLocked: Boolean = false,
+    incentiveTier: IncentiveTier? = null,
+    bonusUsesLeft: Int = 0,
     incentiveProgress: Float = 0f,
+    isIncentiveBlocked: Boolean = false,
+    onConsumeBonusUse: () -> Unit = {},
     autoKickProgress: () -> Float,
     onEmergencyClick: () -> Unit,
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
@@ -782,8 +838,11 @@ fun LandscapeInterceptLayout(
                     isUsesExceeded = isUsesExceeded,
                     isTimeLimitReached = isTimeLimitReached,
                     refreshTimeLeftMillis = refreshTimeLeftMillis,
-                    isIncentiveLocked = isIncentiveLocked,
+                    incentiveTier = incentiveTier,
+                    bonusUsesLeft = bonusUsesLeft,
                     incentiveProgress = incentiveProgress,
+                    isIncentiveBlocked = isIncentiveBlocked,
+                    onConsumeBonusUse = onConsumeBonusUse,
                     autoKickProgress = autoKickProgress,
                     onEmergencyClick = onEmergencyClick,
                     onEmergencyHoldingChange = onEmergencyHoldingChange,
@@ -1040,8 +1099,11 @@ fun ShieldLandscapeContent(
     isUsesExceeded: Boolean,
     isTimeLimitReached: Boolean,
     refreshTimeLeftMillis: Long,
-    isIncentiveLocked: Boolean = false,
+    incentiveTier: IncentiveTier? = null,
+    bonusUsesLeft: Int = 0,
     incentiveProgress: Float = 0f,
+    isIncentiveBlocked: Boolean = false,
+    onConsumeBonusUse: () -> Unit = {},
     autoKickProgress: () -> Float,
     onEmergencyClick: () -> Unit,
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
@@ -1067,8 +1129,11 @@ fun ShieldLandscapeContent(
                 isUsesExceeded = isUsesExceeded,
                 isTimeLimitReached = isTimeLimitReached,
                 refreshTimeLeftMillis = refreshTimeLeftMillis,
-                isIncentiveLocked = isIncentiveLocked,
+                incentiveTier = incentiveTier,
+                bonusUsesLeft = bonusUsesLeft,
                 incentiveProgress = incentiveProgress,
+                isIncentiveBlocked = isIncentiveBlocked,
+                onConsumeBonusUse = onConsumeBonusUse,
                 limitPeriod = shield?.limitPeriod ?: LimitPeriod.DAILY
             )
             if (shield != null && shield.emergencyUseCount > 0) {
@@ -1079,7 +1144,14 @@ fun ShieldLandscapeContent(
             CloseAppTextButton(onCloseApp, autoKickProgress, size = ZenithButtonSize.Large)
         }
     } else {
-        if (isDelaying) {
+        if (incentiveTier != null && !incentiveTier.isUnlocked && incentiveTier.bonusUses < Int.MAX_VALUE && bonusUsesLeft > 0) {
+            IncentiveBonusUseSection(
+                incentiveTier = incentiveTier,
+                bonusUsesLeft = bonusUsesLeft,
+                incentiveProgress = incentiveProgress,
+                onConsumeBonusUse = onConsumeBonusUse
+            )
+        } else if (isDelaying) {
             Column(
                 modifier = Modifier.fillMaxHeight(),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -1116,9 +1188,12 @@ fun LimitReachedSection(
     isTimeLimitReached: Boolean,
     refreshTimeLeftMillis: Long,
     shield: ShieldEntity?,
-    isIncentiveLocked: Boolean = false,
+    incentiveTier: IncentiveTier? = null,
+    bonusUsesLeft: Int = 0,
     incentiveProgress: Float = 0f,
+    isIncentiveBlocked: Boolean = false,
     currentEvent: CurrentCalendarEvent? = null,
+    onConsumeBonusUse: () -> Unit = {},
     onEmergencyClick: () -> Unit,
     onEmergencyHoldingChange: (Boolean) -> Unit = {}
 ) {
@@ -1127,47 +1202,90 @@ fun LimitReachedSection(
         CurrentEventPill(currentEvent = currentEvent)
     }
     Spacer(modifier = Modifier.height(24.dp))
-    LimitReachedContent(isUsesExceeded, isTimeLimitReached, refreshTimeLeftMillis, isIncentiveLocked, incentiveProgress, shield?.limitPeriod ?: LimitPeriod.DAILY)
+    LimitReachedContent(
+        isUsesExceeded = isUsesExceeded,
+        isTimeLimitReached = isTimeLimitReached,
+        refreshTimeLeftMillis = refreshTimeLeftMillis,
+        incentiveTier = incentiveTier,
+        bonusUsesLeft = bonusUsesLeft,
+        incentiveProgress = incentiveProgress,
+        isIncentiveBlocked = isIncentiveBlocked,
+        onConsumeBonusUse = onConsumeBonusUse,
+        limitPeriod = shield?.limitPeriod ?: LimitPeriod.DAILY
+    )
     if (shield != null && shield.emergencyUseCount > 0) {
         Spacer(modifier = Modifier.height(16.dp))
         EmergencyButton(onEmergencyUse = onEmergencyClick, onHoldingChange = onEmergencyHoldingChange)
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LimitReachedContent(
     isUsesExceeded: Boolean,
     isTimeLimitReached: Boolean,
     refreshTimeLeftMillis: Long,
-    isIncentiveLocked: Boolean = false,
+    incentiveTier: IncentiveTier? = null,
+    bonusUsesLeft: Int = 0,
     incentiveProgress: Float = 0f,
+    isIncentiveBlocked: Boolean = false,
+    onConsumeBonusUse: () -> Unit = {},
     limitPeriod: LimitPeriod = LimitPeriod.DAILY
 ) {
-    if (isIncentiveLocked) {
+    if (isIncentiveBlocked && incentiveTier != null) {
         val percentage = (incentiveProgress * 100).toInt()
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "Incentive Lock Active",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.error,
-                fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Complete all your app goals to unlock!\nCurrently at $percentage% completion.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Stay focused! You're making great progress.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
+            when {
+                incentiveTier == IncentiveTier.LOCKED -> {
+                    Text(
+                        text = "Incentive Lock Active",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Complete all your app goals to unlock!\nCurrently at $percentage% completion.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Stay focused! You're making great progress.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                incentiveTier.bonusUses < Int.MAX_VALUE && bonusUsesLeft <= 0 -> {
+                    Text(
+                        text = "No Bonus Uses Left",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "You used all your bonus uses for today.\nProgress: $percentage% — keep going to unlock more!",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    LinearWavyProgressIndicator(
+                        progress = { incentiveProgress },
+                        modifier = Modifier
+                            .fillMaxWidth(0.6f)
+                            .height(10.dp),
+                        color = MaterialTheme.colorScheme.tertiary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                }
+            }
         }
     } else if (isUsesExceeded && !isTimeLimitReached) {
         var countdownText by remember { mutableStateOf(formatCountdown(refreshTimeLeftMillis)) }
@@ -1194,6 +1312,58 @@ fun LimitReachedContent(
             color = MaterialTheme.colorScheme.error,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun IncentiveBonusUseSection(
+    incentiveTier: IncentiveTier,
+    bonusUsesLeft: Int,
+    incentiveProgress: Float,
+    onConsumeBonusUse: () -> Unit
+) {
+    val percentage = (incentiveProgress * 100).toInt()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Goals Progress: $percentage%",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        LinearWavyProgressIndicator(
+            progress = { incentiveProgress },
+            modifier = Modifier
+                .fillMaxWidth(0.7f)
+                .height(10.dp),
+            color = MaterialTheme.colorScheme.tertiary,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "You have $bonusUsesLeft bonus use${if (bonusUsesLeft != 1) "s" else ""} remaining.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        ZenithButton(
+            onClick = onConsumeBonusUse,
+            text = "Use with Bonus",
+            icon = Icons.Outlined.Bolt,
+            type = ZenithButtonType.Filled,
+            size = ZenithButtonSize.Medium,
+            modifier = Modifier.fillMaxWidth(0.6f),
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
         )
     }
 }

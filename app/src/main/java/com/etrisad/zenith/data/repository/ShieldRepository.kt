@@ -10,6 +10,8 @@ import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
+import com.etrisad.zenith.data.model.IncentiveTier
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -17,6 +19,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -28,7 +32,8 @@ class ShieldRepository(
     private val scheduleDao: ScheduleDao,
     private val dailyUsageDao: DailyUsageDao,
     private val hourlyUsageDao: HourlyUsageDao,
-    private val database: ZenithDatabase
+    private val database: ZenithDatabase,
+    private val userPreferencesRepository: UserPreferencesRepository
 ) {
     val allowedApps = ConcurrentHashMap<String, Long>()
     val mindfulGatewayStates = ConcurrentHashMap<String, ShieldEntity>()
@@ -224,6 +229,25 @@ class ShieldRepository(
         return scheduleDao.getScheduleById(id)
     }
 
+    suspend fun consumeIncentiveBonusUse(): Boolean {
+        val progress = getIncentiveGoalProgress().first()
+        val tier = IncentiveTier.fromProgress(progress)
+        if (tier.isUnlocked || tier.bonusUses == Int.MAX_VALUE) return true
+        val prefs = userPreferencesRepository.userPreferencesFlow.first()
+        val used = prefs.incentiveBonusUsesUsed
+        if (used >= tier.bonusUses) return false
+        userPreferencesRepository.setIncentiveBonusUsesUsed(used + 1)
+        return true
+    }
+
+    suspend fun getIncentiveBonusUsesLeft(): Int {
+        val progress = getIncentiveGoalProgress().first()
+        val tier = IncentiveTier.fromProgress(progress)
+        if (tier.isUnlocked || tier.bonusUses == Int.MAX_VALUE) return Int.MAX_VALUE
+        val prefs = userPreferencesRepository.userPreferencesFlow.first()
+        return (tier.bonusUses - prefs.incentiveBonusUsesUsed).coerceAtLeast(0)
+    }
+
     fun getIncentiveGoalProgress(): Flow<Float> {
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         return combine(
@@ -246,5 +270,9 @@ class ShieldRepository(
             }
             (totalProgress / goals.size).toFloat()
         }
+    }
+
+    fun getIncentiveTier(): Flow<IncentiveTier> {
+        return getIncentiveGoalProgress().map { IncentiveTier.fromProgress(it) }
     }
 }
