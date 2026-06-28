@@ -302,7 +302,70 @@ fun OverlayDragHandleWithIndicators(
         horizontalArrangement = Arrangement.Center
     ) {
         Box(modifier = Modifier.weight(1f)) {
-            if (isIncentiveLocked) {
+            val hasUses = currentUses != null && maxUses != null
+            if (isIncentiveLocked && hasUses) {
+                var showingUses by remember { mutableStateOf(true) }
+                LaunchedEffect(Unit) {
+                    while (true) {
+                        delay(3000)
+                        showingUses = !showingUses
+                    }
+                }
+                Crossfade(targetState = showingUses, label = "dragHandle") { showUses ->
+                    if (showUses) {
+                        ZenithButton(
+                            onClick = { },
+                            text = "$currentUses/$maxUses",
+                            icon = Icons.Outlined.Timer,
+                            type = ZenithButtonType.Tonal,
+                            size = ZenithButtonSize.Small,
+                            modifier = Modifier.padding(start = 16.dp).widthIn(max = 110.dp),
+                            isDisableWeight = true,
+                            isDisableExpand = true,
+                            backgroundProgressProvider = { ((maxUses - currentUses).toFloat() / maxUses.toFloat()).coerceIn(0f, 1f) },
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        val tier = incentiveTier ?: IncentiveTier.LOCKED
+                        val displayText = when {
+                            tier == IncentiveTier.LOCKED -> "Locked"
+                            tier.bonusUses < Int.MAX_VALUE -> "$bonusUsesLeft left"
+                            else -> "Unlocked"
+                        }
+                        val icon = when {
+                            tier == IncentiveTier.LOCKED -> Icons.Outlined.Lock
+                            tier == IncentiveTier.LIMITED -> Icons.Outlined.Lock
+                            tier == IncentiveTier.MODERATE -> Icons.Outlined.Timer
+                            else -> Icons.Outlined.Bolt
+                        }
+                        val container = when {
+                            tier == IncentiveTier.LOCKED -> MaterialTheme.colorScheme.errorContainer
+                            tier.bonusUses < Int.MAX_VALUE && bonusUsesLeft <= 0 -> MaterialTheme.colorScheme.errorContainer
+                            tier.bonusUses < Int.MAX_VALUE -> MaterialTheme.colorScheme.tertiaryContainer
+                            else -> MaterialTheme.colorScheme.surfaceContainerHigh
+                        }
+                        val content = when {
+                            tier == IncentiveTier.LOCKED -> MaterialTheme.colorScheme.error
+                            tier.bonusUses < Int.MAX_VALUE && bonusUsesLeft <= 0 -> MaterialTheme.colorScheme.error
+                            tier.bonusUses < Int.MAX_VALUE -> MaterialTheme.colorScheme.onTertiaryContainer
+                            else -> MaterialTheme.colorScheme.primary
+                        }
+                        ZenithButton(
+                            onClick = { },
+                            text = displayText,
+                            icon = icon,
+                            type = ZenithButtonType.Tonal,
+                            size = ZenithButtonSize.Small,
+                            modifier = Modifier.padding(start = 16.dp).widthIn(max = 110.dp),
+                            isDisableWeight = true,
+                            isDisableExpand = true,
+                            containerColor = container,
+                            contentColor = content
+                        )
+                    }
+                }
+            } else if (isIncentiveLocked) {
                 val tier = incentiveTier ?: IncentiveTier.LOCKED
                 val displayText = when {
                     tier == IncentiveTier.LOCKED -> "Locked"
@@ -339,7 +402,7 @@ fun OverlayDragHandleWithIndicators(
                     containerColor = container,
                     contentColor = content
                 )
-            } else if (currentUses != null && maxUses != null) {
+            } else if (hasUses) {
                 ZenithButton(
                     onClick = { },
                     text = "$currentUses/$maxUses",

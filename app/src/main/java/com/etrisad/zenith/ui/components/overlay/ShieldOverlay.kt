@@ -638,6 +638,7 @@ fun PortraitInterceptLayout(
                     bonusUsesLeft = bonusUsesLeft,
                     incentiveProgress = incentiveProgress,
                     isIncentiveBlocked = isIncentiveBlocked,
+                    bonusConsumedThisSession = bonusConsumedThisSession,
                     currentEvent = currentEvent,
                     onConsumeBonusUse = onConsumeBonusUse,
                     onEmergencyClick = onEmergencyClick,
@@ -1139,6 +1140,7 @@ fun ShieldLandscapeContent(
                 bonusUsesLeft = bonusUsesLeft,
                 incentiveProgress = incentiveProgress,
                 isIncentiveBlocked = isIncentiveBlocked,
+                bonusConsumedThisSession = bonusConsumedThisSession,
                 onConsumeBonusUse = onConsumeBonusUse,
                 limitPeriod = shield?.limitPeriod ?: LimitPeriod.DAILY
             )
@@ -1198,6 +1200,7 @@ fun LimitReachedSection(
     bonusUsesLeft: Int = 0,
     incentiveProgress: Float = 0f,
     isIncentiveBlocked: Boolean = false,
+    bonusConsumedThisSession: Boolean = false,
     currentEvent: CurrentCalendarEvent? = null,
     onConsumeBonusUse: () -> Unit = {},
     onEmergencyClick: () -> Unit,
@@ -1216,6 +1219,7 @@ fun LimitReachedSection(
         bonusUsesLeft = bonusUsesLeft,
         incentiveProgress = incentiveProgress,
         isIncentiveBlocked = isIncentiveBlocked,
+        bonusConsumedThisSession = bonusConsumedThisSession,
         onConsumeBonusUse = onConsumeBonusUse,
         limitPeriod = shield?.limitPeriod ?: LimitPeriod.DAILY
     )
@@ -1235,6 +1239,7 @@ fun LimitReachedContent(
     bonusUsesLeft: Int = 0,
     incentiveProgress: Float = 0f,
     isIncentiveBlocked: Boolean = false,
+    bonusConsumedThisSession: Boolean = false,
     onConsumeBonusUse: () -> Unit = {},
     limitPeriod: LimitPeriod = LimitPeriod.DAILY
 ) {
