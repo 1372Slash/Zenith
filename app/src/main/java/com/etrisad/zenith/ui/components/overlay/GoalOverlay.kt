@@ -113,10 +113,13 @@ fun GoalOverlay(
             }
             
             val liveAppUsage = detailedUsage.appUsageMap[packageName] ?: 0L
+            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+            val isAchieved = com.etrisad.zenith.service.SharedMonitoringState.notifiedGoals.contains(packageName)
+            val usage = if (isAchieved && liveAppUsage < limitMillis) limitMillis else liveAppUsage
 
             value = Triple(
                 shield, 
-                liveAppUsage.coerceAtMost(timeSinceMidnight), 
+                usage.coerceAtMost(timeSinceMidnight), 
                 detailedUsage.totalGlobalUsage.coerceAtMost(timeSinceMidnight)
             )
             delay(30000)

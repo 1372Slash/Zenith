@@ -122,9 +122,14 @@ fun ShieldOverlay(
                 dailyUsage
             }
 
+            val shieldEntity = s ?: shield
+            val limitMillis = shieldEntity?.timeLimitMinutes?.times(60000L) ?: 0L
+            val isAchieved = if (shieldEntity != null) com.etrisad.zenith.service.SharedMonitoringState.notifiedGoals.contains(packageName) else false
+            val usage = if (isAchieved && liveAppUsage < limitMillis) limitMillis else liveAppUsage
+
             value = ShieldOverlayCombinedState(
-                shield = s ?: shield,
-                totalUsageToday = liveAppUsage.coerceAtMost(timeSinceMidnight),
+                shield = shieldEntity,
+                totalUsageToday = usage.coerceAtMost(timeSinceMidnight),
                 totalGlobalUsageToday = detailedUsage.totalGlobalUsage.coerceAtMost(timeSinceMidnight),
                 isRealShield = s != null
             )
