@@ -1299,12 +1299,14 @@ class AppUsageMonitorService : Service() {
                         if (systemBase > baseUsageAtSessionStart) {
                             baseUsageAtSessionStart = systemBase
                         }
+                        baseUsageAtSessionStart = cachedTotalUsage.coerceAtLeast(baseUsageAtSessionStart)
                         cachedTotalUsage = baseUsageAtSessionStart
                     }
                     val globalBase = systemGlobal.coerceAtMost(timeSinceMidnight)
                     if (globalBase > baseGlobalUsageAtSessionStart) {
                         baseGlobalUsageAtSessionStart = globalBase
                     }
+                    baseGlobalUsageAtSessionStart = cachedTotalGlobalUsage.coerceAtLeast(baseGlobalUsageAtSessionStart)
                     sessionStartTime = now
                     cachedTotalGlobalUsage = baseGlobalUsageAtSessionStart
 
