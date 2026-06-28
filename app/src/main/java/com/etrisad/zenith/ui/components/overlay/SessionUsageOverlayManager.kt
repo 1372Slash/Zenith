@@ -342,6 +342,9 @@ class SessionUsageOverlayManager(
                                 else session.secondsLeftState.intValue <= 0
                                 
                             if (isTimeUp) {
+                                if (session.isGoal) {
+                                    com.etrisad.zenith.service.SharedMonitoringState.notifiedGoals.add(session.packageName)
+                                }
                                 session.isVisibleState.value = false
                                 hideHUD(session.packageName)
                             } else if (session.isTemporarilyHiddenState.value) {
