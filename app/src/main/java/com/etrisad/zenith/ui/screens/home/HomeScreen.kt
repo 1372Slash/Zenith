@@ -791,10 +791,8 @@ fun ScreenTimeTargetBottomSheet(
                 ) {
                     Text(
                         text = "Daily Screen Time Target",
-                        style = MaterialTheme.typography.displayLarge.copy(
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(

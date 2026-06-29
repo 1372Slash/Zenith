@@ -235,10 +235,8 @@ fun DelayAppBottomSheet(
                 ) {
                     Text(
                         text = "App Opening Delay",
-                        style = MaterialTheme.typography.displayLarge.copy(
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -400,10 +398,8 @@ fun EmergencyRechargeBottomSheet(
                 ) {
                     Text(
                         text = "Emergency Recharge",
-                        style = MaterialTheme.typography.displayLarge.copy(
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -602,10 +598,8 @@ fun DayStartTimeBottomSheet(
                 ) {
                     Text(
                         text = "Day Start Time",
-                        style = MaterialTheme.typography.displayLarge.copy(
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
