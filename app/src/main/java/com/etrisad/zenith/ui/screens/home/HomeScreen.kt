@@ -8,10 +8,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,8 +46,10 @@ import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.SpanStyle
@@ -64,6 +70,7 @@ import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.ui.components.ShieldSortHeader
 import com.etrisad.zenith.ui.components.UsageHistoryCard
 import com.etrisad.zenith.ui.components.ZenithContainedLoadingIndicator
+import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.theme.ZenithTheme
 import com.etrisad.zenith.ui.viewmodel.AppUsageInfo
 import com.etrisad.zenith.ui.viewmodel.HomeUiState
@@ -88,8 +95,6 @@ import androidx.compose.ui.text.style.TextAlign
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import kotlinx.coroutines.delay
-
-import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(
@@ -744,114 +749,211 @@ fun ScreenTimeTargetBottomSheet(
     onDismiss: () -> Unit,
     onSave: (Int) -> Unit
 ) {
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
+    val repository = remember { UserPreferencesRepository(context) }
+    val preferences by repository.userPreferencesFlow.collectAsState(initial = UserPreferences())
+
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var hours by remember { mutableIntStateOf(initialMinutes / 60) }
-    var minutes by remember { mutableIntStateOf(initialMinutes % 60) }
+    var hourText by remember { mutableStateOf((initialMinutes / 60).toString()) }
+    var minuteText by remember { mutableStateOf((initialMinutes % 60).toString()) }
+
+    val containerColor by animateColorAsState(
+        targetValue = if (preferences.expressiveColors) MaterialTheme.colorScheme.surfaceContainerHighest
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "containerColor"
+    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        dragHandle = { BottomSheetDefaults.DragHandle() }
+        containerColor = MaterialTheme.colorScheme.surface
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp)
-                .navigationBarsPadding(),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .heightIn(max = screenHeight * 0.9f)
         ) {
-            Text(
-                text = "Daily Screen Time Target",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Set a goal to help you stay mindful of your device usage.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 16.dp, end = 16.dp, bottom = 100.dp)
             ) {
-                NumberPicker(
-                    value = hours,
-                    onValueChange = { hours = it },
-                    range = 0..23,
-                    label = "Hours"
-                )
-                Text(
-                    ":",
-                    style = MaterialTheme.typography.displaySmall,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-                NumberPicker(
-                    value = minutes,
-                    onValueChange = { minutes = it },
-                    range = 0..59,
-                    label = "Minutes"
-                )
-            }
+                Spacer(modifier = Modifier.height(16.dp))
 
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-            ) {
-                val presets = listOf(120, 240, 360, 480)
-                presets.forEach { preset ->
-                    FilterChip(
-                        selected = (hours * 60 + minutes) == preset,
-                        onClick = {
-                            hours = preset / 60
-                            minutes = preset % 60
-                        },
-                        label = { Text("${preset / 60}h") },
-                        shape = CircleShape
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Daily Screen Time Target",
+                        style = MaterialTheme.typography.displayLarge.copy(
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Set a goal to help you stay mindful of your device usage",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 8.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
+                        color = containerColor
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 16.dp, horizontal = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "Hours",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            BasicTextField(
+                                value = hourText,
+                                onValueChange = { newValue ->
+                                    if (newValue.all { it.isDigit() } && newValue.length <= 2) {
+                                        hourText = newValue
+                                    }
+                                },
+                                textStyle = MaterialTheme.typography.displayLarge.copy(
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                ),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 28.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
+                        color = containerColor
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 16.dp, horizontal = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "Minutes",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            BasicTextField(
+                                value = minuteText,
+                                onValueChange = { newValue ->
+                                    if (newValue.all { it.isDigit() } && newValue.length <= 2) {
+                                        if (newValue.isEmpty() || (newValue.toIntOrNull() ?: 0) < 60) {
+                                            minuteText = newValue
+                                        }
+                                    }
+                                },
+                                textStyle = MaterialTheme.typography.displayLarge.copy(
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                ),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                ZenithGroupedButton(size = ZenithButtonSize.Small) {
+                    val presets = listOf(120, 240, 360, 480)
+                    presets.forEachIndexed { index, preset ->
+                        val currentMinutes = (hourText.toIntOrNull() ?: 0) * 60 + (minuteText.toIntOrNull() ?: 0)
+                        val isSelected = currentMinutes == preset
+                        val label = "${preset / 60}h"
+                        val pShape = when (index) {
+                            0 -> RoundedCornerShape(bottomStart = 28.dp, topStart = 8.dp, topEnd = 8.dp, bottomEnd = 8.dp)
+                            presets.lastIndex -> RoundedCornerShape(bottomEnd = 28.dp, topEnd = 8.dp, topStart = 8.dp, bottomStart = 8.dp)
+                            else -> RoundedCornerShape(8.dp)
+                        }
+                        ZenithButtonWeighted(
+                            onClick = {
+                                hourText = (preset / 60).toString()
+                                minuteText = (preset % 60).toString()
+                            },
+                            text = label,
+                            type = if (isSelected) ZenithButtonType.Filled else ZenithButtonType.Tonal,
+                            size = ZenithButtonSize.Small,
+                            selected = isSelected,
+                            shape = pShape,
+                            isFirst = index == 0,
+                            isLast = index == presets.lastIndex,
+                            contentScaleEnabled = false
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            ZenithGroupedButton {
-                if (initialMinutes > 0) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+                    .navigationBarsPadding()
+            ) {
+                ZenithGroupedButton {
+                    if (initialMinutes > 0) {
+                        ZenithButtonWeighted(
+                            onClick = {
+                                scope.launch {
+                                    sheetState.hide()
+                                    onSave(0)
+                                }
+                            },
+                            text = "Remove",
+                            type = ZenithButtonType.Tonal,
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                            weight = 1f,
+                            isFirst = true,
+                            isLast = false
+                        )
+                    }
                     ZenithButtonWeighted(
                         onClick = {
                             scope.launch {
                                 sheetState.hide()
-                                onSave(0)
+                                onSave((hourText.toIntOrNull() ?: 0) * 60 + (minuteText.toIntOrNull() ?: 0))
                             }
                         },
-                        text = "Remove",
-                        type = ZenithButtonType.Tonal,
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                        weight = 1f,
-                        isFirst = true,
-                        isLast = false
+                        text = "Save Target",
+                        weight = 1.5f,
+                        isFirst = initialMinutes <= 0,
+                        isLast = true
                     )
                 }
-
-                ZenithButtonWeighted(
-                    onClick = {
-                        scope.launch {
-                            sheetState.hide()
-                            onSave(hours * 60 + minutes)
-                        }
-                    },
-                    text = "Save Target",
-                    weight = 1.5f,
-                    isFirst = initialMinutes <= 0,
-                    isLast = true
-                )
             }
         }
     }
@@ -1755,44 +1857,6 @@ fun TickerUnit(unit: String) {
         fontWeight = FontWeight.ExtraBold,
         color = MaterialTheme.colorScheme.onSurface
     )
-}
-
-@Composable
-fun NumberPicker(
-    value: Int,
-    onValueChange: (Int) -> Unit,
-    range: IntRange,
-    label: String
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        IconButton(
-            onClick = { if (value < range.last) onValueChange(value + 1) },
-            enabled = value < range.last
-        ) {
-            Icon(Icons.Outlined.KeyboardArrowUp, contentDescription = "Increase $label")
-        }
-        Text(
-            text = value.toString().padStart(2, '0'),
-            style = MaterialTheme.typography.displayMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        IconButton(
-            onClick = { if (value > range.first) onValueChange(value - 1) },
-            enabled = value > range.first
-        ) {
-            Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = "Decrease $label")
-        }
-    }
 }
 
 @Preview(showBackground = true)

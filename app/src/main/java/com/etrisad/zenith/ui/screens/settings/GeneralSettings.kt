@@ -192,88 +192,160 @@ fun DelayAppBottomSheet(
     onDismiss: () -> Unit,
     onSave: (Int) -> Unit
 ) {
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
+    val repository = remember { UserPreferencesRepository(context) }
+    val preferences by repository.userPreferencesFlow.collectAsState(initial = UserPreferences())
+
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var seconds by remember { mutableIntStateOf(initialSeconds) }
 
+    val containerColor by animateColorAsState(
+        targetValue = if (preferences.expressiveColors) MaterialTheme.colorScheme.surfaceContainerHighest
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "containerColor"
+    )
+
+    val scrollState = rememberScrollState()
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp)
-                .navigationBarsPadding()
+                .heightIn(max = screenHeight * 0.9f)
         ) {
-            Text(
-                text = "App Opening Delay",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Set how many seconds to wait before a user can reopen an app after being kicked out.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 100.dp)
             ) {
-                IconButton(
-                    onClick = { if (seconds >= 5) seconds -= 5 },
-                    modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("-", style = MaterialTheme.typography.headlineMedium)
-                }
-
-                Text(
-                    text = if (seconds >= 60) "${seconds / 60}m ${seconds % 60}s" else "${seconds}s",
-                    style = MaterialTheme.typography.displayMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 32.dp)
-                )
-
-                IconButton(
-                    onClick = { if (seconds < 3600) seconds += 5 },
-                    modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
-                ) {
-                    Text("+", style = MaterialTheme.typography.headlineMedium)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-            ) {
-                listOf(15, 30, 60).forEach { preset ->
-                    FilterChip(
-                        selected = seconds == preset,
-                        onClick = { seconds = preset },
-                        label = { Text("${preset}s") },
-                        shape = CircleShape
+                    Text(
+                        text = "App Opening Delay",
+                        style = MaterialTheme.typography.displayLarge.copy(
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Set how many seconds to wait before reopening an app",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
+                    color = containerColor
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Delay Duration",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            IconButton(
+                                onClick = { if (seconds >= 5) seconds -= 5 },
+                                modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                            ) {
+                                Text("-", style = MaterialTheme.typography.headlineMedium)
+                            }
+                            Text(
+                                text = if (seconds >= 60) "${seconds / 60}m ${seconds % 60}s" else "${seconds}s",
+                                style = MaterialTheme.typography.displayLarge.copy(
+                                    fontSize = 36.sp,
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                modifier = Modifier.padding(horizontal = 24.dp)
+                            )
+                            IconButton(
+                                onClick = { if (seconds < 3600) seconds += 5 },
+                                modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                            ) {
+                                Text("+", style = MaterialTheme.typography.headlineMedium)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                ZenithGroupedButton(size = ZenithButtonSize.Small) {
+                    val presets = listOf(15, 30, 60)
+                    presets.forEachIndexed { index, preset ->
+                        val isSelected = seconds == preset
+                        val label = "${preset}s"
+                        val pShape = when (index) {
+                            0 -> RoundedCornerShape(bottomStart = 28.dp, topStart = 8.dp, topEnd = 8.dp, bottomEnd = 8.dp)
+                            presets.lastIndex -> RoundedCornerShape(bottomEnd = 28.dp, topEnd = 8.dp, topStart = 8.dp, bottomStart = 8.dp)
+                            else -> RoundedCornerShape(8.dp)
+                        }
+                        ZenithButtonWeighted(
+                            onClick = { seconds = preset },
+                            text = label,
+                            type = if (isSelected) ZenithButtonType.Filled else ZenithButtonType.Tonal,
+                            size = ZenithButtonSize.Small,
+                            selected = isSelected,
+                            shape = pShape,
+                            isFirst = index == 0,
+                            isLast = index == presets.lastIndex,
+                            contentScaleEnabled = false
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            ZenithButton(
-                onClick = {
-                    scope.launch {
-                        sheetState.hide()
-                        onSave(seconds)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                text = "Save Delay"
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, MaterialTheme.colorScheme.surface),
+                            startY = 0f,
+                            endY = 40f
+                        )
+                    )
+                    .padding(16.dp)
+                    .navigationBarsPadding()
+            ) {
+                ZenithButton(
+                    onClick = {
+                        scope.launch {
+                            sheetState.hide()
+                            onSave(seconds)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    text = "Save Delay"
+                )
+            }
         }
     }
 }
@@ -285,98 +357,168 @@ fun EmergencyRechargeBottomSheet(
     onDismiss: () -> Unit,
     onSave: (Int) -> Unit
 ) {
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
+    val repository = remember { UserPreferencesRepository(context) }
+    val preferences by repository.userPreferencesFlow.collectAsState(initial = UserPreferences())
+
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var minutes by remember { mutableIntStateOf(initialMinutes) }
 
+    val containerColor by animateColorAsState(
+        targetValue = if (preferences.expressiveColors) MaterialTheme.colorScheme.surfaceContainerHighest
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "containerColor"
+    )
+
+    val scrollState = rememberScrollState()
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp)
-                .navigationBarsPadding()
+                .heightIn(max = screenHeight * 0.9f)
         ) {
-            Text(
-                text = "Emergency Recharge",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Set how long it takes to recover one emergency use count.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 100.dp)
             ) {
-                IconButton(
-                    onClick = { if (minutes >= 5) minutes -= 5 },
-                    modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("-", style = MaterialTheme.typography.headlineMedium)
-                }
-
-                Text(
-                    text = when {
-                        minutes >= 1440 -> "${minutes / 1440}d" + if (minutes % 1440 > 0) " ${ (minutes % 1440) / 60 }h" else ""
-                        minutes >= 60 -> "${minutes / 60}h" + if (minutes % 60 > 0) " ${minutes % 60}m" else ""
-                        else -> "${minutes}m"
-                    },
-                    style = MaterialTheme.typography.displayMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 32.dp)
-                )
-
-                IconButton(
-                    onClick = { if (minutes < 1440) minutes += 5 },
-                    modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
-                ) {
-                    Text("+", style = MaterialTheme.typography.headlineMedium)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-            ) {
-                val presets = listOf(60, 180, 1440)
-                presets.forEach { preset ->
-                    val label = when {
-                        preset >= 1440 -> "${preset / 1440}d"
-                        preset >= 60 -> "${preset / 60}h"
-                        else -> "${preset}m"
-                    }
-                    FilterChip(
-                        selected = minutes == preset,
-                        onClick = { minutes = preset },
-                        label = { Text(label) },
-                        shape = CircleShape
+                    Text(
+                        text = "Emergency Recharge",
+                        style = MaterialTheme.typography.displayLarge.copy(
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Set how long it takes to recover one emergency use count",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
+                    color = containerColor
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Recharge Duration",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            IconButton(
+                                onClick = { if (minutes >= 5) minutes -= 5 },
+                                modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                            ) {
+                                Text("-", style = MaterialTheme.typography.headlineMedium)
+                            }
+                            Text(
+                                text = when {
+                                    minutes >= 1440 -> "${minutes / 1440}d" + if (minutes % 1440 > 0) " ${(minutes % 1440) / 60}h" else ""
+                                    minutes >= 60 -> "${minutes / 60}h" + if (minutes % 60 > 0) " ${minutes % 60}m" else ""
+                                    else -> "${minutes}m"
+                                },
+                                style = MaterialTheme.typography.displayLarge.copy(
+                                    fontSize = 36.sp,
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                modifier = Modifier.padding(horizontal = 24.dp)
+                            )
+                            IconButton(
+                                onClick = { if (minutes < 1440) minutes += 5 },
+                                modifier = Modifier.background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                            ) {
+                                Text("+", style = MaterialTheme.typography.headlineMedium)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                ZenithGroupedButton(size = ZenithButtonSize.Small) {
+                    val presets = listOf(60, 180, 1440)
+                    presets.forEachIndexed { index, preset ->
+                        val isSelected = minutes == preset
+                        val label = when {
+                            preset >= 1440 -> "${preset / 1440}d"
+                            preset >= 60 -> "${preset / 60}h"
+                            else -> "${preset}m"
+                        }
+                        val pShape = when (index) {
+                            0 -> RoundedCornerShape(bottomStart = 28.dp, topStart = 8.dp, topEnd = 8.dp, bottomEnd = 8.dp)
+                            presets.lastIndex -> RoundedCornerShape(bottomEnd = 28.dp, topEnd = 8.dp, topStart = 8.dp, bottomStart = 8.dp)
+                            else -> RoundedCornerShape(8.dp)
+                        }
+                        ZenithButtonWeighted(
+                            onClick = { minutes = preset },
+                            text = label,
+                            type = if (isSelected) ZenithButtonType.Filled else ZenithButtonType.Tonal,
+                            size = ZenithButtonSize.Small,
+                            selected = isSelected,
+                            shape = pShape,
+                            isFirst = index == 0,
+                            isLast = index == presets.lastIndex,
+                            contentScaleEnabled = false
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            ZenithButton(
-                onClick = {
-                    scope.launch {
-                        sheetState.hide()
-                        onSave(minutes)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                text = "Save Duration"
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, MaterialTheme.colorScheme.surface),
+                            startY = 0f,
+                            endY = 40f
+                        )
+                    )
+                    .padding(16.dp)
+                    .navigationBarsPadding()
+            ) {
+                ZenithButton(
+                    onClick = {
+                        scope.launch {
+                            sheetState.hide()
+                            onSave(minutes)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    text = "Save Duration"
+                )
+            }
         }
     }
 }
