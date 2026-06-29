@@ -409,6 +409,7 @@ fun PerformanceTuningPanel(
                 context.startActivity(intent)
             }
         },
+        onInfoClick = { showBankingWarning = true },
         icon = Icons.Outlined.AccessibilityNew,
         position = TuningGroupPosition.Top
     )
@@ -1011,7 +1012,8 @@ private fun TuningPermissionItemRow(
     isGranted: Boolean,
     onClick: () -> Unit,
     icon: ImageVector,
-    position: TuningGroupPosition = TuningGroupPosition.Middle
+    position: TuningGroupPosition = TuningGroupPosition.Middle,
+    onInfoClick: (() -> Unit)? = null
 ) {
     val backgroundColor by animateColorAsState(
         targetValue = if (isGranted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
@@ -1089,17 +1091,33 @@ private fun TuningPermissionItemRow(
                     modifier = Modifier.size(24.dp)
                 )
             } else {
-                Surface(
-                    color = MaterialTheme.colorScheme.primary,
-                    shape = CircleShape
-                ) {
-                    Text(
-                        text = "Grant",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelMedium
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (onInfoClick != null) {
+                        IconButton(
+                            onClick = onInfoClick,
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                Icons.Outlined.Info,
+                                contentDescription = "Info",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+                    Surface(
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            text = "Grant",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
                 }
             }
         }

@@ -266,6 +266,7 @@ fun PermissionBottomSheet(
                             openAccessibilitySettings(context)
                         }
                     },
+                    onInfoClick = { showBankingWarning = true },
                     icon = Icons.Outlined.AccessibilityNew,
                     position = GroupPosition.Bottom
                 )
@@ -293,6 +294,7 @@ fun PermissionBottomSheet(
                                     openAccessibilitySettings(context)
                                 }
                             },
+                            onInfoClick = { showBankingWarning = true },
                             icon = Icons.Outlined.AccessibilityNew,
                             position = GroupPosition.Top,
                             isInsideCollapse = true
@@ -529,7 +531,8 @@ private fun PermissionItemRow(
     onClick: () -> Unit,
     icon: ImageVector,
     position: GroupPosition = GroupPosition.Middle,
-    isInsideCollapse: Boolean = false
+    isInsideCollapse: Boolean = false,
+    onInfoClick: (() -> Unit)? = null
 ) {
     val backgroundColor by animateColorAsState(
         targetValue = when {
@@ -606,9 +609,9 @@ private fun PermissionItemRow(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            Box(
+            Row(
                 modifier = Modifier.align(Alignment.CenterVertically),
-                contentAlignment = Alignment.Center
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 if (isGranted) {
                     Icon(
@@ -618,6 +621,20 @@ private fun PermissionItemRow(
                         modifier = Modifier.size(24.dp)
                     )
                 } else {
+                    if (onInfoClick != null) {
+                        IconButton(
+                            onClick = onInfoClick,
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                Icons.Outlined.Info,
+                                contentDescription = "Info",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
                     Surface(
                         color = MaterialTheme.colorScheme.primary,
                         shape = CircleShape
