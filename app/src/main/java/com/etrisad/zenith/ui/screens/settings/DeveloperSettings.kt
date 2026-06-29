@@ -437,7 +437,7 @@ fun DeveloperSettings(
         val context = LocalContext.current
         val usageStatsManager = context.getSystemService(android.content.Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
         val todayUsage = remember(selectedAppInfo) {
-            ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager).appUsageMap[selectedAppInfo!!.packageName] ?: 0L
+            ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager, dayStartHour = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartHour, dayStartMinute = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartMinute).appUsageMap[selectedAppInfo!!.packageName] ?: 0L
         }
 
         EditValueBottomSheet(

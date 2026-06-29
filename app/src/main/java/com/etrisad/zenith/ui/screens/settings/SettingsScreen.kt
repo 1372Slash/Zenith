@@ -131,6 +131,7 @@ fun SettingsScreen(
                     onSetTarget = { mins -> coroutineScope.launch { preferencesRepository.setScreenTimeTarget(mins) } },
                     onSetEmergencyRecharge = { mins -> coroutineScope.launch { preferencesRepository.setEmergencyRechargeDuration(mins) } },
                     onSetDelayAppDuration = { secs -> coroutineScope.launch { preferencesRepository.setDelayAppDuration(secs) } },
+                    onSetDayStartTime = { hour, minute -> coroutineScope.launch { preferencesRepository.setDayStartTime(hour, minute) } },
                     onShowWhitelistSheetChange = { showWhitelistSheet = it },
                     onOpenPermissions = onOpenPermissions,
                     permissionsMissing = permissionsMissing

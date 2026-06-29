@@ -1,19 +1,35 @@
 package com.etrisad.zenith.ui.screens.settings
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.etrisad.zenith.data.preferences.UserPreferences
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.ZenithButton
+import com.etrisad.zenith.ui.components.ZenithButtonSize
+import com.etrisad.zenith.ui.components.ZenithButtonType
+import com.etrisad.zenith.ui.components.ZenithButtonWeighted
+import com.etrisad.zenith.ui.components.ZenithGroupedButton
+import com.etrisad.zenith.ui.components.focus.TimePickerDialog
 import kotlinx.coroutines.launch
 
 @Composable
@@ -22,6 +38,7 @@ fun GeneralSettings(
     onSetTarget: (Int) -> Unit,
     onSetEmergencyRecharge: (Int) -> Unit,
     onSetDelayAppDuration: (Int) -> Unit,
+    onSetDayStartTime: (Int, Int) -> Unit,
     onShowWhitelistSheetChange: (Boolean) -> Unit,
     onOpenPermissions: () -> Unit,
     permissionsMissing: Boolean = false
@@ -29,6 +46,7 @@ fun GeneralSettings(
     var showTargetSheet by remember { mutableStateOf(false) }
     var showEmergencyRechargeSheet by remember { mutableStateOf(false) }
     var showDelayAppSheet by remember { mutableStateOf(false) }
+    var showDayStartSheet by remember { mutableStateOf(false) }
 
     Column {
         PreferenceCategory(title = "General")
@@ -98,6 +116,21 @@ fun GeneralSettings(
 
         Spacer(modifier = Modifier.height(4.dp))
         SettingsActionItem(
+            title = "Day Start Time",
+            summary = if (preferences.dayStartHour == 0 && preferences.dayStartMinute == 0) {
+                "Day resets at midnight (default)"
+            } else {
+                val h = preferences.dayStartHour
+                val m = preferences.dayStartMinute
+                "Day resets at ${String.format("%02d:%02d", h, m)}"
+            },
+            onClick = { showDayStartSheet = true },
+            icon = Icons.Outlined.Schedule,
+            shape = RoundedCornerShape(8.dp)
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+        SettingsActionItem(
             title = "Whitelist Apps",
             summary = "${preferences.whitelistedPackages.size} apps bypassed",
             onClick = { onShowWhitelistSheetChange(true) },
@@ -135,6 +168,18 @@ fun GeneralSettings(
             onSave = { seconds: Int ->
                 onSetDelayAppDuration(seconds)
                 showDelayAppSheet = false
+            }
+        )
+    }
+
+    if (showDayStartSheet) {
+        DayStartTimeBottomSheet(
+            initialHour = preferences.dayStartHour,
+            initialMinute = preferences.dayStartMinute,
+            onDismiss = { showDayStartSheet = false },
+            onSave = { hour: Int, minute: Int ->
+                onSetDayStartTime(hour, minute)
+                showDayStartSheet = false
             }
         )
     }
@@ -332,6 +377,186 @@ fun EmergencyRechargeBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
                 text = "Save Duration"
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DayStartTimeBottomSheet(
+    initialHour: Int,
+    initialMinute: Int,
+    onDismiss: () -> Unit,
+    onSave: (Int, Int) -> Unit
+) {
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
+    val repository = remember { UserPreferencesRepository(context) }
+    val preferences by repository.userPreferencesFlow.collectAsState(initial = UserPreferences())
+
+    val scope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val currentLocale = androidx.compose.ui.text.intl.Locale.current.platformLocale
+
+    val containerColor by animateColorAsState(
+        targetValue = if (preferences.expressiveColors) MaterialTheme.colorScheme.surfaceContainerHighest
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "containerColor"
+    )
+
+    val scrollState = rememberScrollState()
+
+    var showTimePicker by remember { mutableStateOf(false) }
+    var selectedHour by remember { mutableIntStateOf(initialHour) }
+    var selectedMinute by remember { mutableIntStateOf(initialMinute) }
+
+    if (showTimePicker) {
+        val timePickerState = rememberTimePickerState(
+            initialHour = selectedHour,
+            initialMinute = selectedMinute,
+            is24Hour = true
+        )
+        TimePickerDialog(
+            onDismiss = { showTimePicker = false },
+            onConfirm = {
+                selectedHour = timePickerState.hour
+                selectedMinute = timePickerState.minute
+                showTimePicker = false
+            }
+        ) {
+            MaterialTheme(
+                typography = MaterialTheme.typography.copy(
+                    displayLarge = MaterialTheme.typography.headlineLarge
+                )
+            ) {
+                TimePicker(state = timePickerState)
+            }
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = screenHeight * 0.9f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 100.dp)
+            ) {
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Day Start Time",
+                        style = MaterialTheme.typography.displayLarge.copy(
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Set when a new day begins",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Surface(
+                    onClick = { showTimePicker = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
+                    color = containerColor
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Day Resets At",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = String.format(currentLocale, "%02d:%02d", selectedHour, selectedMinute),
+                            style = MaterialTheme.typography.displayLarge.copy(
+                                fontSize = 36.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                ZenithGroupedButton(size = ZenithButtonSize.Small) {
+                    val presets = listOf(0 to 0, 6 to 0, 9 to 0, 12 to 0)
+                    presets.forEachIndexed { index, (ph, pm) ->
+                        val isSelected = selectedHour == ph && selectedMinute == pm
+                        val label = if (ph == 0 && pm == 0) "Midnight" else String.format("%02d:%02d", ph, pm)
+                        val pShape = when (index) {
+                            0 -> RoundedCornerShape(bottomStart = 28.dp, topStart = 8.dp, topEnd = 8.dp, bottomEnd = 8.dp)
+                            presets.lastIndex -> RoundedCornerShape(bottomEnd = 28.dp, topEnd = 8.dp, topStart = 8.dp, bottomStart = 8.dp)
+                            else -> RoundedCornerShape(8.dp)
+                        }
+                        ZenithButtonWeighted(
+                            onClick = {
+                                selectedHour = ph
+                                selectedMinute = pm
+                            },
+                            text = label,
+                            type = if (isSelected) ZenithButtonType.Filled else ZenithButtonType.Tonal,
+                            size = ZenithButtonSize.Small,
+                            selected = isSelected,
+                            shape = pShape,
+                            isFirst = index == 0,
+                            isLast = index == presets.lastIndex,
+                            contentScaleEnabled = false
+                        )
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, MaterialTheme.colorScheme.surface),
+                            startY = 0f,
+                            endY = 40f
+                        )
+                    )
+                    .padding(16.dp)
+                    .navigationBarsPadding()
+            ) {
+                ZenithButton(
+                    onClick = {
+                        scope.launch {
+                            sheetState.hide()
+                            onSave(selectedHour, selectedMinute)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    text = "Save Day Start Time"
+                )
+            }
         }
     }
 }

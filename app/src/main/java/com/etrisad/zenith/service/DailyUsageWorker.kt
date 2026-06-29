@@ -14,6 +14,7 @@ import com.etrisad.zenith.data.local.entity.DailyUsageEntity
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.util.DateTimeUtils
 import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
 import java.util.*
@@ -22,6 +23,11 @@ import java.util.concurrent.TimeUnit
 class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        val prefsRepo = UserPreferencesRepository(applicationContext)
+        val prefs = prefsRepo.userPreferencesFlow.first()
+        val dayStartHour = prefs.dayStartHour
+        val dayStartMinute = prefs.dayStartMinute
+
         val isBackup = inputData.getBoolean("is_backup", false)
         val nowCal = Calendar.getInstance()
         val currentHour = nowCal.get(Calendar.HOUR_OF_DAY)
@@ -39,27 +45,35 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val hourlyUsageDao = database.hourlyUsageDao()
         val usm = applicationContext.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val pm = applicationContext.packageManager
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
-        val isProcessingYesterday = (!isBackup && currentHour < 9) || (isBackup && currentHour == 0)
+        val now = System.currentTimeMillis()
+        val isBeforeDayStart = DateTimeUtils.isBeforeDayStart(now, dayStartHour, dayStartMinute)
+        val isProcessingYesterday = (!isBackup && isBeforeDayStart) || (isBackup && currentHour == 0)
+
+        val currentDayStart = DateTimeUtils.getDayStartTime(now, dayStartHour, dayStartMinute)
         if (isProcessingYesterday) {
-            calendar.add(Calendar.DAY_OF_YEAR, -1)
+            calendar.timeInMillis = currentDayStart - 1
+        } else {
+            calendar.timeInMillis = currentDayStart
         }
 
-        if (currentHour == 0 && currentMinute < 15) {
+        val dayStartMinutes = dayStartHour * 60 + dayStartMinute
+        val nowMinutes = currentHour * 60 + currentMinute
+        val minutesSinceDayStart = if (nowMinutes >= dayStartMinutes) nowMinutes - dayStartMinutes else nowMinutes + (1440 - dayStartMinutes)
+        if (minutesSinceDayStart in 0..14) {
             try {
                 database.shieldDao().resetDailyRemainingTimes()
                 val cal = Calendar.getInstance()
                 if (cal.get(Calendar.DAY_OF_WEEK) == Calendar.MONDAY) {
                     database.shieldDao().resetWeeklyRemainingTimes()
                 }
-                val prefsRepo = UserPreferencesRepository(applicationContext)
                 prefsRepo.setIncentiveLockGoalsMetToday(false)
                 prefsRepo.resetIncentiveBonusUsesIfNeeded()
             } catch (_: Exception) {}
         }
-        val dateString = dateFormat.format(calendar.time)
-        val isDateToday = dateString == dateFormat.format(nowCal.time)
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val dateString = DateTimeUtils.getDayStartDateString(now, dayStartHour, dayStartMinute)
+        val isDateToday = !isBeforeDayStart
 
         calendar.set(Calendar.HOUR_OF_DAY, 0); calendar.set(Calendar.MINUTE, 0); calendar.set(Calendar.SECOND, 0); calendar.set(Calendar.MILLISECOND, 0)
         val startTime = calendar.timeInMillis
@@ -88,7 +102,7 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val timeSinceMidnight = if (isDateToday) (System.currentTimeMillis() - startTime).coerceAtLeast(0L) else (24 * 60 * 60 * 1000L)
 
         if (isDateToday) {
-            val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm)
+            val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute)
             detailedUsage.appUsageMap.forEach { (pkg, time) ->
                 if (pkg !in excludePackages && pkg in launcherApps && time > 0) {
                     finalAppUsages[pkg] = time.coerceAtMost(timeSinceMidnight)
@@ -192,9 +206,6 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
                 }
             }
         }
-
-        val userPrefsRepo = UserPreferencesRepository(applicationContext)
-        val prefs = userPrefsRepo.userPreferencesFlow.first()
 
         finalAppUsages.keys.forEach { pkg ->
             finalAppUsages[pkg] = (finalAppUsages[pkg] ?: 0L).coerceAtMost(timeSinceMidnight)

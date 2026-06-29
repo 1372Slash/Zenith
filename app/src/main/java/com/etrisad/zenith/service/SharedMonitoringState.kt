@@ -5,8 +5,7 @@ import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.PerformanceConfig
 import com.etrisad.zenith.data.preferences.PerformanceLevel
 import com.etrisad.zenith.data.preferences.UserPreferences
-import java.time.LocalDate
-import java.time.ZoneId
+import com.etrisad.zenith.util.DateTimeUtils
 import java.util.concurrent.ConcurrentHashMap
 
 class ParsedSchedule(
@@ -47,17 +46,21 @@ object SharedMonitoringState {
     @Volatile var performanceLevel: PerformanceLevel = PerformanceLevel.BALANCED
     @Volatile var performanceConfig: PerformanceConfig = PerformanceConfig()
 
+    @Volatile var cachedDayStartHour = 0
+    @Volatile var cachedDayStartMinute = 0
     private var cachedStartOfDayTime = 0L
     private var cachedStartOfDayValue = 0L
     @Volatile var lastDailyUsageFetchTime = 0L
 
     fun getStartOfDay(): Long {
         val now = System.currentTimeMillis()
-        if (now - cachedStartOfDayTime < 60000 && cachedStartOfDayValue > 0) {
+        val cacheKey = cachedDayStartHour * 60 + cachedDayStartMinute
+        val currentSlot = now / 60000
+        if (currentSlot == cachedStartOfDayTime && cachedStartOfDayValue > 0) {
             return cachedStartOfDayValue
         }
-        val result = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        cachedStartOfDayTime = now
+        val result = DateTimeUtils.getDayStartTime(now, cachedDayStartHour, cachedDayStartMinute)
+        cachedStartOfDayTime = currentSlot
         cachedStartOfDayValue = result
         return result
     }

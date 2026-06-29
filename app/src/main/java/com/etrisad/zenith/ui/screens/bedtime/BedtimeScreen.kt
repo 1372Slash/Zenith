@@ -1552,7 +1552,13 @@ fun TimePickerDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         },
         text = {
-            TimePicker(state = timeState)
+            MaterialTheme(
+                typography = MaterialTheme.typography.copy(
+                    displayLarge = MaterialTheme.typography.headlineLarge
+                )
+            ) {
+                TimePicker(state = timeState)
+            }
         }
     )
 }

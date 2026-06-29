@@ -4,7 +4,6 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.util.SparseArray
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 
 object ScreenUsageHelper {
@@ -42,21 +41,23 @@ object ScreenUsageHelper {
     private var currentActiveStartTime = 0L
     private var currentIsScreenOn = true
     private var lastTotalGlobalUsage = 0L
-    private var lastParsedDate: LocalDate? = null
+    private var lastParsedDate: String? = null
 
     fun fetchDetailedUsageToday(
         usageStatsManager: UsageStatsManager,
-        includeHourly: Boolean = false
+        includeHourly: Boolean = false,
+        dayStartHour: Int = 0,
+        dayStartMinute: Int = 0
     ): UsageResult {
         val currentTime = System.currentTimeMillis()
         val zoneId = ZoneId.systemDefault()
-        val today = LocalDate.now(zoneId)
-        val todayStart = today.atStartOfDay(zoneId).toInstant().toEpochMilli()
+        val todayStart = DateTimeUtils.getDayStartTime(currentTime, dayStartHour, dayStartMinute)
+        val todayDateStr = DateTimeUtils.getDayStartDateString(currentTime, dayStartHour, dayStartMinute)
 
         val cached = lastResult
         if (cached != null && currentTime - lastQueryTime < cacheDuration &&
             (!includeHourly || cached.hourlyUsageMap.isNotEmpty()) &&
-            lastParsedDate == today) {
+            lastParsedDate == todayDateStr) {
             return cached
         }
 
@@ -64,13 +65,13 @@ object ScreenUsageHelper {
             val reCached = lastResult
             if (reCached != null && currentTime - lastQueryTime < cacheDuration &&
                 (!includeHourly || reCached.hourlyUsageMap.isNotEmpty()) &&
-                lastParsedDate == today) {
+                lastParsedDate == todayDateStr) {
                 return reCached
             }
 
-            if (lastParsedDate != today || lastParsedTimestamp < todayStart - MIDNIGHT_LOOKBACK_MS) {
+            if (lastParsedDate != todayDateStr || lastParsedTimestamp < todayStart - MIDNIGHT_LOOKBACK_MS) {
                 clearIncrementalState()
-                lastParsedDate = today
+                lastParsedDate = todayDateStr
             }
 
             val startQuery = if (lastParsedTimestamp == 0L) todayStart - MIDNIGHT_LOOKBACK_MS else lastParsedTimestamp
@@ -324,8 +325,8 @@ object ScreenUsageHelper {
         }
     }
 
-    fun fetchAppUsageTodayTillNow(usageStatsManager: UsageStatsManager): Map<String, Long> {
-        return fetchDetailedUsageToday(usageStatsManager).appUsageMap
+    fun fetchAppUsageTodayTillNow(usageStatsManager: UsageStatsManager, dayStartHour: Int = 0, dayStartMinute: Int = 0): Map<String, Long> {
+        return fetchDetailedUsageToday(usageStatsManager, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute).appUsageMap
     }
 
     fun fetchAppUsageSince(

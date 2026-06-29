@@ -57,6 +57,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
+import com.etrisad.zenith.util.DateTimeUtils
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -93,24 +94,20 @@ fun ShieldOverlay(
     ) {
         val usm = context.getSystemService(android.content.Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
         com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
-        val cal = Calendar.getInstance()
+        val dayStartHour = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartHour
+        val dayStartMinute = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartMinute
         var lastOfDay = 0L
         var cachedOfDay = 0L
         while (true) {
             val now = System.currentTimeMillis()
             if (now - lastOfDay > 60000) {
-                cal.timeInMillis = now
-                cal.set(Calendar.HOUR_OF_DAY, 0)
-                cal.set(Calendar.MINUTE, 0)
-                cal.set(Calendar.SECOND, 0)
-                cal.set(Calendar.MILLISECOND, 0)
-                cachedOfDay = cal.timeInMillis
+                cachedOfDay = DateTimeUtils.getDayStartTime(now, dayStartHour, dayStartMinute)
                 lastOfDay = now
             }
             val timeSinceMidnight = (now - cachedOfDay).coerceAtLeast(0L)
 
             val detailedUsage = withContext(Dispatchers.IO) {
-                com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm)
+                com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute)
             }
 
             val s = shieldRepository.getShieldByPackageNameFlow(packageName).first()

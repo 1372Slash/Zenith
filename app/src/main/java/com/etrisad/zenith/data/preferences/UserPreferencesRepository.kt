@@ -18,6 +18,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.repository.ShieldRepository
+import com.etrisad.zenith.util.DateTimeUtils
 import com.etrisad.zenith.ui.theme.FontAxes
 import com.etrisad.zenith.ui.theme.GSFlexSettings
 import kotlinx.coroutines.Dispatchers
@@ -287,6 +288,9 @@ class UserPreferencesRepository(private val context: Context) {
         val PERF_MON_SHIELD_VERY_FAR = longPreferencesKey("perf_mon_shield_very_far")
         val PERF_MON_DEFAULT = longPreferencesKey("perf_mon_default")
 
+        val DAY_START_HOUR = intPreferencesKey("day_start_hour")
+        val DAY_START_MINUTE = intPreferencesKey("day_start_minute")
+
         val GS_FLEX_PRESET = stringPreferencesKey("gs_flex_preset")
         val GS_D_WGHT = floatPreferencesKey("gs_d_wght")
         val GS_D_WDTH = floatPreferencesKey("gs_d_wdth")
@@ -412,6 +416,8 @@ class UserPreferencesRepository(private val context: Context) {
             eyeCareEnabled = settings[PreferencesKeys.EYE_CARE_ENABLED] ?: false,
             eyeCareWorkMinutes = settings[PreferencesKeys.EYE_CARE_WORK_MINUTES] ?: 20,
             eyeCareRestSeconds = settings[PreferencesKeys.EYE_CARE_REST_SECONDS] ?: 20,
+            dayStartHour = settings[PreferencesKeys.DAY_START_HOUR] ?: 0,
+            dayStartMinute = settings[PreferencesKeys.DAY_START_MINUTE] ?: 0,
             usageGlimpseEnabled = settings[PreferencesKeys.USAGE_GLIMPSE_ENABLED] ?: false,
             incentiveLockDisableRequestTimestamp = runtime[RuntimeKeys.INCENTIVE_LOCK_DISABLE_REQUEST_TIMESTAMP] ?: 0L,
             incentiveLockGoalsMetToday = if (runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_TODAY] != true) false
@@ -567,6 +573,13 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.EYE_CARE_REST_SECONDS] = seconds }
     }
 
+    suspend fun setDayStartTime(hour: Int, minute: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.DAY_START_HOUR] = hour
+            preferences[PreferencesKeys.DAY_START_MINUTE] = minute
+        }
+    }
+
     suspend fun setUsageGlimpseEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.USAGE_GLIMPSE_ENABLED] = enabled }
     }
@@ -704,11 +717,10 @@ class UserPreferencesRepository(private val context: Context) {
 
         val excludePackages = setOfNotNull(context.packageName, launcherPackage)
 
-        val calendar = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
-        val todayStart = calendar.timeInMillis
+        val todayStart = DateTimeUtils.getDayStartTime(now, prefs.dayStartHour, prefs.dayStartMinute)
 
         val totalToday = withContext(Dispatchers.IO) {
-            val stats = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager).appUsageMap
+            val stats = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager, dayStartHour = prefs.dayStartHour, dayStartMinute = prefs.dayStartMinute).appUsageMap
             var total = 0L
             stats.forEach { (pkg, time) ->
                 if (pkg !in excludePackages && pkg in launcherApps) total += time
@@ -744,11 +756,9 @@ class UserPreferencesRepository(private val context: Context) {
                 } else break
             }
 
-            val lastUpdateDayStart = Calendar.getInstance().apply {
-                timeInMillis = prefs.globalLastStreakUpdateTimestamp
-                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-            val isLastUpdateYesterday = lastUpdateDayStart == todayStart - 86400000L
+            val lastUpdateDayStart = DateTimeUtils.getDayStartTime(prefs.globalLastStreakUpdateTimestamp, prefs.dayStartHour, prefs.dayStartMinute)
+            val yesterdayStart = DateTimeUtils.getDayStartTime(todayStart - 1, prefs.dayStartHour, prefs.dayStartMinute)
+            val isLastUpdateYesterday = lastUpdateDayStart == yesterdayStart
             val isLastUpdateToday = lastUpdateDayStart == todayStart
 
             val isSuccessToday = totalToday <= targetMillis
@@ -791,6 +801,7 @@ class UserPreferencesRepository(private val context: Context) {
     }
 
     suspend fun refreshAllAppStreaks(shieldRepository: ShieldRepository) {
+        val prefs = userPreferencesFlow.first()
         shieldRepository.isShieldsLoaded.first { it }
         val shields = shieldRepository.allShields.first()
         val allUsage = shieldRepository.getAllUsage().first().groupBy { it.packageName }
@@ -800,7 +811,7 @@ class UserPreferencesRepository(private val context: Context) {
 
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val todayUsageMap = withContext(Dispatchers.IO) {
-            com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager).appUsageMap
+            com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager, dayStartHour = prefs.dayStartHour, dayStartMinute = prefs.dayStartMinute).appUsageMap
         }
 
         shields.forEach { shield ->
@@ -824,9 +835,7 @@ class UserPreferencesRepository(private val context: Context) {
 
             var pastStreak = 0
             var foundDefiniteFailure = false
-            val todayStart = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
+            val todayStart = DateTimeUtils.getDayStartTime(now, prefs.dayStartHour, prefs.dayStartMinute)
 
             val shieldStreakLimit = (shield.currentStreak + 30).coerceAtMost(90)
 
@@ -964,11 +973,9 @@ class UserPreferencesRepository(private val context: Context) {
                     lastStreakUpdateTimestamp = if (isSuccessToday && (shield.type == FocusType.GOAL || todayUsage > 0)) now else shield.lastStreakUpdateTimestamp
                 ))
             } else {
-                val lastUpdateDayStart = Calendar.getInstance().apply {
-                    timeInMillis = shield.lastStreakUpdateTimestamp
-                    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-                val isLastUpdateYesterday = lastUpdateDayStart == todayStart - 86400000L
+                val lastUpdateDayStart = DateTimeUtils.getDayStartTime(shield.lastStreakUpdateTimestamp, prefs.dayStartHour, prefs.dayStartMinute)
+                val yesterdayStart = DateTimeUtils.getDayStartTime(todayStart - 1, prefs.dayStartHour, prefs.dayStartMinute)
+                val isLastUpdateYesterday = lastUpdateDayStart == yesterdayStart
                 val isLastUpdateToday = lastUpdateDayStart == todayStart
 
                 val currentStreak = if (shield.type == FocusType.GOAL) {
@@ -1508,8 +1515,7 @@ class UserPreferencesRepository(private val context: Context) {
         val dbUsage = shieldRepository.getAllUsage().first()
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val calendar = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
-        val todayStart = calendar.timeInMillis
+        val todayStart = DateTimeUtils.getDayStartTime(System.currentTimeMillis(), prefs.dayStartHour, prefs.dayStartMinute)
         if (targetMillis > 0) {
             val (launcherApps, launcherPackage) = withContext(Dispatchers.IO) {
                 try {
@@ -1545,7 +1551,7 @@ class UserPreferencesRepository(private val context: Context) {
             }
 
             val (totalToday, stats) = withContext(Dispatchers.IO) {
-                val stats = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager).appUsageMap
+            val stats = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager, dayStartHour = prefs.dayStartHour, dayStartMinute = prefs.dayStartMinute).appUsageMap
                 var total = 0L
                 stats.forEach { (pkg, time) -> if (pkg !in excludePackages && pkg in launcherApps) total += time }
                 total to stats
@@ -1570,7 +1576,7 @@ class UserPreferencesRepository(private val context: Context) {
         val shields = shieldRepository.allShields.first()
         val allUsage = dbUsage.groupBy { it.packageName }
         val todayUsageMap = withContext(Dispatchers.IO) {
-            com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager).appUsageMap
+            com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager, dayStartHour = prefs.dayStartHour, dayStartMinute = prefs.dayStartMinute).appUsageMap
         }
 
         shields.forEach { shield ->
@@ -1765,6 +1771,8 @@ data class UserPreferences(
     val eyeCareEnabled: Boolean = false,
     val eyeCareWorkMinutes: Int = 20,
     val eyeCareRestSeconds: Int = 20,
+    val dayStartHour: Int = 0,
+    val dayStartMinute: Int = 0,
     val usageGlimpseEnabled: Boolean = false,
     val overlayPaletteId: String = "dynamic",
     val overlaySheetOpacity: Float = 1f,

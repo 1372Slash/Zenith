@@ -89,7 +89,13 @@ fun ScheduleSettingsBottomSheet(
             onDismiss = { showStartTimePicker.value = false },
             onConfirm = { showStartTimePicker.value = false }
         ) {
-            TimePicker(state = startTimeState)
+            MaterialTheme(
+                typography = MaterialTheme.typography.copy(
+                    displayLarge = MaterialTheme.typography.headlineLarge
+                )
+            ) {
+                TimePicker(state = startTimeState)
+            }
         }
     }
 
@@ -98,7 +104,13 @@ fun ScheduleSettingsBottomSheet(
             onDismiss = { showEndTimePicker.value = false },
             onConfirm = { showEndTimePicker.value = false }
         ) {
-            TimePicker(state = endTimeState)
+            MaterialTheme(
+                typography = MaterialTheme.typography.copy(
+                    displayLarge = MaterialTheme.typography.headlineLarge
+                )
+            ) {
+                TimePicker(state = endTimeState)
+            }
         }
     }
 

@@ -30,6 +30,7 @@ import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.ZenithButtonSize
+import com.etrisad.zenith.util.DateTimeUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -66,24 +67,20 @@ fun ScheduleOverlay(
         totalGlobalUsageToday
     ) {
         val usm = context.getSystemService(android.content.Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
-        val cal = Calendar.getInstance()
+        val dayStartHour = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartHour
+        val dayStartMinute = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartMinute
         var lastOfDay = 0L
         var cachedOfDay = 0L
         while (true) {
             val now = System.currentTimeMillis()
             if (now - lastOfDay > 60000) {
-                cal.timeInMillis = now
-                cal.set(Calendar.HOUR_OF_DAY, 0)
-                cal.set(Calendar.MINUTE, 0)
-                cal.set(Calendar.SECOND, 0)
-                cal.set(Calendar.MILLISECOND, 0)
-                cachedOfDay = cal.timeInMillis
+                cachedOfDay = DateTimeUtils.getDayStartTime(now, dayStartHour, dayStartMinute)
                 lastOfDay = now
             }
             val timeSinceMidnight = (now - cachedOfDay).coerceAtLeast(0L)
 
             val detailedUsage = withContext(kotlinx.coroutines.Dispatchers.IO) {
-                com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm)
+                com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute)
             }
             
             var totalToday = 0L

@@ -108,12 +108,7 @@ data class HomeUiState(
     val bedtimeStartTime: String = "22:00",
     val bedtimeEndTime: String = "07:00",
     val bedtimeDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7),
-    val selectedDateMillis: Long = Calendar.getInstance().apply {
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis,
+    val selectedDateMillis: Long = 0L,
     val isLoading: Boolean = true,
     val uninstalledShieldPackageNames: Set<String> = emptySet(),
     val incentiveProgress: Float = 0f,
@@ -161,6 +156,9 @@ class HomeViewModel(
     private val appInfoCache = java.util.concurrent.ConcurrentHashMap<String, String>()
     private var refreshJob: Job? = null
     private val refreshMutex = Mutex()
+
+    private var dayStartHour: Int = 0
+    private var dayStartMinute: Int = 0
 
     private var launcherAppsCache: Set<String>? = null
     private var launcherPackageCache: String? = null
@@ -623,7 +621,7 @@ class HomeViewModel(
                 val liveShields = withContext(Dispatchers.IO) {
                     try {
                         val usm = this@HomeViewModel.context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-                        val accurateUsageMap = ScreenUsageHelper.fetchAppUsageTodayTillNow(usm)
+                        val accurateUsageMap = ScreenUsageHelper.fetchAppUsageTodayTillNow(usm, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute)
                         shields.map { shield ->
                             val usage = accurateUsageMap[shield.packageName] ?: 0L
                             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
@@ -687,6 +685,8 @@ class HomeViewModel(
                 currentTargetMinutes = prefs.screenTimeTargetMinutes
                 prefGlobalBestStreak = prefs.globalBestStreak
                 preferSystemUsageHistory = prefs.preferSystemUsageHistory
+                dayStartHour = prefs.dayStartHour
+                dayStartMinute = prefs.dayStartMinute
 
                 dismissedUninstalledApps = prefs.dismissedUninstalledApps
                 _uiState.update { it.copy(
@@ -712,7 +712,7 @@ class HomeViewModel(
     }
 
     val todayHourlyUsage: Flow<List<HourlyUsageEntity>> = allDatabaseUsage.flatMapLatest {
-        val today = getDateFormat().format(Date())
+        val today = com.etrisad.zenith.util.DateTimeUtils.getDayStartDateString(System.currentTimeMillis(), dayStartHour, dayStartMinute)
         shieldRepository.getHourlyUsageForDate(today)
     }.flowOn(Dispatchers.Default)
 
@@ -801,25 +801,26 @@ class HomeViewModel(
         }
     }
 
-    private val midnightCache = arrayOfNulls<Long>(31)
     private var midnightCacheTime = 0L
+    private val dayStartCache = mutableMapOf<Int, Long>()
 
     private fun getMidnight(offsetDaysFromToday: Int = 0): Long {
         val now = System.currentTimeMillis()
         if (now - midnightCacheTime > 60000) {
-            midnightCache.fill(null)
+            dayStartCache.clear()
             midnightCacheTime = now
         }
-        midnightCache[offsetDaysFromToday]?.let { return it }
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        cal.add(Calendar.DAY_OF_YEAR, -offsetDaysFromToday)
-        val result = cal.timeInMillis
-        midnightCache[offsetDaysFromToday] = result
-        return result
+        dayStartCache[offsetDaysFromToday]?.let { return it }
+        var dayStart = com.etrisad.zenith.util.DateTimeUtils.getDayStartTime(now, dayStartHour, dayStartMinute)
+        if (offsetDaysFromToday > 0) {
+            val cal = java.util.Calendar.getInstance().apply {
+                timeInMillis = dayStart
+                add(java.util.Calendar.DAY_OF_YEAR, -offsetDaysFromToday)
+            }
+            dayStart = com.etrisad.zenith.util.DateTimeUtils.getDayStartForDate(cal.timeInMillis, dayStartHour, dayStartMinute)
+        }
+        dayStartCache[offsetDaysFromToday] = dayStart
+        return dayStart
     }
 
     private var lastFullFallbackRefresh = 0L
@@ -859,7 +860,7 @@ class HomeViewModel(
         val todayStr = getDateFormat().format(Date(todayStart))
 
         val results = if (now - todayStart < 86400000) {
-            val todayDetailed = ScreenUsageHelper.fetchDetailedUsageToday(usm)
+            val todayDetailed = ScreenUsageHelper.fetchDetailedUsageToday(usm, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute)
             val todayLiveRecords = todayDetailed.appUsageMap.mapNotNull { (pkg, time) ->
                 if (pkg in excludePackages || pkg !in launcherApps) null
                 else UsageRecord.Live(pkg, time)
@@ -1008,10 +1009,12 @@ class HomeViewModel(
     }
 
     fun selectDate(dateMillis: Long?) {
-        val cal = Calendar.getInstance()
-        if (dateMillis != null) cal.timeInMillis = dateMillis
-        cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0); cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
-        val date = cal.timeInMillis
+        val now = System.currentTimeMillis()
+        val date = if (dateMillis != null) {
+            com.etrisad.zenith.util.DateTimeUtils.getDayStartForDate(dateMillis, dayStartHour, dayStartMinute)
+        } else {
+            com.etrisad.zenith.util.DateTimeUtils.getDayStartTime(now, dayStartHour, dayStartMinute)
+        }
         if (_uiState.value.selectedDateMillis == date && refreshJob?.isActive == true) return
         _uiState.update { it.copy(
             selectedDateMillis = date,
@@ -1047,14 +1050,18 @@ class HomeViewModel(
         val todayStart = getMidnight(0)
         val timeSinceMidnight = now - todayStart
 
-        val isSelectedToday = selectedDate == todayStart
+        val effectiveSelectedDate = if (selectedDate == 0L) todayStart else selectedDate
+        if (selectedDate == 0L) {
+            _uiState.update { it.copy(selectedDateMillis = todayStart) }
+        }
+        val isSelectedToday = effectiveSelectedDate == todayStart
 
-        val calDate = Calendar.getInstance()
-        calDate.timeInMillis = selectedDate
-        calDate.set(Calendar.HOUR_OF_DAY, 0)
-        calDate.set(Calendar.MINUTE, 0)
-        calDate.set(Calendar.SECOND, 0)
-        calDate.set(Calendar.MILLISECOND, 0)
+        val calDate = java.util.Calendar.getInstance()
+        calDate.timeInMillis = effectiveSelectedDate
+        calDate.set(java.util.Calendar.HOUR_OF_DAY, dayStartHour)
+        calDate.set(java.util.Calendar.MINUTE, dayStartMinute)
+        calDate.set(java.util.Calendar.SECOND, 0)
+        calDate.set(java.util.Calendar.MILLISECOND, 0)
         val dayStart = calDate.timeInMillis
 
         calDate.add(Calendar.DAY_OF_YEAR, 1)
@@ -1063,7 +1070,7 @@ class HomeViewModel(
         val dateFormat = getDateFormat()
 
         val todayDetailed = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = isSelectedToday)
+            ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = isSelectedToday, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute)
         }
         val filteredTodayUsage = todayDetailed.appUsageMap.filter { (pkg, _) ->
             val isUserApp = pkg in launcherApps || pm.getLaunchIntentForPackage(pkg) != null
@@ -1526,7 +1533,7 @@ class HomeViewModel(
                 withContext(Dispatchers.IO) { if (detailFallbackMap.isEmpty() || forceRefresh || isNew) updatePackageFallback(packageName) }
                 combine(shieldRepository.getLastNDaysUsageForPackage(packageName, 21), shieldRepository.getShieldByPackageNameFlow(packageName), userPreferencesRepository.userPreferencesFlow) { historyDB, shield, prefs ->
                     try {
-                        val detailed = withContext(Dispatchers.IO) { kotlinx.coroutines.withTimeoutOrNull(5000) { ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true) } }
+                        val detailed = withContext(Dispatchers.IO) { kotlinx.coroutines.withTimeoutOrNull(5000) { ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute) } }
                         val todayU = detailed?.appUsageMap?.get(packageName) ?: 0L; val sessions = detailed?.sessionCounts?.get(packageName) ?: 0
                         val hourlyU = MutableList(24) { detailed?.hourlyUsageMap?.get(it)?.get(packageName) ?: 0L }; val peakH = hourlyU.indices.maxByOrNull { hourlyU[it] } ?: -1
                         val yesterdayStr = dateFormat.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }.time)
@@ -1724,7 +1731,7 @@ class HomeViewModel(
 
         val usm = this@HomeViewModel.context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val detailedUsage = withContext(Dispatchers.IO) {
-            ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true)
+            ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute)
         }
         val currentTodayUsage = detailedUsage.appUsageMap[pkg] ?: 0L
 

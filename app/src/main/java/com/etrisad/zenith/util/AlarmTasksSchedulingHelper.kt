@@ -8,11 +8,11 @@ import com.etrisad.zenith.receiver.MidnightResetReceiver
 import java.util.Calendar
 
 object AlarmTasksSchedulingHelper {
-    fun scheduleMidnightResetTask(context: Context) {
+    fun scheduleMidnightResetTask(context: Context, dayStartHour: Int = 0, dayStartMinute: Int = 0) {
         val cal = Calendar.getInstance().apply {
             add(Calendar.DATE, 1)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
+            set(Calendar.HOUR_OF_DAY, dayStartHour)
+            set(Calendar.MINUTE, dayStartMinute)
             set(Calendar.SECOND, 3)
             set(Calendar.MILLISECOND, 0)
         }

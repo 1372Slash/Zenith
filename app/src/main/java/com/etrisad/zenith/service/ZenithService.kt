@@ -787,7 +787,7 @@ class ZenithService : AccessibilityService() {
 
         val excludePackages = setOfNotNull(packageName, SharedMonitoringState.defaultLauncherPackage)
 
-        val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
+        val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager, dayStartHour = SharedMonitoringState.cachedDayStartHour, dayStartMinute = SharedMonitoringState.cachedDayStartMinute)
         val accurateUsageMap = detailedUsage.appUsageMap
 
         var totalToday = 0L
@@ -824,7 +824,7 @@ class ZenithService : AccessibilityService() {
         val cacheDuration = cfg.usageStatsCacheMs.coerceIn(30000L, 3600000L)
 
         if (currentTime - lastUsageCacheTime > cacheDuration && currentTime - SharedMonitoringState.lastDailyUsageFetchTime > cacheDuration) {
-            val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
+            val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager, dayStartHour = SharedMonitoringState.cachedDayStartHour, dayStartMinute = SharedMonitoringState.cachedDayStartMinute)
             val tempMap = detailedUsage.appUsageMap
 
             SharedMonitoringState.dailyUsageCache.clear()

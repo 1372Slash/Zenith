@@ -153,7 +153,7 @@ class FocusViewModel(
 
                 val accurateUsageMap = withContext(Dispatchers.IO) {
                     try {
-                        com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usm)
+                        com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usm, dayStartHour = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartHour, dayStartMinute = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartMinute)
                     } catch (e: Exception) {
                         android.util.Log.e("FocusViewModel", "Error fetching usage stats: ${e.message}")
                         emptyMap<String, Long>()
@@ -323,7 +323,7 @@ class FocusViewModel(
     private suspend fun getTopUsedApps(limit: Int): List<AppInfo> = withContext(Dispatchers.IO) {
         try {
             val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
-            val accurateUsageMap = com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usm)
+            val accurateUsageMap = com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usm, dayStartHour = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartHour, dayStartMinute = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartMinute)
             accurateUsageMap.entries
                 .sortedByDescending { it.value }
                 .mapNotNull { (pkg, _) ->
@@ -461,7 +461,7 @@ class FocusViewModel(
 
     private fun getUsageTodayForPackage(packageName: String): Long {
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
-        val accurateUsageMap = com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usm)
+        val accurateUsageMap = com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usm, dayStartHour = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartHour, dayStartMinute = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartMinute)
         return accurateUsageMap[packageName] ?: 0L
     }
 

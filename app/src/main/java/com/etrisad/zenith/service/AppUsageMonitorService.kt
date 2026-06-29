@@ -81,6 +81,7 @@ class AppUsageMonitorService : Service() {
     private val systemZone by lazy { ZoneId.systemDefault() }
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
     private var lastCheckedDayDate: LocalDate? = null
+    private var lastCheckedDayStart: Long = 0L
 
     private var lastDndFilter: Int? = null
     private var lastCheckedDayTimestamp = 0L
@@ -250,6 +251,8 @@ class AppUsageMonitorService : Service() {
                         val gpEnd = prefs.gracePeriodEndTime.split(":")
                         SharedMonitoringState.cachedGracePeriodStartMinutes = (gpStart.getOrNull(0)?.toIntOrNull() ?: 12) * 60 + (gpStart.getOrNull(1)?.toIntOrNull() ?: 0)
                         SharedMonitoringState.cachedGracePeriodEndMinutes = (gpEnd.getOrNull(0)?.toIntOrNull() ?: 13) * 60 + (gpEnd.getOrNull(1)?.toIntOrNull() ?: 0)
+                        SharedMonitoringState.cachedDayStartHour = prefs.dayStartHour
+                        SharedMonitoringState.cachedDayStartMinute = prefs.dayStartMinute
                         updateBedtimeStatus(prefs)
                         updateGracePeriodStatus(prefs)
                     }
@@ -369,7 +372,8 @@ class AppUsageMonitorService : Service() {
             baseGlobalUsageAtSessionStart = 0L
             lastHUDUpdateTime = 0L
 
-            lastCheckedDayDate = LocalDate.now()
+            lastCheckedDayDate = java.time.LocalDate.now()
+            lastCheckedDayStart = com.etrisad.zenith.util.DateTimeUtils.getDayStartTime(currentTime)
             lastCheckedDayTimestamp = currentTime
         }
     }
@@ -435,13 +439,19 @@ class AppUsageMonitorService : Service() {
         isScreenOn = powerManager.isInteractive
         AppStateHolder.isPowerSaveMode.value = powerManager.isPowerSaveMode
 
-        lastCheckedDayDate = LocalDate.now()
+        lastCheckedDayDate = java.time.LocalDate.now()
+        lastCheckedDayStart = com.etrisad.zenith.util.DateTimeUtils.getDayStartTime(System.currentTimeMillis(), 0, 0)
+        SharedMonitoringState.cachedDayStartHour = 0
+        SharedMonitoringState.cachedDayStartMinute = 0
 
         com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
 
         serviceScope.launch {
-            preferencesRepository.userPreferencesFlow.first()
-            com.etrisad.zenith.util.AlarmTasksSchedulingHelper.scheduleMidnightResetTask(this@AppUsageMonitorService)
+            val initPrefs = preferencesRepository.userPreferencesFlow.first()
+            SharedMonitoringState.cachedDayStartHour = initPrefs.dayStartHour
+            SharedMonitoringState.cachedDayStartMinute = initPrefs.dayStartMinute
+            lastCheckedDayStart = com.etrisad.zenith.util.DateTimeUtils.getDayStartTime(System.currentTimeMillis(), initPrefs.dayStartHour, initPrefs.dayStartMinute)
+            com.etrisad.zenith.util.AlarmTasksSchedulingHelper.scheduleMidnightResetTask(this@AppUsageMonitorService, initPrefs.dayStartHour, initPrefs.dayStartMinute)
             startMonitoring()
             scheduleHeartbeatAlarm()
         }
@@ -692,6 +702,8 @@ class AppUsageMonitorService : Service() {
                 val gpEnd = preferences.gracePeriodEndTime.split(":")
                 SharedMonitoringState.cachedGracePeriodStartMinutes = (gpStart.getOrNull(0)?.toIntOrNull() ?: 12) * 60 + (gpStart.getOrNull(1)?.toIntOrNull() ?: 0)
                 SharedMonitoringState.cachedGracePeriodEndMinutes = (gpEnd.getOrNull(0)?.toIntOrNull() ?: 13) * 60 + (gpEnd.getOrNull(1)?.toIntOrNull() ?: 0)
+                SharedMonitoringState.cachedDayStartHour = preferences.dayStartHour
+                SharedMonitoringState.cachedDayStartMinute = preferences.dayStartMinute
 
                 updateBedtimeStatus(preferences)
                 updateGracePeriodStatus(preferences)
@@ -957,7 +969,7 @@ class AppUsageMonitorService : Service() {
                 val timeSinceMidnight = (currentTime - startOfDay).coerceAtLeast(0L)
 
                 val detailedUsage = withContext(Dispatchers.IO) {
-                    com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
+                    com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager, dayStartHour = SharedMonitoringState.cachedDayStartHour, dayStartMinute = SharedMonitoringState.cachedDayStartMinute)
                 }
                 val systemUsage = detailedUsage.appUsageMap[currentApp] ?: 0L
                 val systemGlobal = getFilteredGlobalUsage(detailedUsage.appUsageMap)
@@ -1190,10 +1202,14 @@ class AppUsageMonitorService : Service() {
     private suspend fun checkDayChangePeriodic() {
         val currentTime = System.currentTimeMillis()
         if (currentTime - lastCheckedDayTimestamp <= 120000) return
-        if (lastCheckedDayDate == null) return
 
-        val today = LocalDate.now()
-        if (today != lastCheckedDayDate) {
+        val currentDayStart = com.etrisad.zenith.util.DateTimeUtils.getDayStartTime(
+            currentTime,
+            SharedMonitoringState.cachedDayStartHour,
+            SharedMonitoringState.cachedDayStartMinute
+        )
+
+        if (lastCheckedDayStart > 0 && currentDayStart != lastCheckedDayStart) {
             withContext(Dispatchers.IO) {
                 com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
                 shieldRepository.resetDailyRemainingTimes()
@@ -1218,15 +1234,13 @@ class AppUsageMonitorService : Service() {
             baseUsageAtSessionStart = 0L
             baseGlobalUsageAtSessionStart = 0L
             lastHUDUpdateTime = 0L
-
-            lastCheckedDayDate = today
-            lastCheckedDayTimestamp = currentTime
-            return
         }
 
-        SharedMonitoringState.currentPreferences?.let { updateBedtimeStatus(it) }
-        checkSchedulesTransition(LocalTime.now().hour * 60 + LocalTime.now().minute)
+        lastCheckedDayStart = currentDayStart
         lastCheckedDayTimestamp = currentTime
+
+        SharedMonitoringState.currentPreferences?.let { updateBedtimeStatus(it) }
+        checkSchedulesTransition(java.time.LocalTime.now().hour * 60 + java.time.LocalTime.now().minute)
     }
 
     private suspend fun checkBlockingInstant(currentApp: String, shield: ShieldEntity?) {
@@ -1305,7 +1319,7 @@ class AppUsageMonitorService : Service() {
             serviceScope.launch {
                 try {
                     if (packageName != currentSessionPackage) return@launch
-                    val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
+                    val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager, dayStartHour = SharedMonitoringState.cachedDayStartHour, dayStartMinute = SharedMonitoringState.cachedDayStartMinute)
 
                     val systemUsage = detailedUsage.appUsageMap[packageName] ?: 0L
                     val systemGlobal = getFilteredGlobalUsage(detailedUsage.appUsageMap)
@@ -1646,7 +1660,7 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun getSystemGlobalUsageToday(): Long {
-        val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
+        val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager, dayStartHour = SharedMonitoringState.cachedDayStartHour, dayStartMinute = SharedMonitoringState.cachedDayStartMinute)
         return getFilteredGlobalUsage(detailedUsage.appUsageMap)
     }
 
@@ -1740,7 +1754,7 @@ class AppUsageMonitorService : Service() {
         val timeSinceMidnight = currentTime - startTime
 
         try {
-            val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager)
+            val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager, dayStartHour = SharedMonitoringState.cachedDayStartHour, dayStartMinute = SharedMonitoringState.cachedDayStartMinute)
             SharedMonitoringState.dailyUsageCache.clear()
             detailedUsage.appUsageMap.forEach { (pkg, time) ->
                 val cappedTime = if (time > timeSinceMidnight) timeSinceMidnight else time
