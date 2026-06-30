@@ -919,13 +919,13 @@ class UserPreferencesRepository(private val context: Context) {
 
                 val currentStreak = if (shield.type == FocusType.GOAL) {
                     if (isSuccessToday) {
-                        if (!foundDefiniteFailure && (isLastUpdateLastWeek || isLastUpdateThisWeek)) {
+                        if (isLastUpdateLastWeek || isLastUpdateThisWeek) {
                             maxOf(pastStreak + 1, shield.currentStreak + (if (isLastUpdateLastWeek) 1 else 0))
                         } else pastStreak + 1
                     } else pastStreak
                 } else {
                     if (isSuccessToday) {
-                        if (!foundDefiniteFailure && (isLastUpdateLastWeek || isLastUpdateThisWeek)) {
+                        if (isLastUpdateLastWeek || isLastUpdateThisWeek) {
                             maxOf(pastStreak + 1, shield.currentStreak + (if (isLastUpdateLastWeek) 1 else 0))
                         } else pastStreak + 1
                     } else 0
@@ -980,13 +980,13 @@ class UserPreferencesRepository(private val context: Context) {
 
                 val currentStreak = if (shield.type == FocusType.GOAL) {
                     if (isSuccessToday) {
-                        if (!foundDefiniteFailure && (isLastUpdateYesterday || isLastUpdateToday)) {
+                        if (isLastUpdateYesterday || isLastUpdateToday) {
                             maxOf(pastStreak + 1, shield.currentStreak + (if (isLastUpdateYesterday) 1 else 0))
                         } else pastStreak + 1
                     } else pastStreak
                 } else {
                     if (isSuccessToday) {
-                        if (!foundDefiniteFailure && (isLastUpdateYesterday || isLastUpdateToday)) {
+                        if (isLastUpdateYesterday || isLastUpdateToday) {
                             maxOf(pastStreak + 1, shield.currentStreak + (if (isLastUpdateYesterday) 1 else 0))
                         } else pastStreak + 1
                     } else 0

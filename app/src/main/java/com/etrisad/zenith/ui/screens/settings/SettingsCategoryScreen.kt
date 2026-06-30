@@ -331,7 +331,7 @@ fun SettingsCategoryScreen(
                             coroutineScope.launch {
                                 val shield = app.shieldRepository.getShieldByPackageName(pkg)
                                 if (shield != null) {
-                                    app.shieldRepository.updateShield(shield.copy(currentStreak = streak, bestStreak = maxOf(shield.bestStreak, streak)))
+                                    app.shieldRepository.updateShield(shield.copy(currentStreak = streak, bestStreak = maxOf(shield.bestStreak, streak), lastStreakUpdateTimestamp = System.currentTimeMillis()))
                                 }
                             }
                         },
