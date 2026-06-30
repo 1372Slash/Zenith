@@ -23,7 +23,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.etrisad.zenith.data.preferences.UserPreferences
-import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithButtonType
@@ -195,16 +194,13 @@ fun DelayAppBottomSheet(
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
-    val repository = remember { UserPreferencesRepository(context) }
-    val preferences by repository.userPreferencesFlow.collectAsState(initial = UserPreferences())
 
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var seconds by remember { mutableIntStateOf(initialSeconds) }
 
     val containerColor by animateColorAsState(
-        targetValue = if (preferences.expressiveColors) MaterialTheme.colorScheme.surfaceContainerHighest
-        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        targetValue = MaterialTheme.colorScheme.surfaceContainerLow,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "containerColor"
     )
@@ -358,16 +354,13 @@ fun EmergencyRechargeBottomSheet(
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
-    val repository = remember { UserPreferencesRepository(context) }
-    val preferences by repository.userPreferencesFlow.collectAsState(initial = UserPreferences())
 
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var minutes by remember { mutableIntStateOf(initialMinutes) }
 
     val containerColor by animateColorAsState(
-        targetValue = if (preferences.expressiveColors) MaterialTheme.colorScheme.surfaceContainerHighest
-        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        targetValue = MaterialTheme.colorScheme.surfaceContainerLow,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "containerColor"
     )
@@ -530,16 +523,13 @@ fun DayStartTimeBottomSheet(
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
-    val repository = remember { UserPreferencesRepository(context) }
-    val preferences by repository.userPreferencesFlow.collectAsState(initial = UserPreferences())
 
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val currentLocale = androidx.compose.ui.text.intl.Locale.current.platformLocale
 
     val containerColor by animateColorAsState(
-        targetValue = if (preferences.expressiveColors) MaterialTheme.colorScheme.surfaceContainerHighest
-        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        targetValue = MaterialTheme.colorScheme.surfaceContainerLow,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "containerColor"
     )

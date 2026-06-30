@@ -32,8 +32,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
-import com.etrisad.zenith.data.preferences.UserPreferences
-import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithButtonType
@@ -56,15 +54,12 @@ fun ScheduleSettingsBottomSheet(
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
     val context = LocalContext.current
-    val repository = remember { UserPreferencesRepository(context) }
-    val preferences by repository.userPreferencesFlow.collectAsState(initial = UserPreferences())
 
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val containerColor by animateColorAsState(
-        targetValue = if (preferences.expressiveColors) MaterialTheme.colorScheme.surfaceContainerHighest
-        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        targetValue = MaterialTheme.colorScheme.surfaceContainerLow,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "containerColor"
     )

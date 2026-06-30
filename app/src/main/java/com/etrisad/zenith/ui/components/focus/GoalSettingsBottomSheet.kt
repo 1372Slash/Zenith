@@ -30,8 +30,6 @@ import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.local.entity.ShieldEntity
-import com.etrisad.zenith.data.preferences.UserPreferences
-import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithButtonType
@@ -63,15 +61,12 @@ fun GoalSettingsBottomSheet(
 ) {
     val configuration = LocalConfiguration.current
     val context = androidx.compose.ui.platform.LocalContext.current
-    val repository = remember { UserPreferencesRepository(context) }
-    val preferences by repository.userPreferencesFlow.collectAsState(initial = UserPreferences())
 
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val containerColor by animateColorAsState(
-        targetValue = if (preferences.expressiveColors) MaterialTheme.colorScheme.surfaceContainerHighest
-        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        targetValue = MaterialTheme.colorScheme.surfaceContainerLow,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "containerColor"
     )

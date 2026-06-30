@@ -752,8 +752,6 @@ fun ScreenTimeTargetBottomSheet(
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
-    val repository = remember { UserPreferencesRepository(context) }
-    val preferences by repository.userPreferencesFlow.collectAsState(initial = UserPreferences())
 
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -761,8 +759,7 @@ fun ScreenTimeTargetBottomSheet(
     var minuteText by remember { mutableStateOf((initialMinutes % 60).toString()) }
 
     val containerColor by animateColorAsState(
-        targetValue = if (preferences.expressiveColors) MaterialTheme.colorScheme.surfaceContainerHighest
-        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        targetValue = MaterialTheme.colorScheme.surfaceContainerLow,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "containerColor"
     )
