@@ -74,11 +74,11 @@ class NotificationInsightsWorker(context: Context, params: WorkerParameters) : C
 
                 val targetMinutes = prefs.screenTimeTargetMinutes
                 val message = buildString {
-                    append("Total screen time: ${todayMinutes}m")
+                    append("Total screen time: ${formatDuration(todayMinutes)}")
                     if (targetMinutes > 0) {
                         val diff = todayMinutes - targetMinutes
-                        if (diff > 0) append(" (${diff}m over target)")
-                        else append(" (${-diff}m under target)")
+                        if (diff > 0) append(" (${formatDuration(diff)} over target)")
+                        else append(" (${formatDuration(-diff)} under target)")
                     }
                     if (yesterdayMinutes > 0) {
                         val change = ((todayMinutes - yesterdayMinutes).toFloat() / yesterdayMinutes * 100).toInt()
@@ -87,9 +87,9 @@ class NotificationInsightsWorker(context: Context, params: WorkerParameters) : C
                 }
 
                 val detailLines = mutableListOf<String>()
-                if (shieldMinutes > 0) detailLines.add("Blocked usage: ${shieldMinutes}m")
-                if (goalMinutes > 0) detailLines.add("Goal usage: ${goalMinutes}m")
-                if (otherMinutes > 0) detailLines.add("Other: ${otherMinutes}m")
+                if (shieldMinutes > 0) detailLines.add("Blocked usage: ${formatDuration(shieldMinutes)}")
+                if (goalMinutes > 0) detailLines.add("Goal usage: ${formatDuration(goalMinutes)}")
+                if (otherMinutes > 0) detailLines.add("Other: ${formatDuration(otherMinutes)}")
 
                 val notification = NotificationCompat.Builder(applicationContext, channelId)
                     .setContentTitle("Daily Focus Recap")
@@ -130,18 +130,17 @@ class NotificationInsightsWorker(context: Context, params: WorkerParameters) : C
                 if (weeklyTotal <= 0) return Result.success()
 
                 val weeklyMinutes = weeklyTotal / 60000
-                val weeklyHours = weeklyTotal / 3600000.0
                 val avgDaily = if (dailyValues.isNotEmpty()) dailyValues.average().toInt() else 0
                 val bestDay = dailyValues.maxOrNull() ?: 0
                 val worstDay = dailyValues.minOrNull() ?: 0
 
                 val title = "Weekly Insight"
-                val message = "${weeklyHours.toInt()}h ${(weeklyMinutes % 60)}m total this week"
+                val message = "${formatDuration(weeklyMinutes.toInt())} total this week"
                 val detailLines = mutableListOf<String>()
-                detailLines.add("Daily avg: ${avgDaily}m")
-                detailLines.add("Most: ${bestDay}m | Least: ${worstDay}m")
-                if (blockedTotal > 0) detailLines.add("Blocked: ${blockedTotal / 60000}m")
-                if (goalTotal > 0) detailLines.add("Goals: ${goalTotal / 60000}m")
+                detailLines.add("Daily avg: ${formatDuration(avgDaily)}")
+                detailLines.add("Most: ${formatDuration(bestDay.toInt())} | Least: ${formatDuration(worstDay.toInt())}")
+                if (blockedTotal > 0) detailLines.add("Blocked: ${formatDuration((blockedTotal / 60000).toInt())}")
+                if (goalTotal > 0) detailLines.add("Goals: ${formatDuration((goalTotal / 60000).toInt())}")
 
                 val notification = NotificationCompat.Builder(applicationContext, channelId)
                     .setContentTitle(title)
@@ -198,6 +197,24 @@ class NotificationInsightsWorker(context: Context, params: WorkerParameters) : C
         }
 
         return Result.success()
+    }
+
+    private fun formatDuration(totalMinutes: Int): String {
+        val m = totalMinutes
+        return when {
+            m <= 0 -> "0m"
+            m < 60 -> "${m}m"
+            m < 1440 -> {
+                val h = m / 60
+                val r = m % 60
+                if (r > 0) "${h}h ${r}m" else "${h}h"
+            }
+            else -> {
+                val d = m / 1440
+                val h = (m % 1440) / 60
+                if (h > 0) "${d}d ${h}h" else "${d}d"
+            }
+        }
     }
 
     companion object {
