@@ -135,12 +135,12 @@ class NotificationInsightsWorker(context: Context, params: WorkerParameters) : C
                 val worstDay = dailyValues.minOrNull() ?: 0
 
                 val title = "Weekly Insight"
-                val message = "${formatDuration(weeklyMinutes.toInt())} total this week"
+                val message = "${formatDuration(weeklyMinutes)} total this week"
                 val detailLines = mutableListOf<String>()
-                detailLines.add("Daily avg: ${formatDuration(avgDaily)}")
-                detailLines.add("Most: ${formatDuration(bestDay.toInt())} | Least: ${formatDuration(worstDay.toInt())}")
-                if (blockedTotal > 0) detailLines.add("Blocked: ${formatDuration((blockedTotal / 60000).toInt())}")
-                if (goalTotal > 0) detailLines.add("Goals: ${formatDuration((goalTotal / 60000).toInt())}")
+                detailLines.add("Daily avg: ${formatDuration(avgDaily.toLong())}")
+                detailLines.add("Most: ${formatDuration(bestDay)} | Least: ${formatDuration(worstDay)}")
+                if (blockedTotal > 0) detailLines.add("Blocked: ${formatDuration(blockedTotal / 60000)}")
+                if (goalTotal > 0) detailLines.add("Goals: ${formatDuration(goalTotal / 60000)}")
 
                 val notification = NotificationCompat.Builder(applicationContext, channelId)
                     .setContentTitle(title)
@@ -199,7 +199,7 @@ class NotificationInsightsWorker(context: Context, params: WorkerParameters) : C
         return Result.success()
     }
 
-    private fun formatDuration(totalMinutes: Int): String {
+    private fun formatDuration(totalMinutes: Long): String {
         val m = totalMinutes
         return when {
             m <= 0 -> "0m"
