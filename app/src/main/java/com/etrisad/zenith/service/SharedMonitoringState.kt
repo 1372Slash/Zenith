@@ -38,6 +38,7 @@ object SharedMonitoringState {
     @Volatile var isBedtimeActive = false
     @Volatile var isWindDownActive = false
     @Volatile var isBedtimeBlockingActive = false
+    @Volatile var lastBankingAppsCount = -1
     val windDownUsedPackages = ConcurrentHashMap<String, Boolean>()
     val systemAppCache = ConcurrentHashMap<String, Boolean>()
     val dailyUsageCache = ConcurrentHashMap<String, Long>()

@@ -37,6 +37,5 @@ class EarlyKickManager {
     }
 
     fun reset() {
-        // kicked state persists until day change
     }
 }

@@ -1109,8 +1109,6 @@ class AppUsageMonitorService : Service() {
                     lastForegroundApp = currentApp
                 }
             }
-
-            // Website shield auto-quit when ZenithService is running
             val wsDomain = WebsiteStateHolder.currentWebsiteDomain.value
             if (wsDomain != null && WebsiteRepository.isKnownBrowser(currentApp)) {
                 val wsPkg = "zenith-web:$wsDomain"
@@ -1140,8 +1138,6 @@ class AppUsageMonitorService : Service() {
 
         val prefs = SharedMonitoringState.currentPreferences
         val isOverlayShowing = InterceptOverlayManager.isShowing
-
-        // Early kick evaluation (app shield + website shield)
         val kickDecision = earlyKickHandler.evaluate(
             currentApp = currentApp,
             currentTime = currentTime,

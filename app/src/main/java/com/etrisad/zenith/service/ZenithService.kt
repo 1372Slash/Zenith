@@ -151,13 +151,27 @@ class ZenithService : AccessibilityService() {
         }
     }
 
-    private fun isAnyFinancialAppInstalled(): Boolean {
-        return SharedMonitoringState.FINANCIAL_APPS.any { pkg ->
+    private fun getBankingAppsCount(): Int {
+        return SharedMonitoringState.FINANCIAL_APPS.count { pkg ->
             try {
                 packageManager.getPackageInfo(pkg, 0)
                 true
             } catch (_: Exception) {
                 false
+            }
+        }
+    }
+
+    private fun checkBankingAppsNotification() {
+        val currentCount = getBankingAppsCount()
+        if (currentCount > 0 && currentCount != SharedMonitoringState.lastBankingAppsCount) {
+            showFinancialAppPreventionNotification()
+        }
+        
+        if (currentCount != SharedMonitoringState.lastBankingAppsCount) {
+            SharedMonitoringState.lastBankingAppsCount = currentCount
+            serviceScope.launch {
+                preferencesRepository.setLastBankingAppsCount(currentCount)
             }
         }
     }
@@ -178,12 +192,6 @@ class ZenithService : AccessibilityService() {
             notificationTimeout = 100
         }
         setServiceInfo(info)
-
-        if (isAnyFinancialAppInstalled()) {
-            showFinancialAppPreventionNotification()
-            disableSelf()
-            return
-        }
 
         isServiceRunning = true
 
@@ -255,6 +263,12 @@ class ZenithService : AccessibilityService() {
                 com.etrisad.zenith.util.ScreenUsageHelper.updateCacheDuration(cfg.usageStatsCacheMs)
                 SharedMonitoringState.whitelistedPackages = preferences.whitelistedPackages
                 SharedMonitoringState.bedtimeWhitelistedPackages = preferences.bedtimeWhitelistedPackages
+                
+                val isFirstLoad = SharedMonitoringState.lastBankingAppsCount == -1
+                if (isFirstLoad) {
+                    SharedMonitoringState.lastBankingAppsCount = preferences.lastBankingAppsCount
+                    checkBankingAppsNotification()
+                }
 
                 if (preferences.incentiveLockDisableRequestTimestamp > 0) {
                     val now = System.currentTimeMillis()
@@ -296,9 +310,7 @@ class ZenithService : AccessibilityService() {
             val pkg = queryCurrentForegroundApp()
             if (pkg != null && pkg != packageName && lastForegroundApp == null) {
                 if (SharedMonitoringState.isFinancialApp(pkg)) {
-                    Log.d("ZenithAS", "Financial app already in foreground ($pkg) — disabling accessibility")
-                    showFinancialAppNotification(pkg)
-                    disableSelf()
+                    Log.d("ZenithAS", "Financial app already in foreground ($pkg) — skipping initial detection")
                     return@launch
                 }
                 lastForegroundApp = pkg
@@ -312,9 +324,7 @@ class ZenithService : AccessibilityService() {
                 }
                 if (windowPkg != null && windowPkg != packageName && !shouldBypassBlocking(windowPkg)) {
                     if (SharedMonitoringState.isFinancialApp(windowPkg)) {
-                        Log.d("ZenithAS", "Financial app already in foreground ($windowPkg) — disabling accessibility")
-                        showFinancialAppNotification(windowPkg)
-                        disableSelf()
+                        Log.d("ZenithAS", "Financial app already in foreground ($windowPkg) — skipping initial detection")
                         return@launch
                     }
                     lastForegroundApp = windowPkg
@@ -358,6 +368,7 @@ class ZenithService : AccessibilityService() {
                         }
                     }
                     SharedMonitoringState.performPeriodicCleanup()
+                    checkBankingAppsNotification()
                 } catch (_: Exception) {}
             }
         }
@@ -367,6 +378,7 @@ class ZenithService : AccessibilityService() {
 
     private var lastA11yEventProcessedTime = 0L
     private val lastA11yPackageTime = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val lastBankingNotificationTime = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     private var lastContentChangeUrlCheck = 0L
 
@@ -390,9 +402,13 @@ class ZenithService : AccessibilityService() {
         if (isKeyboardApp(packageName)) return
 
         if (SharedMonitoringState.isFinancialApp(packageName)) {
-            Log.d("ZenithAS", "Financial app detected ($packageName) — disabling accessibility service to avoid detection")
-            showFinancialAppNotification(packageName)
-            disableSelf()
+            Log.d("ZenithAS", "Financial app detected ($packageName) — skipping accessibility events to avoid detection")
+            val now = System.currentTimeMillis()
+            val lastNotified = lastBankingNotificationTime[packageName] ?: 0L
+            if (now - lastNotified > 15000) {
+                lastBankingNotificationTime[packageName] = now
+                showFinancialAppInUseNotification(packageName)
+            }
             return
         }
 
@@ -593,9 +609,9 @@ class ZenithService : AccessibilityService() {
         val channelId = "zenith_banking_channel"
         if (notificationManager.getNotificationChannel(channelId) == null) {
             val channel = NotificationChannel(
-                channelId, "Banking App Compatibility", NotificationManager.IMPORTANCE_DEFAULT
+                channelId, "Banking App Safety", NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Notifications when Zenith disables accessibility for banking app compatibility"
+                description = "Reminders to turn off Zenith accessibility before using banking apps"
             }
             notificationManager.createNotificationChannel(channel)
         }
@@ -605,9 +621,9 @@ class ZenithService : AccessibilityService() {
         }
 
         val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Accessibility Paused")
-            .setContentText("A banking app is installed. Zenith paused accessibility to avoid detection. Monitoring continues via usage stats.")
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("Banking Apps Detected")
+            .setContentText("Turn off Zenith accessibility before opening banking apps for safety.")
+            .setSmallIcon(R.drawable.ic_warning)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .setContentIntent(
@@ -622,41 +638,40 @@ class ZenithService : AccessibilityService() {
         } catch (_: Exception) {}
     }
 
-    private fun showFinancialAppNotification(packageName: String) {
+    private fun showFinancialAppInUseNotification(packageName: String) {
         val appName = try {
             packageManager.getApplicationLabel(packageManager.getApplicationInfo(packageName, 0)).toString()
-        } catch (_: Exception) { "financial app" }
+        } catch (_: Exception) { "banking app" }
 
         val channelId = "zenith_banking_channel"
         if (notificationManager.getNotificationChannel(channelId) == null) {
             val channel = NotificationChannel(
-                channelId, "Banking App Compatibility", NotificationManager.IMPORTANCE_DEFAULT
+                channelId, "Banking App Safety", NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Notifications when Zenith disables accessibility for banking app compatibility"
+                description = "Reminders to turn off Zenith accessibility before using banking apps"
             }
             notificationManager.createNotificationChannel(channel)
         }
 
-        val intent = packageManager.getLaunchIntentForPackage(packageName)
         val openSettingsIntent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
 
         val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Accessibility Disabled")
-            .setContentText("Zenith disabled accessibility so $appName can work. Monitoring still active via usage stats.")
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("Banking App in Use")
+            .setContentText("$appName is open. Turn off Zenith accessibility for safety.")
+            .setSmallIcon(R.drawable.ic_warning)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .setContentIntent(
                 PendingIntent.getActivity(
-                    this, 0, openSettingsIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                    this, packageName.hashCode(), openSettingsIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                 )
             )
             .build()
 
         try {
-            notificationManager.notify(3001, notification)
+            notificationManager.notify(packageName.hashCode(), notification)
         } catch (_: Exception) {}
     }
 
