@@ -5,6 +5,7 @@ import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.PerformanceConfig
 import com.etrisad.zenith.data.preferences.PerformanceLevel
 import com.etrisad.zenith.data.preferences.UserPreferences
+import com.etrisad.zenith.service.earlykick.EarlyKickManager
 import com.etrisad.zenith.util.DateTimeUtils
 import java.util.concurrent.ConcurrentHashMap
 
@@ -45,6 +46,8 @@ object SharedMonitoringState {
     @Volatile var activeSchedules = listOf<com.etrisad.zenith.data.local.entity.ScheduleEntity>()
     @Volatile var performanceLevel: PerformanceLevel = PerformanceLevel.BALANCED
     @Volatile var performanceConfig: PerformanceConfig = PerformanceConfig()
+
+    val earlyKickManager = EarlyKickManager()
 
     @Volatile var cachedDayStartHour = 0
     @Volatile var cachedDayStartMinute = 0

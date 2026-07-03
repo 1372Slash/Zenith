@@ -802,14 +802,19 @@ class ZenithService : AccessibilityService() {
         if (isExpired) {
             val s = shield ?: SharedMonitoringState.allShieldsCache[currentPkg] ?: shieldRepository.getShieldByPackageName(currentPkg)
             if (s?.isAutoQuitEnabled == true) {
-                synchronized(allowedApps) { allowedApps.remove(currentPkg) }
-                lastKickTime = System.currentTimeMillis()
-                lastKickedPackage = currentPkg
-                goToHomeScreen()
-                if (s.isDelayAppEnabled) {
-                    val updated = s.copy(lastDelayStartTimestamp = 0L)
-                    shieldRepository.updateShield(updated)
-                    currentShieldCache = updated
+                if (!SharedMonitoringState.earlyKickManager.wasKicked(currentPkg)) {
+                    SharedMonitoringState.earlyKickManager.markKicked(currentPkg)
+                    synchronized(allowedApps) { allowedApps.remove(currentPkg) }
+                    lastKickTime = System.currentTimeMillis()
+                    lastKickedPackage = currentPkg
+                    goToHomeScreen()
+                    if (s.isDelayAppEnabled) {
+                        val updated = s.copy(lastDelayStartTimestamp = 0L)
+                        shieldRepository.updateShield(updated)
+                        currentShieldCache = updated
+                    }
+                } else if (!InterceptOverlayManager.isShowing) {
+                    checkIfAppIsShielded(currentPkg)
                 }
             } else if (!InterceptOverlayManager.isShowing) {
                 checkIfAppIsShielded(currentPkg)
@@ -824,10 +829,15 @@ class ZenithService : AccessibilityService() {
                         val allowedUntil = allowedApps[currentPkg]
                         if (allowedUntil == null || allowedUntil == 0L || currentTime > allowedUntil) {
                             if (s.isAutoQuitEnabled) {
-                                synchronized(allowedApps) { allowedApps.remove(currentPkg) }
-                                lastKickTime = System.currentTimeMillis()
-                                lastKickedPackage = currentPkg
-                                goToHomeScreen()
+                                if (!SharedMonitoringState.earlyKickManager.wasKicked(currentPkg)) {
+                                    SharedMonitoringState.earlyKickManager.markKicked(currentPkg)
+                                    synchronized(allowedApps) { allowedApps.remove(currentPkg) }
+                                    lastKickTime = System.currentTimeMillis()
+                                    lastKickedPackage = currentPkg
+                                    goToHomeScreen()
+                                } else if (!InterceptOverlayManager.isShowing) {
+                                    checkIfAppIsShielded(currentPkg)
+                                }
                             } else if (!InterceptOverlayManager.isShowing) {
                                 checkIfAppIsShielded(currentPkg)
                             }
@@ -1044,10 +1054,13 @@ class ZenithService : AccessibilityService() {
 
             if (effectiveShield != null && (!InterceptOverlayManager.isShowing || InterceptOverlayManager.currentPackage != actualTargetPackage)) {
                 if (isWebsite && effectiveShield.isAutoQuitEnabled) {
-                    Log.d("Zenith_Block", "Strict block: redirecting browser to about:blank (shield autoQuit enabled for $actualTargetPackage)")
-                    WebsiteRepository.redirectBrowserToBlankPage(this)
-                    goToHomeScreen()
-                    return
+                    if (!SharedMonitoringState.earlyKickManager.wasKicked(actualTargetPackage)) {
+                        SharedMonitoringState.earlyKickManager.markKicked(actualTargetPackage)
+                        Log.d("Zenith_Block", "Strict block: redirecting browser to about:blank (shield autoQuit enabled for $actualTargetPackage)")
+                        WebsiteRepository.redirectBrowserToBlankPage(this)
+                        goToHomeScreen()
+                        return
+                    }
                 }
                 if (effectiveShield.type == FocusType.GOAL && !isWebsite) {
                     if (!SharedMonitoringState.notifiedGoals.contains(actualTargetPackage)) {

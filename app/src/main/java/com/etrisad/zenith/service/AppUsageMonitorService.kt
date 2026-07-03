@@ -29,6 +29,8 @@ import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.data.website.WebsiteStateHolder
+import com.etrisad.zenith.service.earlykick.EarlyKickHandler
+import com.etrisad.zenith.service.earlykick.EarlyKickManager
 import com.etrisad.zenith.ui.components.overlay.SessionUsageOverlayManager
 import com.etrisad.zenith.ui.components.overlay.UsageGlimpseOverlayManager
 import kotlinx.coroutines.CoroutineScope
@@ -55,7 +57,8 @@ class AppUsageMonitorService : Service() {
     private lateinit var overlayManager: InterceptOverlayManager
     private lateinit var sessionUsageOverlayManager: SessionUsageOverlayManager
     private lateinit var overlayActionHandler: OverlayActionHandler
-    private val earlyKickManager = EarlyKickManager()
+    private val earlyKickManager get() = SharedMonitoringState.earlyKickManager
+    private val earlyKickHandler = EarlyKickHandler(SharedMonitoringState.earlyKickManager)
     private val usageStatsManager by lazy { getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager }
     private val powerManager by lazy { getSystemService(POWER_SERVICE) as android.os.PowerManager }
     private val reusableEvent = UsageEvents.Event()
@@ -1094,7 +1097,8 @@ class AppUsageMonitorService : Service() {
                 val remainingMs = (limitMs - cachedTotalUsage).coerceAtLeast(0L)
                 val isAllowedExpired = allowedUntilVal != null && allowedUntilVal > 0L && currentTime > allowedUntilVal
                 if (isAllowedExpired || (remainingMs <= 0L && (allowedUntilVal == null || currentTime > allowedUntilVal))) {
-                    if (shield.isAutoQuitEnabled) {
+                    if (shield.isAutoQuitEnabled && !earlyKickManager.wasKicked(currentApp)) {
+                        earlyKickManager.markKicked(currentApp)
                         lastKickTime = System.currentTimeMillis()
                         lastKickedPackage = currentApp
                         goToHomeScreen()
@@ -1105,38 +1109,64 @@ class AppUsageMonitorService : Service() {
                     lastForegroundApp = currentApp
                 }
             }
+
+            // Website shield auto-quit when ZenithService is running
+            val wsDomain = WebsiteStateHolder.currentWebsiteDomain.value
+            if (wsDomain != null && WebsiteRepository.isKnownBrowser(currentApp)) {
+                val wsPkg = "zenith-web:$wsDomain"
+                val wsShield = SharedMonitoringState.allShieldsCache[wsPkg]
+                val wsGrant = allowedApps[wsPkg]
+                if (wsShield != null && wsShield.type != FocusType.GOAL && !isPaused(wsShield)) {
+                    val wsLimit = wsShield.timeLimitMinutes * 60 * 1000L
+                    val wsUsage = getWebsiteUsageToday(wsDomain)
+                    val wsRemaining = (wsLimit - wsUsage).coerceAtLeast(0L)
+                    val wsAllowedExpired = wsGrant != null && wsGrant > 0L && currentTime > wsGrant
+                    if (wsAllowedExpired || (wsRemaining <= 0L && (wsGrant == null || currentTime > wsGrant))) {
+                        if (wsShield.isAutoQuitEnabled && !earlyKickManager.wasKicked(wsPkg)) {
+                            earlyKickManager.markKicked(wsPkg)
+                            lastKickTime = System.currentTimeMillis()
+                            lastKickedPackage = wsPkg
+                            goToHomeScreen()
+                            allowedApps.remove(wsPkg)
+                        }
+                    }
+                }
+            }
+
             return
         }
 
         updateUsageTime(currentApp)
 
-        val shield = currentShieldCache
-        if (shield != null && shield.type != FocusType.GOAL && !isPaused(shield)) {
-            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
-            val actualRemaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
-            val prefs = SharedMonitoringState.currentPreferences
+        val prefs = SharedMonitoringState.currentPreferences
+        val isOverlayShowing = InterceptOverlayManager.isShowing
 
-            val isOverlayShowing = InterceptOverlayManager.isShowing
-            val isSessionActive = allowedApps[currentApp]?.let { it > currentTime } ?: false
-            val isShieldLimitReached = actualRemaining <= 0L
-
-            val allowedAtRemaining = lastAllowedRemainingTime[currentApp] ?: Long.MAX_VALUE
-            val threshold = 300000L
-            val sessionStartedAboveThreshold = allowedAtRemaining > threshold
-
-            if (!isOverlayShowing && !isShieldLimitReached &&
-                earlyKickManager.shouldKick(currentApp, actualRemaining, prefs?.earlyKickEnabled ?: false) &&
-                (!isSessionActive || sessionStartedAboveThreshold)) {
-
-                allowedApps.remove(currentApp)
-                withContext(Dispatchers.Main) {
-                    sessionUsageOverlayManager.hideHUD(currentApp)
-                    Toast.makeText(this@AppUsageMonitorService, "Early Kick: 5 minutes remaining", Toast.LENGTH_LONG).show()
-                }
-                goToHomeScreen()
-                lastForegroundApp = currentApp
-                return
+        // Early kick evaluation (app shield + website shield)
+        val kickDecision = earlyKickHandler.evaluate(
+            currentApp = currentApp,
+            currentTime = currentTime,
+            cachedTotalUsage = cachedTotalUsage,
+            shield = currentShieldCache,
+            allowedApps = allowedApps,
+            lastAllowedRemainingTime = lastAllowedRemainingTime,
+            prefs = prefs,
+            isOverlayShowing = isOverlayShowing,
+            isAppPaused = this::isPaused,
+            getWebsiteUsageToday = this::getWebsiteUsageToday,
+            websiteDomainProvider = { WebsiteStateHolder.currentWebsiteDomain.value },
+            isKnownBrowser = WebsiteRepository::isKnownBrowser,
+            allShieldsCache = SharedMonitoringState.allShieldsCache
+        )
+        if (kickDecision.shouldKick && kickDecision.targetPackage != null) {
+            val target = kickDecision.targetPackage
+            allowedApps.remove(target)
+            withContext(Dispatchers.Main) {
+                sessionUsageOverlayManager.hideHUD(target)
+                Toast.makeText(this@AppUsageMonitorService, "Early Kick: 5 minutes remaining", Toast.LENGTH_LONG).show()
             }
+            goToHomeScreen()
+            lastForegroundApp = currentApp
+            return
         }
 
         val shieldForPauseCheck = currentShieldCache
@@ -1206,15 +1236,21 @@ class AppUsageMonitorService : Service() {
                 val prefs = SharedMonitoringState.currentPreferences
                 if (sh != null || (prefs?.mindfulGatewayEnabled == true && !shouldBypassBlocking(currentApp))) {
                     if (sh != null && sh.isAutoQuitEnabled && allowedUntilVal != null && allowedUntilVal > 0) {
-                        lastKickTime = System.currentTimeMillis()
-                        lastKickedPackage = currentApp
-                        goToHomeScreen()
-                        allowedApps.remove(currentApp)
-                        if (sh.isDelayAppEnabled) {
-                            serviceScope.launch {
-                                shieldRepository.updateShield(sh.copy(lastDelayStartTimestamp = 0L))
+                        if (!earlyKickManager.wasKicked(currentApp)) {
+                            earlyKickManager.markKicked(currentApp)
+                            lastKickTime = System.currentTimeMillis()
+                            lastKickedPackage = currentApp
+                            goToHomeScreen()
+                            allowedApps.remove(currentApp)
+                            if (sh.isDelayAppEnabled) {
+                                serviceScope.launch {
+                                    shieldRepository.updateShield(sh.copy(lastDelayStartTimestamp = 0L))
+                                }
+                                currentShieldCache = currentShieldCache?.copy(lastDelayStartTimestamp = 0L)
                             }
-                            currentShieldCache = currentShieldCache?.copy(lastDelayStartTimestamp = 0L)
+                        } else {
+                            allowedApps.remove(currentApp)
+                            checkIfAppIsShielded(currentApp)
                         }
                     } else {
                         if (allowedUntilVal != null && allowedUntilVal > 0) {

@@ -1,11 +1,8 @@
-package com.etrisad.zenith.service
-
-import java.util.Calendar
+package com.etrisad.zenith.service.earlykick
 
 class EarlyKickManager {
     private val kickedApps = mutableSetOf<String>()
-    private var lastResetDay = -1
-    private var lastResetCheckTime = 0L
+    private var lastResetDay = -1L
 
     fun shouldKick(packageName: String, remainingTimeMillis: Long, isEnabled: Boolean): Boolean {
         if (!isEnabled) return false
@@ -20,18 +17,26 @@ class EarlyKickManager {
         return false
     }
 
+    fun wasKicked(packageName: String): Boolean {
+        checkDayChange()
+        return kickedApps.contains(packageName)
+    }
+
+    fun markKicked(packageName: String) {
+        checkDayChange()
+        kickedApps.add(packageName)
+    }
+
     private fun checkDayChange() {
-        val now = System.currentTimeMillis()
-        if (now - lastResetCheckTime < 60000) return
-        lastResetCheckTime = now
-        val today = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
-        if (lastResetDay != today) {
+        val today = java.time.LocalDate.now()
+        val dayValue = today.toEpochDay()
+        if (lastResetDay != dayValue) {
             kickedApps.clear()
-            lastResetDay = today
+            lastResetDay = dayValue
         }
     }
 
     fun reset() {
-        kickedApps.clear()
+        // kicked state persists until day change
     }
 }
