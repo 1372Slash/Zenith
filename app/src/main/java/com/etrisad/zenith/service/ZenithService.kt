@@ -560,7 +560,8 @@ class ZenithService : AccessibilityService() {
                 Log.d("Zenith_URL", "Ignoring null domain update while browser $currentPkg is active")
                 return
             }
-            overlayActionHandler.endWebsiteSession("zenith-web:$oldDomain", resumeBrowser = true)
+            overlayActionHandler.scheduleWebsiteSessionDismiss("zenith-web:$oldDomain")
+            overlayActionHandler.restoreBrowserFromWebsite()
         }
         WebsiteStateHolder.currentWebsiteDomain.value = domain
         if (domain != null) {
