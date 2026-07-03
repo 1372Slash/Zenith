@@ -179,7 +179,11 @@ class BedtimeViewModel(
                                     appInfoCache[pkg] = label
                                     AppUsageInfo(pkg, label, entity.usageTimeMillis)
                                 } catch (e: Exception) {
-                                    AppUsageInfo(pkg, pkg, entity.usageTimeMillis)
+                                    val label = if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(pkg)) {
+                                        val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(pkg)
+                                        com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
+                                    } else pkg
+                                    AppUsageInfo(pkg, label, entity.usageTimeMillis)
                                 }
                             }
                         }.sortedByDescending { it.totalTimeVisible }

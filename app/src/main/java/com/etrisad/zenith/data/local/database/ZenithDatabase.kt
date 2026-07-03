@@ -14,11 +14,13 @@ import com.etrisad.zenith.data.local.dao.ShieldDao
 import com.etrisad.zenith.data.local.dao.DailyUsageDao
 import com.etrisad.zenith.data.local.dao.HourlyUsageDao
 import com.etrisad.zenith.data.local.dao.InterceptedNotificationDao
+import com.etrisad.zenith.data.local.dao.WebsiteUsageDao
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.DailyUsageEntity
 import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
 import com.etrisad.zenith.data.local.entity.InterceptedNotificationEntity
+import com.etrisad.zenith.data.local.entity.WebsiteUsageEntity
 import com.etrisad.zenith.data.local.Converters
 
 @Database(
@@ -27,9 +29,10 @@ import com.etrisad.zenith.data.local.Converters
         ScheduleEntity::class,
         DailyUsageEntity::class,
         HourlyUsageEntity::class,
-        InterceptedNotificationEntity::class
+        InterceptedNotificationEntity::class,
+        WebsiteUsageEntity::class
     ],
-    version = 27,
+    version = 28,
     exportSchema = true,
     autoMigrations = [
         androidx.room.AutoMigration(from = 12, to = 13),
@@ -44,6 +47,7 @@ abstract class ZenithDatabase : RoomDatabase() {
     abstract fun dailyUsageDao(): DailyUsageDao
     abstract fun hourlyUsageDao(): HourlyUsageDao
     abstract fun interceptedNotificationDao(): InterceptedNotificationDao
+    abstract fun websiteUsageDao(): WebsiteUsageDao
 
     @Transaction
     open suspend fun deleteUsageForPackageTransaction(date: String, packageName: String) {
@@ -61,6 +65,23 @@ abstract class ZenithDatabase : RoomDatabase() {
                     db.execSQL("ALTER TABLE shields ADD COLUMN timeAdded INTEGER NOT NULL DEFAULT 0")
                     db.execSQL("UPDATE shields SET timeAdded = lastStreakUpdateTimestamp WHERE lastStreakUpdateTimestamp > 0")
                     db.execSQL("UPDATE shields SET timeAdded = lastUsedTimestamp WHERE timeAdded = 0 AND lastUsedTimestamp > 0")
+                } catch (_: Exception) {}
+            }
+        }
+
+        private val MIGRATION_27_28 = object : Migration(27, 28) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN isWebsite INTEGER NOT NULL DEFAULT 0")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN url TEXT")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("CREATE TABLE IF NOT EXISTS `website_usage` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `date` TEXT NOT NULL, `domain` TEXT NOT NULL, `usageTimeMillis` INTEGER NOT NULL, `lastUpdated` INTEGER NOT NULL)")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_website_usage_date_domain` ON `website_usage` (`date`, `domain`)")
                 } catch (_: Exception) {}
             }
         }
@@ -264,7 +285,7 @@ abstract class ZenithDatabase : RoomDatabase() {
                         MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
                         MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18,
                         MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
-                        MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27
+                        MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28
                     )
                     .setQueryExecutor(Executors.newFixedThreadPool(4))
                     .setTransactionExecutor(Executors.newSingleThreadExecutor())

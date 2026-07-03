@@ -24,6 +24,7 @@ import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
+import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.ui.components.overlay.SessionUsageOverlayManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -65,8 +66,11 @@ class ZenithService : AccessibilityService() {
 
     private var monitoringJob: kotlinx.coroutines.Job? = null
     private var bypassCheckRunnable: Runnable? = null
+    private var urlPollJob: kotlinx.coroutines.Job? = null
     @Volatile
     private var isOverlayCheckInProgress = false
+
+    private var lastCheckedWebsiteDomain: String? = null
 
     private var cachedTotalGlobalUsage: Long = 0L
     private var lastGlobalUsageCacheTime: Long = 0L
@@ -160,6 +164,17 @@ class ZenithService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         lastEventTime = System.currentTimeMillis()
+
+        val info = android.accessibilityservice.AccessibilityServiceInfo().apply {
+            flags = android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                    android.accessibilityservice.AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+            eventTypes = android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
+                    android.view.accessibility.AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED or
+                    android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+            feedbackType = android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_GENERIC
+            notificationTimeout = 500
+        }
+        setServiceInfo(info)
 
         if (isAnyFinancialAppInstalled()) {
             showFinancialAppPreventionNotification()
@@ -261,7 +276,7 @@ class ZenithService : AccessibilityService() {
         }
 
         serviceScope.launch {
-            packageChangeFlow.collectLatest { packageName ->
+            packageChangeFlow.collect { packageName ->
                 try {
                     handlePackageChange(packageName)
                 } catch (e: Exception) {
@@ -332,7 +347,7 @@ class ZenithService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         lastEventTime = System.currentTimeMillis()
-        if (!AppStateHolder.isScreenOn.value || event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        if (!AppStateHolder.isScreenOn.value) return
 
         val now = System.currentTimeMillis()
         if (now - lastA11yEventProcessedTime < 40) return
@@ -355,9 +370,38 @@ class ZenithService : AccessibilityService() {
             return
         }
 
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            handleWindowStateChanged(packageName, event)
+        } else if (event.eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
+            handleViewTextChanged(packageName, event)
+        } else if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+            if (WebsiteRepository.isKnownBrowser(packageName)) {
+                val source = event.source
+                if (source != null) {
+                    val srcText = source.text?.toString()?.trim()
+                    if (!srcText.isNullOrBlank()) {
+                        val domain = extractUrlDomain(srcText)
+                        if (domain != null && domain != AppStateHolder.currentWebsiteDomain.value) {
+                            Log.d("Zenith_URL", "URL from contentChanged: $domain")
+                            setCurrentWebsiteDomain(domain)
+                            serviceScope.launch(Dispatchers.Main) {
+                                packageChangeFlow.tryEmit(packageName)
+                            }
+                        }
+                    }
+                    source.recycle()
+                }
+            }
+        }
+    }
+
+    private fun handleWindowStateChanged(packageName: String, event: AccessibilityEvent) {
+        val now = System.currentTimeMillis()
         val lastPkgTime = lastA11yPackageTime[packageName] ?: 0L
         if (now - lastPkgTime < 300) return
         lastA11yPackageTime[packageName] = now
+
+        Log.d("Zenith_A11Y", "handleWindowStateChanged: pkg=$packageName domain=${AppStateHolder.currentWebsiteDomain.value}")
 
         if (packageName !in SharedMonitoringState.CRITICAL_SYSTEM_PACKAGES && !isKeyboardApp(packageName)) {
             lastForegroundApp = packageName
@@ -366,10 +410,423 @@ class ZenithService : AccessibilityService() {
         }
         AppStateHolder.foregroundApp.value = packageName
 
+        if (com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(packageName)) {
+            AppStateHolder.currentWebsiteDomain.value?.let { domain ->
+                overlayActionHandler.cancelWebsiteSessionDismiss("zenith-web:$domain")
+            }
+            try {
+                val source = event.source
+                if (source != null) {
+                    val srcText = source.text?.toString()?.trim()
+                    if (!srcText.isNullOrBlank()) {
+                        val srcDomain = extractUrlDomain(srcText)
+                        if (srcDomain != null && srcDomain != AppStateHolder.currentWebsiteDomain.value) {
+                            Log.d("Zenith_URL", "URL from event.source: $srcDomain")
+                            setCurrentWebsiteDomain(srcDomain)
+                            serviceScope.launch(Dispatchers.Main) {
+                                packageChangeFlow.tryEmit(packageName)
+                            }
+                        }
+                    }
+                    source.recycle()
+                }
+            } catch (_: Exception) {}
+
+            try {
+                val instantRoot = rootInActiveWindow
+                if (instantRoot != null && instantRoot.packageName == packageName) {
+                    val instantDomain = findUrlNodeQuick(instantRoot)
+                    if (instantDomain != null && instantDomain != AppStateHolder.currentWebsiteDomain.value) {
+                        Log.d("Zenith_URL", "URL from instantCheck: $instantDomain")
+                        setCurrentWebsiteDomain(instantDomain)
+                        serviceScope.launch(Dispatchers.Main) {
+                            packageChangeFlow.tryEmit(packageName)
+                        }
+                        instantRoot.recycle()
+                        return
+                    }
+                    instantRoot.recycle()
+                }
+            } catch (_: Exception) {}
+
+            val eventText = event.text?.joinToString("")?.trim()
+            if (eventText != null && eventText.isNotBlank()) {
+                val domain = extractUrlDomain(eventText)
+                if (domain != null && domain != AppStateHolder.currentWebsiteDomain.value) {
+                    setCurrentWebsiteDomain(domain)
+                    serviceScope.launch(Dispatchers.Main) {
+                        packageChangeFlow.tryEmit(packageName)
+                    }
+                }
+            }
+            serviceScope.launch(Dispatchers.IO) {
+                kotlinx.coroutines.delay(200)
+                checkWebsiteUrl(packageName)
+            }
+            startUrlPolling(packageName)
+        } else {
+            val isLauncher = SharedMonitoringState.launcherPackages.contains(packageName) ||
+                packageName.contains("launcher", ignoreCase = true) ||
+                packageName.contains("home", ignoreCase = true)
+            if (isLauncher) {
+                val domain = AppStateHolder.currentWebsiteDomain.value
+                Log.d("Zenith_A11Y", "Launcher detected, domain=$domain calling pauseWebsiteSession")
+                if (domain != null) {
+                    overlayActionHandler.pauseWebsiteSession("zenith-web:$domain")
+                } else {
+                    Log.d("Zenith_A11Y", "Domain is null, skipping pauseWebsiteSession")
+                }
+                sessionUsageOverlayManager.pauseAllSessions()
+                sessionUsageOverlayManager.updateForegroundApp(packageName)
+            } else {
+                AppStateHolder.currentWebsiteDomain.value?.let { domain ->
+                    overlayActionHandler.scheduleWebsiteSessionDismiss("zenith-web:$domain")
+                }
+            }
+            stopUrlPolling()
+        }
+
         serviceScope.launch(Dispatchers.Main) {
             overlayManager.checkAndHide(packageName)
             packageChangeFlow.tryEmit(packageName)
         }
+    }
+
+    private fun handleViewTextChanged(packageName: String, event: AccessibilityEvent) {
+        if (!com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(packageName)) return
+        val className = event.className?.toString() ?: ""
+        val isUrlInput = className.contains("EditText") || className.contains("UrlBar") ||
+                className.contains("Omnibox") || className.contains("Url") ||
+                className.contains("LocationBar")
+        if (!isUrlInput) return
+
+        val rawText = event.text?.joinToString("") ?: return
+        if (rawText.isBlank()) return
+        val domain = extractUrlDomain(rawText)
+        if (domain != null && domain != AppStateHolder.currentWebsiteDomain.value) {
+            setCurrentWebsiteDomain(domain)
+            serviceScope.launch(Dispatchers.Main) {
+                packageChangeFlow.tryEmit(packageName)
+            }
+        }
+    }
+
+    private fun getUrlBarViewIds(packageName: String): List<String> {
+        return when (packageName) {
+            "com.android.chrome", "com.android.chrome.beta", "com.chrome.beta", "com.chrome.dev", "com.chrome.canary", "org.chromium.chrome" -> listOf(
+                "$packageName:id/url_bar",
+                "$packageName:id/search_box_text"
+            )
+            "com.sec.android.app.sbrowser", "com.sec.android.app.sbrowser.beta" -> listOf(
+                "$packageName:id/url_bar",
+                "$packageName:id/location_bar_edit_text"
+            )
+            "org.mozilla.firefox", "org.mozilla.firefox_beta", "org.mozilla.fenix", "org.mozilla.focus" -> listOf(
+                "$packageName:id/url_bar_title",
+                "$packageName:id/mozac_browser_toolbar_url_view",
+                "$packageName:id/toolbar_edit_text"
+            )
+            "com.microsoft.emmx", "com.microsoft.emmx.beta", "com.microsoft.edge.canary", "com.microsoft.edge.beta" -> listOf(
+                "$packageName:id/url_bar",
+                "$packageName:id/search_box_text"
+            )
+            "com.brave.browser" -> listOf(
+                "$packageName:id/url_bar",
+                "$packageName:id/search_box_text"
+            )
+            "com.opera.browser", "com.opera.mini.native", "com.opera.browser.beta" -> listOf(
+                "$packageName:id/url_field"
+            )
+            "com.duckduckgo.mobile.android" -> listOf(
+                "$packageName:id/omniboxTextInput",
+                "$packageName:id/search_edit_text",
+                "$packageName:id/omnibox_text"
+            )
+            "com.vivaldi.browser" -> listOf(
+                "$packageName:id/url_bar"
+            )
+            "com.kiwibrowser.browser" -> listOf(
+                "$packageName:id/url_bar"
+            )
+            "mark.via.gp" -> listOf(
+                "$packageName:id/url_bar",
+                "$packageName:id/location_bar"
+            )
+            else -> listOf(
+                "$packageName:id/url_bar",
+                "$packageName:id/url_field",
+                "$packageName:id/url",
+                "$packageName:id/address_bar",
+                "$packageName:id/location_bar",
+                "$packageName:id/search_box",
+                "$packageName:id/search_box_text",
+                "$packageName:id/omnibox"
+            )
+        }
+    }
+
+    private fun findUrlByViewIds(rootNode: android.view.accessibility.AccessibilityNodeInfo, packageName: String): String? {
+        val viewIds = getUrlBarViewIds(packageName)
+        for (id in viewIds) {
+            val nodes = try {
+                rootNode.findAccessibilityNodeInfosByViewId(id)
+            } catch (_: Exception) {
+                null
+            } ?: continue
+
+            var foundDomain: String? = null
+            for (node in nodes) {
+                if (foundDomain == null) {
+                    val text = node.text?.toString()
+                    if (!text.isNullOrBlank()) {
+                        foundDomain = extractUrlDomain(text)
+                    }
+                    if (foundDomain == null) {
+                        val desc = node.contentDescription?.toString()
+                        if (!desc.isNullOrBlank()) {
+                            foundDomain = extractUrlDomain(desc)
+                        }
+                    }
+                }
+                node.recycle()
+            }
+            if (foundDomain != null) {
+                return foundDomain
+            }
+        }
+        return null
+    }
+
+    private fun extractUrlFromAccessibilityNode(browserPackage: String? = null): String? {
+        try {
+            val allWindows = try { windows } catch (_: Exception) { null }
+            if (allWindows != null) {
+                for (win in allWindows) {
+                    val winRoot = win.root ?: continue
+                    val pkg = winRoot.packageName?.toString() ?: "?"
+                    if (browserPackage != null && pkg != browserPackage) {
+                        winRoot.recycle()
+                        continue
+                    }
+                    var found = findUrlByViewIds(winRoot, pkg)
+                    if (found == null) {
+                        found = findUrlNode(winRoot)
+                    }
+                    winRoot.recycle()
+                    if (found != null) return found
+                }
+            }
+
+            val root = rootInActiveWindow
+            if (root != null) {
+                val pkg = root.packageName?.toString() ?: "?"
+                if (browserPackage != null && pkg != browserPackage) {
+                    root.recycle()
+                    return null
+                }
+                
+                var result = findUrlByViewIds(root, pkg)
+                if (result == null) {
+                    val rText = root.text?.toString()
+                    if (rText != null) { 
+                        val d = extractUrlDomain(rText)
+                        if (d != null) { root.recycle(); return d } 
+                    }
+                    val rDesc = root.contentDescription?.toString()
+                    if (rDesc != null) { 
+                        val d = extractUrlDomain(rDesc)
+                        if (d != null) { root.recycle(); return d } 
+                    }
+
+                    val focused = root.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT)
+                    if (focused != null) {
+                        val fText = focused.text?.toString()
+                        if (fText != null) { 
+                            val d = extractUrlDomain(fText)
+                            if (d != null) { focused.recycle(); root.recycle(); return d } 
+                        }
+                        val fDesc = focused.contentDescription?.toString()
+                        if (fDesc != null) { 
+                            val d = extractUrlDomain(fDesc)
+                            if (d != null) { focused.recycle(); root.recycle(); return d } 
+                        }
+                        if (android.os.Build.VERSION.SDK_INT >= 26) {
+                            val fHint = focused.hintText?.toString()
+                            if (fHint != null) { 
+                                val d = extractUrlDomain(fHint)
+                                if (d != null) { focused.recycle(); root.recycle(); return d } 
+                            }
+                        }
+                        focused.recycle()
+                    }
+                    result = findUrlNode(root)
+                }
+                root.recycle()
+                return result
+            }
+            return null
+        } catch (e: Exception) {
+            Log.e("ZenithAS", "Error extracting URL: ${e.message}")
+            return null
+        }
+    }
+
+    private fun findUrlNodeQuick(node: android.view.accessibility.AccessibilityNodeInfo?): String? {
+        val queue = java.util.ArrayDeque<android.view.accessibility.AccessibilityNodeInfo>()
+        node?.let { queue.add(it) }
+        var depth = 0
+        while (queue.isNotEmpty() && depth < 60) {
+            val current = queue.poll() ?: continue
+            depth++
+            val cls = current.className?.toString() ?: ""
+            val text = current.text?.toString()
+            val desc = current.contentDescription?.toString()
+            if (cls.contains("EditText") || cls.contains("UrlBar") || cls.contains("Omnibox") || cls.contains("LocationBar")) {
+                if (text != null && text.isNotBlank()) {
+                    val domain = extractUrlDomain(text)
+                    if (domain != null) {
+                        current.recycle()
+                        while (queue.isNotEmpty()) {
+                            queue.poll()?.recycle()
+                        }
+                        return domain
+                    }
+                }
+                if (desc != null && desc.isNotBlank()) {
+                    val domain = extractUrlDomain(desc)
+                    if (domain != null) {
+                        current.recycle()
+                        while (queue.isNotEmpty()) {
+                            queue.poll()?.recycle()
+                        }
+                        return domain
+                    }
+                }
+            }
+            for (i in 0 until current.childCount) {
+                val child = current.getChild(i) ?: continue
+                queue.add(child)
+            }
+            if (current !== node) current.recycle()
+        }
+        return null
+    }
+
+    private fun findUrlNode(node: android.view.accessibility.AccessibilityNodeInfo?): String? {
+        if (node == null) return null
+
+        val className = node.className?.toString() ?: ""
+        val viewId = node.viewIdResourceName?.toString() ?: ""
+        val text = node.text?.toString()
+        val contentDesc = node.contentDescription?.toString()
+
+        val isUrlInput = className.contains("EditText") || className.contains("TextView") ||
+                className.contains("UrlBar") || className.contains("Omnibox") ||
+                className.contains("Url") || className.contains("SearchView") ||
+                className.contains("LocationBar") || className.contains("Location") ||
+                className.contains("AutoComplete") || className.contains("MultiAutoComplete")
+
+        val isUrlId = viewId.contains("url_bar") || viewId.contains("omnibox") ||
+                viewId.contains("location_bar") || viewId.contains("search_box") ||
+                viewId.contains("url") || viewId.contains("address_bar")
+
+        val hasText = text != null && !text.isBlank() && text.length < 2048
+        val hasDesc = contentDesc != null && !contentDesc.isBlank() && contentDesc.length < 2048
+        val isPotentialUrl = (hasText && (text!!.contains(".") || text.startsWith("http") || text.startsWith("www"))) ||
+                (hasDesc && (contentDesc!!.contains(".") || contentDesc.startsWith("http") || contentDesc.startsWith("www")))
+
+        if (isUrlInput || isUrlId || isPotentialUrl) {
+            if (text != null && !text.isBlank()) {
+                val domain = extractUrlDomain(text)
+                if (domain != null) return domain
+            }
+            if (contentDesc != null && !contentDesc.isBlank()) {
+                val domain = extractUrlDomain(contentDesc)
+                if (domain != null) return domain
+            }
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            val result = findUrlNode(child)
+            if (result != null) {
+                child?.recycle()
+                return result
+            }
+            child?.recycle()
+        }
+        return null
+    }
+
+    private fun extractUrlDomain(text: String): String? {
+        if (text.isBlank() || text.length > 2048 || text.contains("\n")) return null
+        val trimmed = text.trim()
+        val urlText = when {
+            trimmed.startsWith("https://", ignoreCase = true) ||
+            trimmed.startsWith("http://", ignoreCase = true) ||
+            trimmed.startsWith("www.", ignoreCase = true) -> trimmed
+            trimmed.contains(".") && !trimmed.contains(" ")
+                    && trimmed.length > trimmed.lastIndexOf('.') + 2 -> "https://$trimmed"
+            else -> return null
+        }
+        val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomain(urlText)
+        if (domain == null || !domain.contains(".") || domain.endsWith(".")) return null
+        
+        val parts = domain.split(".")
+        val tld = parts.lastOrNull() ?: ""
+        if (tld.isEmpty() || !tld.any { it.isLetter() }) return null
+        
+        return domain
+    }
+
+    @Volatile
+    private var isCheckingUrl = false
+
+    private fun setCurrentWebsiteDomain(domain: String?) {
+        val oldDomain = AppStateHolder.currentWebsiteDomain.value
+        if (oldDomain != null && oldDomain != domain) {
+            overlayActionHandler.endWebsiteSession("zenith-web:$oldDomain", resumeBrowser = true)
+        }
+        AppStateHolder.currentWebsiteDomain.value = domain
+        if (domain != null) {
+            overlayActionHandler.cancelWebsiteSessionDismiss("zenith-web:$domain")
+        }
+    }
+
+    private fun checkWebsiteUrl(browserPackage: String) {
+        if (isCheckingUrl) return
+        isCheckingUrl = true
+        serviceScope.launch(Dispatchers.Main) {
+            try {
+                val domain = extractUrlFromAccessibilityNode(browserPackage)
+                if (domain != null && domain != AppStateHolder.currentWebsiteDomain.value) {
+                    setCurrentWebsiteDomain(domain)
+                    packageChangeFlow.tryEmit(browserPackage)
+                }
+            } finally {
+                isCheckingUrl = false
+            }
+        }
+    }
+
+    private fun startUrlPolling(browserPackage: String) {
+        urlPollJob?.cancel()
+        urlPollJob = serviceScope.launch(Dispatchers.IO) {
+            try {
+                delay(200)
+                checkWebsiteUrl(browserPackage)
+                while (true) {
+                    kotlinx.coroutines.delay(500)
+                    checkWebsiteUrl(browserPackage)
+                }
+            } catch (_: kotlinx.coroutines.CancellationException) {
+            }
+        }
+    }
+
+    private fun stopUrlPolling() {
+        urlPollJob?.cancel()
+        urlPollJob = null
     }
 
     private fun showFinancialAppPreventionNotification() {
@@ -444,10 +901,16 @@ class ZenithService : AccessibilityService() {
     }
 
     private suspend fun handlePackageChange(currentApp: String) {
+        val currentDomain = AppStateHolder.currentWebsiteDomain.value
         if (currentApp == lastForegroundApp && InterceptOverlayManager.isShowing) {
-            Log.d("Zenith_HPC", "Early return: $currentApp same app + overlay showing")
-            return
+            if (WebsiteRepository.isKnownBrowser(currentApp) && currentDomain != lastCheckedWebsiteDomain) {
+                Log.d("Zenith_HPC", "Website domain changed, allowing re-check")
+            } else {
+                Log.d("Zenith_HPC", "Early return: $currentApp same app + overlay showing")
+                return
+            }
         }
+        lastCheckedWebsiteDomain = currentDomain
 
         if (shouldBypassBlocking(currentApp)) {
             if (InterceptOverlayManager.isShowing && (InterceptOverlayManager.isSystemUiPackage(currentApp) || isKeyboardApp(currentApp))) {
@@ -495,6 +958,9 @@ class ZenithService : AccessibilityService() {
                 }
             }
             mainHandler.postDelayed(bypassCheckRunnable!!, 800)
+            if (WebsiteRepository.isKnownBrowser(currentApp)) {
+                restoreWebsiteHUD()
+            }
             return
         }
 
@@ -507,6 +973,42 @@ class ZenithService : AccessibilityService() {
         sessionUsageOverlayManager.ensureSessionHUDActive(currentApp)
         checkAndHandleSessionExpiry(currentApp, shield)
         checkBlockingInstant(currentApp, shield)
+    }
+
+    private fun restoreWebsiteHUD() {
+        val domain = AppStateHolder.currentWebsiteDomain.value ?: return
+        val websitePkg = "zenith-web:$domain"
+        val endTime: Long
+        synchronized(allowedApps) {
+            endTime = allowedApps[websitePkg] ?: return
+        }
+        val remainingMs = endTime - System.currentTimeMillis()
+        if (remainingMs <= 0) return
+
+        val shield = SharedMonitoringState.allShieldsCache[websitePkg] ?: return
+        val prefs = SharedMonitoringState.currentPreferences ?: return
+        if (!prefs.sessionUsageOverlayEnabled) return
+
+        val isGoal = shield.type == FocusType.GOAL
+        val remainingMinutes = (remainingMs / 60000).toInt().coerceAtLeast(1)
+
+        serviceScope.launch(Dispatchers.Main) {
+            sessionUsageOverlayManager.showHUD(
+                websitePkg,
+                if (isGoal) shield.timeLimitMinutes else remainingMinutes,
+                prefs.sessionUsageOverlaySize,
+                prefs.sessionUsageOverlayOpacity,
+                isGoal = isGoal,
+                initialSeconds = if (isGoal) (getTotalUsageToday(websitePkg) / 1000).toInt() else 0,
+                onSessionEnd = {
+                    allowedApps.remove(websitePkg)
+                    overlayActionHandler.restoreBrowserFromWebsite()
+                }
+            )
+            if (isGoal) {
+                sessionUsageOverlayManager.updateHUDUsage(websitePkg, getTotalUsageToday(websitePkg))
+            }
+        }
     }
 
     private suspend fun checkAndHandleSessionExpiry(currentPkg: String, shield: ShieldEntity?) {
@@ -567,10 +1069,28 @@ class ZenithService : AccessibilityService() {
             val isBedtimeBlocking = SharedMonitoringState.isBedtimeActive || (SharedMonitoringState.isWindDownActive && (SharedMonitoringState.currentPreferences?.bedtimeWindDownEnabled == true))
             val shouldCheckSchedules = (isBedtimeBlocking && currentApp !in SharedMonitoringState.bedtimeWhitelistedPackages) || currentTime > allowedUntil
 
-            if (shouldCheckSchedules && !InterceptOverlayManager.isShowing && !isOverlayCheckInProgress) {
-                val isScheduled = checkSchedules(currentApp)
-                val prefs = SharedMonitoringState.currentPreferences ?: return
-                if (!isScheduled && (shield != null || (prefs.mindfulGatewayEnabled && !shouldBypassBlocking(currentApp))) && currentTime > allowedUntil) {
+            if (shouldCheckSchedules && !isOverlayCheckInProgress) {
+                val websiteDomain = AppStateHolder.currentWebsiteDomain.value
+                val isBrowserWithDomain = WebsiteRepository.isKnownBrowser(currentApp) && websiteDomain != null
+                if (isBrowserWithDomain || !InterceptOverlayManager.isShowing) {
+                    var isScheduled = checkSchedules(currentApp)
+                    if (!isScheduled && isBrowserWithDomain && websiteDomain != null) {
+                        isScheduled = checkSchedules("zenith-web:$websiteDomain")
+                    }
+                    val prefs = SharedMonitoringState.currentPreferences ?: return
+                    if (!isScheduled && (shield != null || isBrowserWithDomain || (prefs.mindfulGatewayEnabled && !shouldBypassBlocking(currentApp))) && currentTime > allowedUntil) {
+                        checkIfAppIsShielded(currentApp)
+                    }
+                }
+            }
+            
+            // Check website shield when browser has a domain, but skip if the specific website grant is still active
+            val wd = AppStateHolder.currentWebsiteDomain.value
+            if (wd != null && WebsiteRepository.isKnownBrowser(currentApp) && !isOverlayCheckInProgress) {
+                val websitePkg = "zenith-web:$wd"
+                val websiteGrant = allowedApps[websitePkg]
+                val hasActiveGrant = websiteGrant != null && System.currentTimeMillis() < websiteGrant
+                if (!hasActiveGrant) {
                     checkIfAppIsShielded(currentApp)
                 }
             }
@@ -675,7 +1195,6 @@ class ZenithService : AccessibilityService() {
         } catch (_: Exception) {}
     }
 
-
     private fun getMindfulShield(packageName: String, appName: String): ShieldEntity =
         overlayActionHandler.getMindfulShield(packageName, appName)
 
@@ -692,34 +1211,77 @@ class ZenithService : AccessibilityService() {
                 if (targetPackageName != actualPkg) return
             }
 
-            if (targetPackageName == InterceptOverlayManager.lastKickedPackage && System.currentTimeMillis() - InterceptOverlayManager.lastKickTime < 500) {
+            val websiteDomain = AppStateHolder.currentWebsiteDomain.value
+            val isWebsite = WebsiteRepository.isKnownBrowser(targetPackageName) && websiteDomain != null
+            var actualTargetPackage = if (isWebsite && websiteDomain != null) {
+                "zenith-web:$websiteDomain"
+            } else {
+                targetPackageName
+            }
+
+            if (actualTargetPackage == InterceptOverlayManager.lastKickedPackage && System.currentTimeMillis() - InterceptOverlayManager.lastKickTime < 500) {
                 return
             }
 
-            val shield = currentShieldCache ?: SharedMonitoringState.allShieldsCache[targetPackageName]
-            val prefs = SharedMonitoringState.currentPreferences ?: return
-            val isMindfulGateway = shield == null && prefs.mindfulGatewayEnabled && !shouldBypassBlocking(targetPackageName)
-            val appName = shield?.appName ?: overlayActionHandler.getAppName(targetPackageName)
-            val effectiveShield = if (isMindfulGateway) overlayActionHandler.getMindfulShield(targetPackageName, appName) else shield
+            var shield = currentShieldCache?.takeIf { it.packageName == actualTargetPackage } ?: SharedMonitoringState.allShieldsCache[actualTargetPackage]
 
-            if (effectiveShield != null && !InterceptOverlayManager.isShowing) {
-                if (effectiveShield.type == FocusType.GOAL) {
-                    if (!SharedMonitoringState.notifiedGoals.contains(targetPackageName)) {
+            if (shield != null && isWebsite && actualTargetPackage.startsWith("zenith-web:")) {
+                val websiteAllowedUntil = allowedApps[actualTargetPackage] ?: 0L
+                if (System.currentTimeMillis() < websiteAllowedUntil) {
+                    sessionUsageOverlayManager.updateForegroundApp(actualTargetPackage)
+                    return
+                }
+            }
+
+            // Fallback: If the website is not shielded but the browser itself is, enforce the browser shield
+            if (shield == null && isWebsite) {
+                val browserAllowedUntil = allowedApps[targetPackageName] ?: 0L
+                if (System.currentTimeMillis() < browserAllowedUntil) return
+                actualTargetPackage = targetPackageName
+                shield = SharedMonitoringState.allShieldsCache[targetPackageName]
+            }
+
+            // If a previous website grant created a browser grant, let Chrome through after leaving that website.
+            if (isWebsite && actualTargetPackage == targetPackageName) {
+                val browserAllowedUntil = allowedApps[targetPackageName] ?: 0L
+                if (System.currentTimeMillis() < browserAllowedUntil) {
+                    return
+                }
+            }
+
+            // Skip if the resolved target package is currently allowed (timer active)
+            val activeAllowedUntil = allowedApps[actualTargetPackage] ?: 0L
+            if (System.currentTimeMillis() < activeAllowedUntil) return
+
+            val prefs = SharedMonitoringState.currentPreferences ?: return
+            val isMindfulGateway = shield == null && prefs.mindfulGatewayEnabled && !shouldBypassBlocking(actualTargetPackage)
+            val appName = shield?.appName ?: overlayActionHandler.getAppName(actualTargetPackage)
+            val effectiveShield = if (isMindfulGateway) overlayActionHandler.getMindfulShield(actualTargetPackage, appName) else shield
+
+            if (effectiveShield != null && (!InterceptOverlayManager.isShowing || InterceptOverlayManager.currentPackage != actualTargetPackage)) {
+                if (effectiveShield.type == FocusType.GOAL && !isWebsite) {
+                    if (!SharedMonitoringState.notifiedGoals.contains(actualTargetPackage)) {
                         com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
                         lastUsageCacheTime = 0L
                         SharedMonitoringState.lastDailyUsageFetchTime = 0L
                     }
                 }
-                var totalUsageToday = getTotalUsageToday(targetPackageName)
+                var totalUsageToday = if (isWebsite && actualTargetPackage.startsWith("zenith-web:")) 0L else getTotalUsageToday(targetPackageName)
                 val totalGlobalUsageToday = getTotalGlobalUsageToday()
                 val delayDurationSeconds = if (isMindfulGateway) 0 else prefs.delayAppDurationSeconds
 
-                if (effectiveShield.type == FocusType.GOAL) {
+                if (actualTargetPackage.startsWith("zenith-web:")) {
+                    AppStateHolder.lastBrowserPackage = targetPackageName
+                    sessionUsageOverlayManager.updateForegroundApp(actualTargetPackage)
+                    overlayActionHandler.pauseBrowserSession(targetPackageName)
+                }
+
+                if (effectiveShield.type == FocusType.GOAL && !isWebsite) {
                     val limitMillis = effectiveShield.timeLimitMinutes * 60 * 1000L
-                    if (SharedMonitoringState.notifiedGoals.contains(targetPackageName)) {
+                    if (SharedMonitoringState.notifiedGoals.contains(actualTargetPackage)) {
                         totalUsageToday = limitMillis
                     } else {
-                        val hudSeconds = sessionUsageOverlayManager.getHUDElapsedSeconds(targetPackageName)
+                        val hudSeconds = sessionUsageOverlayManager.getHUDElapsedSeconds(actualTargetPackage)
                         if (hudSeconds != null) {
                             val hudMillis = hudSeconds * 1000L
                             if (hudMillis > totalUsageToday) {
@@ -727,13 +1289,13 @@ class ZenithService : AccessibilityService() {
                             }
                         }
                         if (totalUsageToday >= limitMillis) {
-                            SharedMonitoringState.notifiedGoals.add(targetPackageName)
+                            SharedMonitoringState.notifiedGoals.add(actualTargetPackage)
                         }
                     }
                 }
 
                 overlayActionHandler.showShieldOverlay(
-                    targetPackageName = targetPackageName,
+                    targetPackageName = actualTargetPackage,
                     shield = effectiveShield,
                     isMindfulGateway = isMindfulGateway,
                     delayDurationSeconds = delayDurationSeconds,
@@ -741,8 +1303,10 @@ class ZenithService : AccessibilityService() {
                     totalGlobalUsageToday = totalGlobalUsageToday,
                     updateShieldCache = { updated -> currentShieldCache = updated },
                     getTotalUsageTodayFn = {
-                        if (effectiveShield.type == FocusType.GOAL && SharedMonitoringState.notifiedGoals.contains(targetPackageName)) {
+                        if (effectiveShield.type == FocusType.GOAL && SharedMonitoringState.notifiedGoals.contains(actualTargetPackage)) {
                             Long.MAX_VALUE
+                        } else if (isWebsite && actualTargetPackage.startsWith("zenith-web:")) {
+                            0L
                         } else {
                             com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
                             lastUsageCacheTime = 0L

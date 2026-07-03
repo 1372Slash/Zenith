@@ -60,5 +60,8 @@ data class ShieldEntity(
     @androidx.room.ColumnInfo(defaultValue = "DAILY")
     val limitPeriod: LimitPeriod = LimitPeriod.DAILY,
     @androidx.room.ColumnInfo(defaultValue = "0")
-    val timeAdded: Long = System.currentTimeMillis()
+    val timeAdded: Long = System.currentTimeMillis(),
+    @androidx.room.ColumnInfo(defaultValue = "0")
+    val isWebsite: Boolean = false,
+    val url: String? = null
 )

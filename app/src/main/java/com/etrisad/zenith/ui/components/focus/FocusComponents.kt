@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Android
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Security
@@ -51,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.ui.viewmodel.AppInfo
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -62,6 +64,12 @@ fun MultiAppIconGroup(
     modifier: Modifier = Modifier
 ) {
     val sunnyShape = MaterialShapes.Sunny.toShape()
+
+    fun iconModel(pkg: String): String {
+        return "app-icon://$pkg"
+    }
+
+    @Composable fun iconShape(pkg: String) = appIconShape(WebsiteRepository.isWebsitePackageName(pkg))
 
     Box(
         modifier = modifier
@@ -80,13 +88,21 @@ fun MultiAppIconGroup(
                 )
             }
             packageNames.size == 1 -> {
+                val pkg = packageNames[0]
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data("app-icon://${packageNames[0]}")
+                        .data(iconModel(pkg))
                         .crossfade(500)
                         .build(),
                     contentDescription = null,
-                    modifier = Modifier.size(size).clip(CircleShape),
+                    modifier = Modifier.size(size)
+                        .clip(iconShape(pkg))
+                        .then(
+                            if (WebsiteRepository.isWebsitePackageName(pkg)) Modifier.background(
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                iconShape(pkg)
+                            ) else Modifier
+                        ),
                     contentScale = ContentScale.Crop
                 )
             }
@@ -101,13 +117,21 @@ fun MultiAppIconGroup(
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
                         packageNames.take(2).forEach { pkg ->
+                            val shape = iconShape(pkg)
                             AsyncImage(
                                 model = ImageRequest.Builder(context)
-                                    .data("app-icon://$pkg")
+                                    .data(iconModel(pkg))
                                     .crossfade(500)
                                     .build(),
                                 contentDescription = null,
-                                modifier = Modifier.size(iconSize).clip(CircleShape),
+                                modifier = Modifier.size(iconSize)
+                                    .clip(shape)
+                                    .then(
+                                        if (WebsiteRepository.isWebsitePackageName(pkg)) Modifier.background(
+                                            MaterialTheme.colorScheme.surfaceVariant,
+                                            shape
+                                        ) else Modifier
+                                    ),
                                 contentScale = ContentScale.Crop
                             )
                         }
@@ -115,25 +139,41 @@ fun MultiAppIconGroup(
                     if (packageNames.size > 2) {
                         Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
                             packageNames.drop(2).take(1).forEach { pkg ->
+                                val shape = iconShape(pkg)
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)
-                                        .data("app-icon://$pkg")
+                                        .data(iconModel(pkg))
                                         .crossfade(500)
                                         .build(),
                                     contentDescription = null,
-                                    modifier = Modifier.size(iconSize).clip(CircleShape),
+                                    modifier = Modifier.size(iconSize)
+                                        .clip(shape)
+                                        .then(
+                                            if (WebsiteRepository.isWebsitePackageName(pkg)) Modifier.background(
+                                                MaterialTheme.colorScheme.surfaceVariant,
+                                                shape
+                                            ) else Modifier
+                                        ),
                                     contentScale = ContentScale.Crop
                                 )
                             }
                             if (packageNames.size == 4 && totalCount <= 4) {
                                 packageNames.drop(3).forEach { pkg ->
+                                    val shape = iconShape(pkg)
                                     AsyncImage(
                                         model = ImageRequest.Builder(context)
-                                            .data("app-icon://$pkg")
+                                            .data(iconModel(pkg))
                                             .crossfade(500)
                                             .build(),
                                         contentDescription = null,
-                                        modifier = Modifier.size(iconSize).clip(CircleShape),
+                                        modifier = Modifier.size(iconSize)
+                                            .clip(shape)
+                                            .then(
+                                                if (WebsiteRepository.isWebsitePackageName(pkg)) Modifier.background(
+                                                    MaterialTheme.colorScheme.surfaceVariant,
+                                                    shape
+                                                ) else Modifier
+                                            ),
                                         contentScale = ContentScale.Crop
                                     )
                                 }
@@ -647,25 +687,37 @@ fun AppPickerItem(
             },
             leadingContent = {
                 val iconSize = 44.dp
+                val imageModel = "app-icon://${app.packageName}"
+                val isWebsite = app.packageName.startsWith("zenith-web:")
+                val shape = appIconShape(isWebsite)
                 SubcomposeAsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data("app-icon://${app.packageName}")
+                        .data(imageModel)
                         .crossfade(400)
                         .build(),
                     contentDescription = null,
                     modifier = Modifier
                         .size(iconSize)
-                        .clip(RoundedCornerShape(12.dp)),
+                        .then(
+                            if (isWebsite) Modifier.background(
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                shape
+                            ) else Modifier
+                        )
+                        .clip(shape),
                     contentScale = ContentScale.Crop,
                     error = {
                         Box(
                             modifier = Modifier
                                 .size(iconSize)
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(shape)
                                 .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Outlined.Android, contentDescription = null)
+                            Icon(
+                                imageVector = if (isWebsite) Icons.Outlined.Language else Icons.Outlined.Android,
+                                contentDescription = null
+                            )
                         }
                     }
                 )

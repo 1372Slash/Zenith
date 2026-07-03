@@ -1206,7 +1206,11 @@ class HomeViewModel(
                     appInfoCache[pkg] = label
                     AppUsageInfo(pkg, label, time, sessionCount = sessions, lastTimeUsed = lastUsed)
                 } catch (_: Exception) {
-                    AppUsageInfo(pkg, pkg, time, sessionCount = sessions, lastTimeUsed = lastUsed)
+                    val label = if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(pkg)) {
+                        val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(pkg)
+                        com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
+                    } else pkg
+                    AppUsageInfo(pkg, label, time, sessionCount = sessions, lastTimeUsed = lastUsed)
                 }
             }
         }
@@ -1335,7 +1339,11 @@ class HomeViewModel(
                 pkgMap.mapNotNull { (pkg, duration) ->
                     if (duration > 0) {
                         val cached = appInfoCache[pkg]
-                        AppUsageInfo(pkg, cached ?: pkg, duration, lastTimeUsed = lastUsedMap[pkg] ?: 0L)
+                        val label = cached ?: if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(pkg)) {
+                            val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(pkg)
+                            com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
+                        } else pkg
+                        AppUsageInfo(pkg, label, duration, lastTimeUsed = lastUsedMap[pkg] ?: 0L)
                     } else null
                 }
             } else {
@@ -1364,7 +1372,11 @@ class HomeViewModel(
 
                     if (durationForThisHour > 0) {
                         val cached = appInfoCache[pkg]
-                        AppUsageInfo(pkg, cached ?: pkg, durationForThisHour, lastTimeUsed = lastUsedMap[pkg] ?: 0L)
+                        val label = cached ?: if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(pkg)) {
+                            val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(pkg)
+                            com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
+                        } else pkg
+                        AppUsageInfo(pkg, label, durationForThisHour, lastTimeUsed = lastUsedMap[pkg] ?: 0L)
                     } else null
                 }
             }.let { list ->
@@ -1523,63 +1535,124 @@ class HomeViewModel(
                 val usm = this@HomeViewModel.context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
                 val pm = this@HomeViewModel.context.packageManager; val dateFormat = getDateFormat()
                 var appName = packageName
-                try {
-                    val appInfo = pm.getApplicationInfo(packageName, 0)
-                    appName = pm.getApplicationLabel(appInfo).toString()
-                    appInfoCache[packageName] = appName
-                } catch (_: Exception) {}
+                if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(packageName)) {
+                    val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(packageName)
+                    appName = com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
+                } else {
+                    try {
+                        val appInfo = pm.getApplicationInfo(packageName, 0)
+                        appName = pm.getApplicationLabel(appInfo).toString()
+                        appInfoCache[packageName] = appName
+                    } catch (_: Exception) {}
+                }
 
                 _appDetailUiState.update { it.copy(appName = appName) }
-                withContext(Dispatchers.IO) { if (detailFallbackMap.isEmpty() || forceRefresh || isNew) updatePackageFallback(packageName) }
-                combine(shieldRepository.getLastNDaysUsageForPackage(packageName, 21), shieldRepository.getShieldByPackageNameFlow(packageName), userPreferencesRepository.userPreferencesFlow) { historyDB, shield, prefs ->
-                    try {
-                        val detailed = withContext(Dispatchers.IO) { kotlinx.coroutines.withTimeoutOrNull(5000) { ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute) } }
-                        val todayU = detailed?.appUsageMap?.get(packageName) ?: 0L; val sessions = detailed?.sessionCounts?.get(packageName) ?: 0
-                        val hourlyU = MutableList(24) { detailed?.hourlyUsageMap?.get(it)?.get(packageName) ?: 0L }; val peakH = hourlyU.indices.maxByOrNull { hourlyU[it] } ?: -1
-                        val yesterdayStr = dateFormat.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }.time)
-                        val yesterdayU = historyDB.find { it.date == yesterdayStr }?.usageTimeMillis ?: if (prefs.preferSystemUsageHistory) detailFallbackMap[yesterdayStr] ?: 0L else 0L
-                        val history = (0 until 21).map { i -> val dStart = getMidnight(i); val dStr = dateFormat.format(Date(dStart)); val dbE = historyDB.find { it.date == dStr }; val dTotal = if (i == 0) todayU else dbE?.usageTimeMillis ?: if (prefs.preferSystemUsageHistory) detailFallbackMap[dStr] ?: 0L else 0L; DailyUsage(dStart, dTotal, dbE != null, detailFallbackMap[dStr] != null, i == 0) }
+                if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(packageName)) {
+                    val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(packageName)
+                    combine(shieldRepository.getWebsiteUsageForDomain(domain), shieldRepository.getShieldByPackageNameFlow(packageName), userPreferencesRepository.userPreferencesFlow) { websiteHistory, shield, prefs ->
+                        try {
+                            val todayStr = dateFormat.format(Date())
+                            val yesterdayCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+                            val yesterdayStr = dateFormat.format(yesterdayCal.time)
+                            val todayWeb = websiteHistory.find { it.date == todayStr }
+                            val yesterdayWeb = websiteHistory.find { it.date == yesterdayStr }
+                            val todayU = todayWeb?.usageTimeMillis ?: 0L
+                            val yesterdayU = yesterdayWeb?.usageTimeMillis ?: 0L
 
-                        val lastCharge = prefs.lastChargeTimestamp
-                        val manualReset = prefs.manualResetTimestamps[packageName] ?: 0L
-                        val resetTime = maxOf(lastCharge, manualReset)
-                        var sinceLastCharge = 0L
+                            val hourlyEntities = withContext(Dispatchers.IO) { shieldRepository.getHourlyUsageForDateSync(todayStr) }
+                            val hourlyU = MutableList(24) { 0L }
+                            hourlyEntities.filter { it.packageName == packageName }.forEach { hourlyU[it.hour] = it.usageTimeMillis }
+                            val peakH = hourlyU.indices.maxByOrNull { hourlyU[it] } ?: -1
 
-                        if (resetTime > 0) {
-                            val usageSince = withContext(Dispatchers.IO) { ScreenUsageHelper.fetchAppUsageSince(usm, resetTime) }
-                            sinceLastCharge = usageSince[packageName] ?: 0L
+                            val history = (0 until 21).map { i ->
+                                val dStart = getMidnight(i)
+                                val dStr = dateFormat.format(Date(dStart))
+                                val we = websiteHistory.find { it.date == dStr }
+                                DailyUsage(dStart, we?.usageTimeMillis ?: 0L, we != null, false, i == 0)
+                            }
+
+                            _appDetailUiState.update { it.copy(
+                                packageName = packageName,
+                                appName = appName,
+                                type = shield?.type,
+                                todayUsage = todayU,
+                                yesterdayUsage = yesterdayU,
+                                averageUsage = if (history.any { it.totalTime > 0 }) history.filter { it.totalTime > 0 }.map { it.totalTime }.average().toLong() else 0L,
+                                totalSessions = 0,
+                                peakHour = peakH,
+                                percentageChange = if (yesterdayU > 0) (todayU - yesterdayU).toFloat() / yesterdayU * 100 else if (todayU > 0) 100f else 0f,
+                                usageHistory = history.reversed(),
+                                hourlyUsage = hourlyU,
+                                currentStreak = shield?.currentStreak ?: 0,
+                                bestStreak = shield?.bestStreak ?: 0,
+                                shieldEntity = shield,
+                                isPaused = shield?.isPaused ?: false,
+                                pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L,
+                                sinceLastChargeUsage = 0L,
+                                lastResetTimestamp = 0L,
+                                batteryStatsResetEnabled = false,
+                                isLoading = false
+                            ) }
+                        } catch (e: Exception) {
+                            android.util.Log.e("HomeVM", "Error in website detail combine for $packageName: ${e.message}")
+                            _appDetailUiState.update { it.copy(isLoading = false) }
                         }
-
-                        _appDetailUiState.update { it.copy(
-                            packageName = packageName,
-                            appName = appName,
-                            type = shield?.type,
-                            todayUsage = todayU,
-                            yesterdayUsage = yesterdayU,
-                            averageUsage = if (history.any { it.totalTime > 0 }) history.filter { it.totalTime > 0 }.map { it.totalTime }.average().toLong() else 0L,
-                            totalSessions = sessions.coerceAtLeast(if (todayU > 0) 1 else 0),
-                            peakHour = peakH,
-                            percentageChange = if (yesterdayU > 0) (todayU - yesterdayU).toFloat() / yesterdayU * 100 else if (todayU > 0) 100f else 0f,
-                            usageHistory = history.reversed(),
-                            hourlyUsage = hourlyU,
-                            currentStreak = shield?.currentStreak ?: 0,
-                            bestStreak = shield?.bestStreak ?: 0,
-                            shieldEntity = shield,
-                            isPaused = shield?.isPaused ?: false,
-                            pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L,
-                            sinceLastChargeUsage = sinceLastCharge,
-                            lastResetTimestamp = resetTime,
-                            batteryStatsResetEnabled = prefs.batteryStatsResetEnabled,
-                            isLoading = false
-                        ) }
-                    } catch (e: Exception) {
-                        android.util.Log.e("HomeVM", "Error in app detail combine for $packageName: ${e.message}")
+                    }.catch { e ->
+                        android.util.Log.e("HomeVM", "Website detail flow failed for $packageName: ${e.message}")
                         _appDetailUiState.update { it.copy(isLoading = false) }
-                    }
-                }.catch { e ->
-                    android.util.Log.e("HomeVM", "App detail flow failed for $packageName: ${e.message}")
-                    _appDetailUiState.update { it.copy(isLoading = false) }
-                }.collect()
+                    }.collect()
+                } else {
+                    withContext(Dispatchers.IO) { if (detailFallbackMap.isEmpty() || forceRefresh || isNew) updatePackageFallback(packageName) }
+                    combine(shieldRepository.getLastNDaysUsageForPackage(packageName, 21), shieldRepository.getShieldByPackageNameFlow(packageName), userPreferencesRepository.userPreferencesFlow) { historyDB, shield, prefs ->
+                        try {
+                            val detailed = withContext(Dispatchers.IO) { kotlinx.coroutines.withTimeoutOrNull(5000) { ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute) } }
+                            val todayU = detailed?.appUsageMap?.get(packageName) ?: 0L; val sessions = detailed?.sessionCounts?.get(packageName) ?: 0
+                            val hourlyU = MutableList(24) { detailed?.hourlyUsageMap?.get(it)?.get(packageName) ?: 0L }; val peakH = hourlyU.indices.maxByOrNull { hourlyU[it] } ?: -1
+                            val yesterdayStr = dateFormat.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }.time)
+                            val yesterdayU = historyDB.find { it.date == yesterdayStr }?.usageTimeMillis ?: if (prefs.preferSystemUsageHistory) detailFallbackMap[yesterdayStr] ?: 0L else 0L
+                            val history = (0 until 21).map { i -> val dStart = getMidnight(i); val dStr = dateFormat.format(Date(dStart)); val dbE = historyDB.find { it.date == dStr }; val dTotal = if (i == 0) todayU else dbE?.usageTimeMillis ?: if (prefs.preferSystemUsageHistory) detailFallbackMap[dStr] ?: 0L else 0L; DailyUsage(dStart, dTotal, dbE != null, detailFallbackMap[dStr] != null, i == 0) }
+
+                            val lastCharge = prefs.lastChargeTimestamp
+                            val manualReset = prefs.manualResetTimestamps[packageName] ?: 0L
+                            val resetTime = maxOf(lastCharge, manualReset)
+                            var sinceLastCharge = 0L
+
+                            if (resetTime > 0) {
+                                val usageSince = withContext(Dispatchers.IO) { ScreenUsageHelper.fetchAppUsageSince(usm, resetTime) }
+                                sinceLastCharge = usageSince[packageName] ?: 0L
+                            }
+
+                            _appDetailUiState.update { it.copy(
+                                packageName = packageName,
+                                appName = appName,
+                                type = shield?.type,
+                                todayUsage = todayU,
+                                yesterdayUsage = yesterdayU,
+                                averageUsage = if (history.any { it.totalTime > 0 }) history.filter { it.totalTime > 0 }.map { it.totalTime }.average().toLong() else 0L,
+                                totalSessions = sessions.coerceAtLeast(if (todayU > 0) 1 else 0),
+                                peakHour = peakH,
+                                percentageChange = if (yesterdayU > 0) (todayU - yesterdayU).toFloat() / yesterdayU * 100 else if (todayU > 0) 100f else 0f,
+                                usageHistory = history.reversed(),
+                                hourlyUsage = hourlyU,
+                                currentStreak = shield?.currentStreak ?: 0,
+                                bestStreak = shield?.bestStreak ?: 0,
+                                shieldEntity = shield,
+                                isPaused = shield?.isPaused ?: false,
+                                pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L,
+                                sinceLastChargeUsage = sinceLastCharge,
+                                lastResetTimestamp = resetTime,
+                                batteryStatsResetEnabled = prefs.batteryStatsResetEnabled,
+                                isLoading = false
+                            ) }
+                        } catch (e: Exception) {
+                            android.util.Log.e("HomeVM", "Error in app detail combine for $packageName: ${e.message}")
+                            _appDetailUiState.update { it.copy(isLoading = false) }
+                        }
+                    }.catch { e ->
+                        android.util.Log.e("HomeVM", "App detail flow failed for $packageName: ${e.message}")
+                        _appDetailUiState.update { it.copy(isLoading = false) }
+                    }.collect()
+                }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -1642,11 +1715,15 @@ class HomeViewModel(
                 allShields
                     .map { it.packageName }
                     .filter { pkg ->
-                        try {
-                            pm.getApplicationInfo(pkg, 0)
+                        if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(pkg)) {
                             false
-                        } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
-                            true
+                        } else {
+                            try {
+                                pm.getApplicationInfo(pkg, 0)
+                                false
+                            } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
+                                true
+                            }
                         }
                     }
                     .filter { pkg -> dismissedUninstalledApps[pkg] != todayStr }
@@ -1729,31 +1806,63 @@ class HomeViewModel(
         val pkg = _appDetailUiState.value.packageName
         if (pkg.isEmpty()) return
 
-        val usm = this@HomeViewModel.context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val detailedUsage = withContext(Dispatchers.IO) {
-            ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute)
-        }
-        val currentTodayUsage = detailedUsage.appUsageMap[pkg] ?: 0L
+        if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(pkg)) {
+            val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(pkg)
+            val dateFormat = getDateFormat()
+            val todayStr = dateFormat.format(Date())
+            val websiteUsage = withContext(Dispatchers.IO) {
+                shieldRepository.getWebsiteUsage(todayStr, domain)
+            }
+            val currentTodayUsage = websiteUsage?.usageTimeMillis ?: 0L
 
-        val appHourlyUsage = MutableList(24) { hour ->
-            detailedUsage.hourlyUsageMap[hour]?.get(pkg) ?: 0L
-        }
-        val peakHour = appHourlyUsage.indices.maxByOrNull { appHourlyUsage[it] } ?: -1
+            val hourlyEntities = withContext(Dispatchers.IO) {
+                shieldRepository.getHourlyUsageForDateSync(todayStr)
+            }
+            val appHourlyUsage = MutableList(24) { 0L }
+            hourlyEntities.filter { it.packageName == pkg }.forEach { appHourlyUsage[it.hour] = it.usageTimeMillis }
+            val peakHour = appHourlyUsage.indices.maxByOrNull { appHourlyUsage[it] } ?: -1
 
-        val yesterdayUsage = _appDetailUiState.value.yesterdayUsage
-        val percentageChange = when {
-            yesterdayUsage > 0 -> ((currentTodayUsage - yesterdayUsage).toFloat() / yesterdayUsage) * 100
-            currentTodayUsage > 0 -> 100f
-            else -> 0f
-        }
+            val yesterdayUsage = _appDetailUiState.value.yesterdayUsage
+            val percentageChange = when {
+                yesterdayUsage > 0 -> ((currentTodayUsage - yesterdayUsage).toFloat() / yesterdayUsage) * 100
+                currentTodayUsage > 0 -> 100f
+                else -> 0f
+            }
 
-        _appDetailUiState.update { it.copy(
-            todayUsage = currentTodayUsage,
-            percentageChange = percentageChange,
-            totalSessions = detailedUsage.sessionCounts[pkg]?.coerceAtLeast(if (currentTodayUsage > 0) 1 else 0) ?: it.totalSessions,
-            hourlyUsage = appHourlyUsage,
-            peakHour = peakHour
-        ) }
+            _appDetailUiState.update { it.copy(
+                todayUsage = currentTodayUsage,
+                percentageChange = percentageChange,
+                totalSessions = 0,
+                hourlyUsage = appHourlyUsage,
+                peakHour = peakHour
+            ) }
+        } else {
+            val usm = this@HomeViewModel.context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+            val detailedUsage = withContext(Dispatchers.IO) {
+                ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute)
+            }
+            val currentTodayUsage = detailedUsage.appUsageMap[pkg] ?: 0L
+
+            val appHourlyUsage = MutableList(24) { hour ->
+                detailedUsage.hourlyUsageMap[hour]?.get(pkg) ?: 0L
+            }
+            val peakHour = appHourlyUsage.indices.maxByOrNull { appHourlyUsage[it] } ?: -1
+
+            val yesterdayUsage = _appDetailUiState.value.yesterdayUsage
+            val percentageChange = when {
+                yesterdayUsage > 0 -> ((currentTodayUsage - yesterdayUsage).toFloat() / yesterdayUsage) * 100
+                currentTodayUsage > 0 -> 100f
+                else -> 0f
+            }
+
+            _appDetailUiState.update { it.copy(
+                todayUsage = currentTodayUsage,
+                percentageChange = percentageChange,
+                totalSessions = detailedUsage.sessionCounts[pkg]?.coerceAtLeast(if (currentTodayUsage > 0) 1 else 0) ?: it.totalSessions,
+                hourlyUsage = appHourlyUsage,
+                peakHour = peakHour
+            ) }
+        }
     }
 
     fun clearAppDetail(packageName: String) {

@@ -12,15 +12,15 @@ import coil.fetch.FetchResult
 import coil.fetch.Fetcher
 import coil.map.Mapper
 import coil.request.Options
-import com.etrisad.zenith.data.website.WebsiteRepository
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.InputStream
 import java.util.concurrent.TimeUnit
 
-data class AppIconData(val packageName: String)
+data class FaviconData(val domain: String)
 
-class AppIconFetcher(
-    private val data: AppIconData,
+class FaviconFetcher(
+    private val data: FaviconData,
     private val context: Context
 ) : Fetcher {
 
@@ -31,29 +31,11 @@ class AppIconFetcher(
         .build()
 
     override suspend fun fetch(): FetchResult? {
-        if (WebsiteRepository.isWebsitePackageName(data.packageName)) {
-            val domain = WebsiteRepository.extractDomainFromPackageName(data.packageName)
-            val favicon = fetchFavicon(domain)
-            if (favicon != null) {
-                return DrawableResult(
-                    drawable = favicon,
-                    isSampled = false,
-                    dataSource = DataSource.NETWORK
-                )
-            }
-            return null
-        }
-
-        val icon = try {
-            context.packageManager.getApplicationIcon(data.packageName)
-        } catch (e: Exception) {
-            null
-        } ?: return null
-
+        val drawable = fetchFavicon(data.domain) ?: return null
         return DrawableResult(
-            drawable = icon,
+            drawable = drawable,
             isSampled = false,
-            dataSource = DataSource.MEMORY_CACHE
+            dataSource = DataSource.NETWORK
         )
     }
 
@@ -82,17 +64,17 @@ class AppIconFetcher(
         return null
     }
 
-    class Factory(private val context: Context) : Fetcher.Factory<AppIconData> {
-        override fun create(data: AppIconData, options: Options, imageLoader: ImageLoader): Fetcher {
-            return AppIconFetcher(data, context)
+    class Factory(private val context: Context) : Fetcher.Factory<FaviconData> {
+        override fun create(data: FaviconData, options: Options, imageLoader: ImageLoader): Fetcher {
+            return FaviconFetcher(data, context)
         }
     }
 }
 
-class AppIconMapper : Mapper<String, AppIconData> {
-    override fun map(data: String, options: Options): AppIconData? {
-        if (!data.startsWith("app-icon://")) return null
-        val pkg = data.substringAfter("app-icon://")
-        return if (pkg.isNotEmpty()) AppIconData(pkg) else null
+class FaviconMapper : Mapper<String, FaviconData> {
+    override fun map(data: String, options: Options): FaviconData? {
+        if (!data.startsWith("favicon://")) return null
+        val domain = data.substringAfter("favicon://")
+        return if (domain.isNotEmpty()) FaviconData(domain) else null
     }
 }

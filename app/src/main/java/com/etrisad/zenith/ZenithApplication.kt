@@ -40,6 +40,7 @@ class ZenithApplication : Application(), ImageLoaderFactory {
                 database.scheduleDao(),
                 database.dailyUsageDao(),
                 database.hourlyUsageDao(),
+                database.websiteUsageDao(),
                 database,
                 userPreferencesRepository
             )
@@ -52,6 +53,7 @@ class ZenithApplication : Application(), ImageLoaderFactory {
                 database.scheduleDao(),
                 database.dailyUsageDao(),
                 database.hourlyUsageDao(),
+                database.websiteUsageDao(),
                 database,
                 userPreferencesRepository
             )
@@ -83,6 +85,8 @@ class ZenithApplication : Application(), ImageLoaderFactory {
             .components {
                 add(com.etrisad.zenith.util.coil.AppIconMapper())
                 add(com.etrisad.zenith.util.coil.AppIconFetcher.Factory(this@ZenithApplication))
+                add(com.etrisad.zenith.util.coil.FaviconMapper())
+                add(com.etrisad.zenith.util.coil.FaviconFetcher.Factory(this@ZenithApplication))
             }
             .memoryCache {
                 MemoryCache.Builder(this)

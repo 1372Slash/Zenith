@@ -121,23 +121,31 @@ fun ShieldSettingsBottomSheet(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        val isWebsite = appInfo.packageName.startsWith("zenith-web:")
+                        val settingsIconShape = appIconShape(isWebsite)
                         SubcomposeAsyncImage(
                             model = "app-icon://${appInfo.packageName}",
                             contentDescription = null,
                             modifier = Modifier
                                 .size(72.dp)
-                                .clip(RoundedCornerShape(20.dp)),
+                                .then(
+                                    if (isWebsite) Modifier.background(
+                                        MaterialTheme.colorScheme.surfaceVariant,
+                                        settingsIconShape
+                                    ) else Modifier
+                                )
+                                .clip(settingsIconShape),
                             contentScale = ContentScale.Crop,
                             error = {
                                 Box(
                                     modifier = Modifier
                                         .size(72.dp)
-                                        .clip(RoundedCornerShape(20.dp))
+                                        .clip(settingsIconShape)
                                         .background(MaterialTheme.colorScheme.surfaceVariant),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        Icons.Outlined.Android,
+                                        if (isWebsite) Icons.Outlined.Language else Icons.Outlined.Android,
                                         contentDescription = null,
                                         modifier = Modifier.size(36.dp)
                                     )

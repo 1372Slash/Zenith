@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Android
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -37,6 +38,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
@@ -44,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
+import com.etrisad.zenith.data.website.WebsiteRepository
+import com.etrisad.zenith.ui.components.focus.appIconShape
 import coil.request.ImageRequest
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.ui.components.SnapshotSection
@@ -1673,6 +1677,8 @@ fun WeeklyStatsDoubleCard(
                         } else {
                             targetApps.take(3).forEach { app ->
                                 key(app.packageName) {
+                                    val isWebsite = WebsiteRepository.isWebsitePackageName(app.packageName)
+                                    val shape = appIconShape(isWebsite)
                                     AsyncImage(
                                         model = ImageRequest.Builder(LocalContext.current)
                                             .data("app-icon://${app.packageName}")
@@ -1681,10 +1687,14 @@ fun WeeklyStatsDoubleCard(
                                         contentDescription = null,
                                         modifier = Modifier
                                             .size(32.dp)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.surface)
+                                            .clip(shape)
+                                            .background(
+                                                if (isWebsite) MaterialTheme.colorScheme.surfaceVariant
+                                                else MaterialTheme.colorScheme.surface,
+                                                shape
+                                            )
                                             .padding(2.dp)
-                                            .clip(CircleShape),
+                                            .clip(shape),
                                         contentScale = ContentScale.Crop
                                     )
                                 }
@@ -1753,6 +1763,8 @@ fun UsageItem(
                 )
             },
             leadingContent = {
+                val isWebsite = app.packageName.startsWith("zenith-web:")
+                val shape = appIconShape(isWebsite)
                 SubcomposeAsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data("app-icon://${app.packageName}")
@@ -1761,18 +1773,24 @@ fun UsageItem(
                     contentDescription = null,
                     modifier = Modifier
                         .size(40.dp)
-                        .clip(CircleShape),
+                        .then(
+                            if (isWebsite) Modifier.background(
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                shape
+                            ) else Modifier
+                        )
+                        .clip(shape),
                     contentScale = ContentScale.Crop,
                     error = {
                         Box(
                             modifier = Modifier
                                 .size(40.dp)
-                                .clip(CircleShape)
+                                .clip(shape)
                                 .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.Android,
+                                imageVector = if (isWebsite) Icons.Outlined.Language else Icons.Outlined.Android,
                                 contentDescription = null,
                                 modifier = Modifier.size(24.dp)
                             )

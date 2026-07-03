@@ -150,7 +150,7 @@ fun MainScreen(
     val enterAlwaysScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     val pinnedScrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
-    val scrollBehavior = if (isDeepScreen) pinnedScrollBehavior else enterAlwaysScrollBehavior
+    val scrollBehavior = if (isDeepScreen || currentRoute == Screen.Focus.route) pinnedScrollBehavior else enterAlwaysScrollBehavior
 
     LaunchedEffect(currentRoute) {
         if (!isDeepScreen) {
@@ -1019,6 +1019,7 @@ fun MainScreen(
                         FocusScreen(
                             focusViewModel,
                             innerPadding,
+                            scrollBehavior = scrollBehavior,
                             onAppClick = { packageName ->
                                 navController.navigate(Screen.AppDetail.createRoute(packageName))
                             },

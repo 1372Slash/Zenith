@@ -1385,6 +1385,7 @@ fun UsageItem(
                         .clip(CircleShape),
                     contentScale = ContentScale.Crop,
                     error = {
+                        val isWebsite = app.packageName.startsWith("zenith-web:")
                         Box(
                             modifier = Modifier
                                 .size(40.dp)
@@ -1393,7 +1394,7 @@ fun UsageItem(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.Android,
+                                imageVector = if (isWebsite) Icons.Outlined.Language else Icons.Outlined.Android,
                                 contentDescription = null,
                                 modifier = Modifier.size(24.dp)
                             )

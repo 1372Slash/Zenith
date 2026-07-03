@@ -27,6 +27,7 @@ import com.etrisad.zenith.data.preferences.ForegroundNotificationStatusMode
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
+import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.ui.components.overlay.SessionUsageOverlayManager
 import com.etrisad.zenith.ui.components.overlay.UsageGlimpseOverlayManager
 import kotlinx.coroutines.CoroutineScope
@@ -184,7 +185,7 @@ class AppUsageMonitorService : Service() {
                     monitoringLoopActive = false
                     overlayActionHandler.cancelPendingTimers()
                     Log.d("Zenith_SCREEN", "Calling hideAllHUDViews() due to SCREEN OFF")
-                    sessionUsageOverlayManager.hideAllHUDViews()
+            sessionUsageOverlayManager.destroyAllHUDs()
                     stopEyeCareTimer()
                     usageGlimpseManager?.hide()
                     usageGlimpseJob?.cancel()
@@ -770,6 +771,10 @@ class AppUsageMonitorService : Service() {
 
                         if (!InterceptOverlayManager.isShowing) {
                             if (a11yRunning) {
+                                val detectedApp = getForegroundApp()
+                                if (detectedApp != null && detectedApp != lastForegroundApp && detectedApp != packageName) {
+                                    lastForegroundApp = detectedApp
+                                }
                                 lastForegroundApp?.let { app -> monitoringTick(app) }
                             } else {
                                 getForegroundApp()?.let { app -> monitoringTick(app) }
@@ -890,13 +895,21 @@ class AppUsageMonitorService : Service() {
             refreshLauncherCache()
         }
 
-        if (SharedMonitoringState.launcherPackages.contains(currentApp) || currentApp == packageName) {
+        val isLauncher = SharedMonitoringState.launcherPackages.contains(currentApp) ||
+            currentApp == packageName ||
+            currentApp.contains("launcher", ignoreCase = true) ||
+            currentApp.contains("home", ignoreCase = true)
+        if (isLauncher) {
+            AppStateHolder.currentWebsiteDomain.value?.let { domain ->
+                overlayActionHandler.pauseWebsiteSession("zenith-web:$domain")
+            }
             if (System.currentTimeMillis() - InterceptOverlayManager.lastKickTime >= 500) {
                 InterceptOverlayManager.lastKickTime = 0L
                 InterceptOverlayManager.lastKickedPackage = null
             }
             overlayManager.hideOverlay()
-            sessionUsageOverlayManager.destroyAllHUDs()
+            sessionUsageOverlayManager.pauseAllSessions()
+            sessionUsageOverlayManager.updateForegroundApp(currentApp)
             lastForegroundApp?.let { prevPkg ->
                 if (prevPkg != packageName && !SharedMonitoringState.launcherPackages.contains(prevPkg)) {
                     SharedMonitoringState.allShieldsCache[prevPkg]?.let { shield ->
@@ -921,9 +934,23 @@ class AppUsageMonitorService : Service() {
         }
 
         if (shouldBypassBlocking(currentApp)) {
+            if (!WebsiteRepository.isKnownBrowser(currentApp)) {
+                AppStateHolder.currentWebsiteDomain.value?.let { domain ->
+                    val websitePkg = "zenith-web:$domain"
+                    val isLauncher = SharedMonitoringState.launcherPackages.contains(currentApp) ||
+                        currentApp.contains("launcher", ignoreCase = true) ||
+                        currentApp.contains("home", ignoreCase = true)
+                    if (isLauncher) {
+                        overlayActionHandler.pauseWebsiteSession(websitePkg)
+                    } else {
+                        overlayActionHandler.scheduleWebsiteSessionDismiss(websitePkg)
+                    }
+                }
+            }
             if (!ZenithService.isServiceRunning) {
                 overlayManager.checkAndHide(currentApp)
             }
+            sessionUsageOverlayManager.updateForegroundApp(currentApp)
             return
         }
 
@@ -933,6 +960,24 @@ class AppUsageMonitorService : Service() {
         if (InterceptOverlayManager.isShowing) {
             lastForegroundApp = currentApp
             return
+        }
+
+        if (WebsiteRepository.isKnownBrowser(currentApp)) {
+            AppStateHolder.currentWebsiteDomain.value?.let { domain ->
+                overlayActionHandler.cancelWebsiteSessionDismiss("zenith-web:$domain")
+            }
+        } else {
+            AppStateHolder.currentWebsiteDomain.value?.let { domain ->
+                val websitePkg = "zenith-web:$domain"
+                val isLauncher = SharedMonitoringState.launcherPackages.contains(currentApp) ||
+                    currentApp.contains("launcher", ignoreCase = true) ||
+                    currentApp.contains("home", ignoreCase = true)
+                if (isLauncher) {
+                    overlayActionHandler.pauseWebsiteSession(websitePkg)
+                } else {
+                    overlayActionHandler.scheduleWebsiteSessionDismiss(websitePkg)
+                }
+            }
         }
 
         sessionUsageOverlayManager.updateForegroundApp(currentApp)
@@ -1001,7 +1046,16 @@ class AppUsageMonitorService : Service() {
 
     private suspend fun monitoringTick(currentApp: String) {
         val currentTime = System.currentTimeMillis()
-        if (currentApp == packageName || SharedMonitoringState.launcherPackages.contains(currentApp)) {
+        val isLauncher = currentApp == packageName ||
+            SharedMonitoringState.launcherPackages.contains(currentApp) ||
+            currentApp.contains("launcher", ignoreCase = true) ||
+            currentApp.contains("home", ignoreCase = true)
+
+        if (isLauncher) {
+            AppStateHolder.currentWebsiteDomain.value?.let { domain ->
+                overlayActionHandler.pauseWebsiteSession("zenith-web:$domain")
+            }
+            sessionUsageOverlayManager.pauseAllSessions()
             sessionUsageOverlayManager.updateForegroundApp(currentApp)
             currentShieldCache = null
             currentSessionPackage = currentApp
@@ -1009,7 +1063,25 @@ class AppUsageMonitorService : Service() {
             return
         }
 
-        if (shouldBypassBlocking(currentApp)) return
+        if (shouldBypassBlocking(currentApp)) {
+            if (!WebsiteRepository.isKnownBrowser(currentApp)) {
+                AppStateHolder.currentWebsiteDomain.value?.let { domain ->
+                    val websitePkg = "zenith-web:$domain"
+                    overlayActionHandler.scheduleWebsiteSessionDismiss(websitePkg)
+                }
+            }
+            return
+        }
+
+        if (WebsiteRepository.isKnownBrowser(currentApp)) {
+            AppStateHolder.currentWebsiteDomain.value?.let { domain ->
+                overlayActionHandler.cancelWebsiteSessionDismiss("zenith-web:$domain")
+            }
+        } else {
+            AppStateHolder.currentWebsiteDomain.value?.let { domain ->
+                overlayActionHandler.scheduleWebsiteSessionDismiss("zenith-web:$domain")
+            }
+        }
 
         if (ZenithService.isServiceRunning && !InterceptOverlayManager.isShowing) {
             val shield = currentShieldCache
@@ -1252,13 +1324,30 @@ class AppUsageMonitorService : Service() {
         val isSessionActive = allowedUntil?.let { it > currentTime } ?: false
 
         if (!isSessionActive && !InterceptOverlayManager.isShowing) {
-            if (checkSchedules(currentApp)) return
+            var isScheduled = checkSchedules(currentApp)
+            val websiteDomain = AppStateHolder.currentWebsiteDomain.value
+            val isBrowserWithDomain = WebsiteRepository.isKnownBrowser(currentApp) && websiteDomain != null
+            if (!isScheduled && isBrowserWithDomain && websiteDomain != null) {
+                isScheduled = checkSchedules("zenith-web:$websiteDomain")
+            }
+            if (isScheduled) return
 
             if (!isAppPaused && (allowedUntil == null || currentTime > allowedUntil)) {
                 val prefs = SharedMonitoringState.currentPreferences
-                if (shield != null || (prefs?.mindfulGatewayEnabled == true && !shouldBypassBlocking(currentApp))) {
+                if (shield != null || isBrowserWithDomain || (prefs?.mindfulGatewayEnabled == true && !shouldBypassBlocking(currentApp))) {
                     checkIfAppIsShielded(currentApp)
                 }
+            }
+        }
+        
+        // Check website shield when browser has a domain, but skip if the specific website grant is still active
+        val wd = AppStateHolder.currentWebsiteDomain.value
+        if (wd != null && WebsiteRepository.isKnownBrowser(currentApp) && !InterceptOverlayManager.isShowing) {
+            val websitePkg = "zenith-web:$wd"
+            val websiteGrant = allowedApps[websitePkg]
+            val hasActiveGrant = websiteGrant != null && System.currentTimeMillis() < websiteGrant
+            if (!hasActiveGrant) {
+                checkIfAppIsShielded(currentApp)
             }
         }
     }
@@ -1542,28 +1631,64 @@ class AppUsageMonitorService : Service() {
     private suspend fun checkIfAppIsShielded(targetPackageName: String) {
         if (targetPackageName in SharedMonitoringState.whitelistedPackages) return
 
-        val allowedUntil = allowedApps[targetPackageName] ?: 0L
-        if (System.currentTimeMillis() < allowedUntil) return
+        val websiteDomain = AppStateHolder.currentWebsiteDomain.value
+        val isWebsite = WebsiteRepository.isKnownBrowser(targetPackageName) && websiteDomain != null
 
-        if (InterceptOverlayManager.isShowing && InterceptOverlayManager.currentPackage == targetPackageName) return
+        // Don't skip website checks when browser is delayed — website shield is independent
+        if (!isWebsite) {
+            val allowedUntil = allowedApps[targetPackageName] ?: 0L
+            if (System.currentTimeMillis() < allowedUntil) return
+        }
 
-        if (targetPackageName == InterceptOverlayManager.lastKickedPackage && System.currentTimeMillis() - InterceptOverlayManager.lastKickTime < 500) return
+        var actualTargetPackage = if (isWebsite && websiteDomain != null) {
+            "zenith-web:$websiteDomain"
+        } else {
+            targetPackageName
+        }
+
+        if (InterceptOverlayManager.isShowing && InterceptOverlayManager.currentPackage == actualTargetPackage) return
+
+        if (actualTargetPackage == InterceptOverlayManager.lastKickedPackage && System.currentTimeMillis() - InterceptOverlayManager.lastKickTime < 500) return
 
         val currentForeground = getForegroundApp() ?: lastForegroundApp
-        if (targetPackageName != currentForeground && targetPackageName != lastForegroundApp) return
+        if (!isWebsite && actualTargetPackage != currentForeground && actualTargetPackage != lastForegroundApp) return
+        if (isWebsite && currentForeground != null && !WebsiteRepository.isKnownBrowser(currentForeground)) return
 
-        val shield = if (currentShieldCache?.packageName == targetPackageName) {
+        var shield = if (currentShieldCache?.packageName == actualTargetPackage) {
             currentShieldCache
         } else {
-            SharedMonitoringState.allShieldsCache[targetPackageName]
+            SharedMonitoringState.allShieldsCache[actualTargetPackage]
         }
+
+        if (shield != null && isWebsite && actualTargetPackage.startsWith("zenith-web:")) {
+            val websiteAllowedUntil = allowedApps[actualTargetPackage] ?: 0L
+            if (System.currentTimeMillis() < websiteAllowedUntil) {
+                sessionUsageOverlayManager.updateForegroundApp(actualTargetPackage)
+                return
+            }
+        }
+
+        // Fallback: If the website is not shielded but the browser itself is, enforce the browser shield.
+        if (shield == null && isWebsite) {
+            val browserAllowedUntil = allowedApps[targetPackageName] ?: 0L
+            if (System.currentTimeMillis() < browserAllowedUntil) {
+                return
+            }
+            actualTargetPackage = targetPackageName
+            shield = SharedMonitoringState.allShieldsCache[targetPackageName]
+        }
+
+        // Skip if the resolved target package is currently allowed (timer active)
+        val activeAllowedUntil = allowedApps[actualTargetPackage] ?: 0L
+        if (System.currentTimeMillis() < activeAllowedUntil) return
+
         val prefs = SharedMonitoringState.currentPreferences ?: return
-        val isMindfulGateway = shield == null && prefs.mindfulGatewayEnabled && !shouldBypassBlocking(targetPackageName)
-        val appName = shield?.appName ?: overlayActionHandler.getAppName(targetPackageName)
-        val effectiveShield = if (isMindfulGateway) overlayActionHandler.getMindfulShield(targetPackageName, appName) else shield
+        val isMindfulGateway = shield == null && prefs.mindfulGatewayEnabled && !shouldBypassBlocking(actualTargetPackage)
+        val appName = shield?.appName ?: overlayActionHandler.getAppName(actualTargetPackage)
+        val effectiveShield = if (isMindfulGateway) overlayActionHandler.getMindfulShield(actualTargetPackage, appName) else shield
 
         if (effectiveShield != null && !InterceptOverlayManager.isShowing) {
-            if (effectiveShield.type == FocusType.GOAL) {
+            if (effectiveShield.type == FocusType.GOAL && !isWebsite) {
                 if (!SharedMonitoringState.notifiedGoals.contains(targetPackageName)) {
                     updateUsageTime(targetPackageName)
                     com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
@@ -1571,16 +1696,22 @@ class AppUsageMonitorService : Service() {
                     SharedMonitoringState.lastDailyUsageFetchTime = 0L
                 }
             }
-            var totalUsageToday = getTotalUsageToday(targetPackageName)
+            var totalUsageToday = if (isWebsite && actualTargetPackage.startsWith("zenith-web:")) 0L else getTotalUsageToday(targetPackageName)
             val totalGlobalUsageToday = getTotalGlobalUsageToday()
             val delayDurationSeconds = if (isMindfulGateway) 0 else prefs.delayAppDurationSeconds
 
+            if (actualTargetPackage.startsWith("zenith-web:")) {
+                AppStateHolder.lastBrowserPackage = targetPackageName
+                sessionUsageOverlayManager.updateForegroundApp(actualTargetPackage)
+                overlayActionHandler.pauseBrowserSession(targetPackageName)
+            }
+
             if (effectiveShield.type == FocusType.GOAL) {
                 val limitMillis = effectiveShield.timeLimitMinutes * 60 * 1000L
-                if (SharedMonitoringState.notifiedGoals.contains(targetPackageName)) {
+                if (SharedMonitoringState.notifiedGoals.contains(actualTargetPackage)) {
                     totalUsageToday = limitMillis
                 } else {
-                    val hudSeconds = sessionUsageOverlayManager.getHUDElapsedSeconds(targetPackageName)
+                    val hudSeconds = sessionUsageOverlayManager.getHUDElapsedSeconds(actualTargetPackage)
                     if (hudSeconds != null) {
                         val hudMillis = hudSeconds * 1000L
                         if (hudMillis > totalUsageToday) {
@@ -1588,7 +1719,7 @@ class AppUsageMonitorService : Service() {
                         }
                     }
                     if (totalUsageToday >= limitMillis) {
-                        SharedMonitoringState.notifiedGoals.add(targetPackageName)
+                        SharedMonitoringState.notifiedGoals.add(actualTargetPackage)
                     }
                 }
             }
@@ -1596,7 +1727,7 @@ class AppUsageMonitorService : Service() {
             currentShieldCache = if (isMindfulGateway) null else effectiveShield
 
             overlayActionHandler.showShieldOverlay(
-                targetPackageName = targetPackageName,
+                targetPackageName = actualTargetPackage,
                 shield = effectiveShield,
                 isMindfulGateway = isMindfulGateway,
                 delayDurationSeconds = delayDurationSeconds,
@@ -1604,8 +1735,10 @@ class AppUsageMonitorService : Service() {
                 totalGlobalUsageToday = totalGlobalUsageToday,
                 updateShieldCache = { updated -> currentShieldCache = updated },
                 getTotalUsageTodayFn = {
-                    if (effectiveShield.type == FocusType.GOAL && SharedMonitoringState.notifiedGoals.contains(targetPackageName)) {
+                    if (effectiveShield.type == FocusType.GOAL && SharedMonitoringState.notifiedGoals.contains(actualTargetPackage)) {
                         Long.MAX_VALUE
+                    } else if (isWebsite && actualTargetPackage.startsWith("zenith-web:")) {
+                        0L
                     } else {
                         updateUsageTime(targetPackageName)
                         com.etrisad.zenith.util.ScreenUsageHelper.clearCache()

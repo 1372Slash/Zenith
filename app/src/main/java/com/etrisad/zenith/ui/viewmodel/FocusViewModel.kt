@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.etrisad.zenith.data.website.TldSuggestions
+import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
@@ -15,6 +17,8 @@ import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +31,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+enum class PickerTab { APPS, WEBSITES }
 
 data class AppInfo(
     val packageName: String,
@@ -59,7 +65,12 @@ data class FocusUiState(
     val incentiveProgress: Float = 0f,
     val incentiveTier: IncentiveTier = IncentiveTier.UNLOCKED,
     val bonusUsesLeft: Int = 0,
-    val uninstalledShields: Set<String> = emptySet()
+    val uninstalledShields: Set<String> = emptySet(),
+    val pickerTab: PickerTab = PickerTab.APPS,
+    val websiteSearchQuery: String = "",
+    val websiteSuggestions: List<String> = emptyList(),
+    val websiteSuggestionsLoading: Boolean = false,
+    val selectedWebsiteUrl: String? = null
 )
 
 @OptIn(kotlinx.coroutines.FlowPreview::class)
@@ -75,6 +86,7 @@ class FocusViewModel(
     private val _allInstalledApps = MutableStateFlow<List<AppInfo>>(emptyList())
     private var allShields: List<ShieldEntity> = emptyList()
     private var loadAppsJob: kotlinx.coroutines.Job? = null
+    private var websiteValidationJob: kotlinx.coroutines.Job? = null
     private var dismissedUninstalledApps: Map<String, String> = emptyMap()
 
     init {
@@ -315,6 +327,7 @@ class FocusViewModel(
         val uninstalled = allShields
             .map { it.packageName }
             .filter { pkg -> pkg !in installedPkgs }
+            .filter { pkg -> !WebsiteRepository.isWebsitePackageName(pkg) }
             .filter { pkg -> dismissedUninstalledApps[pkg] != todayStr }
             .toSet()
         _uiState.update { it.copy(uninstalledShields = uninstalled) }
@@ -339,6 +352,68 @@ class FocusViewModel(
     fun onSearchQueryChange(query: String) {
         _uiState.value = _uiState.value.copy(searchQuery = query)
         updateInstalledAppsFilter()
+    }
+
+    fun setPickerTab(tab: PickerTab) {
+        websiteValidationJob?.cancel()
+        _uiState.value = _uiState.value.copy(pickerTab = tab, websiteSearchQuery = "", websiteSuggestions = emptyList(), websiteSuggestionsLoading = false)
+    }
+
+    fun onWebsiteSearchQueryChange(query: String) {
+        websiteValidationJob?.cancel()
+        val suggestions = if (query.isBlank()) emptyList() else TldSuggestions.suggest(query)
+        _uiState.value = _uiState.value.copy(
+            websiteSearchQuery = query,
+            websiteSuggestions = suggestions,
+            websiteSuggestionsLoading = query.isNotBlank()
+        )
+        if (query.isBlank()) return
+        websiteValidationJob = viewModelScope.launch {
+            delay(3000)
+            if (com.etrisad.zenith.BuildConfig.SHOW_UPDATES) {
+                withContext(Dispatchers.IO) {
+                    val client = okhttp3.OkHttpClient.Builder()
+                        .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                        .readTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                        .followRedirects(true)
+                        .build()
+                    val deferreds = suggestions.map { domain ->
+                        async {
+                            val ok = try {
+                                val request = okhttp3.Request.Builder().url("https://$domain").build()
+                                client.newCall(request).execute().use { it.isSuccessful }
+                            } catch (_: Exception) {
+                                false
+                            }
+                            Pair(domain, ok)
+                        }
+                    }
+                    val reachable = deferreds.awaitAll().filter { it.second }.map { it.first }
+                    _uiState.value = _uiState.value.copy(
+                        websiteSuggestions = if (reachable.isNotEmpty()) reachable else suggestions,
+                        websiteSuggestionsLoading = false
+                    )
+                }
+            } else {
+                _uiState.value = _uiState.value.copy(websiteSuggestionsLoading = false)
+            }
+        }
+    }
+
+    fun confirmWebsite(domain: String) {
+        websiteValidationJob?.cancel()
+        val fullUrl = WebsiteRepository.normalizeUrl(domain)
+        val domainOnly = WebsiteRepository.extractDomain(domain)
+        val displayName = WebsiteRepository.getDisplayName(domainOnly, fullUrl)
+        val packageName = WebsiteRepository.createPackageName(domainOnly)
+        val app = AppInfo(packageName = packageName, appName = displayName)
+        _uiState.value = _uiState.value.copy(
+            websiteSearchQuery = "",
+            websiteSuggestions = emptyList(),
+            websiteSuggestionsLoading = false,
+            selectedWebsiteUrl = fullUrl
+        )
+        selectAppForFocus(app, _uiState.value.selectedFocusType)
     }
 
     fun selectAppForFocus(app: AppInfo?, type: FocusType) {
@@ -371,6 +446,12 @@ class FocusViewModel(
         )
     }
 
+    fun confirmWebsiteForSchedule(domain: String) {
+        val domainOnly = WebsiteRepository.extractDomain(domain)
+        val packageName = WebsiteRepository.createPackageName(domainOnly)
+        toggleAppSelectionForSchedule(packageName)
+    }
+
     fun toggleAppSelectionForSchedule(packageName: String) {
         val current = _uiState.value.selectedAppsForSchedule
         val newSelection = if (packageName in current) {
@@ -390,7 +471,7 @@ class FocusViewModel(
     }
 
     fun closeSchedulePicker() {
-        _uiState.value = _uiState.value.copy(isSchedulePickerOpen = false)
+        _uiState.value = _uiState.value.copy(isSchedulePickerOpen = false, pickerTab = PickerTab.APPS, websiteSearchQuery = "", websiteSuggestions = emptyList(), websiteSuggestionsLoading = false)
     }
 
     fun closeScheduleSettings() {
@@ -468,7 +549,8 @@ class FocusViewModel(
     fun closeSettingsSheet() {
         _uiState.value = _uiState.value.copy(
             isSettingsSheetOpen = false,
-            selectedAppForFocus = null
+            selectedAppForFocus = null,
+            selectedWebsiteUrl = null
         )
     }
 
@@ -487,9 +569,12 @@ class FocusViewModel(
         isGoalCallerEnabled: Boolean = false,
         isGoalCallerSoundEnabled: Boolean = true,
         goalCallerSoundUri: String? = null,
-        limitPeriod: LimitPeriod = LimitPeriod.DAILY
+        limitPeriod: LimitPeriod = LimitPeriod.DAILY,
+        url: String? = null
     ) {
         val type = _uiState.value.selectedFocusType
+        val isWebsite = WebsiteRepository.isWebsitePackageName(packageName)
+        val websiteUrl = if (isWebsite) (url ?: _uiState.value.selectedWebsiteUrl) else null
         viewModelScope.launch {
             try {
                 val existing = allShields.find { it.packageName == packageName }
@@ -535,7 +620,9 @@ class FocusViewModel(
                     isPaused = existing?.isPaused ?: false,
                     pauseEndTimestamp = existing?.pauseEndTimestamp ?: 0L,
                     lastDelayStartTimestamp = existing?.lastDelayStartTimestamp ?: 0L,
-                    timeAdded = existing?.timeAdded?.takeIf { it > 0L } ?: System.currentTimeMillis()
+                    timeAdded = existing?.timeAdded?.takeIf { it > 0L } ?: System.currentTimeMillis(),
+                    isWebsite = isWebsite,
+                    url = websiteUrl
                 )
                 shieldRepository.insertShield(shield); com.etrisad.zenith.service.SharedMonitoringState.notifiedGoals.remove(packageName)
             } catch (e: Exception) {

@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
+import com.etrisad.zenith.ui.components.focus.appIconShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
@@ -480,13 +481,21 @@ fun AppHeader(
             .padding(top = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        val isWebsite = com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(packageName)
+        val detailIconShape = appIconShape(isWebsite)
         Box(contentAlignment = Alignment.Center) {
             SubcomposeAsyncImage(
                 model = "app-icon://$packageName",
                 contentDescription = null,
                 modifier = Modifier
                     .size(80.dp)
-                    .clip(CircleShape),
+                    .then(
+                        if (isWebsite) Modifier.background(
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            detailIconShape
+                        ) else Modifier
+                    )
+                    .clip(detailIconShape),
                 contentScale = ContentScale.Crop,
                 colorFilter = colorFilter,
                 alpha = iconAlpha,
@@ -494,12 +503,12 @@ fun AppHeader(
                     Box(
                         modifier = Modifier
                             .size(80.dp)
-                            .clip(CircleShape)
+                            .clip(detailIconShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Android,
+                            imageVector = if (isWebsite) Icons.Outlined.Language else Icons.Outlined.Android,
                             contentDescription = null,
                             modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = iconAlpha)

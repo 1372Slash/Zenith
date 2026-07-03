@@ -521,7 +521,8 @@ private fun PiechartDetail(preferences: UserPreferences, metadata: BackupUtils.B
                                 contentDescription = null,
                                 modifier = Modifier.fillMaxSize(),
                                 error = {
-                                    Icon(Icons.Outlined.Android, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.outline)
+                                    val isWebsite = pkg.startsWith("zenith-web:")
+                                    Icon(if (isWebsite) Icons.Outlined.Language else Icons.Outlined.Android, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.outline)
                                 }
                             )
                         }

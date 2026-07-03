@@ -826,7 +826,14 @@ class UserPreferencesRepository(private val context: Context) {
                 return@forEach
             }
 
-            val dailyTodayUsage = todayUsageMap[pkg] ?: 0L
+            val timeAddedDateStr = if (shield.isWebsite) dateFormat.format(Date(shield.timeAdded)) else null
+
+            val dailyTodayUsage = if (shield.isWebsite && timeAddedDateStr != null) {
+                val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(pkg)
+                shieldRepository.getWebsiteUsage(todayStr, domain)?.usageTimeMillis ?: 0L
+            } else {
+                todayUsageMap[pkg] ?: 0L
+            }
             val todayUsage = if (isWeekly) {
                 shieldRepository.getWeeklyUsageLive(pkg, dailyTodayUsage)
             } else {
@@ -850,6 +857,7 @@ class UserPreferencesRepository(private val context: Context) {
                     weekCal.add(Calendar.DAY_OF_YEAR, -7)
                     if (shield.lastStreakUpdateTimestamp == 0L && shield.currentStreak == 0) break
                     val weekStartStr = dateFormat.format(weekCal.time)
+                    if (timeAddedDateStr != null && weekStartStr.compareTo(timeAddedDateStr) < 0) break
                     val weekEnd = Calendar.getInstance().apply { timeInMillis = weekCal.timeInMillis; add(Calendar.DAY_OF_YEAR, 6) }
                     val weekEndStr = dateFormat.format(weekEnd.time)
                     var weekTotal = history.filter { it.date >= weekStartStr && it.date <= weekEndStr }.sumOf { it.usageTimeMillis }
@@ -878,6 +886,7 @@ class UserPreferencesRepository(private val context: Context) {
                     c.timeInMillis = todayStart; c.add(Calendar.DAY_OF_YEAR, -i)
                     if (shield.lastStreakUpdateTimestamp == 0L && shield.currentStreak == 0) break
                     val dStr = dateFormat.format(c.time)
+                    if (timeAddedDateStr != null && dStr.compareTo(timeAddedDateStr) < 0) break
                     var usage = history.find { it.date == dStr }?.usageTimeMillis
 
                     if (usage == null) {
@@ -897,7 +906,9 @@ class UserPreferencesRepository(private val context: Context) {
                 }
             }
 
-            val isSuccessToday = if (shield.type == FocusType.GOAL) todayUsage >= limitMillis else todayUsage <= limitMillis
+            val isSuccessToday = if (shield.isWebsite && timeAddedDateStr == todayStr && todayUsage == 0L) {
+                false
+            } else if (shield.type == FocusType.GOAL) todayUsage >= limitMillis else todayUsage <= limitMillis
 
             if (isWeekly) {
                 val thisMonday = Calendar.getInstance().apply {
@@ -934,7 +945,7 @@ class UserPreferencesRepository(private val context: Context) {
                 var bestStreak = shield.bestStreak
                 var tempStreak = 0
                 try {
-                    val startDateStr = oldestHistoryDate ?: todayStr
+                    val startDateStr = if (shield.isWebsite && timeAddedDateStr != null) timeAddedDateStr else (oldestHistoryDate ?: todayStr)
                     val startD = dateFormat.parse(startDateStr) ?: Date()
                     val todayDate = dateFormat.parse(todayStr) ?: Date()
 
@@ -996,7 +1007,7 @@ class UserPreferencesRepository(private val context: Context) {
                 var tempStreak = 0
                 val calendarForBest = Calendar.getInstance()
                 try {
-                    val startDateStr = oldestHistoryDate ?: todayStr
+                    val startDateStr = if (shield.isWebsite && timeAddedDateStr != null) timeAddedDateStr else (oldestHistoryDate ?: todayStr)
                     val startD = dateFormat.parse(startDateStr) ?: Date()
                     calendarForBest.time = startD
                     val todayDate = dateFormat.parse(todayStr) ?: Date()

@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.core.net.toUri
 import com.etrisad.zenith.ZenithApplication
 import com.etrisad.zenith.data.preferences.ThemeConfig
+import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.ui.components.AppGoalOverlayContent
 import com.etrisad.zenith.ui.theme.ZenithTheme
@@ -76,11 +77,24 @@ class AppGoalOverlayActivity : ComponentActivity() {
                 AppGoalOverlayContent(
                     packageNames = activePackageNames,
                     onAnswer = { pkg ->
-                        val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
-                        if (launchIntent != null) {
-                            startActivity(launchIntent)
+                        if (WebsiteRepository.isWebsitePackageName(pkg)) {
+                            val shieldRepo = (application as ZenithApplication).shieldRepository
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                val shield = shieldRepo.getShieldByPackageName(pkg)
+                                val url = shield?.url ?: "https://${WebsiteRepository.extractDomainFromPackageName(pkg)}"
+                                val intent = WebsiteRepository.createLaunchIntent(url)
+                                withContext(Dispatchers.Main) {
+                                    startActivity(intent)
+                                    finish()
+                                }
+                            }
+                        } else {
+                            val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
+                            if (launchIntent != null) {
+                                startActivity(launchIntent)
+                            }
+                            finish()
                         }
-                        finish()
                     },
                     onSnooze = {
                         val shieldRepo = (application as com.etrisad.zenith.ZenithApplication).shieldRepository

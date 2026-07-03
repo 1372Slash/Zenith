@@ -38,6 +38,8 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.etrisad.zenith.data.preferences.FontOption
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.data.website.WebsiteRepository
+import com.etrisad.zenith.service.AppStateHolder
 import com.etrisad.zenith.ui.components.TooltipArrowPosition
 import com.etrisad.zenith.ui.components.ZenithTooltipBox
 import com.etrisad.zenith.ui.theme.GSFlexSettings
@@ -110,6 +112,8 @@ class SessionUsageOverlayManager(
         var backgroundTimestamp: Long = 0L
         @Volatile
         var lastReportedUsageSeconds: Int = initialSeconds
+        @Volatile
+        var isTimerPaused: Boolean = false
     }
 
     companion object {
@@ -154,8 +158,13 @@ class SessionUsageOverlayManager(
             )
             activeSessions.add(session)
 
-            val isForeground = currentForegroundPackage.contains(packageName) ||
-                    packageName.contains(currentForegroundPackage)
+            val isWebsiteSession = packageName.startsWith(WebsiteRepository.WEBSITE_PREFIX)
+            val isForeground = if (isWebsiteSession) {
+                WebsiteRepository.isKnownBrowser(currentForegroundPackage) &&
+                        AppStateHolder.currentWebsiteDomain.value == packageName.removePrefix(WebsiteRepository.WEBSITE_PREFIX)
+            } else {
+                currentForegroundPackage == packageName || currentForegroundPackage.startsWith("$packageName.")
+            }
             if ((isForeground || isGoal) && session.hudInstance == null) {
                 session.hudInstance = createHUDInstance(session)
             }
@@ -186,6 +195,11 @@ class SessionUsageOverlayManager(
                     }
 
                     delay(updateInterval)
+
+                    if (session.isTimerPaused) {
+                        lastUpdateMillis = System.currentTimeMillis()
+                        continue
+                    }
 
                     if (session.backgroundTimestamp != 0L &&
                         System.currentTimeMillis() - session.backgroundTimestamp > 300000L) {
@@ -234,6 +248,29 @@ class SessionUsageOverlayManager(
         }
     }
 
+    fun pauseAllSessions() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { pauseAllSessions() }
+            return
+        }
+        synchronized(activeSessions) {
+            val now = System.currentTimeMillis()
+            activeSessions.forEach { session ->
+                session.isTimerPaused = true
+                session.isVisibleState.value = false
+                session.hudInstance?.let {
+                    destroyHUDInstance(it, session.packageName)
+                    session.hudInstance = null
+                }
+                if (session.backgroundTimestamp == 0L) {
+                    session.backgroundTimestamp = now
+                }
+                session.timerJob?.cancel()
+                session.timerJob = null
+            }
+        }
+    }
+
     fun destroy() {
         destroyAllHUDs()
         scope.cancel()
@@ -247,10 +284,14 @@ class SessionUsageOverlayManager(
             return
         }
         synchronized(activeSessions) {
+            val now = System.currentTimeMillis()
             activeSessions.forEach { session ->
                 session.hudInstance?.let { destroyHUDInstance(it, session.packageName) }
                 session.hudInstance = null
                 session.isVisibleState.value = false
+                if (session.backgroundTimestamp == 0L) {
+                    session.backgroundTimestamp = now
+                }
             }
         }
     }
@@ -261,13 +302,26 @@ class SessionUsageOverlayManager(
             return
         }
         synchronized(activeSessions) {
+            val now = System.currentTimeMillis()
             activeSessions.forEach { session ->
-                session.isVisibleState.value = true
-                session.backgroundTimestamp = 0L
-                if (session.hudInstance == null && !session.isTemporarilyHiddenState.value &&
-                    ((!session.isGoal && session.secondsLeftState.intValue > 0) ||
-                     (session.isGoal && session.secondsElapsedState.intValue < session.totalSeconds))) {
-                    session.hudInstance = createHUDInstance(session)
+                val isWebsiteSession = session.packageName.startsWith("zenith-web:")
+                val isBrowserForWebsite = isWebsiteSession &&
+                        WebsiteRepository.isKnownBrowser(currentForegroundPackage) &&
+                        AppStateHolder.currentWebsiteDomain.value == session.packageName.removePrefix(WebsiteRepository.WEBSITE_PREFIX)
+                val isForeground = currentForegroundPackage.isNotEmpty() &&
+                    (currentForegroundPackage == session.packageName || isBrowserForWebsite || currentForegroundPackage.startsWith("${session.packageName}."))
+                if (isForeground) {
+                    session.isVisibleState.value = true
+                    session.backgroundTimestamp = 0L
+                    if (session.hudInstance == null && !session.isTemporarilyHiddenState.value &&
+                        ((!session.isGoal && session.secondsLeftState.intValue > 0) ||
+                         (session.isGoal && session.secondsElapsedState.intValue < session.totalSeconds))) {
+                        session.hudInstance = createHUDInstance(session)
+                    }
+                } else {
+                    if (session.backgroundTimestamp == 0L) {
+                        session.backgroundTimestamp = now
+                    }
                 }
             }
         }
@@ -449,7 +503,12 @@ class SessionUsageOverlayManager(
     fun ensureSessionHUDActive(packageName: String) {
         if (packageName.isEmpty() || SYSTEM_UI_PACKAGES.contains(packageName)) return
         synchronized(activeSessions) {
-            val session = activeSessions.find { it.packageName == packageName }
+            var session = activeSessions.find { it.packageName == packageName }
+            if (session == null && WebsiteRepository.isKnownBrowser(packageName)) {
+                val activeWebsitePackage = AppStateHolder.currentWebsiteDomain.value
+                    ?.let { WebsiteRepository.createPackageName(it) }
+                session = activeSessions.find { it.packageName == activeWebsitePackage }
+            }
             session?.let {
                 it.isVisibleState.value = true
                 it.backgroundTimestamp = 0L
@@ -472,6 +531,35 @@ class SessionUsageOverlayManager(
         }
     }
 
+    fun pauseSessionTimer(packageName: String) {
+        synchronized(activeSessions) {
+            activeSessions.find { it.packageName == packageName }?.let { session ->
+                session.isTimerPaused = true
+                session.hudInstance?.let {
+                    destroyHUDInstance(it, session.packageName)
+                    session.hudInstance = null
+                }
+                session.isVisibleState.value = false
+            }
+        }
+    }
+
+    fun resumeSessionTimer(packageName: String) {
+        synchronized(activeSessions) {
+            activeSessions.find { it.packageName == packageName }?.let { session ->
+                session.isTimerPaused = false
+                session.backgroundTimestamp = 0L
+            }
+        }
+        ensureSessionHUDActive(packageName)
+    }
+
+    fun hasActiveSession(packageName: String): Boolean {
+        synchronized(activeSessions) {
+            return activeSessions.any { it.packageName == packageName }
+        }
+    }
+
     fun getHUDElapsedSeconds(packageName: String): Int? {
         synchronized(activeSessions) {
             return activeSessions.find { it.packageName == packageName && it.isGoal }
@@ -488,8 +576,12 @@ class SessionUsageOverlayManager(
         foregroundUpdateJob = managerScope.launch {
             val sessionsToProcess = synchronized(activeSessions) { activeSessions.toList() }
             sessionsToProcess.forEach { session ->
+                val isWebsiteSession = session.packageName.startsWith("zenith-web:")
+                val isBrowserForWebsite = isWebsiteSession &&
+                        WebsiteRepository.isKnownBrowser(packageName) &&
+                        AppStateHolder.currentWebsiteDomain.value == session.packageName.removePrefix(WebsiteRepository.WEBSITE_PREFIX)
                 val isForeground = packageName.isNotEmpty() &&
-                                 (packageName == session.packageName || packageName.startsWith("${session.packageName}."))
+                                 (packageName == session.packageName || isBrowserForWebsite || packageName.startsWith("${session.packageName}."))
                 
                 if (isForeground) {
                     session.backgroundTimestamp = 0L

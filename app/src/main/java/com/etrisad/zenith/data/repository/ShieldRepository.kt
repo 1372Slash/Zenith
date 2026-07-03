@@ -4,12 +4,14 @@ import com.etrisad.zenith.data.local.dao.DailyUsageDao
 import com.etrisad.zenith.data.local.dao.HourlyUsageDao
 import com.etrisad.zenith.data.local.dao.ScheduleDao
 import com.etrisad.zenith.data.local.dao.ShieldDao
+import com.etrisad.zenith.data.local.dao.WebsiteUsageDao
 import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.local.entity.DailyUsageEntity
 import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
+import com.etrisad.zenith.data.local.entity.WebsiteUsageEntity
 import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import kotlinx.coroutines.CoroutineScope
@@ -32,6 +34,7 @@ class ShieldRepository(
     private val scheduleDao: ScheduleDao,
     private val dailyUsageDao: DailyUsageDao,
     private val hourlyUsageDao: HourlyUsageDao,
+    private val websiteUsageDao: WebsiteUsageDao,
     private val database: ZenithDatabase,
     private val userPreferencesRepository: UserPreferencesRepository
 ) {
@@ -227,6 +230,34 @@ class ShieldRepository(
 
     suspend fun getScheduleById(id: Long): ScheduleEntity? {
         return scheduleDao.getScheduleById(id)
+    }
+
+    suspend fun getWebsiteUsage(date: String, domain: String): WebsiteUsageEntity? {
+        return websiteUsageDao.getUsageByDateAndDomain(date, domain)
+    }
+
+    fun getWebsiteUsageFlow(date: String, domain: String): Flow<WebsiteUsageEntity?> {
+        return websiteUsageDao.getUsageByDateAndDomainFlow(date, domain)
+    }
+
+    fun getWebsiteUsageForDate(date: String): Flow<List<WebsiteUsageEntity>> {
+        return websiteUsageDao.getUsageForDate(date)
+    }
+
+    suspend fun getWebsiteTotalUsageSince(domain: String, sinceDate: String): Long {
+        return websiteUsageDao.getTotalUsageSince(domain, sinceDate) ?: 0L
+    }
+
+    fun getWebsiteUsageForDomain(domain: String): Flow<List<WebsiteUsageEntity>> {
+        return websiteUsageDao.getUsageForDomain(domain)
+    }
+
+    suspend fun insertWebsiteUsage(usage: WebsiteUsageEntity) {
+        websiteUsageDao.insertUsage(usage)
+    }
+
+    suspend fun deleteOldWebsiteUsage(thresholdDate: String) {
+        websiteUsageDao.deleteOldUsage(thresholdDate)
     }
 
     suspend fun consumeIncentiveBonusUse(): Boolean {

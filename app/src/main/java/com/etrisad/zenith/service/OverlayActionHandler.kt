@@ -5,9 +5,11 @@ import android.content.pm.PackageManager
 import android.util.Log
 import android.view.inputmethod.InputMethodManager
 import com.etrisad.zenith.data.local.entity.FocusType
+import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.local.entity.ShieldEntity
+import com.etrisad.zenith.data.local.entity.WebsiteUsageEntity
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.ui.components.overlay.SessionUsageOverlayManager
 import com.etrisad.zenith.service.AppStateHolder
@@ -15,7 +17,10 @@ import com.etrisad.zenith.util.ScreenUsageHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 class OverlayActionHandler(
@@ -37,11 +42,21 @@ class OverlayActionHandler(
     private val reusableCalendar = Calendar.getInstance()
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val allowedSessionHandlers = ConcurrentHashMap<String, Runnable>()
+    private val pausedBrowserSessions = ConcurrentHashMap<String, Long>()
+    private val websiteDismissHandlers = ConcurrentHashMap<String, Runnable>()
+    private val pausedWebsiteSessions = ConcurrentHashMap<String, Long>()
+
+    private companion object {
+        private const val WEBSITE_DISMISS_GRACE_MS = 60_000L
+    }
 
     fun cancelPendingTimers() {
         Log.d("Zenith_SCREEN", "OverlayActionHandler: cancelling ${allowedSessionHandlers.size} pending timers")
         allowedSessionHandlers.values.forEach { mainHandler.removeCallbacks(it) }
         allowedSessionHandlers.clear()
+        websiteDismissHandlers.values.forEach { mainHandler.removeCallbacks(it) }
+        websiteDismissHandlers.clear()
+        pausedWebsiteSessions.clear()
     }
 
     private var keyboardPackages = emptySet<String>()
@@ -131,6 +146,16 @@ class OverlayActionHandler(
         }
         val shieldWithTimestamp = processDelayForShield(shield, isMindfulGateway, delayDurationSeconds, targetPackageName)
 
+        if (targetPackageName.startsWith("zenith-web:")) {
+            AppStateHolder.let { holder ->
+                if (holder.lastBrowserPackage != null) {
+                    scope.launch(Dispatchers.Main) {
+                        sessionUsageOverlayManager.updateForegroundApp(targetPackageName)
+                    }
+                }
+            }
+        }
+
         scope.launch(Dispatchers.Main) {
             overlayManager.showOverlay(
                 packageName = targetPackageName,
@@ -176,18 +201,7 @@ class OverlayActionHandler(
                                     initialSeconds = currentUsageSeconds,
                                     onSessionEnd = {
                                         allowedApps.remove(targetPackageName)
-                                        this@OverlayActionHandler.scope.launch {
-                                            val s = SharedMonitoringState.allShieldsCache[targetPackageName]
-                                                ?: mindfulGatewayStates[targetPackageName]
-                                                ?: shieldRepository.getShieldByPackageName(targetPackageName)
-                                            if (s?.isAutoQuitEnabled == true) {
-                                                if (getForegroundAppName() == targetPackageName) {
-                                                    goToHomeScreen()
-                                                }
-                                            } else {
-                                                recheckShield(targetPackageName)
-                                            }
-                                        }
+                                        restoreBrowserFromWebsite()
                                     }
                                 )
                                 sessionUsageOverlayManager.updateHUDUsage(targetPackageName, currentUsage)
@@ -196,6 +210,19 @@ class OverlayActionHandler(
                     }
                 }
             )
+        }
+    }
+
+    fun restoreBrowserFromWebsite() {
+        val browserPkg = AppStateHolder.lastBrowserPackage
+        val fg = getForegroundAppName()
+        if (browserPkg != null && (fg == browserPkg || (fg != null && com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(fg)))) {
+            scope.launch(Dispatchers.Main) {
+                sessionUsageOverlayManager.updateForegroundApp(browserPkg)
+            }
+            if (!resumeBrowserSession(browserPkg)) {
+                recheckShield(browserPkg)
+            }
         }
     }
 
@@ -240,60 +267,18 @@ class OverlayActionHandler(
         val currentTimeOnAllow = System.currentTimeMillis()
         val endTime = currentTimeOnAllow + (minutes * 60 * 1000L)
         allowedApps[targetPackageName] = endTime
+        postSessionTimer(targetPackageName, endTime, minutes * 60 * 1000L)
 
-        allowedSessionHandlers[targetPackageName]?.let { mainHandler.removeCallbacks(it) }
-        val runnable = Runnable {
-            Log.d("Zenith_BT", "Timer FIRED for $targetPackageName")
-            if (!AppStateHolder.isScreenOn.value) {
-                Log.d("Zenith_BT", "Timer EXIT: screen OFF for $targetPackageName")
-                return@Runnable
+        // Website grant also grants the browser directly (stored as paused).
+        // When user leaves the domain, the browser grant resumes automatically.
+        if (targetPackageName.startsWith("zenith-web:")) {
+            cancelWebsiteSessionDismiss(targetPackageName)
+            val browserPkg = AppStateHolder.lastBrowserPackage
+            if (browserPkg != null && !pausedBrowserSessions.containsKey(browserPkg)) {
+                pausedBrowserSessions[browserPkg] = minutes * 60 * 1000L
             }
-            val entryEndTime = allowedApps[targetPackageName]
-            if (entryEndTime == null) {
-                Log.d("Zenith_BT", "Timer EXIT: no allowedApps entry for $targetPackageName")
-                return@Runnable
-            }
-            if (allowedApps[targetPackageName] != entryEndTime) {
-                Log.d("Zenith_BT", "Timer EXIT: entry replaced for $targetPackageName")
-                return@Runnable
-            }
-            val fg = getForegroundAppName()
-            if (fg != targetPackageName) {
-                Log.d("Zenith_BT", "Timer EXIT: foreground mismatch for $targetPackageName (fg=$fg)")
-                return@Runnable
-            }
-            allowedApps.remove(targetPackageName)
-            val s = SharedMonitoringState.allShieldsCache[targetPackageName]
-            val mindful = mindfulGatewayStates[targetPackageName]
-            val shield = s ?: mindful
-            if (shield == null) {
-                Log.d("Zenith_BT", "Timer EXIT: shield not found for $targetPackageName")
-                return@Runnable
-            }
-            Log.d("Zenith_BT", "Timer EXECUTING action for $targetPackageName (autoQuit=${shield.isAutoQuitEnabled})")
-            if (shield.isAutoQuitEnabled) {
-                goToHomeScreen()
-            } else {
-                showShieldOverlay(
-                    targetPackageName = targetPackageName,
-                    shield = shield,
-                    isMindfulGateway = mindful != null,
-                    delayDurationSeconds = 0,
-                    totalUsageToday = getTotalUsageToday(targetPackageName),
-                    totalGlobalUsageToday = getTotalGlobalUsageToday(),
-                    updateShieldCache = {},
-                    getTotalUsageTodayFn = {
-                        if (shield.type == FocusType.GOAL && SharedMonitoringState.notifiedGoals.contains(targetPackageName)) {
-                            Long.MAX_VALUE
-                        } else {
-                            getTotalUsageToday(targetPackageName)
-                        }
-                    }
-                )
-            }
+            AppStateHolder.recordWebsiteSessionStart(targetPackageName)
         }
-        allowedSessionHandlers[targetPackageName] = runnable
-        mainHandler.postDelayed(runnable, minutes * 60 * 1000L)
 
         scope.launch {
             if (isMindfulGateway) {
@@ -314,27 +299,22 @@ class OverlayActionHandler(
                 mindfulGatewayStates[targetPackageName] = updatedMindful
             } else {
                 val currentShield = shieldRepository.getShieldByPackageName(targetPackageName)
-                val updatedShield = if (currentShield != null) {
-                    if (isEmergency) {
-                        val isFirstChargeUsed = currentShield.emergencyUseCount == currentShield.maxEmergencyUses
+                if (currentShield != null) {
+                    val updatedShield = if (isEmergency) {
                         currentShield.copy(
                             emergencyUseCount = (currentShield.emergencyUseCount - 1).coerceAtLeast(0),
-                            lastEmergencyRechargeTimestamp = if (isFirstChargeUsed) System.currentTimeMillis() else currentShield.lastEmergencyRechargeTimestamp,
+                            lastEmergencyRechargeTimestamp = if (currentShield.emergencyUseCount == currentShield.maxEmergencyUses) System.currentTimeMillis() else currentShield.lastEmergencyRechargeTimestamp,
                             lastDelayStartTimestamp = 0L,
                             lastSessionEndTimestamp = currentTimeOnAllow
                         )
                     } else {
-                        val periodExpired = System.currentTimeMillis() - currentShield.lastPeriodResetTimestamp > currentShield.refreshPeriodMinutes * 60 * 1000L
                         currentShield.copy(
-                            currentPeriodUses = if (periodExpired) 1 else currentShield.currentPeriodUses + 1,
-                            lastPeriodResetTimestamp = if (periodExpired) System.currentTimeMillis() else currentShield.lastPeriodResetTimestamp,
+                            currentPeriodUses = if (System.currentTimeMillis() - currentShield.lastPeriodResetTimestamp > currentShield.refreshPeriodMinutes * 60 * 1000L) 1 else currentShield.currentPeriodUses + 1,
+                            lastPeriodResetTimestamp = if (System.currentTimeMillis() - currentShield.lastPeriodResetTimestamp > currentShield.refreshPeriodMinutes * 60 * 1000L) System.currentTimeMillis() else currentShield.lastPeriodResetTimestamp,
                             lastDelayStartTimestamp = 0L,
                             lastSessionEndTimestamp = currentTimeOnAllow
                         )
                     }
-                } else null
-
-                if (updatedShield != null) {
                     shieldRepository.updateShield(updatedShield)
                     updateShieldCache(updatedShield)
                 }
@@ -364,18 +344,7 @@ class OverlayActionHandler(
                             initialSeconds = if (isGoal) currentUsageSeconds else 0,
                             onSessionEnd = {
                                 allowedApps.remove(targetPackageName)
-                                scope.launch {
-                                    val s = SharedMonitoringState.allShieldsCache[targetPackageName]
-                                        ?: mindfulGatewayStates[targetPackageName]
-                                        ?: shieldRepository.getShieldByPackageName(targetPackageName)
-                                    if (s?.isAutoQuitEnabled == true) {
-                                        if (getForegroundAppName() == targetPackageName) {
-                                            goToHomeScreen()
-                                        }
-                                    } else {
-                                        recheckShield(targetPackageName)
-                                    }
-                                }
+                                restoreBrowserFromWebsite()
                             }
                         )
                         if (isGoal) {
@@ -385,6 +354,294 @@ class OverlayActionHandler(
                 }
             }
         }
+    }
+
+    private fun postSessionTimer(packageName: String, endTime: Long, delayMs: Long) {
+        allowedSessionHandlers[packageName]?.let { mainHandler.removeCallbacks(it) }
+        val runnable = createSessionTimerRunnable(packageName, endTime)
+        mainHandler.postDelayed(runnable, delayMs)
+        allowedSessionHandlers[packageName] = runnable
+    }
+
+    private fun createSessionTimerRunnable(packageName: String, expectedEndTime: Long): Runnable {
+        return Runnable {
+            Log.d("Zenith_BT", "Timer FIRED for $packageName")
+            if (!AppStateHolder.isScreenOn.value) {
+                Log.d("Zenith_BT", "Timer EXIT: screen OFF for $packageName")
+                return@Runnable
+            }
+            val entryEndTime = allowedApps[packageName]
+            if (entryEndTime == null) {
+                Log.d("Zenith_BT", "Timer EXIT: no allowedApps entry for $packageName")
+                return@Runnable
+            }
+            if (allowedApps[packageName] != entryEndTime) {
+                Log.d("Zenith_BT", "Timer EXIT: entry replaced for $packageName")
+                return@Runnable
+            }
+            val fg = getForegroundAppName()
+            val isWebsitePackage = packageName.startsWith("zenith-web:")
+            if (isWebsitePackage) {
+                val activeDomain = AppStateHolder.currentWebsiteDomain.value
+                val sessionDomain = packageName.removePrefix("zenith-web:")
+                if (activeDomain != sessionDomain) {
+                    Log.d("Zenith_BT", "Timer EXIT: website changed for $packageName (active=$activeDomain)")
+                    allowedApps.remove(packageName)
+                    return@Runnable
+                }
+                if (fg == null || !com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(fg)) {
+                    Log.d("Zenith_BT", "Timer EXPIRE: browser not in foreground for $packageName (fg=$fg)")
+                    saveWebsiteSessionUsage(packageName)
+                    allowedApps.remove(packageName)
+                    scope.launch(Dispatchers.Main) {
+                        sessionUsageOverlayManager.hideHUD(packageName)
+                    }
+                    return@Runnable
+                }
+            } else if (fg != packageName) {
+                Log.d("Zenith_BT", "Timer EXIT: foreground mismatch for $packageName (fg=$fg)")
+                return@Runnable
+            }
+            // If another overlay is already showing, exit (prevent double overlays)
+            if (InterceptOverlayManager.isShowing && InterceptOverlayManager.currentPackage != packageName) {
+                Log.d("Zenith_BT", "Timer EXIT: overlay already showing for ${InterceptOverlayManager.currentPackage}")
+                return@Runnable
+            }
+            if (packageName.startsWith("zenith-web:")) {
+                saveWebsiteSessionUsage(packageName)
+            }
+            allowedApps.remove(packageName)
+            val s = SharedMonitoringState.allShieldsCache[packageName]
+            val mindful = mindfulGatewayStates[packageName]
+            val shield = s ?: mindful
+            if (shield == null) {
+                Log.d("Zenith_BT", "Timer EXIT: shield not found for $packageName")
+                return@Runnable
+            }
+            Log.d("Zenith_BT", "Timer EXECUTING action for $packageName (autoQuit=${shield.isAutoQuitEnabled})")
+            if (shield.isAutoQuitEnabled) {
+                goToHomeScreen()
+            } else {
+                showShieldOverlay(
+                    targetPackageName = packageName,
+                    shield = shield,
+                    isMindfulGateway = mindful != null,
+                    delayDurationSeconds = 0,
+                    totalUsageToday = getTotalUsageToday(packageName),
+                    totalGlobalUsageToday = getTotalGlobalUsageToday(),
+                    updateShieldCache = {},
+                    getTotalUsageTodayFn = {
+                        if (shield.type == FocusType.GOAL && SharedMonitoringState.notifiedGoals.contains(packageName)) {
+                            Long.MAX_VALUE
+                        } else {
+                            getTotalUsageToday(packageName)
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    fun pauseBrowserSession(browserPackage: String) {
+        val endTime = allowedApps[browserPackage]
+        if (endTime != null && System.currentTimeMillis() < endTime) {
+            pausedBrowserSessions[browserPackage] = endTime - System.currentTimeMillis()
+            allowedSessionHandlers[browserPackage]?.let { mainHandler.removeCallbacks(it) }
+            allowedSessionHandlers.remove(browserPackage)
+            allowedApps.remove(browserPackage)
+            scope.launch(Dispatchers.Main) {
+                sessionUsageOverlayManager.pauseSessionTimer(browserPackage)
+            }
+            Log.d("Zenith_BT", "Paused browser session for $browserPackage (endTime=$endTime)")
+        }
+    }
+
+    private fun resumeBrowserSession(browserPackage: String): Boolean {
+        val remaining = pausedBrowserSessions.remove(browserPackage) ?: return false
+        if (remaining <= 0) return false
+        val savedEndTime = System.currentTimeMillis() + remaining
+        allowedApps[browserPackage] = savedEndTime
+        postSessionTimer(browserPackage, savedEndTime, remaining)
+        scope.launch(Dispatchers.Main) {
+            if (sessionUsageOverlayManager.hasActiveSession(browserPackage)) {
+                sessionUsageOverlayManager.resumeSessionTimer(browserPackage)
+            } else {
+                val prefs = SharedMonitoringState.currentPreferences
+                if (prefs?.sessionUsageOverlayEnabled == true) {
+                    sessionUsageOverlayManager.showHUD(
+                        browserPackage,
+                        (remaining / 60000L).toInt().coerceAtLeast(1),
+                        prefs.sessionUsageOverlaySize,
+                        prefs.sessionUsageOverlayOpacity,
+                        onSessionEnd = {
+                            allowedApps.remove(browserPackage)
+                            recheckShield(browserPackage)
+                        }
+                    )
+                }
+            }
+        }
+        Log.d("Zenith_BT", "Resumed browser session for $browserPackage (remaining=${remaining}ms)")
+        return true
+    }
+
+    fun endWebsiteSession(websitePkg: String, resumeBrowser: Boolean = true) {
+        if (!websitePkg.startsWith("zenith-web:")) return
+        websiteDismissHandlers.remove(websitePkg)?.let { mainHandler.removeCallbacks(it) }
+        pausedWebsiteSessions.remove(websitePkg)
+        saveWebsiteSessionUsage(websitePkg)
+        allowedSessionHandlers[websitePkg]?.let { mainHandler.removeCallbacks(it) }
+        allowedSessionHandlers.remove(websitePkg)
+        allowedApps.remove(websitePkg)
+        scope.launch(Dispatchers.Main) {
+            sessionUsageOverlayManager.hideHUD(websitePkg)
+        }
+        if (resumeBrowser) {
+            restoreBrowserFromWebsite()
+        }
+    }
+
+    fun scheduleWebsiteSessionDismiss(websitePkg: String) {
+        if (!websitePkg.startsWith("zenith-web:")) return
+        val allowedUntil = allowedApps[websitePkg] ?: return
+        if (System.currentTimeMillis() >= allowedUntil) return
+        if (websiteDismissHandlers.containsKey(websitePkg)) return
+
+        pausedWebsiteSessions[websitePkg] = allowedUntil - System.currentTimeMillis()
+        saveWebsiteSessionUsage(websitePkg)
+        allowedSessionHandlers[websitePkg]?.let { mainHandler.removeCallbacks(it) }
+        allowedSessionHandlers.remove(websitePkg)
+        scope.launch(Dispatchers.Main) {
+            sessionUsageOverlayManager.pauseSessionTimer(websitePkg)
+        }
+
+        val runnable = Runnable {
+            websiteDismissHandlers.remove(websitePkg)
+            endWebsiteSession(websitePkg, resumeBrowser = true)
+        }
+        websiteDismissHandlers[websitePkg] = runnable
+        mainHandler.postDelayed(runnable, WEBSITE_DISMISS_GRACE_MS)
+        Log.d("Zenith_BT", "Website session pending dismiss for $websitePkg")
+    }
+
+    fun pauseWebsiteSession(websitePkg: String) {
+        if (!websitePkg.startsWith("zenith-web:")) return
+        val allowedUntil = allowedApps[websitePkg] ?: return
+        if (System.currentTimeMillis() >= allowedUntil) return
+
+        websiteDismissHandlers.remove(websitePkg)?.let { mainHandler.removeCallbacks(it) }
+        pausedWebsiteSessions[websitePkg] = allowedUntil - System.currentTimeMillis()
+        saveWebsiteSessionUsage(websitePkg)
+        allowedSessionHandlers[websitePkg]?.let { mainHandler.removeCallbacks(it) }
+        allowedSessionHandlers.remove(websitePkg)
+        scope.launch(Dispatchers.Main) {
+            sessionUsageOverlayManager.pauseSessionTimer(websitePkg)
+        }
+        Log.d("Zenith_BT", "Website session paused for $websitePkg")
+    }
+
+    fun cancelWebsiteSessionDismiss(websitePkg: String) {
+        if (!websitePkg.startsWith("zenith-web:")) return
+        val runnable = websiteDismissHandlers.remove(websitePkg)
+        if (runnable != null) {
+            mainHandler.removeCallbacks(runnable)
+        }
+        val remaining = pausedWebsiteSessions.remove(websitePkg) ?: return
+        if (remaining > 0) {
+            AppStateHolder.recordWebsiteSessionStart(websitePkg)
+            val endTime = System.currentTimeMillis() + remaining
+            allowedApps[websitePkg] = endTime
+            postSessionTimer(websitePkg, endTime, remaining)
+            scope.launch(Dispatchers.Main) {
+                sessionUsageOverlayManager.resumeSessionTimer(websitePkg)
+                sessionUsageOverlayManager.updateForegroundApp(websitePkg)
+            }
+            Log.d("Zenith_BT", "Website session dismiss cancelled for $websitePkg (remaining=${remaining}ms)")
+        }
+    }
+
+    fun saveWebsiteSessionUsage(websitePkg: String): Long {
+        val startTime = AppStateHolder.consumeWebsiteSessionStart(websitePkg) ?: return 0L
+        val now = System.currentTimeMillis()
+        val elapsed = now - startTime
+        if (elapsed <= 1000) return 0L
+
+        val domain = websitePkg.removePrefix("zenith-web:")
+        val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(now))
+
+        scope.launch {
+            try {
+                val existing = shieldRepository.getWebsiteUsage(date, domain)
+                shieldRepository.insertWebsiteUsage(
+                    WebsiteUsageEntity(
+                        date = date,
+                        domain = domain,
+                        usageTimeMillis = (existing?.usageTimeMillis ?: 0L) + elapsed,
+                        lastUpdated = now
+                    )
+                )
+
+                val cal = Calendar.getInstance()
+                cal.timeInMillis = startTime
+                var currentHour = cal.get(Calendar.HOUR_OF_DAY)
+                var currentHourStart = cal.timeInMillis
+                val startCal = Calendar.getInstance().apply { timeInMillis = startTime }
+                val startDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(startTime))
+                var currentDate = startDate
+                var remaining = elapsed
+
+                val hourlyEntities = mutableListOf<HourlyUsageEntity>()
+                var allExistingHourlies: List<HourlyUsageEntity>? = null
+
+                while (remaining > 0) {
+                    val nextHour = currentHour + 1
+                    val nextHourCal = Calendar.getInstance().apply {
+                        timeInMillis = currentHourStart
+                        set(Calendar.HOUR_OF_DAY, nextHour % 24)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                        if (nextHour >= 24) add(Calendar.DAY_OF_YEAR, 1)
+                    }
+                    val nextHourStart = nextHourCal.timeInMillis
+                    val nextDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(nextHourCal.time)
+
+                    val periodEnd = nextHourStart.coerceAtMost(now)
+                    val timeInThisHour = periodEnd - currentHourStart
+
+                    if (timeInThisHour > 0) {
+                        if (allExistingHourlies == null || currentDate != date) {
+                            allExistingHourlies = shieldRepository.getHourlyUsageForDateSync(currentDate)
+                        }
+                        val existingEntry = allExistingHourlies.find {
+                            it.hour == currentHour && it.packageName == websitePkg
+                        }
+                        hourlyEntities.add(
+                            HourlyUsageEntity(
+                                date = currentDate,
+                                hour = currentHour,
+                                packageName = websitePkg,
+                                usageTimeMillis = (existingEntry?.usageTimeMillis ?: 0L) + timeInThisHour,
+                                lastUpdated = now
+                            )
+                        )
+                    }
+
+                    remaining -= timeInThisHour
+                    currentHourStart = periodEnd
+                    currentHour = nextHour % 24
+                    currentDate = if (nextHour >= 24) nextDate else currentDate
+                }
+
+                if (hourlyEntities.isNotEmpty()) {
+                    shieldRepository.insertHourlyUsage(hourlyEntities)
+                }
+            } catch (e: Exception) {
+                Log.e("Zenith_BT", "Error saving website usage: ${e.message}")
+            }
+        }
+
+        return elapsed
     }
 
     private fun handleCloseApp(
