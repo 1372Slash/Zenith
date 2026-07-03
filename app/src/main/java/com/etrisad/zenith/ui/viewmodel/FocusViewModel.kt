@@ -173,7 +173,13 @@ class FocusViewModel(
                 }
 
                 val liveShields = latestShields.map { shield ->
-                    val usage = accurateUsageMap[shield.packageName] ?: 0L
+                    val usage = if (WebsiteRepository.isWebsitePackageName(shield.packageName)) {
+                        val domain = WebsiteRepository.extractDomainFromPackageName(shield.packageName)
+                        val todayDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                        shieldRepository.getWebsiteUsage(todayDate, domain)?.usageTimeMillis ?: 0L
+                    } else {
+                        accurateUsageMap[shield.packageName] ?: 0L
+                    }
                     val limitMillis = shield.timeLimitMinutes * 60 * 1000L
                     val liveRemaining = (limitMillis - usage).coerceAtLeast(0L)
                     val finalRemaining = if (shield.remainingTimeMillis > 0 && liveRemaining > shield.remainingTimeMillis) {

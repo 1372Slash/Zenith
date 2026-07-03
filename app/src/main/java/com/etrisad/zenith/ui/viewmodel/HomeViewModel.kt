@@ -624,7 +624,13 @@ class HomeViewModel(
                         val usm = this@HomeViewModel.context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
                         val accurateUsageMap = ScreenUsageHelper.fetchAppUsageTodayTillNow(usm, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute)
                         shields.map { shield ->
-                            val usage = accurateUsageMap[shield.packageName] ?: 0L
+                            val usage = if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(shield.packageName)) {
+                                val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(shield.packageName)
+                                val todayDate = SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                                shieldRepository.getWebsiteUsage(todayDate, domain)?.usageTimeMillis ?: 0L
+                            } else {
+                                accurateUsageMap[shield.packageName] ?: 0L
+                            }
                             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
                             val liveRemaining = (limitMillis - usage).coerceAtLeast(0L)
                             val finalRemaining = if (shield.remainingTimeMillis > 0 && liveRemaining > shield.remainingTimeMillis) {
@@ -1274,7 +1280,13 @@ class HomeViewModel(
         val storedOtherUsage = selectedDayHistory.find { it.packageName == "OTHER_TOTAL" }?.usageTimeMillis
 
         val liveShields = allShields.map { shield ->
-            val usage = filteredTodayUsage[shield.packageName] ?: 0L
+            val usage = if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(shield.packageName)) {
+                val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(shield.packageName)
+                val todayDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                shieldRepository.getWebsiteUsage(todayDate, domain)?.usageTimeMillis ?: 0L
+            } else {
+                filteredTodayUsage[shield.packageName] ?: 0L
+            }
             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
             val liveRemaining = (limitMillis - usage).coerceAtLeast(0L)
             val finalRemaining = if (shield.remainingTimeMillis > 0 && liveRemaining > shield.remainingTimeMillis) {
