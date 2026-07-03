@@ -12,6 +12,8 @@ import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.entity.WebsiteUsageEntity
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.ui.components.overlay.SessionUsageOverlayManager
+import com.etrisad.zenith.data.website.WebsiteRepository
+import com.etrisad.zenith.data.website.WebsiteStateHolder
 import com.etrisad.zenith.service.AppStateHolder
 import com.etrisad.zenith.util.ScreenUsageHelper
 import kotlinx.coroutines.CoroutineScope
@@ -32,6 +34,7 @@ class OverlayActionHandler(
     private val contextPkg: String,
     private val scope: CoroutineScope,
     private val goToHomeScreen: () -> Unit,
+    private val quitWebsite: () -> Unit = goToHomeScreen,
     private val getForegroundAppName: () -> String?,
     private val recheckShield: (String) -> Unit,
     private val getTotalUsageToday: (String) -> Long,
@@ -125,6 +128,10 @@ class OverlayActionHandler(
     }
 
     fun getAppName(packageName: String): String {
+        if (WebsiteRepository.isWebsitePackageName(packageName)) {
+            val domain = WebsiteRepository.extractDomainFromPackageName(packageName)
+            return WebsiteRepository.getDisplayName(domain, domain)
+        }
         return try {
             packageManager.getApplicationLabel(packageManager.getApplicationInfo(packageName, 0)).toString()
         } catch (_: Exception) { packageName }
@@ -147,10 +154,10 @@ class OverlayActionHandler(
         val shieldWithTimestamp = processDelayForShield(shield, isMindfulGateway, delayDurationSeconds, targetPackageName)
 
         if (targetPackageName.startsWith("zenith-web:")) {
-            AppStateHolder.let { holder ->
+            WebsiteStateHolder.let { holder ->
                 if (holder.lastBrowserPackage != null) {
                     scope.launch(Dispatchers.Main) {
-                        sessionUsageOverlayManager.updateForegroundApp(targetPackageName)
+                        sessionUsageOverlayManager.pauseSessionTimer(targetPackageName)
                     }
                 }
             }
@@ -214,9 +221,9 @@ class OverlayActionHandler(
     }
 
     fun restoreBrowserFromWebsite() {
-        val browserPkg = AppStateHolder.lastBrowserPackage
+        val browserPkg = WebsiteStateHolder.lastBrowserPackage
         val fg = getForegroundAppName()
-        if (browserPkg != null && (fg == browserPkg || (fg != null && com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(fg)))) {
+        if (browserPkg != null && (fg == browserPkg || (fg != null && WebsiteRepository.isKnownBrowser(fg)))) {
             scope.launch(Dispatchers.Main) {
                 sessionUsageOverlayManager.updateForegroundApp(browserPkg)
             }
@@ -268,16 +275,13 @@ class OverlayActionHandler(
         val endTime = currentTimeOnAllow + (minutes * 60 * 1000L)
         allowedApps[targetPackageName] = endTime
         postSessionTimer(targetPackageName, endTime, minutes * 60 * 1000L)
-
-        // Website grant also grants the browser directly (stored as paused).
-        // When user leaves the domain, the browser grant resumes automatically.
         if (targetPackageName.startsWith("zenith-web:")) {
             cancelWebsiteSessionDismiss(targetPackageName)
-            val browserPkg = AppStateHolder.lastBrowserPackage
+            val browserPkg = WebsiteStateHolder.lastBrowserPackage
             if (browserPkg != null && !pausedBrowserSessions.containsKey(browserPkg)) {
                 pausedBrowserSessions[browserPkg] = minutes * 60 * 1000L
             }
-            AppStateHolder.recordWebsiteSessionStart(targetPackageName)
+            WebsiteStateHolder.recordWebsiteSessionStart(targetPackageName)
         }
 
         scope.launch {
@@ -382,14 +386,14 @@ class OverlayActionHandler(
             val fg = getForegroundAppName()
             val isWebsitePackage = packageName.startsWith("zenith-web:")
             if (isWebsitePackage) {
-                val activeDomain = AppStateHolder.currentWebsiteDomain.value
+                val activeDomain = WebsiteStateHolder.currentWebsiteDomain.value
                 val sessionDomain = packageName.removePrefix("zenith-web:")
                 if (activeDomain != sessionDomain) {
                     Log.d("Zenith_BT", "Timer EXIT: website changed for $packageName (active=$activeDomain)")
                     allowedApps.remove(packageName)
                     return@Runnable
                 }
-                if (fg == null || !com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(fg)) {
+                if (fg == null || !WebsiteRepository.isKnownBrowser(fg)) {
                     Log.d("Zenith_BT", "Timer EXPIRE: browser not in foreground for $packageName (fg=$fg)")
                     saveWebsiteSessionUsage(packageName)
                     allowedApps.remove(packageName)
@@ -402,7 +406,6 @@ class OverlayActionHandler(
                 Log.d("Zenith_BT", "Timer EXIT: foreground mismatch for $packageName (fg=$fg)")
                 return@Runnable
             }
-            // If another overlay is already showing, exit (prevent double overlays)
             if (InterceptOverlayManager.isShowing && InterceptOverlayManager.currentPackage != packageName) {
                 Log.d("Zenith_BT", "Timer EXIT: overlay already showing for ${InterceptOverlayManager.currentPackage}")
                 return@Runnable
@@ -503,7 +506,12 @@ class OverlayActionHandler(
 
     fun scheduleWebsiteSessionDismiss(websitePkg: String) {
         if (!websitePkg.startsWith("zenith-web:")) return
-        val allowedUntil = allowedApps[websitePkg] ?: return
+        val allowedUntil = allowedApps[websitePkg] ?: run {
+            if (SharedMonitoringState.currentPreferences?.websiteAutoTrackingEnabled == true) {
+                saveWebsiteSessionUsage(websitePkg)
+            }
+            return
+        }
         if (System.currentTimeMillis() >= allowedUntil) return
         if (websiteDismissHandlers.containsKey(websitePkg)) return
 
@@ -511,7 +519,7 @@ class OverlayActionHandler(
         saveWebsiteSessionUsage(websitePkg)
         allowedSessionHandlers[websitePkg]?.let { mainHandler.removeCallbacks(it) }
         allowedSessionHandlers.remove(websitePkg)
-        scope.launch(Dispatchers.Main) {
+        mainHandler.post {
             sessionUsageOverlayManager.pauseSessionTimer(websitePkg)
         }
 
@@ -526,7 +534,12 @@ class OverlayActionHandler(
 
     fun pauseWebsiteSession(websitePkg: String) {
         if (!websitePkg.startsWith("zenith-web:")) return
-        val allowedUntil = allowedApps[websitePkg] ?: return
+        val allowedUntil = allowedApps[websitePkg] ?: run {
+            if (SharedMonitoringState.currentPreferences?.websiteAutoTrackingEnabled == true) {
+                saveWebsiteSessionUsage(websitePkg)
+            }
+            return
+        }
         if (System.currentTimeMillis() >= allowedUntil) return
 
         websiteDismissHandlers.remove(websitePkg)?.let { mainHandler.removeCallbacks(it) }
@@ -534,7 +547,7 @@ class OverlayActionHandler(
         saveWebsiteSessionUsage(websitePkg)
         allowedSessionHandlers[websitePkg]?.let { mainHandler.removeCallbacks(it) }
         allowedSessionHandlers.remove(websitePkg)
-        scope.launch(Dispatchers.Main) {
+        mainHandler.post {
             sessionUsageOverlayManager.pauseSessionTimer(websitePkg)
         }
         Log.d("Zenith_BT", "Website session paused for $websitePkg")
@@ -548,11 +561,11 @@ class OverlayActionHandler(
         }
         val remaining = pausedWebsiteSessions.remove(websitePkg) ?: return
         if (remaining > 0) {
-            AppStateHolder.recordWebsiteSessionStart(websitePkg)
+            WebsiteStateHolder.recordWebsiteSessionStart(websitePkg)
             val endTime = System.currentTimeMillis() + remaining
             allowedApps[websitePkg] = endTime
             postSessionTimer(websitePkg, endTime, remaining)
-            scope.launch(Dispatchers.Main) {
+            mainHandler.post {
                 sessionUsageOverlayManager.resumeSessionTimer(websitePkg)
                 sessionUsageOverlayManager.updateForegroundApp(websitePkg)
             }
@@ -561,7 +574,7 @@ class OverlayActionHandler(
     }
 
     fun saveWebsiteSessionUsage(websitePkg: String): Long {
-        val startTime = AppStateHolder.consumeWebsiteSessionStart(websitePkg) ?: return 0L
+        val startTime = WebsiteStateHolder.consumeWebsiteSessionStart(websitePkg) ?: return 0L
         val now = System.currentTimeMillis()
         val elapsed = now - startTime
         if (elapsed <= 1000) return 0L
@@ -661,7 +674,11 @@ class OverlayActionHandler(
                 updateShieldCache(updated)
             }
         }
-        goToHomeScreen()
+        if (WebsiteRepository.isWebsitePackageName(targetPackageName)) {
+            quitWebsite()
+        } else {
+            goToHomeScreen()
+        }
     }
 
     fun showScheduleOverlay(
@@ -720,7 +737,11 @@ class OverlayActionHandler(
                     val now = System.currentTimeMillis()
                     InterceptOverlayManager.lastKickTime = now
                     InterceptOverlayManager.lastKickedPackage = packageName
-                    goToHomeScreen()
+                    if (WebsiteRepository.isWebsitePackageName(packageName)) {
+                        quitWebsite()
+                    } else {
+                        goToHomeScreen()
+                    }
                 }
             )
         }
@@ -741,7 +762,11 @@ class OverlayActionHandler(
                     val now = System.currentTimeMillis()
                     InterceptOverlayManager.lastKickTime = now
                     InterceptOverlayManager.lastKickedPackage = packageName
-                    goToHomeScreen()
+                    if (WebsiteRepository.isWebsitePackageName(packageName)) {
+                        quitWebsite()
+                    } else {
+                        goToHomeScreen()
+                    }
                 }
             )
         }
@@ -790,7 +815,11 @@ class OverlayActionHandler(
                     val now = System.currentTimeMillis()
                     InterceptOverlayManager.lastKickTime = now
                     InterceptOverlayManager.lastKickedPackage = packageName
-                    goToHomeScreen()
+                    if (WebsiteRepository.isWebsitePackageName(packageName)) {
+                        quitWebsite()
+                    } else {
+                        goToHomeScreen()
+                    }
                 }
             )
         }
@@ -815,6 +844,7 @@ class OverlayActionHandler(
         if (packageName in SharedMonitoringState.CRITICAL_SYSTEM_PACKAGES) return true
 
         if (SharedMonitoringState.launcherPackages.contains(packageName) ||
+            SharedMonitoringState.defaultLauncherPackage == packageName ||
             packageName.contains("launcher", ignoreCase = true) ||
             packageName.contains("home", ignoreCase = true)) return true
 

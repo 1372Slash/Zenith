@@ -80,7 +80,16 @@ class InterceptOverlayManager(
             "com.android.systemui",
             "android",
             "com.google.android.permissioncontroller",
-            "com.google.android.packageinstaller"
+            "com.google.android.packageinstaller",
+            "com.android.settings",
+            "com.samsung.android.systemui",
+            "com.miui.systemui",
+            "com.huawei.systemui",
+            "com.oppo.systemui",
+            "com.coloros.safecenter",
+            "com.vivo.systemui",
+            "com.oneplus.twspackage",
+            "com.android.incallui"
         )
         fun isSystemUiPackage(packageName: String): Boolean = packageName in SYSTEM_UI_PACKAGES
         private var keyboardPackages = emptySet<String>()

@@ -18,6 +18,9 @@ interface WebsiteUsageDao {
     @Query("SELECT * FROM website_usage WHERE date = :date")
     fun getUsageForDate(date: String): Flow<List<WebsiteUsageEntity>>
 
+    @Query("SELECT * FROM website_usage WHERE date = :date")
+    suspend fun getUsageForDateSnapshot(date: String): List<WebsiteUsageEntity>
+
     @Query("SELECT SUM(usageTimeMillis) FROM website_usage WHERE domain = :domain AND date >= :sinceDate")
     suspend fun getTotalUsageSince(domain: String, sinceDate: String): Long?
 

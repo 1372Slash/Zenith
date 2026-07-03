@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bedtime
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,6 +26,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -41,8 +45,10 @@ fun WindDownOverlayContent(
     onCloseApp: () -> Unit
 ) {
     val context = LocalContext.current
+    val isWebsite = WebsiteRepository.isWebsitePackageName(packageName)
     val appIcon = remember(packageName) {
-        try {
+        if (isWebsite) null
+        else try {
             val drawable = context.packageManager.getApplicationIcon(packageName)
             drawable.toBitmap(width = 120, height = 120).asImageBitmap()
         } catch (_: Exception) {
@@ -169,7 +175,9 @@ fun WindDownOverlayContent(
                         delay(400)
                         onCloseApp()
                     }
-                }
+                },
+                isWebsite = isWebsite,
+                packageName = packageName
             )
         } else {
             PortraitWindDownLayout(
@@ -195,7 +203,9 @@ fun WindDownOverlayContent(
                         delay(400)
                         onCloseApp()
                     }
-                }
+                },
+                isWebsite = isWebsite,
+                packageName = packageName
             )
         }
     }
@@ -213,7 +223,9 @@ fun PortraitWindDownLayout(
     autoKickProgress: Float,
     userPrefs: com.etrisad.zenith.data.preferences.UserPreferences? = null,
     onAllowUse: (Int) -> Unit,
-    onCloseApp: () -> Unit
+    onCloseApp: () -> Unit,
+    isWebsite: Boolean = false,
+    packageName: String = ""
 ) {
     Column(
         modifier = Modifier
@@ -231,7 +243,7 @@ fun PortraitWindDownLayout(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                WindDownHeader(appName, appIcon, sessionUsed)
+                WindDownHeader(appName = appName, appIcon = appIcon, sessionUsed = sessionUsed, isWebsite = isWebsite, packageName = packageName)
             }
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -259,7 +271,7 @@ fun PortraitWindDownLayout(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                WindDownHeader(appName, appIcon, sessionUsed)
+                WindDownHeader(appName = appName, appIcon = appIcon, sessionUsed = sessionUsed, isWebsite = isWebsite, packageName = packageName)
 
                 Spacer(modifier = Modifier.height(32.dp))
 
@@ -296,7 +308,9 @@ fun LandscapeWindDownLayout(
     autoKickProgress: Float,
     userPrefs: com.etrisad.zenith.data.preferences.UserPreferences? = null,
     onAllowUse: (Int) -> Unit,
-    onCloseApp: () -> Unit
+    onCloseApp: () -> Unit,
+    isWebsite: Boolean = false,
+    packageName: String = ""
 ) {
     if (userPrefs?.overlayFullScreen == true) {
         Row(
@@ -312,7 +326,7 @@ fun LandscapeWindDownLayout(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                WindDownHeader(appName, appIcon, sessionUsed, isSmall = true)
+                WindDownHeader(appName = appName, appIcon = appIcon, sessionUsed = sessionUsed, isSmall = true, isWebsite = isWebsite, packageName = packageName)
             }
             Column(
                 modifier = Modifier.weight(1.2f),
@@ -357,7 +371,7 @@ fun LandscapeWindDownLayout(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    WindDownHeader(appName, appIcon, sessionUsed, isSmall = true)
+                    WindDownHeader(appName = appName, appIcon = appIcon, sessionUsed = sessionUsed, isSmall = true, isWebsite = isWebsite, packageName = packageName)
                 }
 
                 Column(
@@ -393,7 +407,9 @@ private fun WindDownHeader(
     appName: String,
     appIcon: androidx.compose.ui.graphics.ImageBitmap?,
     sessionUsed: Boolean,
-    isSmall: Boolean = false
+    isSmall: Boolean = false,
+    isWebsite: Boolean = false,
+    packageName: String = ""
 ) {
     Box(
         modifier = Modifier
@@ -402,7 +418,20 @@ private fun WindDownHeader(
             .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center
     ) {
-        if (appIcon != null) {
+        if (isWebsite) {
+            SubcomposeAsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data("app-icon://$packageName")
+                    .crossfade(500)
+                    .build(),
+                contentDescription = null,
+                modifier = Modifier.size(if (isSmall) 48.dp else 60.dp).clip(CircleShape),
+                contentScale = ContentScale.Crop,
+                error = {
+                    Icon(Icons.Outlined.Language, null, modifier = Modifier.size(if (isSmall) 36.dp else 48.dp), tint = MaterialTheme.colorScheme.primary)
+                }
+            )
+        } else if (appIcon != null) {
             Image(
                 bitmap = appIcon,
                 contentDescription = null,

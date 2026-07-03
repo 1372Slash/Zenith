@@ -260,6 +260,7 @@ class UserPreferencesRepository(private val context: Context) {
         val EYE_CARE_WORK_MINUTES = intPreferencesKey("eye_care_work_minutes")
         val EYE_CARE_REST_SECONDS = intPreferencesKey("eye_care_rest_seconds")
         val USAGE_GLIMPSE_ENABLED = booleanPreferencesKey("usage_glimpse_enabled")
+        val WEBSITE_AUTO_TRACKING = booleanPreferencesKey("website_auto_tracking")
 
         val OVERLAY_PALETTE_ID = stringPreferencesKey("overlay_palette_id")
         val OVERLAY_SHEET_OPACITY = floatPreferencesKey("overlay_sheet_opacity")
@@ -419,6 +420,7 @@ class UserPreferencesRepository(private val context: Context) {
             dayStartHour = settings[PreferencesKeys.DAY_START_HOUR] ?: 0,
             dayStartMinute = settings[PreferencesKeys.DAY_START_MINUTE] ?: 0,
             usageGlimpseEnabled = settings[PreferencesKeys.USAGE_GLIMPSE_ENABLED] ?: false,
+            websiteAutoTrackingEnabled = settings[PreferencesKeys.WEBSITE_AUTO_TRACKING] ?: false,
             incentiveLockDisableRequestTimestamp = runtime[RuntimeKeys.INCENTIVE_LOCK_DISABLE_REQUEST_TIMESTAMP] ?: 0L,
             incentiveLockGoalsMetToday = if (runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_TODAY] != true) false
                 else runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_DATE] == SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
@@ -582,6 +584,10 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setUsageGlimpseEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.USAGE_GLIMPSE_ENABLED] = enabled }
+    }
+
+    suspend fun setWebsiteAutoTrackingEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.WEBSITE_AUTO_TRACKING] = enabled }
     }
 
     suspend fun setIncentiveLockDisableRequestTimestamp(timestamp: Long) {
@@ -1785,6 +1791,7 @@ data class UserPreferences(
     val dayStartHour: Int = 0,
     val dayStartMinute: Int = 0,
     val usageGlimpseEnabled: Boolean = false,
+    val websiteAutoTrackingEnabled: Boolean = false,
     val overlayPaletteId: String = "dynamic",
     val overlaySheetOpacity: Float = 1f,
     val overlayFullScreen: Boolean = false,

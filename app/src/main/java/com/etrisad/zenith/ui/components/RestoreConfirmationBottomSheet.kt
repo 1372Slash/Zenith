@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.data.preferences.UserPreferences
+import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.ui.viewmodel.AppUsageInfo
 import com.etrisad.zenith.ui.viewmodel.DailyUsage
 import com.etrisad.zenith.ui.viewmodel.HourlyUsageInfo
@@ -368,10 +369,14 @@ private fun SnapshotDetail(
             if (topApp != null) {
                 val pkg = topApp.second
                 var appName = pkg
-                try {
-                    val appInfo = pm.getApplicationInfo(pkg, 0)
-                    appName = pm.getApplicationLabel(appInfo).toString()
-                } catch (_: Exception) {}
+                if (WebsiteRepository.isWebsitePackageName(pkg)) {
+                    appName = WebsiteRepository.extractDomainFromPackageName(pkg)
+                } else {
+                    try {
+                        val appInfo = pm.getApplicationInfo(pkg, 0)
+                        appName = pm.getApplicationLabel(appInfo).toString()
+                    } catch (_: Exception) {}
+                }
 
                 AppUsageInfo(
                     packageName = pkg,
@@ -503,10 +508,14 @@ private fun PiechartDetail(preferences: UserPreferences, metadata: BackupUtils.B
                 
                 metadata.latestPiechartData.forEach { (pkg, duration) ->
                     var appName = pkg
-                    try {
-                        val appInfo = pm.getApplicationInfo(pkg, 0)
-                        appName = pm.getApplicationLabel(appInfo).toString()
-                    } catch (_: Exception) {}
+                    if (WebsiteRepository.isWebsitePackageName(pkg)) {
+                        appName = WebsiteRepository.extractDomainFromPackageName(pkg)
+                    } else {
+                        try {
+                            val appInfo = pm.getApplicationInfo(pkg, 0)
+                            appName = pm.getApplicationLabel(appInfo).toString()
+                        } catch (_: Exception) {}
+                    }
                     
                     Row(
                         modifier = Modifier.padding(vertical = 6.dp),

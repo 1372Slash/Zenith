@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.*
@@ -25,10 +26,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.util.DateTimeUtils
 import kotlinx.coroutines.delay
@@ -90,6 +94,15 @@ fun ScheduleOverlay(
                 }
             }
 
+            val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            val websiteTotal = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val websiteUsages = shieldRepository.getWebsiteUsageForDate(todayDate).first()
+                    websiteUsages.sumOf { it.usageTimeMillis }
+                } catch (_: Exception) { 0L }
+            }
+            totalToday += websiteTotal
+
             value = totalToday.coerceAtMost(timeSinceMidnight)
             delay(30000)
         }
@@ -101,8 +114,10 @@ fun ScheduleOverlay(
         value = userPrefsRepo.userPreferencesFlow.first()
     }
 
+    val isWebsite = WebsiteRepository.isWebsitePackageName(packageName)
     val appIcon = remember(packageName) {
-        try {
+        if (isWebsite) null
+        else try {
             val drawable = context.packageManager.getApplicationIcon(packageName)
             drawable.toBitmap(width = 120, height = 120).asImageBitmap()
         } catch (_: Exception) {
@@ -214,7 +229,9 @@ fun ScheduleOverlay(
                         delay(400)
                         onCloseApp()
                     }
-                }
+                },
+                isWebsite = isWebsite,
+                packageName = packageName
             )
         } else {
             PortraitScheduleLayout(
@@ -241,7 +258,9 @@ fun ScheduleOverlay(
                         delay(400)
                         onCloseApp()
                     }
-                }
+                },
+                isWebsite = isWebsite,
+                packageName = packageName
             )
         }
     }
@@ -261,7 +280,9 @@ fun PortraitScheduleLayout(
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
     onEmergencyClick: () -> Unit,
     onAllowUse: (Int) -> Unit,
-    onCloseApp: () -> Unit
+    onCloseApp: () -> Unit,
+    isWebsite: Boolean = false,
+    packageName: String = ""
 ) {
     Column(
         modifier = Modifier
@@ -283,10 +304,23 @@ fun PortraitScheduleLayout(
                 modifier = Modifier
                     .size(80.dp)
                     .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                 contentAlignment = Alignment.Center
             ) {
-                if (appIcon != null) {
+                if (isWebsite) {
+                    SubcomposeAsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data("app-icon://$packageName")
+                            .crossfade(500)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier.size(60.dp).clip(CircleShape),
+                        contentScale = ContentScale.Crop,
+                        error = {
+                            Icon(Icons.Outlined.Language, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+                        }
+                    )
+                } else if (appIcon != null) {
                     Image(
                         bitmap = appIcon,
                         contentDescription = null,
@@ -384,7 +418,7 @@ fun PortraitScheduleLayout(
                 Spacer(modifier = Modifier.height(20.dp))
             }
 
-            CloseAppTextButton(onCloseApp, autoKickProgress, size = ZenithButtonSize.ExtraLarge)
+            CloseAppTextButton(onCloseApp, autoKickProgress, size = ZenithButtonSize.ExtraLarge, isWebsite = isWebsite)
         }
     }
 }
@@ -404,7 +438,9 @@ fun LandscapeScheduleLayout(
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
     onEmergencyClick: () -> Unit,
     onAllowUse: (Int) -> Unit,
-    onCloseApp: () -> Unit
+    onCloseApp: () -> Unit,
+    isWebsite: Boolean = false,
+    packageName: String = ""
 ) {
     Column(
         modifier = modifier.then(
@@ -453,10 +489,23 @@ fun LandscapeScheduleLayout(
                     modifier = Modifier
                         .size(64.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (appIcon != null) {
+                    if (isWebsite) {
+                        SubcomposeAsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data("app-icon://$packageName")
+                                .crossfade(500)
+                                .build(),
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp).clip(CircleShape),
+                            contentScale = ContentScale.Crop,
+                            error = {
+                                Icon(Icons.Outlined.Language, null, modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.primary)
+                            }
+                        )
+                    } else if (appIcon != null) {
                         Image(
                             bitmap = appIcon,
                             contentDescription = null,
@@ -562,7 +611,7 @@ fun LandscapeScheduleLayout(
                 }
                 Spacer(modifier = Modifier.weight(1f))
 
-                CloseAppTextButton(onCloseApp, autoKickProgress, size = ZenithButtonSize.Large)
+                CloseAppTextButton(onCloseApp, autoKickProgress, size = ZenithButtonSize.Large, isWebsite = isWebsite)
             }
         }
     }

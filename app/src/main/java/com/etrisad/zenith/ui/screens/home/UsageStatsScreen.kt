@@ -116,14 +116,27 @@ fun UsageStatsScreen(
     
     var isOtherAppsExpanded by rememberSaveable { mutableStateOf(false) }
     var isOtherHourAppsExpanded by rememberSaveable(selectedHour) { mutableStateOf(false) }
+    var isWebsiteExpanded by rememberSaveable { mutableStateOf(false) }
 
-    val (regularApps, lowUsageApps, totalLowUsageTime) = remember(uiState.allAppsUsage) {
-        val (reg, low) = uiState.allAppsUsage.partition { it.totalTimeVisible >= 60000L }
+    val (regularApps, lowUsageApps, totalLowUsageTime) = remember(uiState.allAppsUsage, uiState.activeShields, uiState.activeGoals, uiState.websiteUsage) {
+        val shieldedOrGoaledPkgs = (uiState.activeShields + uiState.activeGoals).map { it.packageName }.toSet()
+        val filtered = uiState.allAppsUsage.filterNot {
+            WebsiteRepository.isWebsitePackageName(it.packageName) && it.packageName !in shieldedOrGoaledPkgs
+        }
+        val (reg, low) = filtered.partition { it.totalTimeVisible >= 60000L }
         Triple(reg, low, low.sumOf { it.totalTimeVisible })
     }
-    
-    val totalAppsCount = remember(regularApps.size, lowUsageApps.size, totalLowUsageTime, isOtherAppsExpanded) {
-        regularApps.size + (if (totalLowUsageTime > 0) (if (isOtherAppsExpanded) 1 + lowUsageApps.size else 1) else 0)
+
+    val lowWebsiteUsage = remember(uiState.websiteUsage, uiState.activeShields, uiState.activeGoals) {
+        val shieldedOrGoaledPkgs = (uiState.activeShields + uiState.activeGoals).map { it.packageName }.toSet()
+        uiState.websiteUsage.filterNot { it.packageName in shieldedOrGoaledPkgs }
+    }
+
+    val totalAppsCount = remember(regularApps.size, lowUsageApps.size, totalLowUsageTime,
+            isOtherAppsExpanded, lowWebsiteUsage.size, isWebsiteExpanded) {
+        val otherWebSize = if (lowWebsiteUsage.isNotEmpty()) 1 + (if (isWebsiteExpanded) lowWebsiteUsage.size else 0) else 0
+        val otherAppSize = if (totalLowUsageTime > 0) (if (isOtherAppsExpanded) 1 + lowUsageApps.size else 1) else 0
+        regularApps.size + otherWebSize + otherAppSize
     }
 
     val hourlyAppsData = remember(uiState.hourlyUsage, selectedHour) {
@@ -375,8 +388,7 @@ fun UsageStatsScreen(
                 val otherIndexInGroup = 2 + regularHourApps.size
                 item(key = "hourly_other_header_$currentTargetHour") {
                     Column(modifier = Modifier.animateItem()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        GroupedCard(
+                    GroupedCard(
                             index = otherIndexInGroup,
                             total = hourlyGroupTotal,
                             onClick = { isOtherHourAppsExpanded = !isOtherHourAppsExpanded },
@@ -655,14 +667,107 @@ fun UsageStatsScreen(
                 Spacer(modifier = Modifier.height(4.dp))
             }
         }
+        if (lowWebsiteUsage.isNotEmpty()) {
+            val otherWebIndex = regularApps.size
+            val otherWebItemCount = if (isWebsiteExpanded) lowWebsiteUsage.size else 0
 
-        if (totalLowUsageTime > 0) {
-            val otherIndex = regularApps.size
-            
-            item(key = "other_apps_header") {
+            item(key = "other_web_header") {
                 Column(modifier = Modifier.animateItem()) {
                     GroupedCard(
-                        index = otherIndex,
+                        index = otherWebIndex,
+                        total = totalAppsCount,
+                        onClick = { isWebsiteExpanded = !isWebsiteExpanded }
+                    ) {
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    text = "Other Websites",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            supportingContent = {
+                                Text(
+                                    text = "${lowWebsiteUsage.size} domains visited",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            trailingContent = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = viewModel.formatDuration(lowWebsiteUsage.sumOf { it.totalTimeVisible }),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
+                                    Icon(
+                                        imageVector = if (isWebsiteExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp).padding(start = 4.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            },
+                            leadingContent = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Language,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            },
+                            colors = ListItemDefaults.colors(
+                                containerColor = Color.Transparent
+                            )
+                        )
+                    }
+                    if (isWebsiteExpanded) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                }
+            }
+
+            if (isWebsiteExpanded) {
+                itemsIndexed(
+                    items = lowWebsiteUsage,
+                    key = { _, site -> "other-web-${site.packageName}" }
+                ) { index, site ->
+                    Column(modifier = Modifier.animateItem()) {
+                        UsageItem(
+                            app = site,
+                            type = "WEBSITE",
+                            formatDuration = viewModel::formatDuration,
+                            index = otherWebIndex + 1 + index,
+                            total = totalAppsCount,
+                            onClick = {}
+                        )
+                        if (index < lowWebsiteUsage.size - 1) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                    }
+                }
+            }
+        }
+        if (totalLowUsageTime > 0) {
+            val otherAppSectionSize = if (lowWebsiteUsage.isNotEmpty()) 1 + (if (isWebsiteExpanded) lowWebsiteUsage.size else 0) else 0
+            val otherAppIndex = regularApps.size + otherAppSectionSize
+
+            item(key = "other_apps_header") {
+                Column(modifier = Modifier.animateItem()) {
+                    if (lowWebsiteUsage.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                    GroupedCard(
+                        index = otherAppIndex,
                         total = totalAppsCount,
                         onClick = { isOtherAppsExpanded = !isOtherAppsExpanded }
                     ) {
@@ -734,7 +839,7 @@ fun UsageStatsScreen(
                             app = app,
                             type = appTypes[app.packageName] ?: "OTHER",
                             formatDuration = viewModel::formatDuration,
-                            index = otherIndex + 1 + index,
+                            index = otherAppIndex + 1 + index,
                             total = totalAppsCount,
                             onClick = remember(app.packageName, onAppClick) { { onAppClick(app.packageName) } }
                         )
@@ -1733,12 +1838,32 @@ fun UsageItem(
                     val badgeColor = when (type) {
                         "GOAL" -> MaterialTheme.colorScheme.tertiary
                         "SHIELD" -> MaterialTheme.colorScheme.primary
+                        "WEBSITE" -> MaterialTheme.colorScheme.secondary
                         else -> MaterialTheme.colorScheme.secondary
                     }
                     val badgeText = when (type) {
                         "GOAL" -> "Goal"
                         "SHIELD" -> "Shield"
+                        "WEBSITE" -> "Website"
                         else -> "Other"
+                    }
+                    val isWebsitePackage = app.packageName.startsWith("zenith-web:")
+                    if (isWebsitePackage && (type == "SHIELD" || type == "GOAL")) {
+                        Box(
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clip(CircleShape)
+                                .background(badgeColor.copy(alpha = 0.1f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Language,
+                                contentDescription = "Website",
+                                tint = badgeColor,
+                                modifier = Modifier.size(10.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
                     }
                     Surface(
                         color = badgeColor.copy(alpha = 0.1f),

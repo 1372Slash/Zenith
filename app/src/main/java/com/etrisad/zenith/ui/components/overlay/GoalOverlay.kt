@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,14 +21,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.drawable.toBitmap
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.UserPreferences
+import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithButtonType
@@ -51,20 +55,18 @@ fun GoalOverlay(
     onGoalDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val app = context.applicationContext as com.etrisad.zenith.ZenithApplication
+    val shieldRepository = app.shieldRepository
     val scope = rememberCoroutineScope()
 
-    var appIconBitmap by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
-    DisposableEffect(packageName) {
-        val job = scope.launch(Dispatchers.IO) {
-            val bmp = try {
-                context.packageManager.getApplicationIcon(packageName)
-                    .toBitmap(120, 120).asImageBitmap()
-            } catch (_: Exception) { null }
-            withContext(Dispatchers.Main) { appIconBitmap = bmp }
-        }
-        onDispose {
-            job.cancel()
-            appIconBitmap = null
+    val isWebsite = WebsiteRepository.isWebsitePackageName(packageName)
+    val appIcon = remember(packageName) {
+        if (isWebsite) null
+        else try {
+            val drawable = context.packageManager.getApplicationIcon(packageName)
+            drawable.toBitmap(width = 120, height = 120).asImageBitmap()
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -109,7 +111,16 @@ fun GoalOverlay(
                 com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute)
             }
             
-            val liveAppUsage = detailedUsage.appUsageMap[packageName] ?: 0L
+            val liveAppUsage = if (WebsiteRepository.isWebsitePackageName(packageName)) {
+                val domain = WebsiteRepository.extractDomainFromPackageName(packageName)
+                val todayDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                val websiteUsage = withContext(Dispatchers.IO) {
+                    shieldRepository.getWebsiteUsage(todayDate, domain)
+                }
+                (websiteUsage?.usageTimeMillis ?: 0L).coerceAtMost(timeSinceMidnight)
+            } else {
+                detailedUsage.appUsageMap[packageName] ?: 0L
+            }
             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
             val isAchieved = com.etrisad.zenith.service.SharedMonitoringState.notifiedGoals.contains(packageName)
             val usage = if (isAchieved && liveAppUsage < limitMillis) limitMillis else liveAppUsage
@@ -138,7 +149,7 @@ fun GoalOverlay(
             LandscapeGoalLayout(
                 modifier = Modifier.displayCutoutPadding(),
                 appName = appName,
-                appIcon = appIconBitmap,
+                appIcon = appIcon,
                 shield = currentShield,
                 totalUsageToday = currentTotalUsageToday,
                 totalGlobalUsageToday = currentTotalGlobalUsageToday,
@@ -149,12 +160,14 @@ fun GoalOverlay(
                         delay(400)
                         currentOnGoalDismiss()
                     }
-                }
+                },
+                isWebsite = isWebsite,
+                packageName = packageName
             )
         } else {
             PortraitGoalLayout(
                 appName = appName,
-                appIcon = appIconBitmap,
+                appIcon = appIcon,
                 shield = currentShield,
                 totalUsageToday = currentTotalUsageToday,
                 totalGlobalUsageToday = currentTotalGlobalUsageToday,
@@ -165,7 +178,9 @@ fun GoalOverlay(
                         delay(400)
                         currentOnGoalDismiss()
                     }
-                }
+                },
+                isWebsite = isWebsite,
+                packageName = packageName
             )
         }
     }
@@ -180,7 +195,9 @@ fun PortraitGoalLayout(
     totalUsageToday: Long,
     totalGlobalUsageToday: Long,
     userPrefs: UserPreferences,
-    onGoalDismiss: () -> Unit
+    onGoalDismiss: () -> Unit,
+    isWebsite: Boolean = false,
+    packageName: String = ""
 ) {
     Column(
         modifier = Modifier
@@ -202,10 +219,30 @@ fun PortraitGoalLayout(
                 modifier = Modifier
                     .size(80.dp)
                     .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                 contentAlignment = Alignment.Center
             ) {
-                if (appIcon != null) {
+                if (isWebsite) {
+                    SubcomposeAsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data("app-icon://$packageName")
+                            .crossfade(500)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(60.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop,
+                        error = {
+                            Icon(
+                                Icons.Outlined.Language,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    )
+                } else if (appIcon != null) {
                     Image(
                         bitmap = appIcon,
                         contentDescription = null,
@@ -268,7 +305,9 @@ fun LandscapeGoalLayout(
     totalUsageToday: Long,
     totalGlobalUsageToday: Long,
     userPrefs: UserPreferences,
-    onGoalDismiss: () -> Unit
+    onGoalDismiss: () -> Unit,
+    isWebsite: Boolean = false,
+    packageName: String = ""
 ) {
     Column(
         modifier = modifier.then(
@@ -295,10 +334,28 @@ fun LandscapeGoalLayout(
                     modifier = Modifier
                         .size(64.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (appIcon != null) {
+                    if (isWebsite) {
+                        SubcomposeAsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data("app-icon://$packageName")
+                                .crossfade(500)
+                                .build(),
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp).clip(CircleShape),
+                            contentScale = ContentScale.Crop,
+                            error = {
+                                Icon(
+                                    Icons.Outlined.Language,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(36.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        )
+                    } else if (appIcon != null) {
                         Image(
                             bitmap = appIcon,
                             contentDescription = null,

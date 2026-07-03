@@ -39,7 +39,7 @@ import com.etrisad.zenith.data.preferences.FontOption
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.website.WebsiteRepository
-import com.etrisad.zenith.service.AppStateHolder
+import com.etrisad.zenith.data.website.WebsiteStateHolder
 import com.etrisad.zenith.ui.components.TooltipArrowPosition
 import com.etrisad.zenith.ui.components.ZenithTooltipBox
 import com.etrisad.zenith.ui.theme.GSFlexSettings
@@ -77,7 +77,16 @@ class SessionUsageOverlayManager(
         "com.android.systemui",
         "android",
         "com.google.android.permissioncontroller",
-        "com.google.android.packageinstaller"
+        "com.google.android.packageinstaller",
+        "com.android.settings",
+        "com.samsung.android.systemui",
+        "com.miui.systemui",
+        "com.huawei.systemui",
+        "com.oppo.systemui",
+        "com.coloros.safecenter",
+        "com.vivo.systemui",
+        "com.oneplus.twspackage",
+        "com.android.incallui"
     )
 
     private data class HUDInstance(
@@ -88,17 +97,37 @@ class SessionUsageOverlayManager(
 
     private class Session(
         val packageName: String,
-        val totalSeconds: Int,
-        val size: Int,
-        val opacity: Int,
-        val isGoal: Boolean,
-        val onSessionEnd: () -> Unit,
+        initialTotalSeconds: Int,
+        initialSize: Int,
+        initialOpacity: Int,
+        initialIsGoal: Boolean,
+        var onSessionEnd: () -> Unit,
         initialX: Int,
         initialY: Int,
         initialSeconds: Int = 0
     ) {
+        val totalSecondsState = mutableIntStateOf(initialTotalSeconds)
+        var totalSeconds: Int
+            get() = totalSecondsState.intValue
+            set(value) { totalSecondsState.intValue = value }
+
+        val sizeState = mutableIntStateOf(initialSize)
+        var size: Int
+            get() = sizeState.intValue
+            set(value) { sizeState.intValue = value }
+
+        val opacityState = mutableIntStateOf(initialOpacity)
+        var opacity: Int
+            get() = opacityState.intValue
+            set(value) { opacityState.intValue = value }
+
+        val isGoalState = mutableStateOf(initialIsGoal)
+        var isGoal: Boolean
+            get() = isGoalState.value
+            set(value) { isGoalState.value = value }
+
         val secondsElapsedState = mutableIntStateOf(initialSeconds)
-        val secondsLeftState = mutableIntStateOf(if (isGoal) (totalSeconds - initialSeconds).coerceAtLeast(0) else totalSeconds)
+        val secondsLeftState = mutableIntStateOf(if (initialIsGoal) (initialTotalSeconds - initialSeconds).coerceAtLeast(0) else initialTotalSeconds)
         val isVisibleState = mutableStateOf(true)
         val isTemporarilyHiddenState = mutableStateOf(false)
         @Volatile
@@ -139,9 +168,25 @@ class SessionUsageOverlayManager(
         synchronized(activeSessions) {
             val existing = activeSessions.find { it.packageName == packageName }
             if (existing != null) {
+                val totalSeconds = durationMinutes * 60
+                existing.totalSeconds = totalSeconds
+                existing.size = size
+                existing.opacity = opacity
+                existing.isGoal = isGoal
+                existing.secondsElapsedState.intValue = initialSeconds
+                existing.secondsLeftState.intValue = if (isGoal) (totalSeconds - initialSeconds).coerceAtLeast(0) else totalSeconds
+                existing.lastReportedUsageSeconds = initialSeconds
+                existing.isVisibleState.value = true
+                existing.isTemporarilyHiddenState.value = false
+                existing.isTimerPaused = false
+                existing.backgroundTimestamp = 0L
+                existing.onSessionEnd = onSessionEnd
+
                 if (existing.hudInstance == null) {
-                    existing.isVisibleState.value = true
                     existing.hudInstance = createHUDInstance(existing)
+                }
+                if (existing.timerJob == null || !existing.timerJob!!.isActive) {
+                    startTimer(existing)
                 }
                 return
             }
@@ -161,7 +206,7 @@ class SessionUsageOverlayManager(
             val isWebsiteSession = packageName.startsWith(WebsiteRepository.WEBSITE_PREFIX)
             val isForeground = if (isWebsiteSession) {
                 WebsiteRepository.isKnownBrowser(currentForegroundPackage) &&
-                        AppStateHolder.currentWebsiteDomain.value == packageName.removePrefix(WebsiteRepository.WEBSITE_PREFIX)
+                        WebsiteStateHolder.currentWebsiteDomain.value == packageName.removePrefix(WebsiteRepository.WEBSITE_PREFIX)
             } else {
                 currentForegroundPackage == packageName || currentForegroundPackage.startsWith("$packageName.")
             }
@@ -169,64 +214,7 @@ class SessionUsageOverlayManager(
                 session.hudInstance = createHUDInstance(session)
             }
 
-            session.timerJob = managerScope.launch {
-                var lastUpdateMillis = System.currentTimeMillis()
-                while (true) {
-                    if (!isGoal && session.secondsLeftState.intValue <= 0) break
-                    if (isGoal && session.secondsElapsedState.intValue >= session.totalSeconds) break
-
-                    val updateInterval = if (isGoal) {
-                        val remainingSeconds = (session.totalSeconds - session.lastReportedUsageSeconds).coerceAtLeast(0)
-                        when {
-                            remainingSeconds < 60 -> 10000L
-                            remainingSeconds < 300 -> 15000L
-                            remainingSeconds < 900 -> 30000L
-                            else -> 50000L
-                        }
-                    } else {
-                        val remainingMillis = session.secondsLeftState.intValue * 1000L
-                        when {
-                            remainingMillis > 3600000 -> 80000L
-                            remainingMillis > 600000 -> 50000L
-                            remainingMillis > 300000 -> 30000L
-                            remainingMillis > 60000 -> 15000L
-                            else -> 10000L
-                        }
-                    }
-
-                    delay(updateInterval)
-
-                    if (session.isTimerPaused) {
-                        lastUpdateMillis = System.currentTimeMillis()
-                        continue
-                    }
-
-                    if (session.backgroundTimestamp != 0L &&
-                        System.currentTimeMillis() - session.backgroundTimestamp > 300000L) {
-                        hideHUD(session.packageName)
-                        return@launch
-                    }
-
-                    val now = System.currentTimeMillis()
-                    val elapsedMillis = now - lastUpdateMillis
-                    if (elapsedMillis >= 1000) {
-                        val secondsToProcess = (elapsedMillis / 1000).toInt()
-                        if (!isGoal) {
-                            session.secondsLeftState.intValue = (session.secondsLeftState.intValue - secondsToProcess).coerceAtLeast(0)
-                        } else {
-                            val newElapsed = session.secondsElapsedState.intValue + secondsToProcess
-                            session.secondsElapsedState.intValue = newElapsed.coerceAtMost(session.totalSeconds)
-                        }
-                        lastUpdateMillis = now - (elapsedMillis % 1000)
-                    }
-                }
-                
-                if (session.hudInstance == null) {
-                    hideHUD(session.packageName)
-                } else if (!isGoal) {
-                    hideHUD(session.packageName)
-                }
-            }
+            startTimer(session)
         }
     }
 
@@ -307,7 +295,7 @@ class SessionUsageOverlayManager(
                 val isWebsiteSession = session.packageName.startsWith("zenith-web:")
                 val isBrowserForWebsite = isWebsiteSession &&
                         WebsiteRepository.isKnownBrowser(currentForegroundPackage) &&
-                        AppStateHolder.currentWebsiteDomain.value == session.packageName.removePrefix(WebsiteRepository.WEBSITE_PREFIX)
+                        WebsiteStateHolder.currentWebsiteDomain.value == session.packageName.removePrefix(WebsiteRepository.WEBSITE_PREFIX)
                 val isForeground = currentForegroundPackage.isNotEmpty() &&
                     (currentForegroundPackage == session.packageName || isBrowserForWebsite || currentForegroundPackage.startsWith("${session.packageName}."))
                 if (isForeground) {
@@ -366,11 +354,11 @@ class SessionUsageOverlayManager(
                 ) {
                     SessionUsageHUD(
                         secondsLeftProvider = { if (session.isGoal) session.secondsElapsedState.intValue else session.secondsLeftState.intValue },
-                        totalSeconds = session.totalSeconds,
-                        size = session.size,
-                        opacity = session.opacity,
+                        totalSecondsProvider = { session.totalSeconds },
+                        sizeProvider = { session.size },
+                        opacityProvider = { session.opacity },
                         isVisibleProvider = { session.isVisibleState.value && !session.isTemporarilyHiddenState.value },
-                        isGoal = session.isGoal,
+                        isGoalProvider = { session.isGoal },
                         userPrefs = userPrefs,
                         onDrag = { dx, dy ->
                             params.x += dx.roundToInt()
@@ -452,6 +440,67 @@ class SessionUsageOverlayManager(
         }
     }
 
+    private fun startTimer(session: Session) {
+        session.timerJob?.cancel()
+        session.timerJob = managerScope.launch {
+            var lastUpdateMillis = System.currentTimeMillis()
+            while (true) {
+                if (!session.isGoal && session.secondsLeftState.intValue <= 0) break
+                if (session.isGoal && session.secondsElapsedState.intValue >= session.totalSeconds) break
+
+                val updateInterval = if (session.isGoal) {
+                    val remainingSeconds = (session.totalSeconds - session.secondsElapsedState.intValue).coerceAtLeast(0)
+                    when {
+                        remainingSeconds < 60 -> 10000L
+                        remainingSeconds < 300 -> 20000L
+                        remainingSeconds < 900 -> 30000L
+                        else -> 60000L
+                    }
+                } else {
+                    val remainingSeconds = session.secondsLeftState.intValue
+                    when {
+                        remainingSeconds < 60 -> 10000L
+                        remainingSeconds < 300 -> 20000L
+                        remainingSeconds < 900 -> 30000L
+                        else -> 60000L
+                    }
+                }
+
+                delay(updateInterval)
+
+                if (session.isTimerPaused) {
+                    lastUpdateMillis = System.currentTimeMillis()
+                    continue
+                }
+
+                if (session.backgroundTimestamp != 0L &&
+                    System.currentTimeMillis() - session.backgroundTimestamp > 300000L) {
+                    hideHUD(session.packageName)
+                    return@launch
+                }
+
+                val now = System.currentTimeMillis()
+                val elapsedMillis = now - lastUpdateMillis
+                if (elapsedMillis >= 1000) {
+                    val secondsToProcess = (elapsedMillis / 1000).toInt()
+                    if (!session.isGoal) {
+                        session.secondsLeftState.intValue = (session.secondsLeftState.intValue - secondsToProcess).coerceAtLeast(0)
+                    } else {
+                        val newElapsed = session.secondsElapsedState.intValue + secondsToProcess
+                        session.secondsElapsedState.intValue = newElapsed.coerceAtMost(session.totalSeconds)
+                    }
+                    lastUpdateMillis = now - (elapsedMillis % 1000)
+                }
+            }
+
+            if (session.hudInstance == null) {
+                hideHUD(session.packageName)
+            } else if (!session.isGoal) {
+                hideHUD(session.packageName)
+            }
+        }
+    }
+
     fun removeAllHUDViews() {
         synchronized(activeSessions) {
             activeSessions.forEach { session ->
@@ -505,16 +554,17 @@ class SessionUsageOverlayManager(
         synchronized(activeSessions) {
             var session = activeSessions.find { it.packageName == packageName }
             if (session == null && WebsiteRepository.isKnownBrowser(packageName)) {
-                val activeWebsitePackage = AppStateHolder.currentWebsiteDomain.value
+                val activeWebsitePackage = WebsiteStateHolder.currentWebsiteDomain.value
                     ?.let { WebsiteRepository.createPackageName(it) }
                 session = activeSessions.find { it.packageName == activeWebsitePackage }
             }
             session?.let {
+                if (it.backgroundTimestamp != 0L) return@let
                 it.isVisibleState.value = true
-                it.backgroundTimestamp = 0L
-                if (it.hudInstance == null && !it.isTemporarilyHiddenState.value &&
+                val needsHud = it.hudInstance == null && !it.isTemporarilyHiddenState.value &&
                     ((!it.isGoal && it.secondsLeftState.intValue > 0) ||
-                     (it.isGoal && it.secondsElapsedState.intValue < it.totalSeconds))) {
+                     (it.isGoal && it.secondsElapsedState.intValue < it.totalSeconds))
+                if (needsHud) {
                     if (Looper.myLooper() == Looper.getMainLooper()) {
                         it.hudInstance = createHUDInstance(it)
                     } else {
@@ -527,6 +577,13 @@ class SessionUsageOverlayManager(
                         }
                     }
                 }
+                if (it.timerJob == null || !it.timerJob!!.isActive) {
+                    if (Looper.myLooper() == Looper.getMainLooper()) {
+                        startTimer(it)
+                    } else {
+                        mainHandler.post { startTimer(it) }
+                    }
+                }
             }
         }
     }
@@ -535,11 +592,13 @@ class SessionUsageOverlayManager(
         synchronized(activeSessions) {
             activeSessions.find { it.packageName == packageName }?.let { session ->
                 session.isTimerPaused = true
+                session.isVisibleState.value = false
                 session.hudInstance?.let {
                     destroyHUDInstance(it, session.packageName)
                     session.hudInstance = null
                 }
-                session.isVisibleState.value = false
+                session.timerJob?.cancel()
+                session.timerJob = null
             }
         }
     }
@@ -568,9 +627,38 @@ class SessionUsageOverlayManager(
     }
 
     fun updateForegroundApp(packageName: String, force: Boolean = false) {
-        if (packageName.isEmpty() || SYSTEM_UI_PACKAGES.contains(packageName)) return
+        if (packageName.isEmpty()) return
+        val isSystemUI = SYSTEM_UI_PACKAGES.contains(packageName)
+        if (isSystemUI && !force) return
+        
         if (!force && currentForegroundPackage == packageName) return
-        currentForegroundPackage = packageName
+        if (!isSystemUI) currentForegroundPackage = packageName
+        synchronized(activeSessions) {
+            activeSessions.forEach { session ->
+                val isWebsiteSession = session.packageName.startsWith("zenith-web:")
+                val isBrowserForWebsite = isWebsiteSession &&
+                        WebsiteRepository.isKnownBrowser(packageName) &&
+                        WebsiteStateHolder.currentWebsiteDomain.value == session.packageName.removePrefix(WebsiteRepository.WEBSITE_PREFIX)
+                val isForeground = (packageName == session.packageName || isBrowserForWebsite || packageName.startsWith("${session.packageName}."))
+                if (!isForeground && !isSystemUI) {
+                    session.isVisibleState.value = false
+                    if (session.backgroundTimestamp == 0L) {
+                        session.backgroundTimestamp = System.currentTimeMillis()
+                    }
+                    session.hudInstance?.let {
+                        val hud = it
+                        session.hudInstance = null
+                        if (Looper.myLooper() == Looper.getMainLooper()) {
+                            destroyHUDInstance(hud, session.packageName)
+                        } else {
+                            mainHandler.post { destroyHUDInstance(hud, session.packageName) }
+                        }
+                    }
+                    session.timerJob?.cancel()
+                    session.timerJob = null
+                }
+            }
+        }
         
         foregroundUpdateJob?.cancel()
         foregroundUpdateJob = managerScope.launch {
@@ -579,14 +667,15 @@ class SessionUsageOverlayManager(
                 val isWebsiteSession = session.packageName.startsWith("zenith-web:")
                 val isBrowserForWebsite = isWebsiteSession &&
                         WebsiteRepository.isKnownBrowser(packageName) &&
-                        AppStateHolder.currentWebsiteDomain.value == session.packageName.removePrefix(WebsiteRepository.WEBSITE_PREFIX)
+                        WebsiteStateHolder.currentWebsiteDomain.value == session.packageName.removePrefix(WebsiteRepository.WEBSITE_PREFIX)
                 val isForeground = packageName.isNotEmpty() &&
                                  (packageName == session.packageName || isBrowserForWebsite || packageName.startsWith("${session.packageName}."))
                 
                 if (isForeground) {
+                    session.isTimerPaused = false
                     session.backgroundTimestamp = 0L
                     session.isVisibleState.value = true
-                    
+
                     synchronized(session) {
                         if (session.hudInstance == null && !session.isTemporarilyHiddenState.value && 
                             ((!session.isGoal && session.secondsLeftState.intValue > 0) || 
@@ -598,16 +687,8 @@ class SessionUsageOverlayManager(
                             }
                         }
                     }
-                } else {
-                    if (session.isVisibleState.value) {
-                        session.isVisibleState.value = false
-                        if (session.backgroundTimestamp == 0L) {
-                            session.backgroundTimestamp = System.currentTimeMillis()
-                        }
-                    }
-                    session.hudInstance?.let {
-                        destroyHUDInstance(it, session.packageName)
-                        session.hudInstance = null
+                    if (session.timerJob == null || !session.timerJob!!.isActive) {
+                        startTimer(session)
                     }
                 }
             }
@@ -638,11 +719,11 @@ private data class HUDColors(
 @Composable
 fun SessionUsageHUD(
     secondsLeftProvider: () -> Int,
-    totalSeconds: Int,
-    size: Int,
-    opacity: Int,
+    totalSecondsProvider: () -> Int,
+    sizeProvider: () -> Int,
+    opacityProvider: () -> Int,
     isVisibleProvider: () -> Boolean,
-    isGoal: Boolean = false,
+    isGoalProvider: () -> Boolean = { false },
     userPrefs: UserPreferences?,
     onDrag: (Float, Float) -> Unit,
     onHideTemporarily: () -> Unit,
@@ -665,6 +746,8 @@ fun SessionUsageHUD(
         val isCompleted = remember {
             derivedStateOf {
                 val seconds = secondsLeftProvider()
+                val isGoal = isGoalProvider()
+                val totalSeconds = totalSecondsProvider()
                 if (isGoal) seconds >= totalSeconds else seconds <= 0
             }
         }
@@ -673,13 +756,13 @@ fun SessionUsageHUD(
 
         val animatingOutState = remember {
             derivedStateOf {
-                if (isGoal) isCompleted.value && celebrationFinished else isCompleted.value
+                if (isGoalProvider()) isCompleted.value && celebrationFinished else isCompleted.value
             }
         }
 
         val celebrationScale = remember { Animatable(1f) }
         LaunchedEffect(isCompleted.value) {
-            if (isCompleted.value && isGoal) {
+            if (isCompleted.value && isGoalProvider()) {
                 celebrationScale.animateTo(
                     targetValue = 1.12f,
                     animationSpec = spring(
@@ -699,7 +782,7 @@ fun SessionUsageHUD(
             }
         }
 
-        val scaleFactor = remember(size) { size / 100f }
+        val scaleFactor = remember { derivedStateOf { sizeProvider() / 100f } }
         val showHUDState = remember {
             derivedStateOf {
                 isVisibleProvider() && !animatingOutState.value && entranceAnimationStarted.value
@@ -707,7 +790,7 @@ fun SessionUsageHUD(
         }
 
         val scaleState = animateFloatAsState(
-            targetValue = if (showHUDState.value) scaleFactor else 0f,
+            targetValue = if (showHUDState.value) scaleFactor.value else 0f,
             animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow),
             label = "HUDScale",
             finishedListener = { 
@@ -737,8 +820,8 @@ fun SessionUsageHUD(
         ) {
             Box(
                 modifier = Modifier
-                    .size((baseSize + animationBuffer) * scaleFactor)
-                    .pointerInput(scaleFactor) {
+                    .size((baseSize + animationBuffer) * scaleFactor.value)
+                    .pointerInput(Unit) {
                         detectDragGestures { change, dragAmount ->
                             change.consume()
                             onDrag(dragAmount.x, dragAmount.y)
@@ -760,7 +843,7 @@ fun SessionUsageHUD(
                             val scale = scaleState.value * celebrationScale.value
                             scaleX = scale
                             scaleY = scale
-                            alpha = if (scaleFactor > 0f) (scale / scaleFactor).coerceIn(0f, 1f) * (opacity / 100f) else 0f
+                            alpha = if (scaleFactor.value > 0f) (scale / scaleFactor.value).coerceIn(0f, 1f) * (opacityProvider() / 100f) else 0f
                             transformOrigin = TransformOrigin.Center
                         },
                     contentAlignment = Alignment.Center
@@ -774,18 +857,18 @@ fun SessionUsageHUD(
                     ) {
                         HUDProgress(
                             secondsLeftProvider = secondsLeftProvider,
-                            totalSeconds = totalSeconds,
+                            totalSecondsProvider = totalSecondsProvider,
                             color = hudColors.primary,
                             tertiaryColor = hudColors.tertiary,
                             trackColor = hudColors.track,
-                            isCompleted = isCompleted.value && isGoal
+                            isCompletedProvider = { isCompleted.value && isGoalProvider() }
                         )
 
                         HUDTimerText(
                             secondsProvider = secondsLeftProvider,
-                            isCompleted = isCompleted.value && isGoal,
-                            color = if (isCompleted.value && isGoal) hudColors.tertiary else hudColors.onSurface,
-                            iconColor = if (isCompleted.value && isGoal) hudColors.tertiary else hudColors.onSurface
+                            isCompletedProvider = { isCompleted.value && isGoalProvider() },
+                            color = if (isCompleted.value && isGoalProvider()) hudColors.tertiary else hudColors.onSurface,
+                            iconColor = if (isCompleted.value && isGoalProvider()) hudColors.tertiary else hudColors.onSurface
                         )
                     }
                 }
@@ -798,24 +881,25 @@ fun SessionUsageHUD(
 @Composable
 private fun HUDProgress(
     secondsLeftProvider: () -> Int,
-    totalSeconds: Int,
+    totalSecondsProvider: () -> Int,
     color: Color,
     tertiaryColor: Color,
     trackColor: Color,
-    isCompleted: Boolean
+    isCompletedProvider: () -> Boolean
 ) {
     val finalColor by animateColorAsState(
-        targetValue = if (isCompleted) tertiaryColor else color,
+        targetValue = if (isCompletedProvider()) tertiaryColor else color,
         animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessLow),
         label = "ProgressColor"
     )
-    val amplitude by animateFloatAsState(if (isCompleted) 4f else 1f, label = "WaveAmplitude")
-    val waveSpeed by animateDpAsState(if (isCompleted) 15.dp else 0.dp, label = "WaveSpeed")
+    val amplitude by animateFloatAsState(if (isCompletedProvider()) 4f else 1f, label = "WaveAmplitude")
+    val waveSpeed by animateDpAsState(if (isCompletedProvider()) 15.dp else 0.dp, label = "WaveSpeed")
 
-    val snappedProgress by remember(totalSeconds) {
+    val snappedProgress by remember {
         derivedStateOf {
             val seconds = secondsLeftProvider()
-            seconds.toFloat() / totalSeconds.toFloat()
+            val totalSeconds = totalSecondsProvider()
+            if (totalSeconds > 0) seconds.toFloat() / totalSeconds.toFloat() else 0f
         }
     }
 
@@ -848,7 +932,7 @@ private fun HUDProgress(
 @Composable
 private fun HUDTimerText(
     secondsProvider: () -> Int,
-    isCompleted: Boolean,
+    isCompletedProvider: () -> Boolean,
     color: Color,
     iconColor: Color
 ) {
@@ -864,7 +948,7 @@ private fun HUDTimerText(
     }
 
     val textScale = remember { Animatable(1f) }
-    LaunchedEffect(text, isCompleted) {
+    LaunchedEffect(text, isCompletedProvider()) {
         textScale.animateTo(
             targetValue = 1.2f,
             animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)
@@ -875,7 +959,7 @@ private fun HUDTimerText(
         )
     }
 
-    if (isCompleted) {
+    if (isCompletedProvider()) {
         Icon(
             imageVector = Icons.Rounded.Check,
             contentDescription = null,

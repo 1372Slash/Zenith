@@ -44,6 +44,7 @@ import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithButtonType
@@ -111,7 +112,18 @@ fun ShieldOverlay(
             }
 
             val s = shieldRepository.getShieldByPackageNameFlow(packageName).first()
-            val dailyUsage = detailedUsage.appUsageMap[packageName] ?: 0L
+
+            val dailyUsage = if (WebsiteRepository.isWebsitePackageName(packageName)) {
+                val domain = WebsiteRepository.extractDomainFromPackageName(packageName)
+                val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                val websiteUsage = withContext(Dispatchers.IO) {
+                    shieldRepository.getWebsiteUsage(todayDate, domain)
+                }
+                (websiteUsage?.usageTimeMillis ?: 0L).coerceAtMost(timeSinceMidnight)
+            } else {
+                detailedUsage.appUsageMap[packageName] ?: 0L
+            }
+
             val liveAppUsage = if (s != null && s.limitPeriod == LimitPeriod.WEEKLY) {
                 withContext(Dispatchers.IO) {
                     shieldRepository.getWeeklyUsageLive(packageName, dailyUsage.coerceAtMost(timeSinceMidnight))
@@ -544,6 +556,7 @@ fun PortraitInterceptLayout(
 
     val effectivelyTimeReached = isTimeLimitReached || (currentRemainingMinutes != null && currentRemainingMinutes <= 0)
     val isBlocked = (isUsesExceeded || effectivelyTimeReached) && !isEmergencyUnlocked
+    val isWebsite = WebsiteRepository.isWebsitePackageName(packageName)
 
     Column(
         modifier = Modifier
@@ -672,7 +685,7 @@ fun PortraitInterceptLayout(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            CloseAppTextButton(onCloseApp, autoKickProgress, size = ZenithButtonSize.ExtraLarge)
+            CloseAppTextButton(onCloseApp, autoKickProgress, size = ZenithButtonSize.ExtraLarge, isWebsite = isWebsite)
         }
     }
 }
@@ -850,7 +863,8 @@ fun LandscapeInterceptLayout(
                     onEmergencyClick = onEmergencyClick,
                     onEmergencyHoldingChange = onEmergencyHoldingChange,
                     onAllowUse = onAllowUse,
-                    onCloseApp = onCloseApp
+                    onCloseApp = onCloseApp,
+                    packageName = packageName
                 )
             }
         }
@@ -1112,8 +1126,10 @@ fun ShieldLandscapeContent(
     onEmergencyClick: () -> Unit,
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
     onAllowUse: (Int) -> Unit,
-    onCloseApp: () -> Unit
+    onCloseApp: () -> Unit,
+    packageName: String = ""
 ) {
+    val isWebsite = WebsiteRepository.isWebsitePackageName(packageName)
     val displayRemainingMinutes = if (shield != null && shield.timeLimitMinutes > 0) {
         val totalLimitMillis = shield.timeLimitMinutes * 60 * 1000L
         ((totalLimitMillis - totalUsageToday).coerceAtLeast(0L) / 60000).toInt()
@@ -1146,7 +1162,7 @@ fun ShieldLandscapeContent(
                 EmergencyButton(onEmergencyUse = onEmergencyClick, onHoldingChange = onEmergencyHoldingChange)
             }
             Spacer(modifier = Modifier.height(24.dp))
-            CloseAppTextButton(onCloseApp, autoKickProgress, size = ZenithButtonSize.Large)
+            CloseAppTextButton(onCloseApp, autoKickProgress, size = ZenithButtonSize.Large, isWebsite = isWebsite)
         }
     } else {
         if (incentiveTier != null && !incentiveTier.isUnlocked && incentiveTier.bonusUses < Int.MAX_VALUE && bonusUsesLeft > 0 && !bonusConsumedThisSession) {
@@ -1164,7 +1180,7 @@ fun ShieldLandscapeContent(
                 Spacer(modifier = Modifier.weight(1f))
                 DelayInProgressSection(randomMessage, delayProgressAnimatable, delayDurationSeconds, currentEvent)
                 Spacer(modifier = Modifier.weight(1f))
-                CloseAppTextButton(onCloseApp, autoKickProgress, size = ZenithButtonSize.Large)
+                CloseAppTextButton(onCloseApp, autoKickProgress, size = ZenithButtonSize.Large, isWebsite = isWebsite)
             }
         } else {
             Column(
@@ -1181,7 +1197,7 @@ fun ShieldLandscapeContent(
                 Spacer(modifier = Modifier.height(12.dp))
                 DurationButtonsGrid(if (isEmergencyUnlocked) null else displayRemainingMinutes, onAllowUse)
                 Spacer(modifier = Modifier.weight(1f))
-                CloseAppTextButton(onCloseApp, autoKickProgress, size = ZenithButtonSize.Large)
+                CloseAppTextButton(onCloseApp, autoKickProgress, size = ZenithButtonSize.Large, isWebsite = isWebsite)
             }
         }
     }

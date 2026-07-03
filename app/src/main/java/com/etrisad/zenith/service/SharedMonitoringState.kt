@@ -81,7 +81,10 @@ object SharedMonitoringState {
     val CRITICAL_SYSTEM_PACKAGES = setOf(
         "android", "com.android.systemui", "com.android.settings", "com.android.phone",
         "com.android.server.telecom", "com.google.android.packageinstaller",
-        "com.android.packageinstaller", "com.google.android.permissioncontroller"
+        "com.android.packageinstaller", "com.google.android.permissioncontroller",
+        "com.samsung.android.systemui", "com.miui.systemui", "com.huawei.systemui",
+        "com.oppo.systemui", "com.coloros.safecenter", "com.vivo.systemui",
+        "com.oneplus.twspackage", "com.android.incallui"
     )
 
     val BLOCKABLE_SYSTEM_APPS = setOf(

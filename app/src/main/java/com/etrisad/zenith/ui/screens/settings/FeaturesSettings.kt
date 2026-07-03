@@ -53,6 +53,7 @@ fun FeaturesSettings(
     onIncentiveLockDisableRequest: () -> Unit,
     onIncentiveLockCancelDisableRequest: () -> Unit,
     onNavigateToGracePeriod: () -> Unit,
+    onWebsiteAutoTrackingEnabledChange: (Boolean) -> Unit,
     goalCount: Int
 ) {
     val context = LocalContext.current
@@ -325,6 +326,18 @@ fun FeaturesSettings(
             onCheckedChange = onBatteryStatsResetEnabledChange,
             icon = Icons.Outlined.BatteryChargingFull,
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        PreferenceCategory(title = "Website Tracking")
+
+        SettingsToggle(
+            title = "Auto Track Websites",
+            description = "Automatically record time spent on all websites (not just shielded ones) and show them in usage stats",
+            checked = preferences.websiteAutoTrackingEnabled,
+            onCheckedChange = onWebsiteAutoTrackingEnabledChange,
+            icon = Icons.Outlined.Language,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
         )
     }
 }

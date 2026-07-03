@@ -205,6 +205,7 @@ fun SettingsCategoryScreen(
                         onIncentiveLockDisableRequest = { coroutineScope.launch { preferencesRepository.setIncentiveLockDisableRequestTimestamp(System.currentTimeMillis()) } },
                         onIncentiveLockCancelDisableRequest = { coroutineScope.launch { preferencesRepository.setIncentiveLockDisableRequestTimestamp(0L) } },
                         onNavigateToGracePeriod = { navController.navigate(Screen.GracePeriod.route) },
+                        onWebsiteAutoTrackingEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setWebsiteAutoTrackingEnabled(enabled) } },
                         goalCount = goalCount
                     )
                     "appearance" -> AppearanceSettings(

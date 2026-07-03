@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bedtime
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,8 +24,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -40,8 +44,10 @@ fun BedtimeOverlayContent(
     onCloseApp: () -> Unit
 ) {
     val context = LocalContext.current
+    val isWebsite = WebsiteRepository.isWebsitePackageName(packageName)
     val appIcon = remember(packageName) {
-        try {
+        if (isWebsite) null
+        else try {
             val drawable = context.packageManager.getApplicationIcon(packageName)
             drawable.toBitmap(width = 120, height = 120).asImageBitmap()
         } catch (_: Exception) {
@@ -146,7 +152,9 @@ fun BedtimeOverlayContent(
                         delay(400)
                         onCloseApp()
                     }
-                }
+                },
+                isWebsite = isWebsite,
+                packageName = packageName
             )
         } else {
             PortraitBedtimeLayout(
@@ -161,7 +169,9 @@ fun BedtimeOverlayContent(
                         delay(400)
                         onCloseApp()
                     }
-                }
+                },
+                isWebsite = isWebsite,
+                packageName = packageName
             )
         }
     }
@@ -174,7 +184,9 @@ fun PortraitBedtimeLayout(
     bedtimeUiState: Triple<Float, String, String>,
     exitProgress: Float,
     userPrefs: com.etrisad.zenith.data.preferences.UserPreferences? = null,
-    onCloseApp: () -> Unit
+    onCloseApp: () -> Unit,
+    isWebsite: Boolean = false,
+    packageName: String = ""
 ) {
     val isFullScreen = exitProgress > 0f || userPrefs?.overlayFullScreen == true
 
@@ -195,7 +207,7 @@ fun PortraitBedtimeLayout(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically)
         ) {
-            BedtimeHeader(appName, appIcon)
+            BedtimeHeader(appName = appName, appIcon = appIcon, isWebsite = isWebsite, packageName = packageName)
 
             BedtimeProgress(bedtimeUiState, isFullScreen = isFullScreen)
 
@@ -217,7 +229,9 @@ fun LandscapeBedtimeLayout(
     bedtimeUiState: Triple<Float, String, String>,
     exitProgress: Float,
     userPrefs: com.etrisad.zenith.data.preferences.UserPreferences? = null,
-    onCloseApp: () -> Unit
+    onCloseApp: () -> Unit,
+    isWebsite: Boolean = false,
+    packageName: String = ""
 ) {
     val isFullScreen = exitProgress > 0f || userPrefs?.overlayFullScreen == true
 
@@ -238,7 +252,7 @@ fun LandscapeBedtimeLayout(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                BedtimeHeader(appName, appIcon, isSmall = !isFullScreen)
+                BedtimeHeader(appName = appName, appIcon = appIcon, isSmall = !isFullScreen, isWebsite = isWebsite, packageName = packageName)
                 Spacer(modifier = Modifier.height(20.dp))
                 BedtimeDescription()
             }
@@ -261,7 +275,7 @@ fun LandscapeBedtimeLayout(
 }
 
 @Composable
-private fun BedtimeHeader(appName: String, appIcon: androidx.compose.ui.graphics.ImageBitmap?, isSmall: Boolean = false) {
+private fun BedtimeHeader(appName: String, appIcon: androidx.compose.ui.graphics.ImageBitmap?, isSmall: Boolean = false, isWebsite: Boolean = false, packageName: String = "") {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Box(
             modifier = Modifier
@@ -270,7 +284,20 @@ private fun BedtimeHeader(appName: String, appIcon: androidx.compose.ui.graphics
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
-            if (appIcon != null) {
+            if (isWebsite) {
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data("app-icon://$packageName")
+                        .crossfade(500)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier.size(if (isSmall) 48.dp else 60.dp).clip(CircleShape),
+                    contentScale = ContentScale.Crop,
+                    error = {
+                        Icon(Icons.Outlined.Language, null, modifier = Modifier.size(if (isSmall) 36.dp else 48.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
+                )
+            } else if (appIcon != null) {
                 Image(
                     bitmap = appIcon,
                     contentDescription = null,

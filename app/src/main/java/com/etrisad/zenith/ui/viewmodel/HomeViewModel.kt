@@ -91,6 +91,7 @@ data class HomeUiState(
     val snapshotStamps: List<AppUsageInfo> = emptyList(),
     val topApps: List<AppUsageInfo> = emptyList(),
     val allAppsUsage: List<AppUsageInfo> = emptyList(),
+    val websiteUsage: List<AppUsageInfo> = emptyList(),
     val activeShields: List<ShieldEntity> = emptyList(),
     val activeGoals: List<ShieldEntity> = emptyList(),
     val shieldSortType: ShieldSortType = ShieldSortType.ALPHABETICAL,
@@ -709,6 +710,36 @@ class HomeViewModel(
                 }
             }
         }
+
+        observeWebsiteUsage()
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeWebsiteUsage() {
+        viewModelScope.launch {
+            _uiState.map { it.selectedDateMillis }
+                .distinctUntilChanged()
+                .flatMapLatest { millis ->
+                    val dateStr = getDateFormat().format(Date(millis))
+                    shieldRepository.getWebsiteUsageForDate(dateStr)
+                }
+                .flowOn(Dispatchers.Default)
+                .collect { entities ->
+                    val usage = entities.map { entity ->
+                        val domain = entity.domain
+                        val displayName = com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
+                        val pkgName = com.etrisad.zenith.data.website.WebsiteRepository.createPackageName(domain)
+                        AppUsageInfo(
+                            packageName = pkgName,
+                            appName = displayName,
+                            totalTimeVisible = entity.usageTimeMillis,
+                            hasDatabaseRecord = true,
+                            isLive = false
+                        )
+                    }.sortedByDescending { it.totalTimeVisible }
+                    _uiState.update { it.copy(websiteUsage = usage) }
+                }
+        }
     }
 
     val todayHourlyUsage: Flow<List<HourlyUsageEntity>> = allDatabaseUsage.flatMapLatest {
@@ -1219,6 +1250,22 @@ class HomeViewModel(
         val topApps = allAppsUsage.take(5)
 
         val selectedDateStr = dateFormat.format(Date(selectedDate))
+
+        val websiteUsage = withContext(Dispatchers.IO) {
+            val websiteEntities = shieldRepository.getWebsiteUsageListForDate(selectedDateStr)
+            websiteEntities.map { entity ->
+                val domain = entity.domain
+                val displayName = com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
+                val pkgName = com.etrisad.zenith.data.website.WebsiteRepository.createPackageName(domain)
+                AppUsageInfo(
+                    packageName = pkgName,
+                    appName = displayName,
+                    totalTimeVisible = entity.usageTimeMillis,
+                    hasDatabaseRecord = true,
+                    isLive = false
+                )
+            }.sortedByDescending { it.totalTimeVisible }
+        }
         val selectedDayHistory = allHistory.filter { it.date == selectedDateStr }
         val appSum = allAppsUsage.sumOf { it.totalTimeVisible }
 
@@ -1510,6 +1557,7 @@ class HomeViewModel(
                 snapshotStamps       = snapshotStamps.reversed(),
                 topApps              = if (topApps.isEmpty() && isSelectedToday) state.topApps else topApps,
                 allAppsUsage         = if (allAppsUsage.isEmpty() && isSelectedToday) state.allAppsUsage else allAppsUsage,
+                websiteUsage         = websiteUsage,
                 shieldUsage          = finalShieldUsage,
                 goalUsage            = finalGoalUsage,
                 otherUsage           = finalOtherUsage,

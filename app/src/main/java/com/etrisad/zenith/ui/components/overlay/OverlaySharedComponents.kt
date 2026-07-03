@@ -585,11 +585,12 @@ fun EmergencyButton(onEmergencyUse: () -> Unit, onHoldingChange: (Boolean) -> Un
 fun CloseAppTextButton(
     onCloseApp: () -> Unit,
     autoKickProgress: () -> Float = { 0f },
-    size: ZenithButtonSize = ZenithButtonSize.ExtraLarge
+    size: ZenithButtonSize = ZenithButtonSize.ExtraLarge,
+    isWebsite: Boolean = false
 ) {
     ZenithButton(
         onClick = onCloseApp,
-        text = "Close App",
+        text = if (isWebsite) "Quit Web" else "Close App",
         type = ZenithButtonType.Text,
         contentColor = MaterialTheme.colorScheme.error,
         backgroundProgressProvider = autoKickProgress,
