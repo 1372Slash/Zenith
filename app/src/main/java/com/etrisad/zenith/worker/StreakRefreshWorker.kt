@@ -14,7 +14,8 @@ class StreakRefreshWorker(
         return try {
             val app = applicationContext as ZenithApplication
             app.userPreferencesRepository.refreshGlobalStreak(app.shieldRepository)
-            app.userPreferencesRepository.refreshAllAppStreaks(app.shieldRepository)
+            app.userPreferencesRepository.refreshAppStreaks(app.shieldRepository)
+            app.userPreferencesRepository.refreshWebStreaks(app.shieldRepository)
             Result.success()
         } catch (e: Exception) {
             Result.retry()

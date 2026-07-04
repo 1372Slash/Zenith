@@ -353,7 +353,8 @@ class AppUsageMonitorService : Service() {
             com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
             updateStreaks()
             preferencesRepository.refreshGlobalStreak(shieldRepository)
-            preferencesRepository.refreshAllAppStreaks(shieldRepository)
+            preferencesRepository.refreshAppStreaks(shieldRepository)
+            preferencesRepository.refreshWebStreaks(shieldRepository)
             shieldRepository.resetDailyRemainingTimes()
             checkWeeklyReset()
             SharedMonitoringState.notifiedGoals.clear()
@@ -1809,7 +1810,8 @@ class AppUsageMonitorService : Service() {
 
     private suspend fun updateStreaks() {
         preferencesRepository.refreshGlobalStreak(shieldRepository)
-        preferencesRepository.refreshAllAppStreaks(shieldRepository)
+        preferencesRepository.refreshAppStreaks(shieldRepository)
+        preferencesRepository.refreshWebStreaks(shieldRepository)
 
         val prefs = preferencesRepository.userPreferencesFlow.first()
         if (prefs.bedtimeEnabled) {
