@@ -348,6 +348,26 @@ fun SettingsCategoryScreen(
                                 app.shieldRepository.insertDailyUsage(com.etrisad.zenith.data.local.entity.DailyUsageEntity(packageName = pkg, date = todayStr, usageTimeMillis = time))
                             }
                         },
+                        onTestGoalCallerDelayed = {
+                            try {
+                                val alarmManager = context.getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+                                val alarmIntent = android.content.Intent(context, com.etrisad.zenith.service.ZenithHeartbeatReceiver::class.java).apply {
+                                    action = "com.etrisad.zenith.action.TEST_GOAL_CALLER_FIRE"
+                                }
+                                val pendingIntent = android.app.PendingIntent.getBroadcast(
+                                    context, 1003, alarmIntent,
+                                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                                )
+                                alarmManager.setAndAllowWhileIdle(
+                                    android.app.AlarmManager.RTC_WAKEUP,
+                                    java.lang.System.currentTimeMillis() + 10 * 60 * 1000L,
+                                    pendingIntent
+                                )
+                                Toast.makeText(context, "Test goal caller in 10 min", Toast.LENGTH_SHORT).show()
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Failed: ${e.message}", Toast.LENGTH_LONG).show()
+                            }
+                        },
                         onTestUsageGlimpse = {
                             val isDark = when (preferences.themeConfig) {
                                 com.etrisad.zenith.data.preferences.ThemeConfig.LIGHT -> false

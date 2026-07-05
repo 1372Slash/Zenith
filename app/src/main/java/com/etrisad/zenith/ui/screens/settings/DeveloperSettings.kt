@@ -55,7 +55,8 @@ fun DeveloperSettings(
     onUpdateAppStreak: (String, Int) -> Unit,
     onUpdateGlobalScreenTime: (Long) -> Unit,
     onUpdateAppScreenTime: (String, Long) -> Unit,
-    onTestUsageGlimpse: () -> Unit
+    onTestUsageGlimpse: () -> Unit,
+    onTestGoalCallerDelayed: () -> Unit
 ) {
     var showAppPickerForStreak by remember { mutableStateOf(false) }
     var showAppPickerForUsage by remember { mutableStateOf(false) }
@@ -204,6 +205,15 @@ fun DeveloperSettings(
                 onClick = onTestGoalOverlay,
                 icon = Icons.Outlined.BugReport,
                 shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+            SettingsActionItem(
+                title = "Test Goal Caller (10 min)",
+                summary = "Schedule a test goal caller alarm to fire after 10 minutes (tests screen-off behavior)",
+                onClick = onTestGoalCallerDelayed,
+                icon = Icons.Outlined.Alarm,
+                shape = RoundedCornerShape(8.dp)
             )
 
             Spacer(modifier = Modifier.height(4.dp))

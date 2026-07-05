@@ -225,9 +225,34 @@ class AppUsageMonitorService : Service() {
                 if (!isScreenOn) {
                     Log.d("Zenith_SCREEN", "SCREEN_OFF_GOAL_CHECK: running checkGoalReminders()")
                     serviceScope.launch { checkGoalReminders() }
+                    scheduleScreenOffGoalAlarm()
                 } else {
                     Log.d("Zenith_SCREEN", "SCREEN_OFF_GOAL_CHECK: ignored, screen is ON")
                 }
+            }
+            "com.etrisad.zenith.action.TEST_GOAL_CALLER" -> {
+                try {
+                    val alarmManager = getSystemService(android.content.Context.ALARM_SERVICE) as AlarmManager
+                    val alarmIntent = Intent(this, ZenithHeartbeatReceiver::class.java).apply {
+                        action = "com.etrisad.zenith.action.TEST_GOAL_CALLER_FIRE"
+                    }
+                    val pendingIntent = PendingIntent.getBroadcast(
+                        this, 1003, alarmIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    alarmManager.setAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        System.currentTimeMillis() + 10 * 60 * 1000L,
+                        pendingIntent
+                    )
+                    Toast.makeText(this, "Test goal caller will fire in 10 minutes", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Log.e("Zenith", "Failed to schedule test goal caller", e)
+                }
+            }
+            "com.etrisad.zenith.action.TEST_GOAL_CALLER_FIRE" -> {
+                Log.d("Zenith_SCREEN", "TEST_GOAL_CALLER_FIRE: firing test goal caller")
+                serviceScope.launch { sendTestGoalCallerNotification() }
             }
         }
         return START_STICKY
@@ -329,10 +354,9 @@ class AppUsageMonitorService : Service() {
             this, 1001, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val interval = 15 * 60 * 1000L
-        alarmManager.setInexactRepeating(
+        alarmManager.setAndAllowWhileIdle(
             AlarmManager.RTC_WAKEUP,
             System.currentTimeMillis() + interval,
-            interval,
             pendingIntent
         )
     }
@@ -494,18 +518,15 @@ class AppUsageMonitorService : Service() {
             if (triggeredGoals.isNotEmpty()) {
                 triggeredGoals.forEach { goal ->
                     sendGoalSuggestionNotification(goal)
-                    shieldRepository.updateShield(goal.copy(lastGoalReminderTimestamp = currentTime))
                 }
 
                 val overlayGoals = triggeredGoals.filter { it.isGoalCallerEnabled }
                 if (overlayGoals.isNotEmpty()) {
-                    val now = LocalTime.now()
-                    val hour = now.hour
-                    val isNightTime = hour >= 22 || hour < 5
+                    sendGoalCallerNotification(overlayGoals)
+                }
 
-                    if ((!SharedMonitoringState.isBedtimeActive || hour >= 6) && !isNightTime) {
-                        sendGoalCallerNotification(overlayGoals)
-                    }
+                triggeredGoals.forEach { goal ->
+                    shieldRepository.updateShield(goal.copy(lastGoalReminderTimestamp = currentTime))
                 }
             }
         } catch (e: Exception) {
@@ -514,19 +535,20 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun sendGoalSuggestionNotification(goal: ShieldEntity) {
-        val channelId = "zenith_goal_channel"
-        val manager = getSystemService(NotificationManager::class.java)
+        try {
+            val channelId = "zenith_goal_channel"
+            val manager = getSystemService(NotificationManager::class.java)
 
-        val intent = packageManager.getLaunchIntentForPackage(goal.packageName)
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            goal.packageName.hashCode(),
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
+            val intent = packageManager.getLaunchIntentForPackage(goal.packageName)
+            val pendingIntent = PendingIntent.getActivity(
+                this,
+                goal.packageName.hashCode(),
+                intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
 
-        var isCustomBitmap: Boolean
-        val iconBitmap = try {
+            var isCustomBitmap: Boolean
+            val iconBitmap = try {
             val drawable = packageManager.getApplicationIcon(goal.packageName)
             if (drawable is BitmapDrawable) {
                 isCustomBitmap = false
@@ -564,39 +586,115 @@ class AppUsageMonitorService : Service() {
         manager.notify(goal.packageName.hashCode() + 1000, notification)
 
         if (isCustomBitmap) iconBitmap?.recycle()
+        } catch (e: Exception) {
+            Log.e("ZenithAUMS", "sendGoalSuggestionNotification failed: ${e.message}", e)
+        }
     }
 
     private fun sendGoalCallerNotification(goals: List<ShieldEntity>) {
-        val channelId = "zenith_goal_caller_channel"
-        val manager = getSystemService(NotificationManager::class.java)
+        try {
+            val channelId = "zenith_goal_caller_channel"
+            val manager = getSystemService(NotificationManager::class.java)
 
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            if (manager.getNotificationChannel(channelId) == null) {
-                val channel = NotificationChannel(
-                    channelId, "Goal Caller", NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-                    description = "Full-screen goal caller alerts"
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                if (manager.getNotificationChannel(channelId) == null) {
+                    val channel = NotificationChannel(
+                        channelId, "Goal Caller", NotificationManager.IMPORTANCE_HIGH
+                    ).apply {
+                        description = "Full-screen goal caller alerts"
+                    }
+                    manager.createNotificationChannel(channel)
                 }
-                manager.createNotificationChannel(channel)
             }
-        }
 
-        val firstGoal = goals.first()
+            val firstGoal = goals.first()
+            val intent = Intent(this, AppGoalOverlayActivity::class.java).apply {
+                putStringArrayListExtra(
+                    AppGoalOverlayActivity.EXTRA_PACKAGE_NAMES,
+                    ArrayList(goals.map { it.packageName })
+                )
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                this, 0, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val builder = NotificationCompat.Builder(this, channelId)
+                .setContentTitle("Time for ${firstGoal.appName}?")
+                .setContentText("Your goal setting suggests it's time to open ${firstGoal.appName} and make some progress!")
+                .setSmallIcon(R.drawable.ic_flag)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_CALL)
+                .setFullScreenIntent(pendingIntent, true)
+                .setAutoCancel(true)
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                builder.setTimeoutAfter(5000L)
+            }
+
+            manager.notify(2000, builder.build())
+
+            if (!isScreenOn) {
+                val directIntent = Intent(this, AppGoalOverlayActivity::class.java).apply {
+                    putStringArrayListExtra(
+                        AppGoalOverlayActivity.EXTRA_PACKAGE_NAMES,
+                        ArrayList(goals.map { it.packageName })
+                    )
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                }
+                val wakePendingIntent = PendingIntent.getActivity(
+                    this, 1002, directIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                val alarmManager = getSystemService(android.content.Context.ALARM_SERVICE) as AlarmManager
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    System.currentTimeMillis() + 100,
+                    wakePendingIntent
+                )
+            }
+        } catch (e: Exception) {
+            Log.e("ZenithAUMS", "sendGoalCallerNotification failed: ${e.message}", e)
+        }
+    }
+
+    private suspend fun sendTestGoalCallerNotification() {
+        try {
+            val channelId = "zenith_goal_caller_channel"
+            val manager = getSystemService(NotificationManager::class.java)
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                if (manager.getNotificationChannel(channelId) == null) {
+                    val channel = NotificationChannel(
+                        channelId, "Goal Caller", NotificationManager.IMPORTANCE_HIGH
+                    ).apply {
+                        description = "Full-screen goal caller alerts"
+                    }
+                    manager.createNotificationChannel(channel)
+                }
+            }
+
+            val testPackageName = packageName
+        val testAppName = try {
+            packageManager.getApplicationLabel(packageManager.getApplicationInfo(testPackageName, 0)).toString()
+        } catch (_: Exception) { "Zenith" }
+
         val intent = Intent(this, AppGoalOverlayActivity::class.java).apply {
             putStringArrayListExtra(
                 AppGoalOverlayActivity.EXTRA_PACKAGE_NAMES,
-                ArrayList(goals.map { it.packageName })
+                arrayListOf(testPackageName)
             )
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
         }
         val pendingIntent = PendingIntent.getActivity(
-            this, 0, intent,
+            this, 2000, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val builder = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Time for ${firstGoal.appName}?")
-            .setContentText("Your goal setting suggests it's time to open ${firstGoal.appName} and make some progress!")
+            .setContentTitle("Test: Time for $testAppName?")
+            .setContentText("[TEST] Your goal setting suggests it's time to open $testAppName and make some progress!")
             .setSmallIcon(R.drawable.ic_flag)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_CALL)
@@ -607,26 +705,29 @@ class AppUsageMonitorService : Service() {
             builder.setTimeoutAfter(5000L)
         }
 
-        manager.notify(2000, builder.build())
+        manager.notify(2001, builder.build())
 
         if (!isScreenOn) {
             val directIntent = Intent(this, AppGoalOverlayActivity::class.java).apply {
                 putStringArrayListExtra(
                     AppGoalOverlayActivity.EXTRA_PACKAGE_NAMES,
-                    ArrayList(goals.map { it.packageName })
+                    arrayListOf(testPackageName)
                 )
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             }
             val wakePendingIntent = PendingIntent.getActivity(
-                this, 1002, directIntent,
+                this, 1004, directIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             val alarmManager = getSystemService(android.content.Context.ALARM_SERVICE) as AlarmManager
-            alarmManager.setExactAndAllowWhileIdle(
+            alarmManager.setAndAllowWhileIdle(
                 AlarmManager.RTC_WAKEUP,
                 System.currentTimeMillis() + 100,
                 wakePendingIntent
             )
+        }
+        } catch (e: Exception) {
+            Log.e("ZenithAUMS", "sendTestGoalCallerNotification failed: ${e.message}", e)
         }
     }
 

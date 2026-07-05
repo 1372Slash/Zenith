@@ -12,6 +12,8 @@ class ZenithHeartbeatReceiver : BroadcastReceiver() {
             "com.etrisad.zenith.action.HEARTBEAT",
             "com.etrisad.zenith.action.REFRESH_SERVICES",
             "com.etrisad.zenith.action.SCREEN_OFF_GOAL_CHECK",
+            "com.etrisad.zenith.action.TEST_GOAL_CALLER",
+            "com.etrisad.zenith.action.TEST_GOAL_CALLER_FIRE",
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED
         )
@@ -22,6 +24,8 @@ class ZenithHeartbeatReceiver : BroadcastReceiver() {
                     this.action = when (action) {
                         "com.etrisad.zenith.action.REFRESH_SERVICES" -> "com.etrisad.zenith.action.REFRESH_DATA"
                         "com.etrisad.zenith.action.SCREEN_OFF_GOAL_CHECK" -> "com.etrisad.zenith.action.SCREEN_OFF_GOAL_CHECK"
+                        "com.etrisad.zenith.action.TEST_GOAL_CALLER" -> "com.etrisad.zenith.action.TEST_GOAL_CALLER"
+                        "com.etrisad.zenith.action.TEST_GOAL_CALLER_FIRE" -> "com.etrisad.zenith.action.TEST_GOAL_CALLER_FIRE"
                         else -> "com.etrisad.zenith.action.HEARTBEAT"
                     }
                 }
