@@ -821,6 +821,9 @@ class AppUsageMonitorService : Service() {
                 SharedMonitoringState.cachedGracePeriodEndMinutes = (gpEnd.getOrNull(0)?.toIntOrNull() ?: 13) * 60 + (gpEnd.getOrNull(1)?.toIntOrNull() ?: 0)
                 SharedMonitoringState.cachedDayStartHour = preferences.dayStartHour
                 SharedMonitoringState.cachedDayStartMinute = preferences.dayStartMinute
+                SharedMonitoringState.disableTrackingAtUnusedHours = preferences.disableTrackingAtUnusedHours
+                SharedMonitoringState.disableTrackingStartHour = preferences.disableTrackingStartHour
+                SharedMonitoringState.disableTrackingEndHour = preferences.disableTrackingEndHour
 
                 updateBedtimeStatus(preferences)
                 updateGracePeriodStatus(preferences)
@@ -855,6 +858,7 @@ class AppUsageMonitorService : Service() {
                 .distinctUntilChanged()
                 .collect { currentApp ->
                     if (!isScreenOn) return@collect
+                    if (isInUnusedHours()) return@collect
                     try {
                         lastLoopTick = System.currentTimeMillis()
                         handleForegroundChange(currentApp)
@@ -874,6 +878,12 @@ class AppUsageMonitorService : Service() {
             while (true) {
                 try {
                     lastLoopTick = System.currentTimeMillis()
+
+                    if (isScreenOn && isInUnusedHours()) {
+                        delay(60_000L)
+                        maintenanceTick = (lastLoopTick - startTime) / 60_000L
+                        continue
+                    }
 
                     if (isScreenOn) {
                         val a11yRunning = ZenithService.isServiceRunning
@@ -1369,6 +1379,15 @@ class AppUsageMonitorService : Service() {
             }
         }
 
+    }
+
+    private fun isInUnusedHours(): Boolean {
+        if (!SharedMonitoringState.disableTrackingAtUnusedHours) return false
+        val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        val start = SharedMonitoringState.disableTrackingStartHour
+        val end = SharedMonitoringState.disableTrackingEndHour
+        return if (start <= end) currentHour in start until end
+        else currentHour >= start || currentHour < end
     }
 
     private fun computeMonitoringDelay(): Long {

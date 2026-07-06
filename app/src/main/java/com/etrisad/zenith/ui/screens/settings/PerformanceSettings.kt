@@ -33,6 +33,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.etrisad.zenith.ui.components.focus.TimePickerDialog
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -54,6 +56,7 @@ import com.etrisad.zenith.ui.components.BankingWarningBottomSheet
 import com.etrisad.zenith.util.isAccessibilityServiceEnabled
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PerformanceSettings(
     preferences: UserPreferences,
@@ -61,6 +64,9 @@ fun PerformanceSettings(
     onSelectLevel: (PerformanceLevel) -> Unit,
     preferencesRepository: UserPreferencesRepository? = null,
     coroutineScope: kotlinx.coroutines.CoroutineScope? = null,
+    onDisableTrackingAtUnusedHoursChange: (Boolean) -> Unit = {},
+    onDisableTrackingStartHourChange: (Int) -> Unit = {},
+    onDisableTrackingEndHourChange: (Int) -> Unit = {},
 ) {
     val allLevels = PerformanceLevel.values()
     var pendingBatteryLevel by remember { mutableStateOf<PerformanceLevel?>(null) }
@@ -174,6 +180,113 @@ fun PerformanceSettings(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 4.dp))
+
+    Spacer(modifier = Modifier.height(16.dp))
+    PreferenceCategory(title = "Unused Hours")
+    SettingsToggle(
+        title = "Disable Tracking at Unused Hours",
+        description = "Pause monitoring during hours you never use your phone. Works with screen-off to save battery overnight.",
+        checked = preferences.disableTrackingAtUnusedHours,
+        onCheckedChange = onDisableTrackingAtUnusedHoursChange,
+        icon = Icons.Outlined.Nightlight,
+        shape = if (preferences.disableTrackingAtUnusedHours) RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                else RoundedCornerShape(24.dp)
+    )
+    AnimatedVisibility(
+        visible = preferences.disableTrackingAtUnusedHours,
+        enter = expandVertically(animationSpec = spring(dampingRatio = 0.8f, stiffness = 400f)) + fadeIn(animationSpec = spring(dampingRatio = 0.8f, stiffness = 400f)),
+        exit = shrinkVertically(animationSpec = spring(dampingRatio = 0.8f, stiffness = 400f)) + fadeOut(animationSpec = spring(dampingRatio = 0.8f, stiffness = 400f))
+    ) {
+        Column {
+            Spacer(modifier = Modifier.height(4.dp))
+            var showStartPicker by remember { mutableStateOf(false) }
+            var showEndPicker by remember { mutableStateOf(false) }
+            val startTimeState = rememberTimePickerState(
+                initialHour = preferences.disableTrackingStartHour,
+                initialMinute = 0,
+                is24Hour = true
+            )
+            val endTimeState = rememberTimePickerState(
+                initialHour = preferences.disableTrackingEndHour,
+                initialMinute = 0,
+                is24Hour = true
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+                Surface(
+                    onClick = { showStartPicker = true },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 28.dp, bottomEnd = 8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Start Time", style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "%02d:00".format(preferences.disableTrackingStartHour),
+                            style = MaterialTheme.typography.displayLarge.copy(fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+                Surface(
+                    onClick = { showEndPicker = true },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 8.dp, bottomEnd = 28.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("End Time", style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "%02d:00".format(preferences.disableTrackingEndHour),
+                            style = MaterialTheme.typography.displayLarge.copy(fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+            }
+            if (showStartPicker) {
+                TimePickerDialog(
+                    onDismiss = { showStartPicker = false },
+                    onConfirm = {
+                        onDisableTrackingStartHourChange(startTimeState.hour)
+                        showStartPicker = false
+                    }
+                ) {
+                    MaterialTheme(
+                        typography = MaterialTheme.typography.copy(
+                            displayLarge = MaterialTheme.typography.headlineLarge
+                        )
+                    ) {
+                        TimePicker(state = startTimeState)
+                    }
+                }
+            }
+            if (showEndPicker) {
+                TimePickerDialog(
+                    onDismiss = { showEndPicker = false },
+                    onConfirm = {
+                        onDisableTrackingEndHourChange(endTimeState.hour)
+                        showEndPicker = false
+                    }
+                ) {
+                    MaterialTheme(
+                        typography = MaterialTheme.typography.copy(
+                            displayLarge = MaterialTheme.typography.headlineLarge
+                        )
+                    ) {
+                        TimePicker(state = endTimeState)
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable

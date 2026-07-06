@@ -312,6 +312,10 @@ class UserPreferencesRepository(private val context: Context) {
         val GS_B_GRAD = floatPreferencesKey("gs_b_grad")
         val GS_B_SLNT = floatPreferencesKey("gs_b_slnt")
         val GS_B_ROND = floatPreferencesKey("gs_b_rond")
+
+        val DISABLE_TRACKING_AT_UNUSED_HOURS = booleanPreferencesKey("disable_tracking_at_unused_hours")
+        val DISABLE_TRACKING_START_HOUR = intPreferencesKey("disable_tracking_start_hour")
+        val DISABLE_TRACKING_END_HOUR = intPreferencesKey("disable_tracking_end_hour")
     }
 
     private object RuntimeKeys {
@@ -490,6 +494,9 @@ class UserPreferencesRepository(private val context: Context) {
             overlaySheetOpacity = settings[PreferencesKeys.OVERLAY_SHEET_OPACITY] ?: 1f,
             overlayFullScreen = settings[PreferencesKeys.OVERLAY_FULL_SCREEN] ?: false,
             overlayCustomHue = settings[PreferencesKeys.OVERLAY_CUSTOM_HUE] ?: 270f,
+            disableTrackingAtUnusedHours = settings[PreferencesKeys.DISABLE_TRACKING_AT_UNUSED_HOURS] ?: false,
+            disableTrackingStartHour = settings[PreferencesKeys.DISABLE_TRACKING_START_HOUR] ?: 2,
+            disableTrackingEndHour = settings[PreferencesKeys.DISABLE_TRACKING_END_HOUR] ?: 4,
             streakRecoveryPerformed = runtime[RuntimeKeys.STREAK_RECOVERY_PERFORMED] ?: false,
             dismissedUninstalledApps = runtime[RuntimeKeys.DISMISSED_UNINSTALLED_APPS]
                 ?.split(",")
@@ -1193,6 +1200,18 @@ class UserPreferencesRepository(private val context: Context) {
         context.runtimeDataStore.edit { preferences -> preferences[RuntimeKeys.STREAK_RECOVERY_PERFORMED] = performed }
     }
 
+    suspend fun setDisableTrackingAtUnusedHours(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DISABLE_TRACKING_AT_UNUSED_HOURS] = enabled }
+    }
+
+    suspend fun setDisableTrackingStartHour(hour: Int) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DISABLE_TRACKING_START_HOUR] = hour }
+    }
+
+    suspend fun setDisableTrackingEndHour(hour: Int) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DISABLE_TRACKING_END_HOUR] = hour }
+    }
+
 
 
 }
@@ -1306,6 +1325,9 @@ data class UserPreferences(
     val overlaySheetOpacity: Float = 1f,
     val overlayFullScreen: Boolean = false,
     val overlayCustomHue: Float = 270f,
+    val disableTrackingAtUnusedHours: Boolean = false,
+    val disableTrackingStartHour: Int = 2,
+    val disableTrackingEndHour: Int = 4,
 ) {
     fun buildPerformanceConfig(): PerformanceConfig {
         if (performanceLevel.isPreset()) return performanceLevel.toConfig()

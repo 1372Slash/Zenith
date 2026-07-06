@@ -50,6 +50,10 @@ object SharedMonitoringState {
 
     val earlyKickManager = EarlyKickManager()
 
+    @Volatile var disableTrackingAtUnusedHours: Boolean = false
+    @Volatile var disableTrackingStartHour: Int = 2
+    @Volatile var disableTrackingEndHour: Int = 4
+
     @Volatile var cachedDayStartHour = 0
     @Volatile var cachedDayStartMinute = 0
     private var cachedStartOfDayTime = 0L

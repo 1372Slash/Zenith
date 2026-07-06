@@ -256,6 +256,9 @@ fun SettingsCategoryScreen(
                             onSelectLevel = { level -> perfSelectedLevel = level },
                             preferencesRepository = preferencesRepository,
                             coroutineScope = coroutineScope,
+                            onDisableTrackingAtUnusedHoursChange = { enabled -> coroutineScope.launch { preferencesRepository.setDisableTrackingAtUnusedHours(enabled) } },
+                            onDisableTrackingStartHourChange = { hour -> coroutineScope.launch { preferencesRepository.setDisableTrackingStartHour(hour) } },
+                            onDisableTrackingEndHourChange = { hour -> coroutineScope.launch { preferencesRepository.setDisableTrackingEndHour(hour) } },
                         )
                         Spacer(modifier = Modifier.height(24.dp))
                         PerformanceTuningPanel(
