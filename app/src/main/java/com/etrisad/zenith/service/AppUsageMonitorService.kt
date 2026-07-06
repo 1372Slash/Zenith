@@ -522,11 +522,20 @@ class AppUsageMonitorService : Service() {
 
                 val overlayGoals = triggeredGoals.filter { it.isGoalCallerEnabled }
                 if (overlayGoals.isNotEmpty()) {
-                    sendGoalCallerNotification(overlayGoals)
-                }
+                    val now = java.time.LocalTime.now()
+                    val hour = now.hour
+                    val isNightTime = hour >= 22 || hour < 6
 
-                triggeredGoals.forEach { goal ->
-                    shieldRepository.updateShield(goal.copy(lastGoalReminderTimestamp = currentTime))
+                    if (!isNightTime && !SharedMonitoringState.isBedtimeActive) {
+                        sendGoalCallerNotification(overlayGoals)
+                        triggeredGoals.forEach { goal ->
+                            shieldRepository.updateShield(goal.copy(lastGoalReminderTimestamp = currentTime))
+                        }
+                    }
+                } else {
+                    triggeredGoals.forEach { goal ->
+                        shieldRepository.updateShield(goal.copy(lastGoalReminderTimestamp = currentTime))
+                    }
                 }
             }
         } catch (e: Exception) {
