@@ -64,6 +64,7 @@ import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.ui.components.UninstalledAppCard
 import com.etrisad.zenith.ui.components.focus.AppTypeTab
 import com.etrisad.zenith.ui.components.focus.ShieldSectionContent
+import com.etrisad.zenith.ui.components.focus.activeShieldSection
 import com.etrisad.zenith.ui.components.focus.activeTypeTabRow
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonWeighted
@@ -177,6 +178,7 @@ fun HomeScreenContent(
 
     val bedtimeStatus = rememberBedtimeStatus(preferences)
     var activeTab by remember { mutableStateOf(AppTypeTab.APPS) }
+    val nowMillis by produceState(initialValue = System.currentTimeMillis()) { }
 
     PullToRefreshBox(
         isRefreshing = uiState.isLoading,
@@ -377,165 +379,159 @@ fun HomeScreenContent(
 
             activeTypeTabRow(tabValue = activeTab, onTabChange = { activeTab = it })
 
-            item(key = "shield_sections") {
-                AnimatedContent(
-                    targetState = activeTab,
-                    transitionSpec = {
-                        val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
-                        (fadeIn(animationSpec = tween(300)) + slideInHorizontally { direction * it / 4 })
-                            .togetherWith(fadeOut(animationSpec = tween(300)) + slideOutHorizontally { -direction * it / 4 })
-                    },
-                    label = "HomeTabContent"
-                ) { tab ->
-                    Column {
-                        ShieldSectionContent(
-                            title = "Active Goals",
-                            shields = uiState.activeGoals,
-                            sortType = uiState.goalSortType,
-                            onSortTypeChange = onGoalSortTypeChange,
-                            tabValue = tab,
-                            isHomeScreen = true,
-                            onClick = onAppClick,
-                            uninstalledPackages = uiState.uninstalledShieldPackageNames,
-                            onDeleteShield = onDeleteShield,
-                            onDismissUninstalled = onDismissUninstalled,
-                            showHeader = true
+            activeShieldSection(
+                key = "goals",
+                title = "Active Goals",
+                shields = uiState.activeGoals,
+                sortType = uiState.goalSortType,
+                onSortTypeChange = onGoalSortTypeChange,
+                tabValue = activeTab,
+                isHomeScreen = true,
+                onClick = onAppClick,
+                nowMillis = nowMillis,
+                uninstalledPackages = uiState.uninstalledShieldPackageNames,
+                onDeleteShield = onDeleteShield,
+                onDismissUninstalled = onDismissUninstalled,
+                showHeader = true
+            )
+
+            item { Spacer(modifier = Modifier.height(24.dp)) }
+
+            item(key = "shields_header") {
+                ShieldSortHeader(
+                    title = "Active Shields",
+                    currentSortType = uiState.shieldSortType,
+                    onSortTypeChange = onShieldSortTypeChange
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            if (preferences.incentiveLockEnabled && !preferences.incentiveLockGoalsMetToday) {
+                item(key = "incentive_lock") {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                         )
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        ShieldSortHeader(
-                            title = "Active Shields",
-                            currentSortType = uiState.shieldSortType,
-                            onSortTypeChange = onShieldSortTypeChange
+                    ) {
+                        val tierLabel = when {
+                            uiState.incentiveProgress < 0.25f -> "Locked"
+                            uiState.incentiveProgress < 0.5f -> "Limited Access"
+                            uiState.incentiveProgress < 0.75f -> "Moderate Access"
+                            else -> "Almost Unlocked"
+                        }
+                        val animatedProgress by animateFloatAsState(
+                            targetValue = uiState.incentiveProgress,
+                            animationSpec = spring(dampingRatio = 0.5f, stiffness = 100f),
+                            label = "IncentiveProgress"
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        if (preferences.incentiveLockEnabled && !preferences.incentiveLockGoalsMetToday) {
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 16.dp),
-                                shape = RoundedCornerShape(24.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                                )
-                            ) {
-                                val tierLabel = when {
-                                    uiState.incentiveProgress < 0.25f -> "Locked"
-                                    uiState.incentiveProgress < 0.5f -> "Limited Access"
-                                    uiState.incentiveProgress < 0.75f -> "Moderate Access"
-                                    else -> "Almost Unlocked"
-                                }
-                                val animatedProgress by animateFloatAsState(
-                                    targetValue = uiState.incentiveProgress,
-                                    animationSpec = spring(dampingRatio = 0.5f, stiffness = 100f),
-                                    label = "IncentiveProgress"
-                                )
-                                val percentage = (uiState.incentiveProgress * 100).toInt()
-                                Column(modifier = Modifier.padding(16.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(48.dp)
-                                                .background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Box(
-                                                modifier = Modifier.matchParentSize(),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.Lock,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                                                    modifier = Modifier.size(24.dp)
-                                                )
-                                            }
-                                        if (uiState.incentiveTier.bonusUses < Int.MAX_VALUE) {
-                                            val total = uiState.incentiveTier.bonusUses
-                                            Surface(
-                                                shape = RoundedCornerShape(8.dp),
-                                                color = if (uiState.bonusUsesLeft > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.surfaceVariant,
-                                                tonalElevation = 2.dp,
-                                                shadowElevation = 2.dp,
-                                                modifier = Modifier
-                                                    .align(Alignment.BottomCenter)
-                                                    .offset(y = 3.dp)
-                                            ) {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Outlined.Timer,
-                                                        contentDescription = "Bonus",
-                                                        modifier = Modifier.size(10.dp),
-                                                        tint = if (uiState.bonusUsesLeft > 0) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                    Text(
-                                                        text = "${uiState.bonusUsesLeft}/$total",
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        fontSize = 8.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = if (uiState.bonusUsesLeft > 0) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.padding(start = 2.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        }
-                                        Spacer(modifier = Modifier.width(16.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Shields: $tierLabel",
-                                                style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Text(
-                                                text = "Complete your app goals to earn shield access.",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "$percentage%",
-                                            style = MaterialTheme.typography.labelLarge,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        val percentage = (uiState.incentiveProgress * 100).toInt()
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier.matchParentSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Lock,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            modifier = Modifier.size(24.dp)
                                         )
                                     }
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    LinearWavyProgressIndicator(
-                                        progress = { animatedProgress },
+                                if (uiState.incentiveTier.bonusUses < Int.MAX_VALUE) {
+                                    val total = uiState.incentiveTier.bonusUses
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (uiState.bonusUsesLeft > 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.surfaceVariant,
+                                        tonalElevation = 2.dp,
+                                        shadowElevation = 2.dp,
                                         modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(10.dp),
-                                        color = MaterialTheme.colorScheme.tertiary,
-                                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                            .align(Alignment.BottomCenter)
+                                            .offset(y = 3.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Timer,
+                                                contentDescription = "Bonus",
+                                                modifier = Modifier.size(10.dp),
+                                                tint = if (uiState.bonusUsesLeft > 0) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = "${uiState.bonusUsesLeft}/$total",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontSize = 8.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (uiState.bonusUsesLeft > 0) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(start = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Shields: $tierLabel",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Complete your app goals to earn shield access.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "$percentage%",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            LinearWavyProgressIndicator(
+                                progress = { animatedProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(10.dp),
+                                color = MaterialTheme.colorScheme.tertiary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
                         }
-
-                        ShieldSectionContent(
-                            title = "Active Shields",
-                            shields = uiState.activeShields,
-                            sortType = uiState.shieldSortType,
-                            onSortTypeChange = onShieldSortTypeChange,
-                            tabValue = tab,
-                            isHomeScreen = true,
-                            onClick = onAppClick,
-                            uninstalledPackages = uiState.uninstalledShieldPackageNames,
-                            onDeleteShield = onDeleteShield,
-                            onDismissUninstalled = onDismissUninstalled,
-                            showHeader = false
-                        )
                     }
                 }
             }
+
+            activeShieldSection(
+                key = "shields",
+                title = "Shields",
+                shields = uiState.activeShields,
+                sortType = uiState.shieldSortType,
+                onSortTypeChange = onShieldSortTypeChange,
+                tabValue = activeTab,
+                isHomeScreen = true,
+                onClick = onAppClick,
+                nowMillis = nowMillis,
+                uninstalledPackages = uiState.uninstalledShieldPackageNames,
+                onDeleteShield = onDeleteShield,
+                onDismissUninstalled = onDismissUninstalled,
+                showHeader = false
+            )
         }
     }
 }
