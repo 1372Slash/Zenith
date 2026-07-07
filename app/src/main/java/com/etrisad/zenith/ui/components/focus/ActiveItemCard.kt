@@ -1000,27 +1000,35 @@ fun ShieldSectionContent(
                     else -> RoundedCornerShape(8.dp)
                 }
 
-                Column {
-                    if (isHomeScreen) {
-                        ActiveShieldCard(
-                            shield = shield,
-                            shape = shape,
-                            isHomeScreen = true,
-                            onClick = onClick
-                        )
-                    }
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                            scaleIn(initialScale = 0.92f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)),
+                    exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                            scaleOut(targetScale = 0.92f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+                ) {
+                    Column {
+                        if (isHomeScreen) {
+                            ActiveShieldCard(
+                                shield = shield,
+                                shape = shape,
+                                isHomeScreen = true,
+                                onClick = onClick
+                            )
+                        }
 
-                    if (shield.packageName in uninstalledPackages) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        UninstalledAppCard(
-                            appName = shield.appName,
-                            onDelete = { onDeleteShield(shield) },
-                            onDismissToday = { onDismissUninstalled(shield.packageName) }
-                        )
-                    }
+                        if (shield.packageName in uninstalledPackages) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            UninstalledAppCard(
+                                appName = shield.appName,
+                                onDelete = { onDeleteShield(shield) },
+                                onDismissToday = { onDismissUninstalled(shield.packageName) }
+                            )
+                        }
 
-                    if (index < filteredShields.size - 1) {
-                        Spacer(modifier = Modifier.height(4.dp))
+                        if (index < filteredShields.size - 1) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
                     }
                 }
             }

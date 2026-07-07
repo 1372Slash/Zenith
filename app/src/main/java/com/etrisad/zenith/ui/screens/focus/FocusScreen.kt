@@ -119,7 +119,6 @@ fun FocusScreen(
             scrollBehavior = scrollBehavior,
             onEditShield = onEditShield,
             onDeleteShield = { pendingDeleteShield = it },
-            onDeleteShieldDirect = onDeleteShield,
             onDismissUninstalled = onDismissUninstalled,
             onEditSchedule = onEditSchedule,
             onDeleteSchedule = { pendingDeleteSchedule = it },
@@ -371,7 +370,6 @@ fun FocusScreenContent(
     selectedSchedules: Set<Long> = emptySet(),
     onToggleShieldSelection: (String) -> Unit = {},
     onToggleScheduleSelection: (Long) -> Unit = {},
-    onDeleteShieldDirect: (ShieldEntity) -> Unit = {},
     onDismissUninstalled: (String) -> Unit = {}
 ) {
     val nowMillis by produceState(initialValue = System.currentTimeMillis()) {
@@ -430,7 +428,7 @@ fun FocusScreenContent(
                 onClick = onAppClick,
                 nowMillis = nowMillis,
                 uninstalledPackages = uiState.uninstalledShields,
-                onDeleteShield = onDeleteShieldDirect,
+                onDeleteShield = onDeleteShield,
                 onDismissUninstalled = onDismissUninstalled,
                 isSelectionMode = isSelectionMode,
                 selectedShields = selectedShields,
@@ -511,7 +509,7 @@ fun FocusScreenContent(
                 onClick = onAppClick,
                 nowMillis = nowMillis,
                 uninstalledPackages = uiState.uninstalledShields,
-                onDeleteShield = onDeleteShieldDirect,
+                onDeleteShield = onDeleteShield,
                 onDismissUninstalled = onDismissUninstalled,
                 isSelectionMode = isSelectionMode,
                 selectedShields = selectedShields,
