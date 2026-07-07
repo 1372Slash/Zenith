@@ -38,8 +38,10 @@ import com.etrisad.zenith.ui.components.ZenithToggleOption
 import com.etrisad.zenith.ui.components.focus.AlarmItemSettingsBottomSheet
 import com.etrisad.zenith.ui.components.focus.SwipeableItemContainer
 import com.etrisad.zenith.ui.screens.bedtime.TimePickerDialog
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private enum class AlarmSortType { TIME, NAME, CLOSEST }
 
@@ -252,7 +254,7 @@ fun AlarmScreen(
                     val isActuallyActiveToday = alarm.enabled && prefs.alarmMasterEnabled && 
                                                (alarm.days.isEmpty() || alarm.days.contains(today))
                     
-                    val isHighlighted = isSelected || isActuallyActiveToday
+    val isHighlighted = isSelected || isActuallyActiveToday
 
                     val topStartRadius by animateDpAsState(
                         targetValue = if (isHighlighted || total == 1 || index == 0) 24.dp else 8.dp,
@@ -603,6 +605,7 @@ private fun AlarmListItem(
     val today = remember { java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK) }
     val isActuallyActiveToday = enabled && (alarm.days.isEmpty() || alarm.days.contains(today))
     val isHighlighted = isSelected || isActuallyActiveToday
+    val isEnabledButInactive = alarm.enabled && !isActuallyActiveToday
     val haptic = LocalHapticFeedback.current
 
     val timeUntilMillis = remember(alarm, masterEnabled) {
@@ -786,8 +789,16 @@ private fun AlarmListItem(
                     checked = alarm.enabled,
                     onCheckedChange = onToggle,
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = if (isHighlighted) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onPrimary,
-                        checkedTrackColor = if (isHighlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary,
+                        checkedThumbColor = when {
+                            isHighlighted -> MaterialTheme.colorScheme.onPrimaryContainer
+                            isEnabledButInactive -> MaterialTheme.colorScheme.onTertiary
+                            else -> MaterialTheme.colorScheme.onPrimary
+                        },
+                        checkedTrackColor = when {
+                            isHighlighted -> MaterialTheme.colorScheme.primary
+                            isEnabledButInactive -> MaterialTheme.colorScheme.tertiary
+                            else -> MaterialTheme.colorScheme.primary
+                        },
                         uncheckedThumbColor = if (isHighlighted) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outline,
                         uncheckedTrackColor = if (isHighlighted) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceContainerHighest
                     ),
@@ -801,7 +812,11 @@ private fun AlarmListItem(
                             label = "thumbSize"
                         )
                         val iconColor by animateColorAsState(
-                            targetValue = if (alarm.enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                            targetValue = when {
+                                isEnabledButInactive -> MaterialTheme.colorScheme.tertiary
+                                alarm.enabled -> MaterialTheme.colorScheme.primary
+                                else -> MaterialTheme.colorScheme.surfaceContainerHighest
+                            },
                             animationSpec = spring(stiffness = Spring.StiffnessMedium),
                             label = "iconColor"
                         )
@@ -845,21 +860,19 @@ private fun AlarmListItem(
     }
 }
 
-private fun rescheduleAlarms(
+private suspend fun rescheduleAlarms(
     context: android.content.Context,
     preferencesRepository: UserPreferencesRepository,
     masterEnabled: Boolean
-) {
-    kotlinx.coroutines.MainScope().launch {
-        AlarmBroadcastReceiver.cancelAlarm(context)
+) = withContext(Dispatchers.IO) {
+    AlarmBroadcastReceiver.cancelAlarm(context)
 
-        if (masterEnabled) {
-            val prefs = preferencesRepository.userPreferencesFlow.first()
-            val alarms = preferencesRepository.parseAlarms(prefs.alarmsJson)
-            val enabledAlarms = alarms.filter { it.enabled }
-            for (alarm in enabledAlarms) {
-                AlarmBroadcastReceiver.scheduleAlarm(context, alarm.timeString)
-            }
+    if (masterEnabled) {
+        val prefs = preferencesRepository.userPreferencesFlow.first()
+        val alarms = preferencesRepository.parseAlarms(prefs.alarmsJson)
+        val enabledAlarms = alarms.filter { it.enabled }
+        for (alarm in enabledAlarms) {
+            AlarmBroadcastReceiver.scheduleAlarm(context, alarm.timeString)
         }
     }
 }
