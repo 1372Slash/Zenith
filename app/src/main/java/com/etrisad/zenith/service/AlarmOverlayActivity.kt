@@ -14,7 +14,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
 import com.etrisad.zenith.ZenithApplication
@@ -36,25 +39,22 @@ class AlarmOverlayActivity : ComponentActivity() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var gradualVolumeJob: kotlinx.coroutines.Job? = null
 
-    private val alarmTime: String by lazy {
-        intent?.getStringExtra(EXTRA_ALARM_TIME) ?: "07:00"
-    }
-
-    private val snoozeCount: Int by lazy {
-        intent?.getIntExtra(EXTRA_SNOOZE_COUNT, 0) ?: 0
-    }
-
-    private val testMathChallenge: Boolean by lazy {
-        intent?.getBooleanExtra(EXTRA_TEST_MATH_CHALLENGE, false) ?: false
-    }
-
-    private val testGradualVolume: Boolean by lazy {
-        intent?.getBooleanExtra(EXTRA_TEST_GRADUAL_VOLUME, false) ?: false
-    }
+    private var alarmTime: String = "07:00"
+    private var snoozeCount: Int = 0
+    private var testMathChallenge: Boolean = false
+    private var testGradualVolume: Boolean = false
+    private var restartKey by mutableIntStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        isShowing = true
+
+        alarmTime = intent?.getStringExtra(EXTRA_ALARM_TIME) ?: "07:00"
+        snoozeCount = intent?.getIntExtra(EXTRA_SNOOZE_COUNT, 0) ?: 0
+        testMathChallenge = intent?.getBooleanExtra(EXTRA_TEST_MATH_CHALLENGE, false) ?: false
+        testGradualVolume = intent?.getBooleanExtra(EXTRA_TEST_GRADUAL_VOLUME, false) ?: false
 
         playAlarmSound()
 
@@ -73,50 +73,65 @@ class AlarmOverlayActivity : ComponentActivity() {
         wakeLock?.acquire(10 * 60 * 1000L)
 
         setContent {
-            val userPreferencesRepository = (application as ZenithApplication).userPreferencesRepository
-            val userPreferences by userPreferencesRepository.userPreferencesFlow.collectAsState(
-                initial = UserPreferences()
-            )
-
-            val currentAlarm = remember(userPreferences.alarmsJson) {
-                userPreferencesRepository.parseAlarms(userPreferences.alarmsJson)
-                    .find { it.timeString == alarmTime }
-            }
-
-            val darkTheme = when (userPreferences.themeConfig) {
-                ThemeConfig.FOLLOW_SYSTEM -> isSystemInDarkTheme()
-                ThemeConfig.LIGHT -> false
-                ThemeConfig.DARK -> true
-            }
-
-            ZenithTheme(
-                darkTheme = darkTheme,
-                dynamicColor = userPreferences.dynamicColor,
-                fontOption = userPreferences.fontOption,
-                expressiveColors = userPreferences.expressiveColors,
-                gsFlexSettings = userPreferences.gsFlexSettings
-            ) {
-                AlarmOverlayContent(
-                    alarmTime = alarmTime,
-                    alarmName = currentAlarm?.name ?: "Alarm",
-                    snoozeDurationMinutes = currentAlarm?.snoozeDurationMinutes ?: 5,
-                    onDismiss = {
-                        dismissWithAutoRepeat()
-                    },
-                    onStopAlarm = {
-                        dismissWithAutoRepeat()
-                    },
-                    onSnooze = {
-                        snooze()
-                    },
-                    snoozeCount = snoozeCount,
-                    snoozeMaxCount = currentAlarm?.snoozeMaxCount ?: 3,
-                    mathChallengeEnabled = if (intent?.hasExtra(EXTRA_TEST_MATH_CHALLENGE) == true)
-                                               testMathChallenge
-                                           else currentAlarm?.mathChallengeEnabled ?: false
+            key(restartKey) {
+                val userPreferencesRepository = (application as ZenithApplication).userPreferencesRepository
+                val userPreferences by userPreferencesRepository.userPreferencesFlow.collectAsState(
+                    initial = UserPreferences()
                 )
+
+                val currentAlarm = remember(userPreferences.alarmsJson) {
+                    userPreferencesRepository.parseAlarms(userPreferences.alarmsJson)
+                        .find { it.timeString == alarmTime }
+                }
+
+                val darkTheme = when (userPreferences.themeConfig) {
+                    ThemeConfig.FOLLOW_SYSTEM -> isSystemInDarkTheme()
+                    ThemeConfig.LIGHT -> false
+                    ThemeConfig.DARK -> true
+                }
+
+                ZenithTheme(
+                    darkTheme = darkTheme,
+                    dynamicColor = userPreferences.dynamicColor,
+                    fontOption = userPreferences.fontOption,
+                    expressiveColors = userPreferences.expressiveColors,
+                    gsFlexSettings = userPreferences.gsFlexSettings
+                ) {
+                    AlarmOverlayContent(
+                        alarmTime = alarmTime,
+                        alarmName = currentAlarm?.name ?: "Alarm",
+                        snoozeDurationMinutes = currentAlarm?.snoozeDurationMinutes ?: 5,
+                        onDismiss = {
+                            dismissWithAutoRepeat()
+                        },
+                        onStopAlarm = {
+                            dismissWithAutoRepeat()
+                        },
+                        onSnooze = {
+                            snooze()
+                        },
+                        snoozeCount = snoozeCount,
+                        snoozeMaxCount = currentAlarm?.snoozeMaxCount ?: 3,
+                        mathChallengeEnabled = if (testMathChallenge) testMathChallenge
+                                               else currentAlarm?.mathChallengeEnabled ?: false
+                    )
+                }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val newAlarmTime = intent.getStringExtra(EXTRA_ALARM_TIME) ?: return
+        if (newAlarmTime == alarmTime) return
+
+        alarmTime = newAlarmTime
+        snoozeCount = intent.getIntExtra(EXTRA_SNOOZE_COUNT, 0)
+        testMathChallenge = intent.getBooleanExtra(EXTRA_TEST_MATH_CHALLENGE, false)
+        testGradualVolume = intent.getBooleanExtra(EXTRA_TEST_GRADUAL_VOLUME, false)
+        restartKey++
+
+        playAlarmSound()
     }
 
     private fun dismissWithAutoRepeat() {
@@ -174,8 +189,7 @@ class AlarmOverlayActivity : ComponentActivity() {
                 val prefs = userPreferencesRepository.userPreferencesFlow.first()
                 val alarms = userPreferencesRepository.parseAlarms(prefs.alarmsJson)
                 val currentAlarm = alarms.find { it.timeString == alarmTime }
-                val gradualVolume = if (intent?.hasExtra(EXTRA_TEST_GRADUAL_VOLUME) == true)
-                                        testGradualVolume
+                val gradualVolume = if (testGradualVolume) testGradualVolume
                                     else currentAlarm?.gradualVolumeEnabled ?: false
 
                 if (!prefs.alarmSoundEnabled) return@launch
@@ -188,6 +202,7 @@ class AlarmOverlayActivity : ComponentActivity() {
 
                 withContext(Dispatchers.Main) {
                     try {
+                        mediaPlayer?.stop()
                         mediaPlayer?.release()
                         mediaPlayer = MediaPlayer().apply {
                             setDataSource(this@AlarmOverlayActivity, soundUri)
@@ -248,7 +263,10 @@ class AlarmOverlayActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        isShowing = false
+
         super.onDestroy()
+
         mediaPlayer?.stop()
         mediaPlayer?.release()
         mediaPlayer = null
@@ -261,6 +279,9 @@ class AlarmOverlayActivity : ComponentActivity() {
         const val EXTRA_SNOOZE_COUNT = "extra_snooze_count"
         const val EXTRA_TEST_MATH_CHALLENGE = "extra_test_math_challenge"
         const val EXTRA_TEST_GRADUAL_VOLUME = "extra_test_gradual_volume"
+
+        @Volatile
+        var isShowing = false
 
         fun start(context: Context, alarmTime: String) {
             val intent = Intent(context, AlarmOverlayActivity::class.java).apply {
