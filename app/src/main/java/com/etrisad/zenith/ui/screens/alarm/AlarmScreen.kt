@@ -701,8 +701,8 @@ private fun AlarmListItem(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = if (isHighlighted) MaterialTheme.colorScheme.onPrimaryContainer
-                            else if (enabled) MaterialTheme.colorScheme.onSurface
-                            else MaterialTheme.colorScheme.onSurfaceVariant
+                            else if (isEnabledButInactive) MaterialTheme.colorScheme.onSurfaceVariant
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                 )
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(
@@ -710,8 +710,8 @@ private fun AlarmListItem(
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Black,
                         color = if (isHighlighted) MaterialTheme.colorScheme.onPrimaryContainer
-                                else if (enabled) MaterialTheme.colorScheme.onSurface
-                                else MaterialTheme.colorScheme.onSurfaceVariant
+                                else if (isEnabledButInactive) MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                     )
                     if (showCountdown) {
                         Surface(
@@ -741,47 +741,63 @@ private fun AlarmListItem(
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium,
                         color = if (isHighlighted) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(horizontal = 12.dp)
-            ) {
-                if (alarm.vibrateEnabled) {
-                    Icon(
-                        imageVector = Icons.Outlined.Vibration,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = if (isHighlighted) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
-                                else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (alarm.autoRepeatEnabled) {
-                    Icon(
-                        imageVector = Icons.Outlined.Repeat,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = if (isHighlighted) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
-                                else MaterialTheme.colorScheme.onSurfaceVariant
+                                else if (isEnabledButInactive) MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                     )
                 }
             }
 
             AnimatedVisibility(
                 visible = !isSelectionMode,
-                enter = scaleIn(
-                    initialScale = 0.7f,
+                enter = expandHorizontally(
+                    expandFrom = Alignment.End,
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioMediumBouncy,
                         stiffness = Spring.StiffnessMediumLow
                     )
                 ) + fadeIn(),
-                exit = scaleOut(
-                    targetScale = 0.7f,
+                exit = shrinkHorizontally(
+                    shrinkTowards = Alignment.End,
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                ) + fadeOut()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                ) {
+                    if (alarm.vibrateEnabled) {
+                        Icon(
+                            imageVector = Icons.Outlined.Vibration,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (isHighlighted) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (alarm.autoRepeatEnabled) {
+                        Icon(
+                            imageVector = Icons.Outlined.Repeat,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (isHighlighted) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            AnimatedVisibility(
+                visible = !isSelectionMode,
+                enter = expandHorizontally(
+                    expandFrom = Alignment.Start,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                ) + fadeIn(),
+                exit = shrinkHorizontally(
+                    shrinkTowards = Alignment.Start,
                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
                 ) + fadeOut()
             ) {

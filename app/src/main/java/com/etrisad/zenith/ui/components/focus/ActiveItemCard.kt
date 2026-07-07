@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -150,8 +151,49 @@ fun ActiveShieldCard(
     nowMillis: Long = System.currentTimeMillis(),
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
-    onToggleSelection: (() -> Unit)? = null
+    onToggleSelection: (() -> Unit)? = null,
+    isFirst: Boolean = false,
+    isLast: Boolean = false,
+    isSingle: Boolean = false
 ) {
+    val topStartRadius by animateDpAsState(
+        targetValue = if (isSelected) 24.dp else if (isSingle || isFirst) 24.dp else 8.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "topStartRadius"
+    )
+    val topEndRadius by animateDpAsState(
+        targetValue = if (isSelected) 24.dp else if (isSingle || isFirst) 24.dp else 8.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "topEndRadius"
+    )
+    val bottomStartRadius by animateDpAsState(
+        targetValue = if (isSelected) 24.dp else if (isSingle || isLast) 24.dp else 8.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "bottomStartRadius"
+    )
+    val bottomEndRadius by animateDpAsState(
+        targetValue = if (isSelected) 24.dp else if (isSingle || isLast) 24.dp else 8.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "bottomEndRadius"
+    )
+    val animatedShape = RoundedCornerShape(
+        topStart = topStartRadius,
+        topEnd = topEndRadius,
+        bottomStart = bottomStartRadius,
+        bottomEnd = bottomEndRadius
+    )
     val haptic = LocalHapticFeedback.current
 
     val isEffectivelyPaused = remember(shield.isPaused, shield.pauseEndTimestamp, nowMillis) {
@@ -212,7 +254,7 @@ fun ActiveShieldCard(
     androidx.compose.material3.Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(shape)
+            .clip(animatedShape)
             .combinedClickable(
                 onClick = {
                     if (isSelectionMode) onToggleSelection?.invoke()
@@ -227,7 +269,7 @@ fun ActiveShieldCard(
                     }
                 }
             ),
-        shape = shape,
+        shape = animatedShape,
         colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = cardColor)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -790,10 +832,13 @@ fun LazyListScope.activeShieldSection(
             items = filteredShields,
             key = { _, shield -> "${key}_${shield.packageName}" }
         ) { index, shield ->
+            val isSingle = filteredShields.size == 1
+            val isFirst = index == 0
+            val isLast = index == filteredShields.size - 1
             val shape = when {
-                filteredShields.size == 1 -> RoundedCornerShape(24.dp)
-                index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-                index == filteredShields.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                isSingle -> RoundedCornerShape(24.dp)
+                isFirst -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                isLast -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                 else -> RoundedCornerShape(8.dp)
             }
 
@@ -809,7 +854,10 @@ fun LazyListScope.activeShieldSection(
                         shield = shield,
                         shape = shape,
                         isHomeScreen = true,
-                        onClick = onClick
+                        onClick = onClick,
+                        isFirst = isFirst,
+                        isLast = isLast,
+                        isSingle = isSingle
                     )
                 } else {
                     SwipeableItemContainer(
@@ -828,7 +876,10 @@ fun LazyListScope.activeShieldSection(
                             nowMillis = nowMillis,
                             isSelectionMode = isSelectionMode,
                             isSelected = shield.packageName in selectedShields,
-                            onToggleSelection = { onToggleSelection(shield.packageName) }
+                            onToggleSelection = { onToggleSelection(shield.packageName) },
+                            isFirst = isFirst,
+                            isLast = isLast,
+                            isSingle = isSingle
                         )
                     }
                 }
