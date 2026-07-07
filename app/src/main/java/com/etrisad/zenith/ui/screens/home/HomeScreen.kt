@@ -64,7 +64,9 @@ import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.ui.components.UninstalledAppCard
 import com.etrisad.zenith.ui.components.focus.AppTypeTab
 import com.etrisad.zenith.ui.components.focus.ShieldSectionContent
+import com.etrisad.zenith.ui.components.focus.AccessibilityWarningCard
 import com.etrisad.zenith.ui.components.focus.activeShieldSection
+import com.etrisad.zenith.util.isAccessibilityServiceEnabled
 import com.etrisad.zenith.ui.components.focus.activeTypeTabRow
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonWeighted
@@ -179,6 +181,7 @@ fun HomeScreenContent(
     val bedtimeStatus = rememberBedtimeStatus(preferences)
     var activeTab by remember { mutableStateOf(AppTypeTab.APPS) }
     val nowMillis by produceState(initialValue = System.currentTimeMillis()) { }
+    val isAccessibilityEnabled = isAccessibilityServiceEnabled(LocalContext.current)
 
     PullToRefreshBox(
         isRefreshing = uiState.isLoading,
@@ -514,6 +517,13 @@ fun HomeScreenContent(
                             )
                         }
                     }
+                }
+            }
+
+            if (activeTab == AppTypeTab.WEBSITES && !isAccessibilityEnabled) {
+                item(key = "accessibility_warning") {
+                    AccessibilityWarningCard()
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
 

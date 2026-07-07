@@ -77,6 +77,7 @@ import com.etrisad.zenith.ui.viewmodel.FocusUiState
 import com.etrisad.zenith.ui.viewmodel.FocusViewModel
 import com.etrisad.zenith.ui.viewmodel.ShieldSortType
 import com.etrisad.zenith.ui.components.focus.*
+import com.etrisad.zenith.util.isAccessibilityServiceEnabled
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -379,6 +380,8 @@ fun FocusScreenContent(
         }
     }
 
+    val isAccessibilityEnabled = isAccessibilityServiceEnabled(LocalContext.current)
+
     var activeTab by remember { mutableStateOf(AppTypeTab.APPS) }
 
     val listState = rememberLazyListState()
@@ -497,7 +500,14 @@ fun FocusScreenContent(
                     }
                 }
             }
-    
+
+            if (tab == AppTypeTab.WEBSITES && !isAccessibilityEnabled) {
+                item(key = "accessibility_warning") {
+                    AccessibilityWarningCard()
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+
             activeShieldSection(
                 key = "shields",
                 title = "Active Shields",

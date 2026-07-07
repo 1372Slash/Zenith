@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.AccessibilityNew
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material3.*
 import androidx.compose.material3.MaterialShapes
@@ -52,6 +53,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import android.content.Intent
+import android.provider.Settings
 import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.ui.viewmodel.AppInfo
 
@@ -761,4 +764,79 @@ fun TimePickerDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
         text = { content() }
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AccessibilityWarningCard(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    Surface(
+        onClick = {
+            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        },
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp)),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 64.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.AccessibilityNew,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "Accessibility Required",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Website blocking requires the Accessibility Service to be enabled.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Surface(
+                color = MaterialTheme.colorScheme.primary,
+                shape = CircleShape
+            ) {
+                Text(
+                    text = "Enable",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
+        }
+    }
 }
