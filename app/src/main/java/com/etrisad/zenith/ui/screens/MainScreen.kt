@@ -952,6 +952,7 @@ fun MainScreen(
                         val isTargetDeep =
                             targetRoute == Screen.UsageStats.route ||
                                     targetRoute == Screen.Bedtime.route ||
+                                    targetRoute == Screen.Alarm.route ||
                                     targetRoute == Screen.GracePeriod.route ||
                                     targetRoute == Screen.EyeCare.route ||
                                     targetRoute == Screen.DatabaseDebug.route ||
@@ -965,6 +966,7 @@ fun MainScreen(
                         val isInitialDeep =
                             initialRoute == Screen.UsageStats.route ||
                                     initialRoute == Screen.Bedtime.route ||
+                                    initialRoute == Screen.Alarm.route ||
                                     initialRoute == Screen.GracePeriod.route ||
                                     initialRoute == Screen.EyeCare.route ||
                                     initialRoute == Screen.DatabaseDebug.route ||
@@ -1010,6 +1012,7 @@ fun MainScreen(
                         val isTargetDeep =
                             targetRoute == Screen.UsageStats.route ||
                                     targetRoute == Screen.Bedtime.route ||
+                                    targetRoute == Screen.Alarm.route ||
                                     targetRoute == Screen.GracePeriod.route ||
                                     targetRoute == Screen.EyeCare.route ||
                                     targetRoute == Screen.DatabaseDebug.route ||
@@ -1024,6 +1027,7 @@ fun MainScreen(
                         val isInitialDeep =
                             initialRoute == Screen.UsageStats.route ||
                                     initialRoute == Screen.Bedtime.route ||
+                                    initialRoute == Screen.Alarm.route ||
                                     initialRoute == Screen.GracePeriod.route ||
                                     initialRoute == Screen.EyeCare.route ||
                                     initialRoute == Screen.DatabaseDebug.route ||
