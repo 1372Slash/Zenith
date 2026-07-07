@@ -108,7 +108,8 @@ fun HomeScreen(
     onAppClick: (String) -> Unit,
     onBedtimeClick: () -> Unit,
     onDeleteShield: (ShieldEntity) -> Unit,
-    onDismissUninstalled: (String) -> Unit
+    onDismissUninstalled: (String) -> Unit,
+    onAlarmClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val preferences by viewModel.homeScreenPreferences.collectAsState()
@@ -138,6 +139,7 @@ fun HomeScreen(
         onSeeFullList = onSeeFullList,
         onAppClick = onAppClick,
         onBedtimeClick = onBedtimeClick,
+        onAlarmClick = onAlarmClick,
         onStatsClick = onSeeFullList,
         onDaySelected = onDaySelected,
         onRefresh = { viewModel.onRefresh() },
@@ -159,6 +161,7 @@ fun HomeScreenContent(
     onSeeFullList: () -> Unit,
     onAppClick: (String) -> Unit,
     onBedtimeClick: () -> Unit,
+    onAlarmClick: () -> Unit = {},
     onStatsClick: () -> Unit,
     onDaySelected: (Long?) -> Unit,
     onRefresh: () -> Unit,
@@ -365,6 +368,7 @@ fun HomeScreenContent(
             item(key = "quick_actions") {
                 QuickActionsSection(
                     bedtimeStatus = bedtimeStatus,
+                    onAlarmClick = onAlarmClick,
                     onBedtimeClick = onBedtimeClick,
                     onStatsClick = onStatsClick
                 )
@@ -1302,6 +1306,7 @@ fun rememberBedtimeStatus(prefs: UserPreferences): BedtimeStatus {
 @Composable
 fun QuickActionsSection(
     bedtimeStatus: BedtimeStatus,
+    onAlarmClick: () -> Unit,
     onBedtimeClick: () -> Unit,
     onStatsClick: () -> Unit
 ) {
@@ -1329,7 +1334,8 @@ fun QuickActionsSection(
     ) {
         QuickActionCard(
             icon = Icons.Outlined.Alarm,
-            label = "Alarm"
+            label = "Alarm",
+            onClick = onAlarmClick
         )
         QuickActionCard(
             icon = Icons.Outlined.Timer,

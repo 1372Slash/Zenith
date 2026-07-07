@@ -371,7 +371,7 @@ fun SettingsCategoryScreen(
                                 Toast.makeText(context, "Failed: ${e.message}", Toast.LENGTH_LONG).show()
                             }
                         },
-                        onTestUsageGlimpse = {
+                            onTestUsageGlimpse = {
                             val isDark = when (preferences.themeConfig) {
                                 com.etrisad.zenith.data.preferences.ThemeConfig.LIGHT -> false
                                 com.etrisad.zenith.data.preferences.ThemeConfig.DARK -> true
@@ -393,6 +393,10 @@ fun SettingsCategoryScreen(
                                 kotlinx.coroutines.delay(5000L)
                                 glimpseManager.hide()
                             }
+                        },
+                        onTestAlarmOverlay = {
+                            val intent = android.content.Intent(context, com.etrisad.zenith.service.AlarmOverlayActivity::class.java)
+                            context.startActivity(intent)
                         }
                     )
                 }

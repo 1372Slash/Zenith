@@ -50,6 +50,7 @@ fun ZenithHeader(
         currentRoute == Screen.GSFlexCustomizer.route ||
         currentRoute == Screen.SystemUsageDebug.route ||
         currentRoute == Screen.OverlayAppearance.route ||
+        currentRoute == Screen.Alarm.route ||
         currentRoute?.startsWith("settings_category") == true ||
         currentRoute?.startsWith("app_detail") == true
 
@@ -134,6 +135,7 @@ fun ZenithHeader(
                 currentRoute == Screen.GSFlexCustomizer.route -> "GS Flex Designer"
                 currentRoute == Screen.SystemUsageDebug.route -> "System Usage Fetch"
                 currentRoute == Screen.OverlayAppearance.route -> "Overlay Appearance"
+                currentRoute == Screen.Alarm.route -> "Alarm"
                 currentRoute?.startsWith("settings_category") == true -> categoryName ?: "Settings"
                 currentRoute?.startsWith("app_detail") == true -> "App Detail"
                 else -> "Zenith"

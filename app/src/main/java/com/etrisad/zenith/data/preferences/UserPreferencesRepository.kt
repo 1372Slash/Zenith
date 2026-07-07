@@ -17,7 +17,11 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.LimitPeriod
+import com.etrisad.zenith.data.model.AlarmItem
 import com.etrisad.zenith.data.repository.ShieldRepository
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import com.etrisad.zenith.util.DateTimeUtils
 import com.etrisad.zenith.ui.theme.FontAxes
 import com.etrisad.zenith.ui.theme.GSFlexSettings
@@ -316,6 +320,14 @@ class UserPreferencesRepository(private val context: Context) {
         val DISABLE_TRACKING_AT_UNUSED_HOURS = booleanPreferencesKey("disable_tracking_at_unused_hours")
         val DISABLE_TRACKING_START_HOUR = intPreferencesKey("disable_tracking_start_hour")
         val DISABLE_TRACKING_END_HOUR = intPreferencesKey("disable_tracking_end_hour")
+
+        val ALARM_ENABLED = booleanPreferencesKey("alarm_enabled")
+        val ALARM_TIME = stringPreferencesKey("alarm_time")
+        val ALARM_SOUND_URI = stringPreferencesKey("alarm_sound_uri")
+        val ALARM_SOUND_ENABLED = booleanPreferencesKey("alarm_sound_enabled")
+        val ALARM_AUTO_REPEAT_ENABLED = booleanPreferencesKey("alarm_auto_repeat_enabled")
+        val ALARM_MASTER_ENABLED = booleanPreferencesKey("alarm_master_enabled")
+        val ALARMS_JSON = stringPreferencesKey("alarms_json")
     }
 
     private object RuntimeKeys {
@@ -497,6 +509,13 @@ class UserPreferencesRepository(private val context: Context) {
             disableTrackingAtUnusedHours = settings[PreferencesKeys.DISABLE_TRACKING_AT_UNUSED_HOURS] ?: false,
             disableTrackingStartHour = settings[PreferencesKeys.DISABLE_TRACKING_START_HOUR] ?: 2,
             disableTrackingEndHour = settings[PreferencesKeys.DISABLE_TRACKING_END_HOUR] ?: 4,
+            alarmEnabled = settings[PreferencesKeys.ALARM_ENABLED] ?: false,
+            alarmTime = settings[PreferencesKeys.ALARM_TIME] ?: "07:00",
+            alarmSoundUri = settings[PreferencesKeys.ALARM_SOUND_URI]?.takeIf { it.isNotEmpty() },
+            alarmSoundEnabled = settings[PreferencesKeys.ALARM_SOUND_ENABLED] ?: true,
+            alarmAutoRepeatEnabled = settings[PreferencesKeys.ALARM_AUTO_REPEAT_ENABLED] ?: true,
+            alarmMasterEnabled = settings[PreferencesKeys.ALARM_MASTER_ENABLED] ?: false,
+            alarmsJson = settings[PreferencesKeys.ALARMS_JSON] ?: "[]",
             streakRecoveryPerformed = runtime[RuntimeKeys.STREAK_RECOVERY_PERFORMED] ?: false,
             dismissedUninstalledApps = runtime[RuntimeKeys.DISMISSED_UNINSTALLED_APPS]
                 ?.split(",")
@@ -509,6 +528,32 @@ class UserPreferencesRepository(private val context: Context) {
     }.distinctUntilChanged()
 
     val streakCalculator = StreakCalculator(context, userPreferencesFlow)
+
+    private val moshi = Moshi.Builder()
+        .add(KotlinJsonAdapterFactory())
+        .build()
+
+    private val alarmsAdapter = moshi.adapter(List::class.java).serializeNulls()
+
+    fun parseAlarms(json: String): List<AlarmItem> {
+        return try {
+            val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, AlarmItem::class.java)
+            val adapter: com.squareup.moshi.JsonAdapter<List<AlarmItem>> = moshi.adapter(type)
+            adapter.fromJson(json) ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun serializeAlarms(alarms: List<AlarmItem>): String {
+        return try {
+            val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, AlarmItem::class.java)
+            val adapter: com.squareup.moshi.JsonAdapter<List<AlarmItem>> = moshi.adapter(type)
+            adapter.toJson(alarms)
+        } catch (_: Exception) {
+            "[]"
+        }
+    }
 
     suspend fun refreshGlobalStreak(shieldRepository: ShieldRepository): Pair<Int, Int> =
         streakCalculator.refreshGlobalStreak(shieldRepository)
@@ -1212,6 +1257,58 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.DISABLE_TRACKING_END_HOUR] = hour }
     }
 
+    suspend fun setAlarmEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.ALARM_ENABLED] = enabled }
+    }
+
+    suspend fun setAlarmTime(time: String) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.ALARM_TIME] = time }
+    }
+
+    suspend fun setAlarmSoundUri(uri: String?) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.ALARM_SOUND_URI] = uri ?: "" }
+    }
+
+    suspend fun setAlarmSoundEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.ALARM_SOUND_ENABLED] = enabled }
+    }
+
+    suspend fun setAlarmAutoRepeatEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.ALARM_AUTO_REPEAT_ENABLED] = enabled }
+    }
+
+    suspend fun setAlarmMasterEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.ALARM_MASTER_ENABLED] = enabled }
+    }
+
+    suspend fun setAlarms(alarms: List<AlarmItem>) {
+        val json = serializeAlarms(alarms)
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.ALARMS_JSON] = json }
+    }
+
+    suspend fun addAlarm(alarm: AlarmItem) {
+        val current = parseAlarms(getCachedAlarmsJson())
+        setAlarms(current + alarm)
+    }
+
+    suspend fun updateAlarm(alarm: AlarmItem) {
+        val current = parseAlarms(getCachedAlarmsJson()).toMutableList()
+        val index = current.indexOfFirst { it.id == alarm.id }
+        if (index >= 0) {
+            current[index] = alarm
+            setAlarms(current)
+        }
+    }
+
+    suspend fun deleteAlarm(alarmId: Long) {
+        val current = parseAlarms(getCachedAlarmsJson()).toMutableList()
+        current.removeAll { it.id == alarmId }
+        setAlarms(current)
+    }
+
+    private suspend fun getCachedAlarmsJson(): String {
+        return context.dataStore.data.first()[PreferencesKeys.ALARMS_JSON] ?: "[]"
+    }
 
 
 }
@@ -1328,6 +1425,13 @@ data class UserPreferences(
     val disableTrackingAtUnusedHours: Boolean = false,
     val disableTrackingStartHour: Int = 2,
     val disableTrackingEndHour: Int = 4,
+    val alarmEnabled: Boolean = false,
+    val alarmTime: String = "07:00",
+    val alarmSoundUri: String? = null,
+    val alarmSoundEnabled: Boolean = true,
+    val alarmAutoRepeatEnabled: Boolean = true,
+    val alarmMasterEnabled: Boolean = false,
+    val alarmsJson: String = "[]",
 ) {
     fun buildPerformanceConfig(): PerformanceConfig {
         if (performanceLevel.isPreset()) return performanceLevel.toConfig()

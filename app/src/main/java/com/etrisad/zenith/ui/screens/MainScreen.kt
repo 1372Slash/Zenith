@@ -60,6 +60,7 @@ import com.etrisad.zenith.ui.navigation.navItems
 import com.etrisad.zenith.ui.screens.focus.FocusScreen
 import com.etrisad.zenith.ui.screens.home.HomeScreen
 import com.etrisad.zenith.ui.screens.home.UsageStatsScreen
+import com.etrisad.zenith.ui.screens.alarm.AlarmScreen
 import com.etrisad.zenith.ui.screens.bedtime.BedtimeScreen
 import com.etrisad.zenith.ui.screens.graceperiod.GracePeriodScreen
 import com.etrisad.zenith.ui.screens.settings.EyeCareScreen
@@ -136,6 +137,7 @@ fun MainScreen(
     val isDeepScreen =
         currentRoute == Screen.UsageStats.route ||
                 currentRoute == Screen.Bedtime.route ||
+                currentRoute == Screen.Alarm.route ||
                 currentRoute == Screen.GracePeriod.route ||
                 currentRoute == Screen.EyeCare.route ||
                 currentRoute == Screen.DatabaseDebug.route ||
@@ -180,6 +182,8 @@ fun MainScreen(
     var gracePeriodSwitchInLayout by remember { mutableStateOf(false) }
     var eyeCareSwitchVisible by remember { mutableStateOf(false) }
     var eyeCareSwitchInLayout by remember { mutableStateOf(false) }
+    var alarmSwitchVisible by remember { mutableStateOf(false) }
+    var alarmSwitchInLayout by remember { mutableStateOf(false) }
     val performanceBackInterceptor = remember { mutableStateOf<() -> Boolean>({ false }) }
 
     var showBatchDeleteSheet by remember { mutableStateOf(false) }
@@ -247,6 +251,25 @@ fun MainScreen(
             if (eyeCareSwitchInLayout) {
                 delay(1500)
                 eyeCareSwitchInLayout = false
+            }
+        }
+    }
+
+    LaunchedEffect(currentRoute) {
+        val isAlarmScreen = currentRoute == Screen.Alarm.route
+
+        if (isAlarmScreen) {
+            alarmSwitchInLayout = true
+            delay(1200)
+            alarmSwitchVisible = true
+        } else {
+            if (alarmSwitchVisible) {
+                alarmSwitchVisible = false
+                delay(800)
+            }
+            if (alarmSwitchInLayout) {
+                delay(1500)
+                alarmSwitchInLayout = false
             }
         }
     }
@@ -395,6 +418,7 @@ fun MainScreen(
         val showNavRail =
             currentRoute != Screen.UsageStats.route &&
                     currentRoute != Screen.Bedtime.route &&
+                    currentRoute != Screen.Alarm.route &&
                     currentRoute != Screen.GracePeriod.route &&
                     currentRoute != Screen.EyeCare.route &&
                     currentRoute != Screen.DatabaseDebug.route &&
@@ -783,6 +807,71 @@ fun MainScreen(
                                     }
                                 }
                             }
+                            if (alarmSwitchInLayout) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(end = 16.dp)
+                                        .width(52.dp)
+                                        .height(32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = alarmSwitchVisible,
+                                        enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
+                                                slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+                                        exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                                    ) {
+                                        Switch(
+                                            checked = preferences.alarmMasterEnabled,
+                                            onCheckedChange = {
+                                                scope.launch {
+                                                    userPreferencesRepository.setAlarmMasterEnabled(!preferences.alarmMasterEnabled)
+                                                }
+                                            },
+                                            thumbContent = {
+                                                val thumbSize by animateDpAsState(
+                                                    targetValue = if (preferences.alarmMasterEnabled) 28.dp else 24.dp,
+                                                    animationSpec = spring(
+                                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                        stiffness = Spring.StiffnessMediumLow
+                                                    ),
+                                                    label = "thumb_size"
+                                                )
+                                                val iconColor by animateColorAsState(
+                                                    targetValue = if (preferences.alarmMasterEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                                                    label = "switch_icon_color"
+                                                )
+                                                Box(
+                                                    modifier = Modifier.size(thumbSize),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    AnimatedContent(
+                                                        targetState = preferences.alarmMasterEnabled,
+                                                        transitionSpec = {
+                                                            (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                                    scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
+                                                                .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                                        scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
+                                                        },
+                                                        label = "switch_icon_anim"
+                                                    ) { isChecked ->
+                                                        Icon(
+                                                            imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
+                                                            tint = iconColor
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 )
@@ -1003,6 +1092,7 @@ fun MainScreen(
                                 navController.navigate(Screen.AppDetail.createRoute(packageName))
                             },
                             onBedtimeClick = { navController.navigate(Screen.Bedtime.route) },
+                            onAlarmClick = { navController.navigate(Screen.Alarm.route) },
                             onDeleteShield = { shield -> homeViewModel.deleteShield(shield) },
                             onDismissUninstalled = { pkg ->
                                 homeScope.launch {
@@ -1045,6 +1135,13 @@ fun MainScreen(
                     }
                     composable(Screen.Bedtime.route) {
                         BedtimeScreen(bedtimeViewModel, innerPadding)
+                    }
+                    composable(Screen.Alarm.route) {
+                        AlarmScreen(
+                            preferencesRepository = userPreferencesRepository,
+                            innerPadding = innerPadding,
+                            onBack = { navController.popBackStack() }
+                        )
                     }
                     composable(Screen.GracePeriod.route) {
                         GracePeriodScreen(gracePeriodViewModel, innerPadding)
@@ -1145,6 +1242,7 @@ fun MainScreen(
                     val showBottomBar =
                     currentRoute != Screen.UsageStats.route &&
                             currentRoute != Screen.Bedtime.route &&
+                            currentRoute != Screen.Alarm.route &&
                             currentRoute != Screen.GracePeriod.route &&
                             currentRoute != Screen.EyeCare.route &&
                             currentRoute != Screen.DatabaseDebug.route &&

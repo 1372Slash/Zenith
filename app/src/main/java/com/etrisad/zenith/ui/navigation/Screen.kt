@@ -3,11 +3,13 @@ package com.etrisad.zenith.ui.navigation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.outlined.List
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.FreeBreakfast
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.FreeBreakfast
 import androidx.compose.material.icons.outlined.Home
@@ -29,6 +31,8 @@ sealed class Screen(
         Screen("usage_stats", "Usage Stats", Icons.AutoMirrored.Filled.List, Icons.AutoMirrored.Outlined.List)
 
     object Bedtime : Screen("bedtime", "Bedtime", Icons.Filled.Bedtime, Icons.Outlined.Bedtime)
+
+    object Alarm : Screen("alarm", "Alarm", Icons.Filled.Alarm, Icons.Outlined.Alarm)
 
     object GracePeriod : Screen("grace_period", "Grace Period", Icons.Filled.FreeBreakfast, Icons.Outlined.FreeBreakfast)
 

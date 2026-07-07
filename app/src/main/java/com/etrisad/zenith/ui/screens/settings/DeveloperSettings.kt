@@ -1,6 +1,8 @@
 package com.etrisad.zenith.ui.screens.settings
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -28,6 +30,9 @@ import androidx.compose.material3.SliderDefaults
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.UserPreferences
+import com.etrisad.zenith.ui.components.ZenithButton
+import com.etrisad.zenith.ui.components.ZenithButtonSize
+import com.etrisad.zenith.ui.components.ZenithButtonType
 import com.etrisad.zenith.ui.components.focus.AppPickerBottomSheet
 import com.etrisad.zenith.ui.components.overlay.InterceptBottomSheet
 import com.etrisad.zenith.ui.viewmodel.AppInfo
@@ -56,7 +61,8 @@ fun DeveloperSettings(
     onUpdateGlobalScreenTime: (Long) -> Unit,
     onUpdateAppScreenTime: (String, Long) -> Unit,
     onTestUsageGlimpse: () -> Unit,
-    onTestGoalCallerDelayed: () -> Unit
+    onTestGoalCallerDelayed: () -> Unit,
+    onTestAlarmOverlay: () -> Unit
 ) {
     var showAppPickerForStreak by remember { mutableStateOf(false) }
     var showAppPickerForUsage by remember { mutableStateOf(false) }
@@ -251,8 +257,25 @@ fun DeveloperSettings(
                 summary = "Interactive test for InterceptBottomSheet expand behavior",
                 onClick = { showBottomSheetTest = true },
                 icon = Icons.Outlined.OpenInFull,
+                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+            var showTestAlarmDialog by remember { mutableStateOf(false) }
+
+            SettingsActionItem(
+                title = "Test Alarm Overlay",
+                summary = "Immediately trigger the alarm full screen overlay",
+                onClick = { showTestAlarmDialog = true },
+                icon = Icons.Outlined.Alarm,
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
             )
+
+            if (showTestAlarmDialog) {
+                TestAlarmBottomSheet(
+                    onDismiss = { showTestAlarmDialog = false }
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -547,6 +570,163 @@ fun EditValueBottomSheet(
             ) {
                 Text("Update Data", fontWeight = FontWeight.Bold)
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TestAlarmBottomSheet(
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var mathChallengeEnabled by remember { mutableStateOf(false) }
+    var gradualVolumeEnabled by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val containerColor by animateColorAsState(
+        targetValue = MaterialTheme.colorScheme.surfaceContainerHigh,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "containerColor"
+    )
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+                .navigationBarsPadding()
+        ) {
+            Text(
+                text = "Debug Alarm Overlay",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Text(
+                text = "Configure and trigger a test alarm overlay.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Surface(
+                onClick = { mathChallengeEnabled = !mathChallengeEnabled },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 4.dp, bottomEnd = 4.dp),
+                color = containerColor
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Calculate,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Math Challenge",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Solve a math problem to dismiss",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = mathChallengeEnabled,
+                        onCheckedChange = { mathChallengeEnabled = it }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            Surface(
+                onClick = { gradualVolumeEnabled = !gradualVolumeEnabled },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
+                color = containerColor
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Gradual Volume",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Ramp up volume over 30 seconds",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = gradualVolumeEnabled,
+                        onCheckedChange = { gradualVolumeEnabled = it }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            ZenithButton(
+                onClick = {
+                    val intent = android.content.Intent(
+                        context,
+                        com.etrisad.zenith.service.AlarmOverlayActivity::class.java
+                    ).apply {
+                        putExtra(
+                            com.etrisad.zenith.service.AlarmOverlayActivity.EXTRA_TEST_MATH_CHALLENGE,
+                            mathChallengeEnabled
+                        )
+                        putExtra(
+                            com.etrisad.zenith.service.AlarmOverlayActivity.EXTRA_TEST_GRADUAL_VOLUME,
+                            gradualVolumeEnabled
+                        )
+                    }
+                    context.startActivity(intent)
+                    onDismiss()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                text = "Test Alarm",
+                type = ZenithButtonType.Filled,
+                size = ZenithButtonSize.ExtraLarge,
+                fillMaxWidth = true
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            ZenithButton(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+                text = "Cancel",
+                type = ZenithButtonType.Outlined,
+                size = ZenithButtonSize.ExtraLarge,
+                fillMaxWidth = true
+            )
         }
     }
 }
