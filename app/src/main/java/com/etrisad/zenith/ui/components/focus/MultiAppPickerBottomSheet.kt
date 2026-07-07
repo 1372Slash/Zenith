@@ -43,7 +43,8 @@ fun MultiAppPickerBottomSheet(
     onSearchQueryChange: (String) -> Unit,
     onTabChange: ((PickerTab) -> Unit)? = null,
     onWebsiteSearchChange: ((String) -> Unit)? = null,
-    onWebsiteToggled: ((String) -> Unit)? = null
+    onWebsiteToggled: ((String) -> Unit)? = null,
+    showTabs: Boolean = true
 ) {
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
@@ -80,26 +81,28 @@ fun MultiAppPickerBottomSheet(
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
 
-                    TabRow(
-                        selectedTabIndex = if (uiState.pickerTab == PickerTab.APPS) 0 else 1,
-                        containerColor = Color.Transparent,
-                        contentColor = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).clip(RoundedCornerShape(24.dp))
-                    ) {
-                        Tab(
-                            selected = uiState.pickerTab == PickerTab.APPS,
-                            onClick = { onTabChange?.invoke(PickerTab.APPS) },
-                            text = { Text("Apps", fontWeight = FontWeight.Bold) }
-                        )
-                        Tab(
-                            selected = uiState.pickerTab == PickerTab.WEBSITES,
-                            onClick = { onTabChange?.invoke(PickerTab.WEBSITES) },
-                            text = { Text("Websites", fontWeight = FontWeight.Bold) }
-                        )
+                    if (showTabs) {
+                        TabRow(
+                            selectedTabIndex = if (uiState.pickerTab == PickerTab.APPS) 0 else 1,
+                            containerColor = Color.Transparent,
+                            contentColor = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).clip(RoundedCornerShape(24.dp))
+                        ) {
+                            Tab(
+                                selected = uiState.pickerTab == PickerTab.APPS,
+                                onClick = { onTabChange?.invoke(PickerTab.APPS) },
+                                text = { Text("Apps", fontWeight = FontWeight.Bold) }
+                            )
+                            Tab(
+                                selected = uiState.pickerTab == PickerTab.WEBSITES,
+                                onClick = { onTabChange?.invoke(PickerTab.WEBSITES) },
+                                text = { Text("Websites", fontWeight = FontWeight.Bold) }
+                            )
+                        }
                     }
 
                     AnimatedContent(
-                        targetState = uiState.pickerTab,
+                        targetState = if (showTabs) uiState.pickerTab else PickerTab.APPS,
                         transitionSpec = {
                             val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
                             (fadeIn(animationSpec = tween(300)) + slideInHorizontally { direction * it / 4 })
@@ -165,7 +168,7 @@ fun MultiAppPickerBottomSheet(
 
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     AnimatedContent(
-                        targetState = uiState.pickerTab,
+                        targetState = if (showTabs) uiState.pickerTab else PickerTab.APPS,
                         transitionSpec = {
                             val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
                             (fadeIn(animationSpec = tween(300)) + slideInHorizontally { direction * it / 4 })

@@ -428,8 +428,10 @@ fun AlarmScreen(
                 snoozeMaxCount = currentEditing.snoozeMaxCount,
                 gradualVolumeEnabled = currentEditing.gradualVolumeEnabled,
                 mathChallengeEnabled = currentEditing.mathChallengeEnabled,
+                wakeUpAppPackageNames = currentEditing.wakeUpAppPackageNames,
+                wakeUpAppDurationSeconds = currentEditing.wakeUpAppDurationSeconds,
                 onDismiss = { editingAlarm = null },
-                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, mathChallengeEnabled ->
+                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, mathChallengeEnabled, wakeUpAppPackageNames, wakeUpAppDurationSeconds ->
                     scope.launch {
                         preferencesRepository.updateAlarm(
                             currentEditing.copy(
@@ -442,7 +444,9 @@ fun AlarmScreen(
                                 snoozeDurationMinutes = snoozeDurationMinutes,
                                 snoozeMaxCount = snoozeMaxCount,
                                 gradualVolumeEnabled = gradualVolumeEnabled,
-                                mathChallengeEnabled = mathChallengeEnabled
+                                mathChallengeEnabled = mathChallengeEnabled,
+                                wakeUpAppPackageNames = wakeUpAppPackageNames,
+                                wakeUpAppDurationSeconds = wakeUpAppDurationSeconds
                             )
                         )
                         rescheduleAlarms(context, preferencesRepository, prefs.alarmMasterEnabled)
@@ -467,8 +471,10 @@ fun AlarmScreen(
                 snoozeMaxCount = currentNew.snoozeMaxCount,
                 gradualVolumeEnabled = currentNew.gradualVolumeEnabled,
                 mathChallengeEnabled = currentNew.mathChallengeEnabled,
+                wakeUpAppPackageNames = currentNew.wakeUpAppPackageNames,
+                wakeUpAppDurationSeconds = currentNew.wakeUpAppDurationSeconds,
                 onDismiss = { newAlarm = null },
-                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, mathChallengeEnabled ->
+                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, mathChallengeEnabled, wakeUpAppPackageNames, wakeUpAppDurationSeconds ->
                     scope.launch {
                         preferencesRepository.addAlarm(
                             currentNew.copy(
@@ -481,7 +487,9 @@ fun AlarmScreen(
                                 snoozeDurationMinutes = snoozeDurationMinutes,
                                 snoozeMaxCount = snoozeMaxCount,
                                 gradualVolumeEnabled = gradualVolumeEnabled,
-                                mathChallengeEnabled = mathChallengeEnabled
+                                mathChallengeEnabled = mathChallengeEnabled,
+                                wakeUpAppPackageNames = wakeUpAppPackageNames,
+                                wakeUpAppDurationSeconds = wakeUpAppDurationSeconds
                             )
                         )
                         rescheduleAlarms(context, preferencesRepository, prefs.alarmMasterEnabled)

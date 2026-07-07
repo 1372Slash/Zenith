@@ -1,6 +1,8 @@
 package com.etrisad.zenith.service
 
 import android.app.KeyguardManager
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
@@ -16,11 +18,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
 import com.etrisad.zenith.ZenithApplication
+import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.preferences.ThemeConfig
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.receiver.AlarmBroadcastReceiver
@@ -44,6 +49,12 @@ class AlarmOverlayActivity : ComponentActivity() {
     private var testMathChallenge: Boolean = false
     private var testGradualVolume: Boolean = false
     private var restartKey by mutableIntStateOf(0)
+
+    private var wakeUpTrackingActive by mutableStateOf(false)
+    private var wakeUpStartTime by mutableLongStateOf(0L)
+    private var wakeUpAccumulatedSeconds by mutableIntStateOf(0)
+    private var wakeUpComplete by mutableStateOf(false)
+    private var wakeUpJob: kotlinx.coroutines.Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,6 +95,35 @@ class AlarmOverlayActivity : ComponentActivity() {
                         .find { it.timeString == alarmTime }
                 }
 
+                val goalStreak = remember {
+                    val shieldRepo = (application as ZenithApplication).shieldRepository
+                    try {
+                        kotlinx.coroutines.runBlocking {
+                            shieldRepo.allShields.first()
+                                .filter { it.type == FocusType.GOAL }
+                                .maxOfOrNull { it.currentStreak } ?: 0
+                        }
+                    } catch (_: Exception) { 0 }
+                }
+
+                val wakeUpAppPackageNames = remember(currentAlarm) {
+                    currentAlarm?.wakeUpAppPackageNames ?: emptyList()
+                }
+
+                val wakeUpAppNames = remember(wakeUpAppPackageNames) {
+                    wakeUpAppPackageNames.associateWith { pkg ->
+                        try {
+                            packageManager.getApplicationLabel(
+                                packageManager.getApplicationInfo(pkg, 0)
+                            ).toString()
+                        } catch (_: Exception) { pkg }
+                    }
+                }
+
+                val wakeUpAppDurationSeconds = remember(currentAlarm) {
+                    currentAlarm?.wakeUpAppDurationSeconds ?: 120
+                }
+
                 val darkTheme = when (userPreferences.themeConfig) {
                     ThemeConfig.FOLLOW_SYSTEM -> isSystemInDarkTheme()
                     ThemeConfig.LIGHT -> false
@@ -105,7 +145,7 @@ class AlarmOverlayActivity : ComponentActivity() {
                             dismissWithAutoRepeat()
                         },
                         onStopAlarm = {
-                            dismissWithAutoRepeat()
+                            stopAlarmAndFinish()
                         },
                         onSnooze = {
                             snooze()
@@ -113,7 +153,20 @@ class AlarmOverlayActivity : ComponentActivity() {
                         snoozeCount = snoozeCount,
                         snoozeMaxCount = currentAlarm?.snoozeMaxCount ?: 3,
                         mathChallengeEnabled = if (testMathChallenge) testMathChallenge
-                                               else currentAlarm?.mathChallengeEnabled ?: false
+                                               else currentAlarm?.mathChallengeEnabled ?: false,
+                        goalStreak = goalStreak,
+                        wakeUpAppPackageNames = wakeUpAppPackageNames,
+                        wakeUpAppNames = wakeUpAppNames,
+                        wakeUpAppDurationSeconds = wakeUpAppDurationSeconds,
+                        wakeUpAccumulatedSeconds = wakeUpAccumulatedSeconds,
+                        wakeUpComplete = wakeUpComplete,
+                        onWakeUpAppOpened = { pkg ->
+                            handleWakeUpAppOpened(pkg, wakeUpAppPackageNames, wakeUpAppDurationSeconds)
+                        },
+                        onWakeUpDismiss = {
+                            stopWakeUpTracking()
+                            stopAlarmAndFinish()
+                        }
                     )
                 }
             }
@@ -125,6 +178,7 @@ class AlarmOverlayActivity : ComponentActivity() {
         val newAlarmTime = intent.getStringExtra(EXTRA_ALARM_TIME) ?: return
         if (newAlarmTime == alarmTime) return
 
+        stopWakeUpTracking()
         alarmTime = newAlarmTime
         snoozeCount = intent.getIntExtra(EXTRA_SNOOZE_COUNT, 0)
         testMathChallenge = intent.getBooleanExtra(EXTRA_TEST_MATH_CHALLENGE, false)
@@ -264,6 +318,7 @@ class AlarmOverlayActivity : ComponentActivity() {
 
     override fun onDestroy() {
         isShowing = false
+        stopWakeUpTracking()
 
         super.onDestroy()
 
@@ -272,6 +327,99 @@ class AlarmOverlayActivity : ComponentActivity() {
         mediaPlayer = null
         wakeLock?.release()
         wakeLock = null
+    }
+
+    private fun handleWakeUpAppOpened(packageName: String, appPackages: List<String>, durationSeconds: Int) {
+        val intent = packageManager.getLaunchIntentForPackage(packageName)
+        if (intent != null) {
+            if (!wakeUpTrackingActive) {
+                wakeUpStartTime = System.currentTimeMillis()
+                wakeUpTrackingActive = true
+                startWakeUpTracking(appPackages, durationSeconds)
+            }
+            startActivity(intent)
+        }
+    }
+
+    private fun startWakeUpTracking(appPackages: List<String> = emptyList(), durationSeconds: Int = 120) {
+        val packages = appPackages.ifEmpty {
+            val repo = (application as ZenithApplication).userPreferencesRepository
+            try {
+                val prefs = kotlinx.coroutines.runBlocking { repo.userPreferencesFlow.first() }
+                repo.parseAlarms(prefs.alarmsJson)
+                    .find { it.timeString == alarmTime }
+                    ?.wakeUpAppPackageNames ?: emptyList()
+            } catch (_: Exception) { emptyList() }
+        }
+        val duration = if (durationSeconds != 120 || appPackages.isNotEmpty()) durationSeconds else {
+            val repo = (application as ZenithApplication).userPreferencesRepository
+            try {
+                val prefs = kotlinx.coroutines.runBlocking { repo.userPreferencesFlow.first() }
+                repo.parseAlarms(prefs.alarmsJson)
+                    .find { it.timeString == alarmTime }
+                    ?.wakeUpAppDurationSeconds ?: 120
+            } catch (_: Exception) { 120 }
+        }
+        wakeUpJob?.cancel()
+        wakeUpJob = lifecycleScope.launch(Dispatchers.IO) {
+            while (true) {
+                delay(3000)
+                val accumulated = getAccumulatedForegroundMs(
+                    packages.toSet(),
+                    wakeUpStartTime
+                )
+                withContext(Dispatchers.Main) {
+                    wakeUpAccumulatedSeconds = (accumulated / 1000).toInt()
+                    if (wakeUpAccumulatedSeconds >= duration) {
+                        wakeUpComplete = true
+                        wakeUpTrackingActive = false
+                        wakeUpJob?.cancel()
+                        return@withContext
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stopWakeUpTracking() {
+        wakeUpJob?.cancel()
+        wakeUpJob = null
+        wakeUpTrackingActive = false
+        wakeUpAccumulatedSeconds = 0
+        wakeUpComplete = false
+        wakeUpStartTime = 0L
+    }
+
+    private fun getAccumulatedForegroundMs(packageNames: Set<String>, sinceMs: Long): Long {
+        return try {
+            val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+            val events = usm.queryEvents(sinceMs, System.currentTimeMillis())
+            val activeStart = mutableMapOf<String, Long>()
+            var total = 0L
+            while (events.hasNextEvent()) {
+                val event = UsageEvents.Event()
+                events.getNextEvent(event)
+                if (!packageNames.contains(event.packageName)) continue
+                when (event.eventType) {
+                    UsageEvents.Event.MOVE_TO_FOREGROUND,
+                    UsageEvents.Event.ACTIVITY_RESUMED -> {
+                        activeStart[event.packageName] = event.timeStamp
+                    }
+                    UsageEvents.Event.MOVE_TO_BACKGROUND,
+                    UsageEvents.Event.ACTIVITY_PAUSED -> {
+                        val start = activeStart.remove(event.packageName) ?: continue
+                        total += event.timeStamp - start
+                    }
+                }
+            }
+            val now = System.currentTimeMillis()
+            for (start in activeStart.values) {
+                total += now - start
+            }
+            total
+        } catch (_: Exception) {
+            0L
+        }
     }
 
     companion object {

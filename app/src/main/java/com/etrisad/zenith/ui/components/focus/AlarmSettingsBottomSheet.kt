@@ -5,6 +5,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,11 +17,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +39,9 @@ import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithButtonType
 import com.etrisad.zenith.ui.components.ZenithButtonWeighted
 import com.etrisad.zenith.ui.components.ZenithGroupedButton
+import com.etrisad.zenith.ui.viewmodel.AppInfo
+import com.etrisad.zenith.ui.viewmodel.FocusUiState
+import com.etrisad.zenith.ui.viewmodel.PickerTab
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
 
@@ -53,8 +58,10 @@ fun AlarmItemSettingsBottomSheet(
     snoozeMaxCount: Int = 3,
     gradualVolumeEnabled: Boolean = false,
     mathChallengeEnabled: Boolean = false,
+    wakeUpAppPackageNames: List<String> = emptyList(),
+    wakeUpAppDurationSeconds: Int = 120,
     onDismiss: () -> Unit,
-    onSave: (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, mathChallengeEnabled: Boolean) -> Unit,
+    onSave: (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, mathChallengeEnabled: Boolean, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int) -> Unit,
     onTimeClick: (() -> Unit)? = null,
     alarmTimeText: String? = null
 ) {
@@ -69,6 +76,8 @@ fun AlarmItemSettingsBottomSheet(
         initialSnoozeMaxCount = snoozeMaxCount,
         initialGradualVolumeEnabled = gradualVolumeEnabled,
         initialMathChallengeEnabled = mathChallengeEnabled,
+        initialWakeUpAppPackageNames = wakeUpAppPackageNames,
+        initialWakeUpAppDurationSeconds = wakeUpAppDurationSeconds,
         onDismiss = onDismiss,
         onSave = onSave,
         onTimeClick = onTimeClick,
@@ -89,8 +98,10 @@ private fun AlarmSettingsSheetContent(
     initialSnoozeMaxCount: Int = 3,
     initialGradualVolumeEnabled: Boolean = false,
     initialMathChallengeEnabled: Boolean = false,
+    initialWakeUpAppPackageNames: List<String> = emptyList(),
+    initialWakeUpAppDurationSeconds: Int = 120,
     onDismiss: () -> Unit,
-    onSave: (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, mathChallengeEnabled: Boolean) -> Unit,
+    onSave: (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, mathChallengeEnabled: Boolean, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int) -> Unit,
     onTimeClick: (() -> Unit)?,
     alarmTimeText: String?
 ) {
@@ -117,6 +128,10 @@ private fun AlarmSettingsSheetContent(
     var snoozeMaxCount by remember { mutableStateOf(initialSnoozeMaxCount) }
     var gradualVolumeEnabled by remember { mutableStateOf(initialGradualVolumeEnabled) }
     var mathChallengeEnabled by remember { mutableStateOf(initialMathChallengeEnabled) }
+    var wakeUpAppPackageNames by remember { mutableStateOf(initialWakeUpAppPackageNames) }
+    var wakeUpAppDurationSeconds by remember { mutableStateOf(initialWakeUpAppDurationSeconds) }
+    var useCertainAppEnabled by remember { mutableStateOf(initialWakeUpAppPackageNames.isNotEmpty()) }
+    var showWakeUpAppPicker by remember { mutableStateOf(false) }
     var isPlayingPreview by remember { mutableStateOf(false) }
     val previewPlayer = remember {
         android.media.MediaPlayer()
@@ -325,9 +340,12 @@ private fun AlarmSettingsSheetContent(
 
                         Spacer(modifier = Modifier.height(24.dp))
 
-                        PreferenceCategory(title = "Snooze")
+                        PreferenceCategory(title = "Alarm Behavior")
 
-                        CardGroup(shape = RoundedCornerShape(28.dp), containerColor = containerColor) {
+                        CardGroup(
+                            shape = topShape,
+                            containerColor = containerColor
+                        ) {
                             Column {
                                 Row(
                                     modifier = Modifier
@@ -387,7 +405,7 @@ private fun AlarmSettingsSheetContent(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Outlined.Repeat,
+                                            imageVector = Icons.Outlined.FormatListNumbered,
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                             modifier = Modifier.size(20.dp)
@@ -413,6 +431,340 @@ private fun AlarmSettingsSheetContent(
                                         width = 120.dp
                                     )
                                 }
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { alarmAutoRepeatEnabled = !alarmAutoRepeatEnabled }
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Repeat,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Auto Repeat Alarm",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "Re-trigger alarm every 5 min if you don't use your phone within 1 min after dismissing",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Switch(
+                                        checked = alarmAutoRepeatEnabled,
+                                        onCheckedChange = { alarmAutoRepeatEnabled = it }
+                                    )
+                                }
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            useCertainAppEnabled = !useCertainAppEnabled
+                                            if (!useCertainAppEnabled) wakeUpAppPackageNames = emptyList()
+                                        }
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Smartphone,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Use certain app for completion",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "Wake up by using selected apps",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Switch(
+                                        checked = useCertainAppEnabled,
+                                        onCheckedChange = {
+                                            useCertainAppEnabled = it
+                                            if (!it) wakeUpAppPackageNames = emptyList()
+                                        }
+                                    )
+                                }
+
+                            }
+                        }
+
+                        AnimatedVisibility(
+                            visible = useCertainAppEnabled,
+                            enter = expandVertically(
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
+                            ) + fadeIn(),
+                            exit = shrinkVertically(
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
+                            ) + fadeOut()
+                        ) {
+                            Column {
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                CardGroup(shape = middleShape, containerColor = containerColor) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(40.dp)
+                                        .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Apps,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Select Apps",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = "Apps to open before alarm stops",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(12.dp))
+
+                                        AnimatedContent(
+                                            targetState = wakeUpAppPackageNames.isEmpty(),
+                                            transitionSpec = {
+                                                fadeIn(animationSpec = spring(
+                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                    stiffness = Spring.StiffnessMediumLow
+                                                )) + scaleIn(
+                                                    initialScale = 0.9f,
+                                                    animationSpec = spring(
+                                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                        stiffness = Spring.StiffnessMediumLow
+                                                    )
+                                                ) togetherWith fadeOut(animationSpec = spring(
+                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                    stiffness = Spring.StiffnessMediumLow
+                                                )) + scaleOut(
+                                                    targetScale = 0.9f,
+                                                    animationSpec = spring(
+                                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                        stiffness = Spring.StiffnessMediumLow
+                                                    )
+                                                )
+                                            },
+                                            label = "appSelectionContainer"
+                                        ) { isEmpty ->
+                                            if (isEmpty) {
+                                                ZenithButton(
+                                                    onClick = { showWakeUpAppPicker = true },
+                                                    text = "Choose Apps",
+                                                    type = ZenithButtonType.Outlined,
+                                                    size = ZenithButtonSize.Medium,
+                                                    fillMaxWidth = true
+                                                )
+                                            } else {
+                                                val selectedCount = wakeUpAppPackageNames.size
+                                                val topAppNames = remember(wakeUpAppPackageNames) {
+                                                    wakeUpAppPackageNames.take(2).map { pkg ->
+                                                        try {
+                                                            context.packageManager.getApplicationLabel(
+                                                                context.packageManager.getApplicationInfo(pkg, 0)
+                                                            ).toString()
+                                                        } catch (_: Exception) { pkg }
+                                                    }
+                                                }
+
+                                                Surface(
+                                                    onClick = { showWakeUpAppPicker = true },
+                                                    shape = RoundedCornerShape(20.dp),
+                                                    color = MaterialTheme.colorScheme.surface
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(12.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        MultiAppIconGroup(
+                                                            packageNames = wakeUpAppPackageNames.take(4),
+                                                            totalCount = selectedCount,
+                                                            size = 48.dp
+                                                        )
+                                                        Spacer(modifier = Modifier.width(16.dp))
+                                                        Column(modifier = Modifier.weight(1f)) {
+                                                            Text(
+                                                                text = "$selectedCount selected",
+                                                                style = MaterialTheme.typography.titleMedium,
+                                                                fontWeight = FontWeight.Bold
+                                                            )
+                                                            Text(
+                                                                text = buildString {
+                                                                    topAppNames.forEachIndexed { index, name ->
+                                                                        if (index > 0) append(", ")
+                                                                        append(name)
+                                                                    }
+                                                                    if (selectedCount > 2) append(" +${selectedCount - 2} Other Apps")
+                                                                },
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                            )
+                                                        }
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Icon(
+                                                            Icons.Outlined.Edit,
+                                                            contentDescription = "Edit",
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                CardGroup(shape = middleShape, containerColor = containerColor) {
+                                    val durationOptions = listOf(30 to "30 sec", 60 to "1 min", 120 to "2 min", 180 to "3 min", 300 to "5 min")
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Timer,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Usage Duration",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = "Time needed on selected apps",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        ZenithDropdown(
+                                            options = durationOptions.map { (sec, label) -> label to sec },
+                                            selectedOption = wakeUpAppDurationSeconds,
+                                            onOptionSelected = { wakeUpAppDurationSeconds = it },
+                                            width = 130.dp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        CardGroup(shape = bottomShape, containerColor = containerColor) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { mathChallengeEnabled = !mathChallengeEnabled }
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Calculate,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Math Challenge",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Solve a math problem before dismissing alarm",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Switch(
+                                    checked = mathChallengeEnabled,
+                                    onCheckedChange = { mathChallengeEnabled = it }
+                                )
                             }
                         }
 
@@ -591,39 +943,13 @@ private fun AlarmSettingsSheetContent(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        CardGroup(shape = middleShape, containerColor = containerColor) {
+                        CardGroup(shape = bottomShape, containerColor = containerColor) {
                             SettingsToggle(
                                 title = "Vibrate",
                                 description = "Vibrate device when alarm rings",
                                 checked = vibrateEnabled,
                                 onCheckedChange = { vibrateEnabled = it },
                                 icon = Icons.Outlined.NotificationsActive,
-                                shape = middleShape
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        CardGroup(shape = middleShape, containerColor = containerColor) {
-                            SettingsToggle(
-                                title = "Auto Repeat Alarm",
-                                description = "Re-trigger alarm every 5 min if you don't use your phone within 1 min after dismissing",
-                                checked = alarmAutoRepeatEnabled,
-                                onCheckedChange = { alarmAutoRepeatEnabled = it },
-                                icon = Icons.Outlined.Repeat,
-                                shape = middleShape
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        CardGroup(shape = bottomShape, containerColor = containerColor) {
-                            SettingsToggle(
-                                title = "Math Challenge",
-                                description = "Solve a math problem before dismissing alarm",
-                                checked = mathChallengeEnabled,
-                                onCheckedChange = { mathChallengeEnabled = it },
-                                icon = Icons.Outlined.Calculate,
                                 shape = bottomShape
                             )
                         }
@@ -669,7 +995,9 @@ private fun AlarmSettingsSheetContent(
                             snoozeDurationMinutes,
                             snoozeMaxCount,
                             gradualVolumeEnabled,
-                            mathChallengeEnabled
+                            mathChallengeEnabled,
+                            if (useCertainAppEnabled) wakeUpAppPackageNames else emptyList(),
+                            wakeUpAppDurationSeconds
                         )
                         scope.launch {
                             sheetState.hide()
@@ -681,4 +1009,63 @@ private fun AlarmSettingsSheetContent(
             }
         }
     }
+
+    if (showWakeUpAppPicker) {
+        WakeUpAppPickerSheet(
+            selectedPackages = wakeUpAppPackageNames.toSet(),
+            onPackagesSelected = { selected ->
+                wakeUpAppPackageNames = selected.toList()
+                showWakeUpAppPicker = false
+            },
+            onDismiss = { showWakeUpAppPicker = false }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun WakeUpAppPickerSheet(
+    selectedPackages: Set<String>,
+    onPackagesSelected: (Set<String>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val pm = LocalContext.current.packageManager
+    val installedApps = remember {
+        val intent = android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
+            addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+        }
+        val activities = pm.queryIntentActivities(intent, 0)
+        activities.map { resolveInfo ->
+            AppInfo(
+                packageName = resolveInfo.activityInfo.packageName,
+                appName = resolveInfo.loadLabel(pm).toString()
+            )
+        }
+            .distinctBy { it.packageName }
+            .sortedBy { it.appName }
+    }
+
+    var searchQuery by remember { mutableStateOf("") }
+    var tempSelection by remember { mutableStateOf(selectedPackages) }
+
+    val uiState = remember(installedApps, searchQuery, tempSelection) {
+        FocusUiState(
+            installedApps = installedApps,
+            topApps = emptyList(),
+            searchQuery = searchQuery,
+            selectedAppsForSchedule = tempSelection,
+            pickerTab = PickerTab.APPS
+        )
+    }
+
+    MultiAppPickerBottomSheet(
+        uiState = uiState,
+        onDismiss = onDismiss,
+        onAppToggled = { pkg ->
+            tempSelection = if (pkg in tempSelection) tempSelection - pkg else tempSelection + pkg
+        },
+        onConfirm = { onPackagesSelected(tempSelection) },
+        onSearchQueryChange = { searchQuery = it },
+        showTabs = false
+    )
 }

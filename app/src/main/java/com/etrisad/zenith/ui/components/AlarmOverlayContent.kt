@@ -47,7 +47,15 @@ fun AlarmOverlayContent(
     onSnooze: () -> Unit = {},
     snoozeCount: Int = 0,
     snoozeMaxCount: Int = 3,
-    mathChallengeEnabled: Boolean = false
+    mathChallengeEnabled: Boolean = false,
+    goalStreak: Int = 0,
+    wakeUpAppPackageNames: List<String> = emptyList(),
+    wakeUpAppNames: Map<String, String> = emptyMap(),
+    wakeUpAppDurationSeconds: Int = 120,
+    wakeUpAccumulatedSeconds: Int = 0,
+    wakeUpComplete: Boolean = false,
+    onWakeUpAppOpened: (String) -> Unit = {},
+    onWakeUpDismiss: () -> Unit = {}
 ) {
     var showMathChallenge by remember { mutableStateOf(false) }
     var mathUserAnswer by remember { mutableStateOf("") }
@@ -55,6 +63,7 @@ fun AlarmOverlayContent(
     var mathA by remember { mutableStateOf(0) }
     var mathB by remember { mutableStateOf(0) }
     var mathError by remember { mutableStateOf(false) }
+    var showWakeUpSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(showMathChallenge) {
         if (showMathChallenge) {
@@ -69,6 +78,8 @@ fun AlarmOverlayContent(
     fun handleDismiss(action: () -> Unit) {
         if (mathChallengeEnabled && !showMathChallenge) {
             showMathChallenge = true
+        } else if (wakeUpAppPackageNames.isNotEmpty() && !wakeUpComplete) {
+            showWakeUpSheet = true
         } else {
             action()
         }
@@ -233,7 +244,30 @@ fun AlarmOverlayContent(
                         modifier = Modifier.padding(top = 8.dp)
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    if (goalStreak > 0) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "🔥",
+                                    fontSize = 16.sp
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "$goalStreak day goal streak",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
 
                     AlarmInfoCard(
                         alarmTime = timeInfo.second,
@@ -273,7 +307,7 @@ fun AlarmOverlayContent(
 
                     AlarmActionGroup(
                         hintPhase = hintPhase,
-                        onStopAlarm = { handleDismiss(onStopAlarm) },
+                        onStopAlarm = onStopAlarm,
                         onDismiss = { handleDismiss(onDismiss) }
                     )
                 }
@@ -304,7 +338,30 @@ fun AlarmOverlayContent(
                     modifier = Modifier.padding(top = 12.dp)
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                if (goalStreak > 0) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "🔥",
+                                fontSize = 16.sp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "$goalStreak day goal streak",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
                 AlarmInfoCard(
                     alarmTime = timeInfo.second,
@@ -338,7 +395,7 @@ fun AlarmOverlayContent(
 
                 AlarmActionGroup(
                     hintPhase = hintPhase,
-                    onStopAlarm = { handleDismiss(onStopAlarm) },
+                    onStopAlarm = onStopAlarm,
                     onDismiss = { handleDismiss(onDismiss) }
                 )
 
@@ -356,6 +413,182 @@ fun AlarmOverlayContent(
                 onSubmit = { handleMathSubmit() },
                 onDismiss = { showMathChallenge = false }
             )
+        }
+
+        if (showWakeUpSheet) {
+            WakeUpAppBottomSheet(
+                wakeUpAppNames = wakeUpAppNames,
+                accumulatedSeconds = wakeUpAccumulatedSeconds,
+                requiredSeconds = wakeUpAppDurationSeconds,
+                isComplete = wakeUpComplete,
+                onOpenApp = { pkg ->
+                    onWakeUpAppOpened(pkg)
+                },
+                onDone = {
+                    showWakeUpSheet = false
+                    onWakeUpDismiss()
+                },
+                onBackToAlarm = { showWakeUpSheet = false }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WakeUpAppBottomSheet(
+    wakeUpAppNames: Map<String, String>,
+    accumulatedSeconds: Int,
+    requiredSeconds: Int,
+    isComplete: Boolean,
+    onOpenApp: (String) -> Unit,
+    onDone: () -> Unit,
+    onBackToAlarm: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = { onBackToAlarm() },
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+                .navigationBarsPadding(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = null,
+                modifier = Modifier.size(56.dp),
+                tint = if (isComplete) MaterialTheme.colorScheme.primary
+                       else MaterialTheme.colorScheme.outline
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Text(
+                text = if (isComplete) "Wake-Up Verified!" else "Wake-Up Verification",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = if (isComplete) "You proved you're awake!"
+                       else "Open the apps below to prove you're awake",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            if (!isComplete) {
+                LinearProgressIndicator(
+                    progress = (accumulatedSeconds.toFloat() / requiredSeconds.toFloat()).coerceIn(0f, 1f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "$accumulatedSeconds / $requiredSeconds seconds",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            wakeUpAppNames.forEach { (pkg, appName) ->
+                Surface(
+                    onClick = { if (!isComplete) onOpenApp(pkg) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = appName.take(1).uppercase(),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = appName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        if (!isComplete) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = "Open",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = "Done",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            if (isComplete) {
+                ZenithButton(
+                    onClick = { scope.launch { sheetState.hide(); onDone() } },
+                    modifier = Modifier.fillMaxWidth(),
+                    text = "Done — I'm Awake!",
+                    type = ZenithButtonType.Filled,
+                    size = ZenithButtonSize.ExtraLarge,
+                    fillMaxWidth = true
+                )
+            } else {
+                ZenithButton(
+                    onClick = { onBackToAlarm() },
+                    modifier = Modifier.fillMaxWidth(),
+                    text = "Back to Alarm",
+                    type = ZenithButtonType.Outlined,
+                    size = ZenithButtonSize.ExtraLarge,
+                    fillMaxWidth = true
+                )
+            }
         }
     }
 }

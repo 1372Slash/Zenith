@@ -14,7 +14,9 @@ data class AlarmItem(
     val snoozeDurationMinutes: Int = 5,
     val snoozeMaxCount: Int = 3,
     val gradualVolumeEnabled: Boolean = false,
-    val mathChallengeEnabled: Boolean = false
+    val mathChallengeEnabled: Boolean = false,
+    val wakeUpAppPackageNames: List<String> = emptyList(),
+    val wakeUpAppDurationSeconds: Int = 120
 ) {
     val timeString: String get() = String.format("%02d:%02d", hour, minute)
 
