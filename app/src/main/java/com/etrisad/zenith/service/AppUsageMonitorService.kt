@@ -1292,7 +1292,7 @@ class AppUsageMonitorService : Service() {
         val allowedUntilVal = allowedApps[currentApp]
         if (!isAppPaused && allowedUntilVal != null && allowedUntilVal > currentTime && !ZenithService.isServiceRunning) {
             val prefs = SharedMonitoringState.currentPreferences
-            if (prefs?.sessionUsageOverlayEnabled == true) {
+            if (prefs?.sessionUsageOverlayEnabled == true && !sessionUsageOverlayManager.hasActiveSession(currentApp)) {
                 val remainingMinutes = ((allowedUntilVal - currentTime) / 60000L).toInt().coerceAtLeast(1)
                 val sh = currentShieldCache
                 val isGoal = sh?.type == FocusType.GOAL
