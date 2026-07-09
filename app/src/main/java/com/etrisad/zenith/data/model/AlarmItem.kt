@@ -15,6 +15,8 @@ data class AlarmItem(
     val snoozeMaxCount: Int = 3,
     val gradualVolumeEnabled: Boolean = false,
     val mathChallengeEnabled: Boolean = false,
+    val ttsEnabled: Boolean = false,
+    val ttsCustomPhrase: String? = null,
     val wakeUpAppPackageNames: List<String> = emptyList(),
     val wakeUpAppDurationSeconds: Int = 120
 ) {

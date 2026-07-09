@@ -20,6 +20,7 @@ import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.etrisad.zenith.R
 import com.etrisad.zenith.data.local.entity.FocusType
+import com.etrisad.zenith.receiver.AlarmBroadcastReceiver
 import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.database.ZenithDatabase
@@ -483,6 +484,11 @@ class AppUsageMonitorService : Service() {
             SharedMonitoringState.cachedDayStartMinute = initPrefs.dayStartMinute
             lastCheckedDayStart = com.etrisad.zenith.util.DateTimeUtils.getDayStartTime(System.currentTimeMillis(), initPrefs.dayStartHour, initPrefs.dayStartMinute)
             com.etrisad.zenith.util.AlarmTasksSchedulingHelper.scheduleMidnightResetTask(this@AppUsageMonitorService, initPrefs.dayStartHour, initPrefs.dayStartMinute)
+            if (initPrefs.alarmMasterEnabled) {
+                val alarms = preferencesRepository.parseAlarms(initPrefs.alarmsJson)
+                val enabledAlarms = alarms.filter { it.enabled }
+                AlarmBroadcastReceiver.rescheduleAllAlarms(this@AppUsageMonitorService, enabledAlarms)
+            }
             startMonitoring()
             scheduleHeartbeatAlarm()
         }
@@ -528,9 +534,9 @@ class AppUsageMonitorService : Service() {
 
                     if (!isNightTime && !SharedMonitoringState.isBedtimeActive) {
                         sendGoalCallerNotification(overlayGoals)
-                        triggeredGoals.forEach { goal ->
-                            shieldRepository.updateShield(goal.copy(lastGoalReminderTimestamp = currentTime))
-                        }
+                    }
+                    triggeredGoals.forEach { goal ->
+                        shieldRepository.updateShield(goal.copy(lastGoalReminderTimestamp = currentTime))
                     }
                 } else {
                     triggeredGoals.forEach { goal ->
@@ -657,11 +663,27 @@ class AppUsageMonitorService : Service() {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
                 val alarmManager = getSystemService(android.content.Context.ALARM_SERVICE) as AlarmManager
-                alarmManager.setAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    System.currentTimeMillis() + 100,
-                    wakePendingIntent
-                )
+                try {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && alarmManager.canScheduleExactAlarms()) {
+                        alarmManager.setExactAndAllowWhileIdle(
+                            AlarmManager.RTC_WAKEUP,
+                            System.currentTimeMillis() + 100,
+                            wakePendingIntent
+                        )
+                    } else {
+                        alarmManager.setAndAllowWhileIdle(
+                            AlarmManager.RTC_WAKEUP,
+                            System.currentTimeMillis() + 100,
+                            wakePendingIntent
+                        )
+                    }
+                } catch (_: Exception) {
+                    alarmManager.setAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        System.currentTimeMillis() + 100,
+                        wakePendingIntent
+                    )
+                }
             }
         } catch (e: Exception) {
             Log.e("ZenithAUMS", "sendGoalCallerNotification failed: ${e.message}", e)
@@ -729,11 +751,27 @@ class AppUsageMonitorService : Service() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             val alarmManager = getSystemService(android.content.Context.ALARM_SERVICE) as AlarmManager
-            alarmManager.setAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                System.currentTimeMillis() + 100,
-                wakePendingIntent
-            )
+            try {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && alarmManager.canScheduleExactAlarms()) {
+                    alarmManager.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        System.currentTimeMillis() + 100,
+                        wakePendingIntent
+                    )
+                } else {
+                    alarmManager.setAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        System.currentTimeMillis() + 100,
+                        wakePendingIntent
+                    )
+                }
+            } catch (_: Exception) {
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    System.currentTimeMillis() + 100,
+                    wakePendingIntent
+                )
+            }
         }
         } catch (e: Exception) {
             Log.e("ZenithAUMS", "sendTestGoalCallerNotification failed: ${e.message}", e)
@@ -1121,6 +1159,8 @@ class AppUsageMonitorService : Service() {
                 }
             }
         } catch (_: Exception) {}
+
+        serviceScope.launch { checkGoalReminders() }
 
         if (isNewSession) {
             lastForegroundApp?.let { oldPkg ->

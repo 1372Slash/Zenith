@@ -428,11 +428,16 @@ fun AlarmScreen(
                 snoozeMaxCount = currentEditing.snoozeMaxCount,
                 gradualVolumeEnabled = currentEditing.gradualVolumeEnabled,
                 mathChallengeEnabled = currentEditing.mathChallengeEnabled,
+                ttsEnabled = currentEditing.ttsEnabled,
+                ttsCustomPhrase = currentEditing.ttsCustomPhrase,
                 wakeUpAppPackageNames = currentEditing.wakeUpAppPackageNames,
                 wakeUpAppDurationSeconds = currentEditing.wakeUpAppDurationSeconds,
                 onDismiss = { editingAlarm = null },
-                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, mathChallengeEnabled, wakeUpAppPackageNames, wakeUpAppDurationSeconds ->
+                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, mathChallengeEnabled, ttsEnabled, ttsCustomPhrase, wakeUpAppPackageNames, wakeUpAppDurationSeconds ->
                     scope.launch {
+                        val original = alarmList.find { it.id == currentEditing.id }
+                        val timeChanged = original != null && (original.hour != currentEditing.hour || original.minute != currentEditing.minute)
+                        val daysChanged = original != null && original.days != selectedDays
                         preferencesRepository.updateAlarm(
                             currentEditing.copy(
                                 name = name,
@@ -445,13 +450,15 @@ fun AlarmScreen(
                                 snoozeMaxCount = snoozeMaxCount,
                                 gradualVolumeEnabled = gradualVolumeEnabled,
                                 mathChallengeEnabled = mathChallengeEnabled,
+                                ttsEnabled = ttsEnabled,
+                                ttsCustomPhrase = ttsCustomPhrase,
                                 wakeUpAppPackageNames = wakeUpAppPackageNames,
-                                wakeUpAppDurationSeconds = wakeUpAppDurationSeconds
+                                wakeUpAppDurationSeconds = wakeUpAppDurationSeconds,
+                                enabled = if (timeChanged || daysChanged) true else currentEditing.enabled
                             )
                         )
                         rescheduleAlarms(context, preferencesRepository, prefs.alarmMasterEnabled)
                     }
-                    editingAlarm = null
                 },
                 onTimeClick = { showTimePicker = true },
                 alarmTimeText = currentEditing.timeString
@@ -471,10 +478,12 @@ fun AlarmScreen(
                 snoozeMaxCount = currentNew.snoozeMaxCount,
                 gradualVolumeEnabled = currentNew.gradualVolumeEnabled,
                 mathChallengeEnabled = currentNew.mathChallengeEnabled,
+                ttsEnabled = currentNew.ttsEnabled,
+                ttsCustomPhrase = currentNew.ttsCustomPhrase,
                 wakeUpAppPackageNames = currentNew.wakeUpAppPackageNames,
                 wakeUpAppDurationSeconds = currentNew.wakeUpAppDurationSeconds,
                 onDismiss = { newAlarm = null },
-                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, mathChallengeEnabled, wakeUpAppPackageNames, wakeUpAppDurationSeconds ->
+                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, mathChallengeEnabled, ttsEnabled, ttsCustomPhrase, wakeUpAppPackageNames, wakeUpAppDurationSeconds ->
                     scope.launch {
                         preferencesRepository.addAlarm(
                             currentNew.copy(
@@ -488,6 +497,8 @@ fun AlarmScreen(
                                 snoozeMaxCount = snoozeMaxCount,
                                 gradualVolumeEnabled = gradualVolumeEnabled,
                                 mathChallengeEnabled = mathChallengeEnabled,
+                                ttsEnabled = ttsEnabled,
+                                ttsCustomPhrase = ttsCustomPhrase,
                                 wakeUpAppPackageNames = wakeUpAppPackageNames,
                                 wakeUpAppDurationSeconds = wakeUpAppDurationSeconds
                             )
@@ -896,7 +907,7 @@ private suspend fun rescheduleAlarms(
         val alarms = preferencesRepository.parseAlarms(prefs.alarmsJson)
         val enabledAlarms = alarms.filter { it.enabled }
         for (alarm in enabledAlarms) {
-            AlarmBroadcastReceiver.scheduleAlarm(context, alarm.timeString)
+            AlarmBroadcastReceiver.scheduleAlarm(context, alarm.timeString, alarm.days)
         }
     }
 }

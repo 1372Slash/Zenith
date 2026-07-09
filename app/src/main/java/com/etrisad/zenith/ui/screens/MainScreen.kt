@@ -828,7 +828,15 @@ fun MainScreen(
                                             checked = preferences.alarmMasterEnabled,
                                             onCheckedChange = {
                                                 scope.launch {
-                                                    userPreferencesRepository.setAlarmMasterEnabled(!preferences.alarmMasterEnabled)
+                                                    val newEnabled = !preferences.alarmMasterEnabled
+                                                    userPreferencesRepository.setAlarmMasterEnabled(newEnabled)
+                                                    if (newEnabled) {
+                                                        val alarms = userPreferencesRepository.parseAlarms(preferences.alarmsJson)
+                                                        val enabledAlarms = alarms.filter { it.enabled }
+                                                        com.etrisad.zenith.receiver.AlarmBroadcastReceiver.rescheduleAllAlarms(context, enabledAlarms)
+                                                    } else {
+                                                        com.etrisad.zenith.receiver.AlarmBroadcastReceiver.cancelAlarm(context)
+                                                    }
                                                 }
                                             },
                                             thumbContent = {
