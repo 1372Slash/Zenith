@@ -276,6 +276,7 @@ class AlarmOverlayActivity : ComponentActivity() {
 
                 val ttsEnabled = currentAlarm?.ttsEnabled ?: false
                 val ttsPhrase = currentAlarm?.ttsCustomPhrase
+                val ttsLanguage = currentAlarm?.ttsLanguage
 
                 withContext(Dispatchers.Main) {
                     try {
@@ -301,7 +302,7 @@ class AlarmOverlayActivity : ComponentActivity() {
                                     rampUpVolume()
                                 }
                                 if (ttsEnabled) {
-                                    speakAlarmTime(ttsPhrase)
+                                    speakAlarmTime(ttsPhrase, ttsLanguage)
                                 }
                             }
                             prepareAsync()
@@ -316,7 +317,7 @@ class AlarmOverlayActivity : ComponentActivity() {
         }
     }
 
-    private fun speakAlarmTime(customPhrase: String?) {
+    private fun speakAlarmTime(customPhrase: String?, language: String?) {
         try {
             val hour = alarmTime.split(":").getOrNull(0)?.toIntOrNull() ?: 7
             val minute = alarmTime.split(":").getOrNull(1)?.toIntOrNull() ?: 0
@@ -331,11 +332,17 @@ class AlarmOverlayActivity : ComponentActivity() {
             val defaultPhrase = "Wake up, it's $timeText"
             val text = customPhrase?.replace("{time}", timeText) ?: defaultPhrase
 
+            val locale = language?.let { l ->
+                val parts = l.split("_")
+                if (parts.size == 2) java.util.Locale(parts[0], parts[1])
+                else java.util.Locale(l)
+            } ?: java.util.Locale.US
+
             tts?.stop()
             tts?.shutdown()
             tts = android.speech.tts.TextToSpeech(this@AlarmOverlayActivity) { status ->
                 if (status == android.speech.tts.TextToSpeech.SUCCESS) {
-                    tts?.language = java.util.Locale.US
+                    tts?.language = locale
                     tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
                         override fun onStart(utteranceId: String?) {}
                         override fun onDone(utteranceId: String?) {

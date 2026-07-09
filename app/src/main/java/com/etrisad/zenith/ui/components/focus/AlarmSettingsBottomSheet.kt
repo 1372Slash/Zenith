@@ -60,10 +60,11 @@ fun AlarmItemSettingsBottomSheet(
     mathChallengeEnabled: Boolean = false,
     ttsEnabled: Boolean = false,
     ttsCustomPhrase: String? = null,
+    ttsLanguage: String? = null,
     wakeUpAppPackageNames: List<String> = emptyList(),
     wakeUpAppDurationSeconds: Int = 120,
     onDismiss: () -> Unit,
-    onSave: (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, mathChallengeEnabled: Boolean, ttsEnabled: Boolean, ttsCustomPhrase: String?, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int) -> Unit,
+    onSave: (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, mathChallengeEnabled: Boolean, ttsEnabled: Boolean, ttsCustomPhrase: String?, ttsLanguage: String?, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int) -> Unit,
     onTimeClick: (() -> Unit)? = null,
     alarmTimeText: String? = null
 ) {
@@ -80,6 +81,7 @@ fun AlarmItemSettingsBottomSheet(
         initialMathChallengeEnabled = mathChallengeEnabled,
         initialTtsEnabled = ttsEnabled,
         initialTtsCustomPhrase = ttsCustomPhrase,
+        initialTtsLanguage = ttsLanguage,
         initialWakeUpAppPackageNames = wakeUpAppPackageNames,
         initialWakeUpAppDurationSeconds = wakeUpAppDurationSeconds,
         onDismiss = onDismiss,
@@ -104,10 +106,11 @@ private fun AlarmSettingsSheetContent(
     initialMathChallengeEnabled: Boolean = false,
     initialTtsEnabled: Boolean = false,
     initialTtsCustomPhrase: String? = null,
+    initialTtsLanguage: String? = null,
     initialWakeUpAppPackageNames: List<String> = emptyList(),
     initialWakeUpAppDurationSeconds: Int = 120,
     onDismiss: () -> Unit,
-    onSave: (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, mathChallengeEnabled: Boolean, ttsEnabled: Boolean, ttsCustomPhrase: String?, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int) -> Unit,
+    onSave: (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, mathChallengeEnabled: Boolean, ttsEnabled: Boolean, ttsCustomPhrase: String?, ttsLanguage: String?, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int) -> Unit,
     onTimeClick: (() -> Unit)?,
     alarmTimeText: String?
 ) {
@@ -136,6 +139,7 @@ private fun AlarmSettingsSheetContent(
     var mathChallengeEnabled by remember { mutableStateOf(initialMathChallengeEnabled) }
     var ttsEnabled by remember { mutableStateOf(initialTtsEnabled) }
     var ttsCustomPhrase by remember { mutableStateOf(initialTtsCustomPhrase) }
+    var ttsLanguage by remember { mutableStateOf(initialTtsLanguage) }
     var wakeUpAppPackageNames by remember { mutableStateOf(initialWakeUpAppPackageNames) }
     var wakeUpAppDurationSeconds by remember { mutableStateOf(initialWakeUpAppDurationSeconds) }
     var useCertainAppEnabled by remember { mutableStateOf(initialWakeUpAppPackageNames.isNotEmpty()) }
@@ -145,10 +149,48 @@ private fun AlarmSettingsSheetContent(
         android.media.MediaPlayer()
     }
 
+    var ttsEngine by remember { mutableStateOf<android.speech.tts.TextToSpeech?>(null) }
+    var ttsEngineStatus by remember { mutableStateOf("") }
+    var availableLocales by remember { mutableStateOf<List<java.util.Locale>>(emptyList()) }
+    var selectedLocale by remember { mutableStateOf<java.util.Locale?>(null) }
+
+    LaunchedEffect(ttsEnabled) {
+        if (ttsEnabled) {
+            var engine: android.speech.tts.TextToSpeech? = null
+            engine = android.speech.tts.TextToSpeech(context) { status ->
+                if (status == android.speech.tts.TextToSpeech.SUCCESS) {
+                    engine?.let { e ->
+                        availableLocales = e.availableLanguages?.toList() ?: emptyList()
+                        val locale = ttsLanguage?.let { l ->
+                            val parts = l.split("_")
+                            if (parts.size == 2) java.util.Locale(parts[0], parts[1])
+                            else java.util.Locale(l)
+                        } ?: java.util.Locale.US
+                        selectedLocale = locale
+                        val result = e.setLanguage(locale)
+                        ttsEngineStatus = when (result) {
+                            android.speech.tts.TextToSpeech.LANG_COUNTRY_AVAILABLE,
+                            android.speech.tts.TextToSpeech.LANG_AVAILABLE -> "Ready"
+                            android.speech.tts.TextToSpeech.LANG_MISSING_DATA -> "Missing data"
+                            android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED -> "Not supported"
+                            else -> "Ready"
+                        }
+                    }
+                } else {
+                    ttsEngineStatus = "Init failed"
+                }
+            }
+            ttsEngine = engine
+        }
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             if (previewPlayer.isPlaying) previewPlayer.stop()
             previewPlayer.release()
+            ttsEngine?.stop()
+            ttsEngine?.shutdown()
+            ttsEngine = null
         }
     }
 
@@ -1042,6 +1084,124 @@ private fun AlarmSettingsSheetContent(
                                                 .fillMaxWidth()
                                                 .padding(16.dp)
                                         ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (ttsEngineStatus == "Ready") Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
+                                                    contentDescription = null,
+                                                    tint = if (ttsEngineStatus == "Ready") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Column {
+                                                    Text(
+                                                        text = "TTS Engine",
+                                                        style = MaterialTheme.typography.titleSmall,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    Text(
+                                                        text = if (ttsEngineStatus == "Ready" && selectedLocale != null) "Ready (${selectedLocale!!.displayName})" else ttsEngineStatus,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        if (availableLocales.isNotEmpty()) {
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(horizontal = 16.dp),
+                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                            )
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(16.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Language",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                                val localeOptions by remember(availableLocales) {
+                                                    mutableStateOf(
+                                                        availableLocales
+                                                            .distinctBy { it.language }
+                                                            .sortedBy { it.displayName }
+                                                            .map { it.toLanguageTag() to it.displayName }
+                                                    )
+                                                }
+                                                var expanded by remember { mutableStateOf(false) }
+                                                val selectedLabel = remember(selectedLocale) {
+                                                    selectedLocale?.displayName ?: "Default"
+                                                }
+                                                ExposedDropdownMenuBox(
+                                                    expanded = expanded,
+                                                    onExpandedChange = { expanded = it }
+                                                ) {
+                                                    OutlinedTextField(
+                                                        value = selectedLabel,
+                                                        onValueChange = {},
+                                                        readOnly = true,
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .menuAnchor(),
+                                                        shape = RoundedCornerShape(16.dp),
+                                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                                                        singleLine = true
+                                                    )
+                                                    ExposedDropdownMenu(
+                                                        expanded = expanded,
+                                                        onDismissRequest = { expanded = false }
+                                                    ) {
+                                                        localeOptions.forEach { (tag, displayName) ->
+                                                            DropdownMenuItem(
+                                                                text = { Text(displayName) },
+                                                                onClick = {
+                                                                    val locale = java.util.Locale.forLanguageTag(tag)
+                                                                    selectedLocale = locale
+                                                                    ttsLanguage = tag
+                                                                    ttsEngine?.setLanguage(locale)
+                                                                    ttsEngineStatus = "Ready"
+                                                                    expanded = false
+                                                                }
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        if (ttsEngineStatus.isNotEmpty() && ttsEngineStatus != "Ready") {
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            ZenithButton(
+                                                onClick = {
+                                                    context.startActivity(
+                                                        android.content.Intent(android.speech.tts.TextToSpeech.Engine.ACTION_CHECK_TTS_DATA)
+                                                    )
+                                                },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 16.dp),
+                                                text = "Open TTS Settings",
+                                                type = ZenithButtonType.Tonal,
+                                                size = ZenithButtonSize.Medium,
+                                                fillMaxWidth = true
+                                            )
+                                        }
+
+                                        HorizontalDivider(
+                                            modifier = Modifier.padding(horizontal = 16.dp),
+                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                        )
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(16.dp)
+                                        ) {
                                             Text(
                                                 text = "Custom Phrase",
                                                 style = MaterialTheme.typography.titleSmall,
@@ -1126,6 +1286,7 @@ private fun AlarmSettingsSheetContent(
                             mathChallengeEnabled,
                             ttsEnabled,
                             ttsCustomPhrase,
+                            ttsLanguage,
                             if (useCertainAppEnabled) wakeUpAppPackageNames else emptyList(),
                             wakeUpAppDurationSeconds
                         )

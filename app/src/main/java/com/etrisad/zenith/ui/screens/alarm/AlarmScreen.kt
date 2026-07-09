@@ -430,10 +430,11 @@ fun AlarmScreen(
                 mathChallengeEnabled = currentEditing.mathChallengeEnabled,
                 ttsEnabled = currentEditing.ttsEnabled,
                 ttsCustomPhrase = currentEditing.ttsCustomPhrase,
+                ttsLanguage = currentEditing.ttsLanguage,
                 wakeUpAppPackageNames = currentEditing.wakeUpAppPackageNames,
                 wakeUpAppDurationSeconds = currentEditing.wakeUpAppDurationSeconds,
                 onDismiss = { editingAlarm = null },
-                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, mathChallengeEnabled, ttsEnabled, ttsCustomPhrase, wakeUpAppPackageNames, wakeUpAppDurationSeconds ->
+                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, mathChallengeEnabled, ttsEnabled, ttsCustomPhrase, ttsLanguage, wakeUpAppPackageNames, wakeUpAppDurationSeconds ->
                     scope.launch {
                         val original = alarmList.find { it.id == currentEditing.id }
                         val timeChanged = original != null && (original.hour != currentEditing.hour || original.minute != currentEditing.minute)
@@ -452,6 +453,7 @@ fun AlarmScreen(
                                 mathChallengeEnabled = mathChallengeEnabled,
                                 ttsEnabled = ttsEnabled,
                                 ttsCustomPhrase = ttsCustomPhrase,
+                                ttsLanguage = ttsLanguage,
                                 wakeUpAppPackageNames = wakeUpAppPackageNames,
                                 wakeUpAppDurationSeconds = wakeUpAppDurationSeconds,
                                 enabled = if (timeChanged || daysChanged) true else currentEditing.enabled
@@ -480,10 +482,11 @@ fun AlarmScreen(
                 mathChallengeEnabled = currentNew.mathChallengeEnabled,
                 ttsEnabled = currentNew.ttsEnabled,
                 ttsCustomPhrase = currentNew.ttsCustomPhrase,
+                ttsLanguage = currentNew.ttsLanguage,
                 wakeUpAppPackageNames = currentNew.wakeUpAppPackageNames,
                 wakeUpAppDurationSeconds = currentNew.wakeUpAppDurationSeconds,
                 onDismiss = { newAlarm = null },
-                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, mathChallengeEnabled, ttsEnabled, ttsCustomPhrase, wakeUpAppPackageNames, wakeUpAppDurationSeconds ->
+                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, mathChallengeEnabled, ttsEnabled, ttsCustomPhrase, ttsLanguage, wakeUpAppPackageNames, wakeUpAppDurationSeconds ->
                     scope.launch {
                         preferencesRepository.addAlarm(
                             currentNew.copy(
@@ -499,6 +502,7 @@ fun AlarmScreen(
                                 mathChallengeEnabled = mathChallengeEnabled,
                                 ttsEnabled = ttsEnabled,
                                 ttsCustomPhrase = ttsCustomPhrase,
+                                ttsLanguage = ttsLanguage,
                                 wakeUpAppPackageNames = wakeUpAppPackageNames,
                                 wakeUpAppDurationSeconds = wakeUpAppDurationSeconds
                             )

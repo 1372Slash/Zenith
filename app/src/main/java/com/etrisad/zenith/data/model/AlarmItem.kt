@@ -17,6 +17,7 @@ data class AlarmItem(
     val mathChallengeEnabled: Boolean = false,
     val ttsEnabled: Boolean = false,
     val ttsCustomPhrase: String? = null,
+    val ttsLanguage: String? = null,
     val wakeUpAppPackageNames: List<String> = emptyList(),
     val wakeUpAppDurationSeconds: Int = 120
 ) {
