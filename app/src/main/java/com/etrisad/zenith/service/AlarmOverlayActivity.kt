@@ -325,8 +325,9 @@ class AlarmOverlayActivity : ComponentActivity() {
                 hour > 12 -> hour - 12
                 else -> hour
             }
+            val minuteStr = minute.toString().padStart(2, '0')
             val amPm = if (hour < 12) "AM" else "PM"
-            val timeText = "$hourFormatted $amPm"
+            val timeText = if (minute == 0) "$hourFormatted $amPm" else "$hourFormatted:$minuteStr $amPm"
             val defaultPhrase = "Wake up, it's $timeText"
             val text = customPhrase?.replace("{time}", timeText) ?: defaultPhrase
 
