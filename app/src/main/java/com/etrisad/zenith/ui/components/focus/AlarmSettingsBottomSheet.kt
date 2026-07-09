@@ -473,7 +473,7 @@ private fun AlarmSettingsSheetContent(
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Switch(
+                                AnimatedSwitch(
                                     checked = alarmAutoRepeatEnabled,
                                     onCheckedChange = { alarmAutoRepeatEnabled = it }
                                 )
@@ -521,7 +521,7 @@ private fun AlarmSettingsSheetContent(
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Switch(
+                                    AnimatedSwitch(
                                         checked = useCertainAppEnabled,
                                         onCheckedChange = {
                                             useCertainAppEnabled = it
@@ -764,7 +764,7 @@ private fun AlarmSettingsSheetContent(
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Switch(
+                                AnimatedSwitch(
                                     checked = mathChallengeEnabled,
                                     onCheckedChange = { mathChallengeEnabled = it }
                                 )
@@ -811,7 +811,7 @@ private fun AlarmSettingsSheetContent(
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Switch(
+                                    AnimatedSwitch(
                                         checked = alarmSoundEnabled,
                                         onCheckedChange = { alarmSoundEnabled = it }
                                     )
@@ -1017,7 +1017,7 @@ private fun AlarmSettingsSheetContent(
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Switch(
+                                    AnimatedSwitch(
                                         checked = ttsEnabled,
                                         onCheckedChange = { ttsEnabled = it }
                                     )
@@ -1198,5 +1198,55 @@ private fun WakeUpAppPickerSheet(
         onConfirm = { onPackagesSelected(tempSelection) },
         onSearchQueryChange = { searchQuery = it },
         showTabs = false
+    )
+}
+
+@Composable
+private fun AnimatedSwitch(
+    checked: Boolean,
+    onCheckedChange: ((Boolean) -> Unit)?,
+    enabled: Boolean = true
+) {
+    Switch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        enabled = enabled,
+        thumbContent = {
+            val thumbSize by animateDpAsState(
+                targetValue = if (checked) 28.dp else 24.dp,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
+                label = "thumb_size"
+            )
+            val iconColor by animateColorAsState(
+                targetValue = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                label = "switch_icon_color"
+            )
+            Box(modifier = Modifier.size(thumbSize), contentAlignment = Alignment.Center) {
+                AnimatedContent(
+                    targetState = checked,
+                    transitionSpec = {
+                        (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                            scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
+                            .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
+                    },
+                    label = "switch_icon_anim"
+                ) { isChecked ->
+                    Icon(
+                        imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
+                        contentDescription = null,
+                        modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
+                        tint = iconColor
+                    )
+                }
+            }
+        },
+        colors = SwitchDefaults.colors(
+            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+            checkedTrackColor = MaterialTheme.colorScheme.primary,
+            disabledUncheckedThumbColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+            disabledUncheckedTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+        )
     )
 }
