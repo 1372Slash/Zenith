@@ -25,6 +25,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -542,7 +543,7 @@ fun <T> ZenithDropdown(
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            onClick = { expanded = true }
+            onClick = { /* Handled by onExpandedChange */ }
         ) {
             Row(
                 modifier = Modifier
@@ -569,7 +570,7 @@ fun <T> ZenithDropdown(
                 )
                 
                 Icon(
-                    imageVector = Icons.Filled.ArrowDropDown,
+                    imageVector = Icons.Filled.KeyboardArrowDown,
                     contentDescription = null,
                     modifier = Modifier
                         .size(24.dp)

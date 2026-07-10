@@ -34,6 +34,7 @@ import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithButtonType
 import com.etrisad.zenith.ui.components.focus.AppPickerBottomSheet
+import com.etrisad.zenith.ui.components.focus.ZenithDropdown
 import com.etrisad.zenith.ui.components.overlay.InterceptBottomSheet
 import com.etrisad.zenith.ui.viewmodel.AppInfo
 import com.etrisad.zenith.ui.viewmodel.FocusUiState
@@ -762,12 +763,13 @@ private fun TtsTestBottomSheet(
 
     LaunchedEffect(Unit) {
         try {
-            val ttsInstance = android.speech.tts.TextToSpeech(context) { status ->
+            var engine: android.speech.tts.TextToSpeech? = null
+            engine = android.speech.tts.TextToSpeech(context) { status ->
                 if (status == android.speech.tts.TextToSpeech.SUCCESS) {
-                    tts?.let { engine ->
-                        availableLocales = engine.availableLanguages?.toList() ?: emptyList()
+                    engine?.let { e ->
+                        availableLocales = e.availableLanguages?.toList() ?: emptyList()
                         selectedLocale = java.util.Locale.getDefault()
-                        val result = engine.setLanguage(selectedLocale)
+                        val result = e.setLanguage(selectedLocale)
                         ttsStatus = when (result) {
                             android.speech.tts.TextToSpeech.LANG_COUNTRY_AVAILABLE -> "Ready (${selectedLocale.displayName})"
                             android.speech.tts.TextToSpeech.LANG_AVAILABLE -> "Ready (${selectedLocale.displayName})"
@@ -780,7 +782,7 @@ private fun TtsTestBottomSheet(
                     ttsStatus = "TTS init failed (status: $status)"
                 }
             }
-            tts = ttsInstance
+            tts = engine
         } catch (e: Exception) {
             ttsStatus = "TTS error: ${e.message}"
         }
@@ -828,28 +830,79 @@ private fun TtsTestBottomSheet(
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = if (ttsStatus.startsWith("Ready")) Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
-                        contentDescription = null,
-                        tint = if (ttsStatus.startsWith("Ready")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (ttsStatus.startsWith("Ready")) Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "TTS Engine",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = ttsStatus,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    if (!ttsStatus.startsWith("Ready")) {
+                        Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "TTS Engine Status",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = ttsStatus,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            text = "Zenith uses your device's built-in Text-to-Speech engine. If a language is missing, consider installing Google Speech Services from the Play Store.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            onClick = {
+                                context.startActivity(
+                                    android.content.Intent(android.speech.tts.TextToSpeech.Engine.ACTION_CHECK_TTS_DATA)
+                                )
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Settings,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Open TTS Settings",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
             }
@@ -914,38 +967,64 @@ private fun TtsTestBottomSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            OutlinedTextField(
-                value = selectedLocale.displayName,
-                onValueChange = {},
-                label = { Text("Language") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                readOnly = true,
-                singleLine = true,
-                trailingIcon = {
-                    if (availableLocales.isNotEmpty()) {
-                        Icon(
-                            imageVector = Icons.Outlined.Language,
-                            contentDescription = null
+            if (availableLocales.isNotEmpty()) {
+                val localeOptions = remember(availableLocales) {
+                    availableLocales
+                        .distinctBy { it.language }
+                        .sortedBy { it.displayName }
+                        .map { it.displayName to it.toLanguageTag() }
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Language,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Voice Language",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Language for spoken alarm alerts",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        ZenithDropdown(
+                            options = localeOptions,
+                            selectedOption = selectedLocale.toLanguageTag(),
+                            onOptionSelected = { tag ->
+                                val locale = java.util.Locale.forLanguageTag(tag)
+                                selectedLocale = locale
+                                tts?.setLanguage(locale)
+                                ttsStatus = "Ready (${locale.displayName})"
+                            },
+                            width = 200.dp
                         )
                     }
                 }
-            )
-
-                if (!ttsStatus.startsWith("Ready")) {
-                ZenithButton(
-                    onClick = {
-                        context.startActivity(
-                            android.content.Intent(android.speech.tts.TextToSpeech.Engine.ACTION_CHECK_TTS_DATA)
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    text = "Open TTS Settings",
-                    type = ZenithButtonType.Tonal,
-                    size = ZenithButtonSize.ExtraLarge,
-                    fillMaxWidth = true
-                )
-                Spacer(modifier = Modifier.height(12.dp))
             }
 
             Spacer(modifier = Modifier.height(24.dp))
