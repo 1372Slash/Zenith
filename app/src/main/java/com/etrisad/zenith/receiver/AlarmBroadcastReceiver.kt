@@ -192,11 +192,16 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
                 context.packageManager.resolveActivity(intent, 0)?.activityInfo?.packageName
             } catch (_: Exception) { null }
+            val ttsEnginePackage = try {
+                val ttsIntent = Intent(android.speech.tts.TextToSpeech.Engine.ACTION_CHECK_TTS_DATA)
+                context.packageManager.resolveActivity(ttsIntent, 0)?.activityInfo?.packageName
+            } catch (_: Exception) { null }
             while (events.hasNextEvent()) {
                 val event = UsageEvents.Event()
                 events.getNextEvent(event)
                 if (event.packageName == ownPackage) continue
                 if (event.packageName == launcherPackage) continue
+                if (ttsEnginePackage != null && event.packageName == ttsEnginePackage) continue
                 if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND ||
                     event.eventType == UsageEvents.Event.ACTIVITY_RESUMED
                 ) {
@@ -204,7 +209,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                     break
                 }
             }
-            Log.d("AlarmReceiver", "hasRecentUsage: window=[$oneMinuteAgo, $now], result=$hasEvent (launcher=$launcherPackage)")
+            Log.d("AlarmReceiver", "hasRecentUsage: window=[$oneMinuteAgo, $now], result=$hasEvent (launcher=$launcherPackage, tts=$ttsEnginePackage)")
             return hasEvent
         } catch (e: Exception) {
             Log.w("AlarmReceiver", "hasRecentUsage check failed (permission?): ${e.message}")

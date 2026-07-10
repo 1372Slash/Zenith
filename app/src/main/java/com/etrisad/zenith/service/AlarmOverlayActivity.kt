@@ -172,15 +172,17 @@ class AlarmOverlayActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         val newAlarmTime = intent.getStringExtra(EXTRA_ALARM_TIME) ?: return
-        if (newAlarmTime == alarmTime) return
 
-        stopWakeUpTracking()
-        alarmTime = newAlarmTime
-        snoozeCount = intent.getIntExtra(EXTRA_SNOOZE_COUNT, 0)
-        testMathChallenge = intent.getBooleanExtra(EXTRA_TEST_MATH_CHALLENGE, false)
-        testGradualVolume = intent.getBooleanExtra(EXTRA_TEST_GRADUAL_VOLUME, false)
-        restartKey++
+        if (newAlarmTime != alarmTime) {
+            stopWakeUpTracking()
+            alarmTime = newAlarmTime
+            snoozeCount = intent.getIntExtra(EXTRA_SNOOZE_COUNT, 0)
+            testMathChallenge = intent.getBooleanExtra(EXTRA_TEST_MATH_CHALLENGE, false)
+            testGradualVolume = intent.getBooleanExtra(EXTRA_TEST_GRADUAL_VOLUME, false)
+            restartKey++
+        }
 
+        isAlarmActive = true
         playAlarmSound()
     }
 
@@ -347,7 +349,26 @@ class AlarmOverlayActivity : ComponentActivity() {
                             delay(3000L)
                             if (!isAlarmActive) break
                             mediaPlayer?.setVolume(0.3f, 0.3f)
-                            tts?.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "alarm_tts")
+                            try {
+                                val result = tts?.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "alarm_tts")
+                                if (result == android.speech.tts.TextToSpeech.ERROR) {
+                                    Log.w("ZenithAlarm", "TTS speak failed, reinitializing")
+                                    tts?.stop()
+                                    tts?.shutdown()
+                                    withContext(Dispatchers.Main) {
+                                        speakAlarmTime(customPhrase, language)
+                                    }
+                                    return@launch
+                                }
+                            } catch (e: Exception) {
+                                Log.w("ZenithAlarm", "TTS speak exception: ${e.message}")
+                                tts?.stop()
+                                tts?.shutdown()
+                                withContext(Dispatchers.Main) {
+                                    speakAlarmTime(customPhrase, language)
+                                }
+                                return@launch
+                            }
                         }
                     }
                 }
