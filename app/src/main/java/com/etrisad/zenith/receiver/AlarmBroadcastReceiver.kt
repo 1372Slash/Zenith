@@ -9,6 +9,8 @@ import android.app.usage.UsageStatsManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.etrisad.zenith.R
@@ -135,11 +137,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             val triggerAtMillis = System.currentTimeMillis() + 1000
-            val showIntent = PendingIntent.getActivity(
-                context, 0,
-                context.packageManager.getLaunchIntentForPackage(context.packageName),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
+            val showIntent = buildShowIntent(context)
             val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent)
             alarmManager.setAlarmClock(alarmClockInfo, wakePendingIntent)
             Log.d("AlarmReceiver", "scheduleWakeAlarm: setAlarmClock for +1s")
@@ -242,6 +240,52 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             val hour = parts.getOrNull(0)?.toIntOrNull() ?: 0
             val minute = parts.getOrNull(1)?.toIntOrNull() ?: 0
             return base + hour * 100 + minute
+        }
+
+        private fun buildShowIntent(context: Context): PendingIntent {
+            val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                ?: Intent(context, com.etrisad.zenith.MainActivity::class.java)
+            return PendingIntent.getActivity(
+                context, 0, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+
+        fun hasExactAlarmPermission(context: Context): Boolean {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                return am.canScheduleExactAlarms()
+            }
+            return true
+        }
+
+        fun promptExactAlarmPermission(context: Context) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !hasExactAlarmPermission(context)) {
+                try {
+                    val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                        data = android.net.Uri.parse("package:${context.packageName}")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    Log.w("AlarmReceiver", "Failed to open exact alarm settings: ${e.message}")
+                }
+            }
+        }
+
+        fun requestBatteryOptimizationExemption(context: Context) {
+            try {
+                val pm = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+                if (!pm.isIgnoringBatteryOptimizations(context.packageName)) {
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = android.net.Uri.parse("package:${context.packageName}")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                }
+            } catch (e: Exception) {
+                Log.w("AlarmReceiver", "Failed to request battery optimization exemption: ${e.message}")
+            }
         }
 
         fun scheduleAlarm(context: Context, alarmTime: String, days: Set<Int> = emptySet()) {
@@ -392,42 +436,15 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             pendingIntent.cancel()
         }
 
-        private fun cancelReTriggerNoLog(context: Context, alarmTime: String) {
-            val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
-                action = ACTION_RE_TRIGGER
-            }
-            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val requestCode = requestCodeFor(REQUEST_CODE_RE_TRIGGER_BASE, alarmTime)
-            val pendingIntent = PendingIntent.getBroadcast(
-                context, requestCode, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            alarmManager.cancel(pendingIntent)
-            pendingIntent.cancel()
-        }
-
-        private fun cancelUsageCheckNoLog(context: Context, alarmTime: String) {
-            val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
-                action = ACTION_CHECK_USAGE
-            }
-            val requestCode = requestCodeFor(REQUEST_CODE_CHECK_BASE, alarmTime)
-            val pendingIntent = PendingIntent.getBroadcast(
-                context, requestCode, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            alarmManager.cancel(pendingIntent)
-            pendingIntent.cancel()
-        }
-
         private fun setExactAlarm(context: Context, triggerAtMillis: Long, pendingIntent: PendingIntent) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+                Log.w("AlarmReceiver", "setExactAlarm: SCHEDULE_EXACT_ALARM not granted, trying setAlarmClock anyway (Doze-exempt path)")
+            }
+
             try {
-                val showIntent = PendingIntent.getActivity(
-                    context, 0,
-                    context.packageManager.getLaunchIntentForPackage(context.packageName),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
+                val showIntent = buildShowIntent(context)
                 val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent)
                 alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
                 Log.d("AlarmReceiver", "setExactAlarm: setAlarmClock at $triggerAtMillis")

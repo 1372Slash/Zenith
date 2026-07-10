@@ -69,6 +69,7 @@ class ZenithApplication : Application(), ImageLoaderFactory {
             com.etrisad.zenith.worker.StreakRefreshWorker.enqueue(this)
             com.etrisad.zenith.worker.NotificationInsightsWorker.scheduleDailyRecap(this)
             com.etrisad.zenith.worker.NotificationInsightsWorker.scheduleWeeklyInsight(this)
+            com.etrisad.zenith.worker.AlarmWatchdogWorker.enqueue(this)
         }
 
         applicationScope.launch {

@@ -6,6 +6,7 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Bundle
 import android.os.PowerManager
@@ -45,6 +46,8 @@ class AlarmOverlayActivity : ComponentActivity() {
     private var gradualVolumeJob: kotlinx.coroutines.Job? = null
     private var tts: android.speech.tts.TextToSpeech? = null
     private var ttsLoopJob: kotlinx.coroutines.Job? = null
+    private var wakeLockRenewalJob: kotlinx.coroutines.Job? = null
+    private var ttsRetryCount = 0
 
     @Volatile
     private var isAlarmActive = false
@@ -90,6 +93,8 @@ class AlarmOverlayActivity : ComponentActivity() {
             "Zenith:AlarmWakeLock"
         )
         wakeLock?.acquire(10 * 60 * 1000L)
+        startWakeLockRenewal()
+        forceAlarmVolume()
 
         setContent {
             key(restartKey) {
@@ -183,6 +188,7 @@ class AlarmOverlayActivity : ComponentActivity() {
         }
 
         isAlarmActive = true
+        forceAlarmVolume()
         playAlarmSound()
     }
 
@@ -289,6 +295,20 @@ class AlarmOverlayActivity : ComponentActivity() {
                             } else {
                                 setVolume(1.0f, 1.0f)
                             }
+                            setOnErrorListener { mp, what, extra ->
+                                Log.e("ZenithAlarm", "MediaPlayer error: what=$what extra=$extra")
+                                try {
+                                    mp.reset()
+                                    mp.setDataSource(
+                                        this@AlarmOverlayActivity,
+                                        android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
+                                    )
+                                    mp.prepareAsync()
+                                } catch (e: Exception) {
+                                    Log.e("ZenithAlarm", "Fallback sound also failed: ${e.message}")
+                                }
+                                true
+                            }
                             setOnPreparedListener {
                                 if (!isAlarmActive) return@setOnPreparedListener
                                 it.start()
@@ -311,7 +331,8 @@ class AlarmOverlayActivity : ComponentActivity() {
         }
     }
 
-    private fun speakAlarmTime(customPhrase: String?, language: String?) {
+    private fun speakAlarmTime(customPhrase: String?, language: String?, isRetry: Boolean = false) {
+        if (!isRetry) ttsRetryCount = 0
         try {
             val hour = alarmTime.split(":").getOrNull(0)?.toIntOrNull() ?: 7
             val minute = alarmTime.split(":").getOrNull(1)?.toIntOrNull() ?: 0
@@ -352,20 +373,30 @@ class AlarmOverlayActivity : ComponentActivity() {
                             try {
                                 val result = tts?.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "alarm_tts")
                                 if (result == android.speech.tts.TextToSpeech.ERROR) {
-                                    Log.w("ZenithAlarm", "TTS speak failed, reinitializing")
+                                    ttsRetryCount++
+                                    if (ttsRetryCount >= 3) {
+                                        Log.e("ZenithAlarm", "TTS failed after 3 retries, giving up")
+                                        return@launch
+                                    }
+                                    Log.w("ZenithAlarm", "TTS speak failed (retry $ttsRetryCount/3), reinitializing")
                                     tts?.stop()
                                     tts?.shutdown()
                                     withContext(Dispatchers.Main) {
-                                        speakAlarmTime(customPhrase, language)
+                                        speakAlarmTime(customPhrase, language, isRetry = true)
                                     }
                                     return@launch
                                 }
                             } catch (e: Exception) {
-                                Log.w("ZenithAlarm", "TTS speak exception: ${e.message}")
+                                ttsRetryCount++
+                                if (ttsRetryCount >= 3) {
+                                    Log.e("ZenithAlarm", "TTS exception after 3 retries, giving up")
+                                    return@launch
+                                }
+                                Log.w("ZenithAlarm", "TTS speak exception (retry $ttsRetryCount/3): ${e.message}")
                                 tts?.stop()
                                 tts?.shutdown()
                                 withContext(Dispatchers.Main) {
-                                    speakAlarmTime(customPhrase, language)
+                                    speakAlarmTime(customPhrase, language, isRetry = true)
                                 }
                                 return@launch
                             }
@@ -393,10 +424,48 @@ class AlarmOverlayActivity : ComponentActivity() {
         }
     }
 
+    private fun forceAlarmVolume() {
+        try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+            val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_ALARM)
+            if (currentVol < maxVol / 2) {
+                audioManager.setStreamVolume(AudioManager.STREAM_ALARM, maxVol / 2, 0)
+                Log.d("ZenithAlarm", "Forced alarm volume from $currentVol to ${maxVol / 2}")
+            }
+        } catch (e: Exception) {
+            Log.w("ZenithAlarm", "Failed to force alarm volume: ${e.message}")
+        }
+    }
+
+    private fun startWakeLockRenewal() {
+        wakeLockRenewalJob?.cancel()
+        wakeLockRenewalJob = lifecycleScope.launch {
+            while (isAlarmActive) {
+                delay(8 * 60 * 1000L)
+                if (!isAlarmActive) break
+                wakeLock?.let {
+                    if (it.isHeld) {
+                        it.release()
+                    }
+                }
+                val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+                wakeLock = powerManager.newWakeLock(
+                    PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                    "Zenith:AlarmWakeLock"
+                )
+                wakeLock?.acquire(10 * 60 * 1000L)
+                Log.d("ZenithAlarm", "Wake lock renewed")
+            }
+        }
+    }
+
     private fun stopAlarmAndFinish() {
         isAlarmActive = false
         ttsLoopJob?.cancel()
         ttsLoopJob = null
+        wakeLockRenewalJob?.cancel()
+        wakeLockRenewalJob = null
         gradualVolumeJob?.cancel()
         gradualVolumeJob = null
         mediaPlayer?.stop()
@@ -418,6 +487,8 @@ class AlarmOverlayActivity : ComponentActivity() {
 
         ttsLoopJob?.cancel()
         ttsLoopJob = null
+        wakeLockRenewalJob?.cancel()
+        wakeLockRenewalJob = null
         tts?.stop()
         tts?.shutdown()
         tts = null

@@ -831,6 +831,10 @@ fun MainScreen(
                                                     val newEnabled = !preferences.alarmMasterEnabled
                                                     userPreferencesRepository.setAlarmMasterEnabled(newEnabled)
                                                     if (newEnabled) {
+                                                        if (!com.etrisad.zenith.receiver.AlarmBroadcastReceiver.hasExactAlarmPermission(context)) {
+                                                            com.etrisad.zenith.receiver.AlarmBroadcastReceiver.promptExactAlarmPermission(context)
+                                                        }
+                                                        com.etrisad.zenith.receiver.AlarmBroadcastReceiver.requestBatteryOptimizationExemption(context)
                                                         val alarms = userPreferencesRepository.parseAlarms(preferences.alarmsJson)
                                                         val enabledAlarms = alarms.filter { it.enabled }
                                                         com.etrisad.zenith.receiver.AlarmBroadcastReceiver.rescheduleAllAlarms(context, enabledAlarms)
