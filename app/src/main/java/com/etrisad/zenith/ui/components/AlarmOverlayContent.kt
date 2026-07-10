@@ -48,7 +48,6 @@ fun AlarmOverlayContent(
     snoozeCount: Int = 0,
     snoozeMaxCount: Int = 3,
     mathChallengeEnabled: Boolean = false,
-    goalStreak: Int = 0,
     wakeUpAppPackageNames: List<String> = emptyList(),
     wakeUpAppNames: Map<String, String> = emptyMap(),
     wakeUpAppDurationSeconds: Int = 120,
@@ -244,31 +243,6 @@ fun AlarmOverlayContent(
                         modifier = Modifier.padding(top = 8.dp)
                     )
 
-                    if (goalStreak > 0) {
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "🔥",
-                                    fontSize = 16.sp
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "$goalStreak day goal streak",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-
                     AlarmInfoCard(
                         alarmTime = timeInfo.second,
                         currentTime = timeInfo.first,
@@ -320,7 +294,7 @@ fun AlarmOverlayContent(
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.height(64.dp))
+                Spacer(modifier = Modifier.height(32.dp))
 
                 Text(
                     text = if (alarmName == "Alarm") "It's Time!" else alarmName,
@@ -337,31 +311,6 @@ fun AlarmOverlayContent(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 12.dp)
                 )
-
-                if (goalStreak > 0) {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "🔥",
-                                fontSize = 16.sp
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "$goalStreak day goal streak",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
 
                 AlarmInfoCard(
                     alarmTime = timeInfo.second,

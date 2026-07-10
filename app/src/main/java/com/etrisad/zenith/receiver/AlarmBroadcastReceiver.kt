@@ -134,21 +134,15 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 context, 3002, wakeIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && alarmManager.canScheduleExactAlarms()) {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    System.currentTimeMillis() + 1000,
-                    wakePendingIntent
-                )
-                Log.d("AlarmReceiver", "scheduleWakeAlarm: exact alarm scheduled for +1s")
-            } else {
-                alarmManager.setAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    System.currentTimeMillis() + 1000,
-                    wakePendingIntent
-                )
-                Log.d("AlarmReceiver", "scheduleWakeAlarm: inexact alarm scheduled for +1s")
-            }
+            val triggerAtMillis = System.currentTimeMillis() + 1000
+            val showIntent = PendingIntent.getActivity(
+                context, 0,
+                context.packageManager.getLaunchIntentForPackage(context.packageName),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent)
+            alarmManager.setAlarmClock(alarmClockInfo, wakePendingIntent)
+            Log.d("AlarmReceiver", "scheduleWakeAlarm: setAlarmClock for +1s")
         } catch (e: Exception) {
             Log.e("AlarmReceiver", "scheduleWakeAlarm failed: ${e.message}", e)
         }
@@ -424,22 +418,25 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         private fun setExactAlarm(context: Context, triggerAtMillis: Long, pendingIntent: PendingIntent) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             try {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                    if (alarmManager.canScheduleExactAlarms()) {
-                        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-                    } else {
-                        Log.w("AlarmReceiver", "SCHEDULE_EXACT_ALARM not granted, using inexact alarm")
-                        alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-                    }
-                } else {
-                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-                }
+                val showIntent = PendingIntent.getActivity(
+                    context, 0,
+                    context.packageManager.getLaunchIntentForPackage(context.packageName),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent)
+                alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
+                Log.d("AlarmReceiver", "setExactAlarm: setAlarmClock at $triggerAtMillis")
             } catch (e: Exception) {
-                Log.e("AlarmReceiver", "setExactAlarm failed: ${e.message}")
+                Log.e("AlarmReceiver", "setAlarmClock failed, falling back: ${e.message}")
                 try {
-                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
                 } catch (e2: Exception) {
-                    Log.e("AlarmReceiver", "setAndAllowWhileIdle fallback also failed: ${e2.message}")
+                    Log.e("AlarmReceiver", "setExactAndAllowWhileIdle fallback also failed: ${e2.message}")
+                    try {
+                        alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+                    } catch (e3: Exception) {
+                        Log.e("AlarmReceiver", "setAndAllowWhileIdle fallback also failed: ${e3.message}")
+                    }
                 }
             }
         }

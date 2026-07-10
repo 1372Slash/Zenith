@@ -26,7 +26,6 @@ import androidx.compose.runtime.setValue
 import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
 import com.etrisad.zenith.ZenithApplication
-import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.preferences.ThemeConfig
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.receiver.AlarmBroadcastReceiver
@@ -47,6 +46,9 @@ class AlarmOverlayActivity : ComponentActivity() {
     private var tts: android.speech.tts.TextToSpeech? = null
     private var ttsLoopJob: kotlinx.coroutines.Job? = null
 
+    @Volatile
+    private var isAlarmActive = false
+
     private var alarmTime: String = "07:00"
     private var snoozeCount: Int = 0
     private var testMathChallenge: Boolean = false
@@ -65,6 +67,7 @@ class AlarmOverlayActivity : ComponentActivity() {
 
         Log.d("ZenithAlarm", "AlarmOverlayActivity.onCreate STARTED")
         isShowing = true
+        isAlarmActive = true
 
         alarmTime = intent?.getStringExtra(EXTRA_ALARM_TIME) ?: "07:00"
         Log.d("ZenithAlarm", "AlarmOverlayActivity.onCreate alarmTime=$alarmTime snoozeCount=$snoozeCount")
@@ -98,17 +101,6 @@ class AlarmOverlayActivity : ComponentActivity() {
                 val currentAlarm = remember(userPreferences.alarmsJson) {
                     userPreferencesRepository.parseAlarms(userPreferences.alarmsJson)
                         .find { it.timeString == alarmTime }
-                }
-
-                val goalStreak = remember {
-                    val shieldRepo = (application as ZenithApplication).shieldRepository
-                    try {
-                        kotlinx.coroutines.runBlocking {
-                            shieldRepo.allShields.first()
-                                .filter { it.type == FocusType.GOAL }
-                                .maxOfOrNull { it.currentStreak } ?: 0
-                        }
-                    } catch (_: Exception) { 0 }
                 }
 
                 val wakeUpAppPackageNames = remember(currentAlarm) {
@@ -159,7 +151,6 @@ class AlarmOverlayActivity : ComponentActivity() {
                         snoozeMaxCount = currentAlarm?.snoozeMaxCount ?: 3,
                         mathChallengeEnabled = if (testMathChallenge) testMathChallenge
                         else currentAlarm?.mathChallengeEnabled ?: false,
-                        goalStreak = goalStreak,
                         wakeUpAppPackageNames = wakeUpAppPackageNames,
                         wakeUpAppNames = wakeUpAppNames,
                         wakeUpAppDurationSeconds = wakeUpAppDurationSeconds,
@@ -297,6 +288,7 @@ class AlarmOverlayActivity : ComponentActivity() {
                                 setVolume(1.0f, 1.0f)
                             }
                             setOnPreparedListener {
+                                if (!isAlarmActive) return@setOnPreparedListener
                                 it.start()
                                 if (gradualVolume) {
                                     rampUpVolume()
@@ -341,22 +333,23 @@ class AlarmOverlayActivity : ComponentActivity() {
             tts?.stop()
             tts?.shutdown()
             tts = android.speech.tts.TextToSpeech(this@AlarmOverlayActivity) { status ->
-                if (status == android.speech.tts.TextToSpeech.SUCCESS) {
+                if (status == android.speech.tts.TextToSpeech.SUCCESS && isAlarmActive) {
                     tts?.language = locale
-                    tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
-                        override fun onStart(utteranceId: String?) {}
-                        override fun onDone(utteranceId: String?) {
-                            ttsLoopJob = lifecycleScope.launch {
-                                mediaPlayer?.setVolume(1.0f, 1.0f)
-                                delay(3000L)
-                                mediaPlayer?.setVolume(0.3f, 0.3f)
-                                tts?.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "alarm_tts")
-                            }
-                        }
-                        override fun onError(utteranceId: String?) {}
-                    })
                     mediaPlayer?.setVolume(0.3f, 0.3f)
                     tts?.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "alarm_tts")
+
+                    ttsLoopJob?.cancel()
+                    ttsLoopJob = lifecycleScope.launch {
+                        while (isAlarmActive) {
+                            delay(3000L)
+                            if (!isAlarmActive) break
+                            mediaPlayer?.setVolume(1.0f, 1.0f)
+                            delay(3000L)
+                            if (!isAlarmActive) break
+                            mediaPlayer?.setVolume(0.3f, 0.3f)
+                            tts?.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "alarm_tts")
+                        }
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -380,6 +373,7 @@ class AlarmOverlayActivity : ComponentActivity() {
     }
 
     private fun stopAlarmAndFinish() {
+        isAlarmActive = false
         ttsLoopJob?.cancel()
         ttsLoopJob = null
         gradualVolumeJob?.cancel()
@@ -397,6 +391,7 @@ class AlarmOverlayActivity : ComponentActivity() {
 
     override fun onDestroy() {
         Log.d("ZenithAlarm", "AlarmOverlayActivity.onDestroy")
+        isAlarmActive = false
         isShowing = false
         stopWakeUpTracking()
 

@@ -27,15 +27,14 @@ object AlarmTasksSchedulingHelper {
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                if (alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
-                } else {
-                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
-                }
-            } else {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
-            }
+            val triggerAtMillis = cal.timeInMillis
+            val showIntent = PendingIntent.getActivity(
+                context, 0,
+                context.packageManager.getLaunchIntentForPackage(context.packageName),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent)
+            alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
         } catch (e: Exception) {
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.timeInMillis, pendingIntent)
         }

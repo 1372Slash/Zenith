@@ -64,7 +64,7 @@ fun AlarmItemSettingsBottomSheet(
     wakeUpAppPackageNames: List<String> = emptyList(),
     wakeUpAppDurationSeconds: Int = 120,
     onDismiss: () -> Unit,
-    onSave: (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, mathChallengeEnabled: Boolean, ttsEnabled: Boolean, ttsCustomPhrase: String?, ttsLanguage: String?, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int) -> Unit,
+    onSave: suspend (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, mathChallengeEnabled: Boolean, ttsEnabled: Boolean, ttsCustomPhrase: String?, ttsLanguage: String?, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int) -> Unit,
     onTimeClick: (() -> Unit)? = null,
     alarmTimeText: String? = null
 ) {
@@ -110,7 +110,7 @@ private fun AlarmSettingsSheetContent(
     initialWakeUpAppPackageNames: List<String> = emptyList(),
     initialWakeUpAppDurationSeconds: Int = 120,
     onDismiss: () -> Unit,
-    onSave: (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, mathChallengeEnabled: Boolean, ttsEnabled: Boolean, ttsCustomPhrase: String?, ttsLanguage: String?, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int) -> Unit,
+    onSave: suspend (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, mathChallengeEnabled: Boolean, ttsEnabled: Boolean, ttsCustomPhrase: String?, ttsLanguage: String?, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int) -> Unit,
     onTimeClick: (() -> Unit)?,
     alarmTimeText: String?
 ) {
@@ -120,6 +120,11 @@ private fun AlarmSettingsSheetContent(
 
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    var currentTimeText by remember { mutableStateOf(alarmTimeText) }
+    LaunchedEffect(alarmTimeText) {
+        currentTimeText = alarmTimeText
+    }
 
     val containerColor by animateColorAsState(
         targetValue = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -194,9 +199,9 @@ private fun AlarmSettingsSheetContent(
         }
     }
 
-    val alarmDetail by remember(selectedDays, alarmTimeText) {
+    val alarmDetail by remember(selectedDays, currentTimeText) {
         derivedStateOf {
-            val isTomorrow = alarmTimeText?.let { text ->
+            val isTomorrow = currentTimeText?.let { text ->
                 val parts = text.split(":")
                 if (parts.size == 2) {
                     val h = parts[0].toIntOrNull()
@@ -350,7 +355,7 @@ private fun AlarmSettingsSheetContent(
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = alarmTimeText ?: "--:--",
+                                    text = currentTimeText ?: "--:--",
                                     style = MaterialTheme.typography.displayLarge.copy(
                                         fontSize = 28.sp,
                                         fontWeight = FontWeight.Bold
@@ -1080,24 +1085,32 @@ private fun AlarmSettingsSheetContent(
                                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                                         )
                                         Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(16.dp)
+                                            modifier = Modifier.fillMaxWidth()
                                         ) {
                                             Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(16.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Icon(
-                                                    imageVector = if (ttsEngineStatus == "Ready") Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
-                                                    contentDescription = null,
-                                                    tint = if (ttsEngineStatus == "Ready") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Column {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(40.dp)
+                                                        .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (ttsEngineStatus == "Ready") Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(16.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
                                                     Text(
                                                         text = "TTS Engine",
-                                                        style = MaterialTheme.typography.titleSmall,
+                                                        style = MaterialTheme.typography.titleMedium,
                                                         fontWeight = FontWeight.Bold
                                                     )
                                                     Text(
@@ -1107,90 +1120,104 @@ private fun AlarmSettingsSheetContent(
                                                     )
                                                 }
                                             }
+                                            if (!ttsEngineStatus.startsWith("Ready")) {
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                                Text(
+                                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                                    text = "Zenith uses your device's built-in Text-to-Speech engine. If a language is missing, consider installing Google Speech Services from the Play Store.",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                                Surface(
+                                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                                    onClick = {
+                                                        context.startActivity(
+                                                            android.content.Intent(android.speech.tts.TextToSpeech.Engine.ACTION_CHECK_TTS_DATA)
+                                                        )
+                                                    },
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.Settings,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(
+                                                            text = "Open TTS Settings",
+                                                            style = MaterialTheme.typography.labelLarge,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.height(16.dp))
+                                            }
                                         }
-
                                         if (availableLocales.isNotEmpty()) {
                                             HorizontalDivider(
                                                 modifier = Modifier.padding(horizontal = 16.dp),
                                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                                             )
-                                            Column(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(16.dp)
-                                            ) {
-                                                Text(
-                                                    text = "Language",
-                                                    style = MaterialTheme.typography.titleSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                                Spacer(modifier = Modifier.height(8.dp))
-                                                val localeOptions by remember(availableLocales) {
-                                                    mutableStateOf(
-                                                        availableLocales
-                                                            .distinctBy { it.language }
-                                                            .sortedBy { it.displayName }
-                                                            .map { it.toLanguageTag() to it.displayName }
-                                                    )
-                                                }
-                                                var expanded by remember { mutableStateOf(false) }
-                                                val selectedLabel = remember(selectedLocale) {
-                                                    selectedLocale?.displayName ?: "Default"
-                                                }
-                                                ExposedDropdownMenuBox(
-                                                    expanded = expanded,
-                                                    onExpandedChange = { expanded = it }
-                                                ) {
-                                                    OutlinedTextField(
-                                                        value = selectedLabel,
-                                                        onValueChange = {},
-                                                        readOnly = true,
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .menuAnchor(),
-                                                        shape = RoundedCornerShape(16.dp),
-                                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                                                        singleLine = true
-                                                    )
-                                                    ExposedDropdownMenu(
-                                                        expanded = expanded,
-                                                        onDismissRequest = { expanded = false }
-                                                    ) {
-                                                        localeOptions.forEach { (tag, displayName) ->
-                                                            DropdownMenuItem(
-                                                                text = { Text(displayName) },
-                                                                onClick = {
-                                                                    val locale = java.util.Locale.forLanguageTag(tag)
-                                                                    selectedLocale = locale
-                                                                    ttsLanguage = tag
-                                                                    ttsEngine?.setLanguage(locale)
-                                                                    ttsEngineStatus = "Ready"
-                                                                    expanded = false
-                                                                }
-                                                            )
-                                                        }
-                                                    }
-                                                }
+                                            val localeOptions = remember(availableLocales) {
+                                                availableLocales
+                                                    .distinctBy { it.language }
+                                                    .sortedBy { it.displayName }
+                                                    .map { it.displayName to it.toLanguageTag() }
                                             }
-                                        }
-
-                                        if (ttsEngineStatus.isNotEmpty() && ttsEngineStatus != "Ready") {
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            ZenithButton(
-                                                onClick = {
-                                                    context.startActivity(
-                                                        android.content.Intent(android.speech.tts.TextToSpeech.Engine.ACTION_CHECK_TTS_DATA)
-                                                    )
-                                                },
+                                            Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .padding(horizontal = 16.dp),
-                                                text = "Open TTS Settings",
-                                                type = ZenithButtonType.Tonal,
-                                                size = ZenithButtonSize.Medium,
-                                                fillMaxWidth = true
-                                            )
+                                                    .padding(16.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(40.dp)
+                                                        .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Language,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(16.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = "Voice Language",
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    Text(
+                                                        text = "Language for spoken alarm alerts",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                ZenithDropdown(
+                                                    options = localeOptions,
+                                                    selectedOption = selectedLocale?.toLanguageTag() ?: "en_US",
+                                                    onOptionSelected = { tag ->
+                                                        val locale = java.util.Locale.forLanguageTag(tag)
+                                                        selectedLocale = locale
+                                                        ttsLanguage = tag
+                                                        ttsEngine?.setLanguage(locale)
+                                                        ttsEngineStatus = "Ready"
+                                                    },
+                                                    width = 200.dp
+                                                )
+                                            }
                                         }
 
                                         HorizontalDivider(
@@ -1198,27 +1225,48 @@ private fun AlarmSettingsSheetContent(
                                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                                         )
                                         Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(16.dp)
+                                            modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Text(
-                                                text = "Custom Phrase",
-                                                style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = "Leave empty for default. Use {time} for current time.",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(16.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(40.dp)
+                                                        .background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.TextFields,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(16.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = "Custom Phrase",
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    Text(
+                                                        text = "Default: \"Wake up, it's {time}\". Use {time} to include current time.",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
                                             OutlinedTextField(
                                                 value = ttsCustomPhrase ?: "",
                                                 onValueChange = { ttsCustomPhrase = it.ifEmpty { null } },
-                                                modifier = Modifier.fillMaxWidth(),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 16.dp)
+                                                    .padding(bottom = 16.dp),
                                                 singleLine = true,
                                                 placeholder = { Text("Wake up, it's {time}") },
                                                 shape = RoundedCornerShape(16.dp)
@@ -1273,24 +1321,24 @@ private fun AlarmSettingsSheetContent(
             ) {
                 ZenithButton(
                     onClick = {
-                        onSave(
-                            alarmName,
-                            alarmSoundUri,
-                            alarmSoundEnabled,
-                            alarmAutoRepeatEnabled,
-                            selectedDays,
-                            vibrateEnabled,
-                            snoozeDurationMinutes,
-                            snoozeMaxCount,
-                            gradualVolumeEnabled,
-                            mathChallengeEnabled,
-                            ttsEnabled,
-                            ttsCustomPhrase,
-                            ttsLanguage,
-                            if (useCertainAppEnabled) wakeUpAppPackageNames else emptyList(),
-                            wakeUpAppDurationSeconds
-                        )
                         scope.launch {
+                            onSave(
+                                alarmName,
+                                alarmSoundUri,
+                                alarmSoundEnabled,
+                                alarmAutoRepeatEnabled,
+                                selectedDays,
+                                vibrateEnabled,
+                                snoozeDurationMinutes,
+                                snoozeMaxCount,
+                                gradualVolumeEnabled,
+                                mathChallengeEnabled,
+                                ttsEnabled,
+                                ttsCustomPhrase,
+                                ttsLanguage,
+                                if (useCertainAppEnabled) wakeUpAppPackageNames else emptyList(),
+                                wakeUpAppDurationSeconds
+                            )
                             sheetState.hide()
                             onDismiss()
                         }
