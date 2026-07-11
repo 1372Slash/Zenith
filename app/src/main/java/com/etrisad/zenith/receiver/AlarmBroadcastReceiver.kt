@@ -344,6 +344,28 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                         )
                         alarmManager.cancel(pendingIntent)
                         pendingIntent.cancel()
+
+                        val reTriggerIntent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
+                            action = ACTION_RE_TRIGGER
+                        }
+                        val reTriggerCode = REQUEST_CODE_RE_TRIGGER_BASE + h * 100 + m
+                        val reTriggerPi = PendingIntent.getBroadcast(
+                            context, reTriggerCode, reTriggerIntent,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                        )
+                        alarmManager.cancel(reTriggerPi)
+                        reTriggerPi.cancel()
+
+                        val usageIntent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
+                            action = ACTION_CHECK_USAGE
+                        }
+                        val usageCode = REQUEST_CODE_CHECK_BASE + h * 100 + m
+                        val usagePi = PendingIntent.getBroadcast(
+                            context, usageCode, usageIntent,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                        )
+                        alarmManager.cancel(usagePi)
+                        usagePi.cancel()
                     }
                 }
             }

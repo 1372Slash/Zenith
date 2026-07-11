@@ -823,20 +823,6 @@ private fun AlarmListItem(
                 Switch(
                     checked = alarm.enabled,
                     onCheckedChange = onToggle,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = when {
-                            isHighlighted -> MaterialTheme.colorScheme.onPrimaryContainer
-                            isEnabledButInactive -> MaterialTheme.colorScheme.onTertiary
-                            else -> MaterialTheme.colorScheme.onPrimary
-                        },
-                        checkedTrackColor = when {
-                            isHighlighted -> MaterialTheme.colorScheme.primary
-                            isEnabledButInactive -> MaterialTheme.colorScheme.tertiary
-                            else -> MaterialTheme.colorScheme.primary
-                        },
-                        uncheckedThumbColor = if (isHighlighted) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outline,
-                        uncheckedTrackColor = if (isHighlighted) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceContainerHighest
-                    ),
                     thumbContent = {
                         val thumbSize by animateDpAsState(
                             targetValue = if (alarm.enabled) 28.dp else 24.dp,
@@ -847,11 +833,8 @@ private fun AlarmListItem(
                             label = "thumbSize"
                         )
                         val iconColor by animateColorAsState(
-                            targetValue = when {
-                                isEnabledButInactive -> MaterialTheme.colorScheme.tertiary
-                                alarm.enabled -> MaterialTheme.colorScheme.primary
-                                else -> MaterialTheme.colorScheme.surfaceContainerHighest
-                            },
+                            targetValue = if (alarm.enabled) MaterialTheme.colorScheme.primary
+                                          else MaterialTheme.colorScheme.surfaceContainerHighest,
                             animationSpec = spring(stiffness = Spring.StiffnessMedium),
                             label = "iconColor"
                         )

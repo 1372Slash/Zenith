@@ -187,12 +187,12 @@ class AlarmOverlayActivity : ComponentActivity() {
 
         if (newAlarmTime != alarmTime) {
             stopWakeUpTracking()
-            alarmTime = newAlarmTime
-            snoozeCount = intent.getIntExtra(EXTRA_SNOOZE_COUNT, 0)
-            testMathChallenge = intent.getBooleanExtra(EXTRA_TEST_MATH_CHALLENGE, false)
-            testGradualVolume = intent.getBooleanExtra(EXTRA_TEST_GRADUAL_VOLUME, false)
-            restartKey++
         }
+        alarmTime = newAlarmTime
+        snoozeCount = intent.getIntExtra(EXTRA_SNOOZE_COUNT, 0)
+        testMathChallenge = intent.getBooleanExtra(EXTRA_TEST_MATH_CHALLENGE, false)
+        testGradualVolume = intent.getBooleanExtra(EXTRA_TEST_GRADUAL_VOLUME, false)
+        restartKey++
 
         isAlarmActive = true
         AlarmPlaybackService.start(this, alarmTime)
