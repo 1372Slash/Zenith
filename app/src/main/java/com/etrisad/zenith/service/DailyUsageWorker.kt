@@ -10,6 +10,7 @@ import androidx.core.app.NotificationCompat
 import androidx.work.*
 import com.etrisad.zenith.R
 import com.etrisad.zenith.data.local.database.ZenithDatabase
+import com.etrisad.zenith.data.local.database.DbLogBuffer
 import com.etrisad.zenith.data.local.entity.DailyUsageEntity
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
@@ -43,7 +44,7 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val database = ZenithDatabase.getDatabase(applicationContext)
         val dailyUsageDao = database.dailyUsageDao()
         val hourlyUsageDao = database.hourlyUsageDao()
-        val usm = applicationContext.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val usm = applicationContext.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
         val pm = applicationContext.packageManager
 
         val now = System.currentTimeMillis()
@@ -74,6 +75,8 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val dateString = DateTimeUtils.getDayStartDateString(now, dayStartHour, dayStartMinute)
         val isDateToday = !isBeforeDayStart
+        android.util.Log.d("ZenithDB", "DAILY_WORKER_START: isBackup=$isBackup isDateToday=$isDateToday date=$dateString")
+        DbLogBuffer.d("ZenithDB", "DAILY_WORKER_START: isBackup=$isBackup isDateToday=$isDateToday date=$dateString")
 
         calendar.set(Calendar.HOUR_OF_DAY, 0); calendar.set(Calendar.MINUTE, 0); calendar.set(Calendar.SECOND, 0); calendar.set(Calendar.MILLISECOND, 0)
         val startTime = calendar.timeInMillis
@@ -84,6 +87,8 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val existingTotalVal = existingDaily["TOTAL"]?.usageTimeMillis ?: 0L
 
         if (!isDateToday && existingTotalVal > 0) {
+            android.util.Log.d("ZenithDB", "DAILY_WORKER_SKIP: date=$dateString already has total=$existingTotalVal, skipping")
+            DbLogBuffer.d("ZenithDB", "DAILY_WORKER_SKIP: date=$dateString already has total=$existingTotalVal, skipping")
             return Result.success()
         }
 
@@ -211,6 +216,11 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
             finalAppUsages[pkg] = (finalAppUsages[pkg] ?: 0L).coerceAtMost(timeSinceMidnight)
         }
 
+        if (finalAppUsages.isEmpty()) {
+            android.util.Log.w("ZenithDB", "DAILY_WORKER_NO_DATA: date=$dateString isDateToday=$isDateToday no usage stats found")
+            DbLogBuffer.w("ZenithDB", "DAILY_WORKER_NO_DATA: date=$dateString isDateToday=$isDateToday no usage stats found")
+        }
+
         val calculatedSum = finalAppUsages.values.sum()
 
         var totalUsage = calculatedSum.coerceAtMost(timeSinceMidnight)
@@ -234,6 +244,8 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         usagesToInsert.add(DailyUsageEntity(date = dateString, packageName = "OTHER_TOTAL", usageTimeMillis = (totalUsage - (sUsage + gUsage)).coerceAtLeast(0L)))
 
         dailyUsageDao.insertAll(usagesToInsert)
+        android.util.Log.d("ZenithDB", "DAILY_WORKER_SAVE: date=$dateString saved ${usagesToInsert.size} records totalUsage=${totalUsage}ms (apps=${finalAppUsages.size})")
+        DbLogBuffer.d("ZenithDB", "DAILY_WORKER_SAVE: date=$dateString saved ${usagesToInsert.size} records totalUsage=${totalUsage}ms (apps=${finalAppUsages.size})")
 
         if (!isBackup) {
             sendDataSavedNotification()

@@ -63,7 +63,8 @@ fun DeveloperSettings(
     onUpdateAppScreenTime: (String, Long) -> Unit,
     onTestUsageGlimpse: () -> Unit,
     onTestGoalCallerDelayed: () -> Unit,
-    onTestAlarmOverlay: () -> Unit
+    onTestAlarmOverlay: () -> Unit,
+    onShowDbLogViewer: () -> Unit = {}
 ) {
     var showAppPickerForStreak by remember { mutableStateOf(false) }
     var showAppPickerForUsage by remember { mutableStateOf(false) }
@@ -152,6 +153,15 @@ fun DeveloperSettings(
                 summary = "Fix missing or incorrect usage history",
                 onClick = onNavigateToDataRepairment,
                 icon = Icons.Outlined.Build,
+                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+            SettingsActionItem(
+                title = "DB Log Viewer",
+                summary = "View database and goal/shield operation logs in real-time",
+                onClick = onShowDbLogViewer,
+                icon = Icons.Outlined.BugReport,
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
             )
 

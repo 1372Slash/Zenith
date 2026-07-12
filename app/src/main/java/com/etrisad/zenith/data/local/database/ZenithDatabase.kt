@@ -274,6 +274,8 @@ abstract class ZenithDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): ZenithDatabase {
             return INSTANCE ?: synchronized(this) {
+                android.util.Log.d("ZenithDB", "Creating database instance (version=28, journal=WAL)")
+                DbLogBuffer.d("ZenithDB", "Creating database instance (version=28, journal=WAL)")
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     ZenithDatabase::class.java,
@@ -302,6 +304,43 @@ abstract class ZenithDatabase : RoomDatabase() {
         fun closeDatabase() {
             INSTANCE?.close()
             INSTANCE = null
+        }
+
+        fun verifyDatabase(database: ZenithDatabase) {
+            try {
+                val db = database.openHelper.readableDatabase
+                val tables = listOf("shields", "schedules", "daily_usage", "hourly_usage", "website_usage", "intercepted_notifications")
+                val counts = mutableMapOf<String, Int>()
+                for (table in tables) {
+                    try {
+                        val cursor = db.query("SELECT COUNT(*) FROM $table")
+                        if (cursor.moveToFirst()) {
+                            counts[table] = cursor.getInt(0)
+                        }
+                        cursor.close()
+                    } catch (e: Exception) {
+                        android.util.Log.e("ZenithDB", "TABLE_CHECK_FAILED: $table - ${e.message}")
+                        DbLogBuffer.e("ZenithDB", "TABLE_CHECK_FAILED: $table - ${e.message}")
+                        counts[table] = -1
+                    }
+                }
+                val totalRecords = counts.values.filter { it >= 0 }.sum()
+                val countMsg = "shields=${counts["shields"]} schedules=${counts["schedules"]} daily=${counts["daily_usage"]} hourly=${counts["hourly_usage"]} website=${counts["website_usage"]} intercepted=${counts["intercepted_notifications"]} TOTAL=$totalRecords"
+                android.util.Log.d("ZenithDB", "TABLE_COUNTS: $countMsg")
+                DbLogBuffer.d("ZenithDB", "TABLE_COUNTS: $countMsg")
+
+                if ((counts["daily_usage"] ?: 0) == 0 && (counts["shields"] ?: 0) > 0) {
+                    android.util.Log.w("ZenithDB", "WARNING: shields exist (${counts["shields"]}) but daily_usage is EMPTY (0) - stats data may be lost!")
+                    DbLogBuffer.w("ZenithDB", "WARNING: shields exist (${counts["shields"]}) but daily_usage is EMPTY (0) - stats data may be lost!")
+                }
+                if ((counts["hourly_usage"] ?: 0) == 0 && (counts["shields"] ?: 0) > 0) {
+                    android.util.Log.w("ZenithDB", "WARNING: shields exist but hourly_usage is EMPTY (0) - hourly stats may be lost!")
+                    DbLogBuffer.w("ZenithDB", "WARNING: shields exist but hourly_usage is EMPTY (0) - hourly stats may be lost!")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ZenithDB", "VERIFY_FAILED: ${e.message}")
+                DbLogBuffer.e("ZenithDB", "VERIFY_FAILED: ${e.message}")
+            }
         }
     }
 }

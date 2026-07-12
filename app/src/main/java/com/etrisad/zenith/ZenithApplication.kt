@@ -8,6 +8,7 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 
 import com.etrisad.zenith.data.local.database.ZenithDatabase
+import com.etrisad.zenith.data.local.database.DbLogBuffer
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.widget.AppStreakWidget
@@ -34,7 +35,10 @@ class ZenithApplication : Application(), ImageLoaderFactory {
 
     val shieldRepository: ShieldRepository by lazy {
         try {
+            android.util.Log.d("ZenithDB", "Initializing database...")
+            DbLogBuffer.d("ZenithDB", "Initializing database...")
             val database = ZenithDatabase.getDatabase(this)
+            ZenithDatabase.verifyDatabase(database)
             ShieldRepository(
                 database.shieldDao(),
                 database.scheduleDao(),
@@ -45,9 +49,15 @@ class ZenithApplication : Application(), ImageLoaderFactory {
                 userPreferencesRepository
             )
         } catch (e: Exception) {
-            android.util.Log.e("ZenithApp", "Failed to initialize DB, trying destructive rebuild", e)
+            android.util.Log.e("ZenithDB", "DB_INIT_FAILED: ${e.message} - attempting destructive rebuild", e)
+            DbLogBuffer.e("ZenithDB", "DB_INIT_FAILED: ${e.message} - attempting destructive rebuild")
             ZenithDatabase.closeDatabase()
+            android.util.Log.d("ZenithDB", "Rebuilding database after failure...")
+            DbLogBuffer.d("ZenithDB", "Rebuilding database after failure...")
             val database = ZenithDatabase.getDatabase(this)
+            ZenithDatabase.verifyDatabase(database)
+            android.util.Log.w("ZenithDB", "DB_REBUILT: Previous data may be lost after destructive rebuild")
+            DbLogBuffer.w("ZenithDB", "DB_REBUILT: Previous data may be lost after destructive rebuild")
             ShieldRepository(
                 database.shieldDao(),
                 database.scheduleDao(),

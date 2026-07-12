@@ -15,6 +15,7 @@ import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.local.entity.DailyUsageEntity
 import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
 import com.etrisad.zenith.data.repository.ShieldRepository
+import com.etrisad.zenith.data.local.database.DbLogBuffer
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.preferences.UserPreferences
@@ -272,6 +273,12 @@ class HomeViewModel(
                 shieldRepository.getLastNDaysGlobalUsage(60),
                 userPreferencesRepository.userPreferencesFlow
             ) { usage, global, prefs ->
+                android.util.Log.d("ZenithDB", "DATA_OBSERVER: recentUsage=${usage.size} records, globalUsage=${global.size} records")
+                DbLogBuffer.d("ZenithDB", "DATA_OBSERVER: recentUsage=${usage.size} records, globalUsage=${global.size} records")
+                if (usage.isEmpty() && global.isEmpty()) {
+                    android.util.Log.w("ZenithDB", "DATA_OBSERVER: BOTH recentUsage AND globalUsage are EMPTY!")
+                    DbLogBuffer.w("ZenithDB", "DATA_OBSERVER: BOTH recentUsage AND globalUsage are EMPTY!")
+                }
                 val forceUpdate = (lastPreferSystem != null && lastPreferSystem != prefs.preferSystemUsageHistory) ||
                         (lastOnboardingCompleted != null && lastOnboardingCompleted != prefs.onboardingStatsCompleted)
 
@@ -458,6 +465,8 @@ class HomeViewModel(
 
     private suspend fun performUsageStatsRefresh(showLoading: Boolean = true) {
         if (showLoading) _uiState.update { it.copy(isLoading = true) }
+        android.util.Log.d("ZenithDB", "REFRESH_START: allHistory=${allHistory.size} records, allShields=${allShields.size}, globalHistory=${globalHistory.size}")
+        DbLogBuffer.d("ZenithDB", "REFRESH_START: allHistory=${allHistory.size} records, allShields=${allShields.size}, globalHistory=${globalHistory.size}")
 
         val usm = this@HomeViewModel.context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val pm = this@HomeViewModel.context.packageManager

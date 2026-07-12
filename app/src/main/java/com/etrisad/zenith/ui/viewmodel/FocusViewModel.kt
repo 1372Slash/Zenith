@@ -16,6 +16,7 @@ import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
+import com.etrisad.zenith.data.local.database.DbLogBuffer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -97,6 +98,8 @@ class FocusViewModel(
                 .collect { shields ->
                     try {
                         allShields = shields
+                        android.util.Log.d("ZenithGoalShield", "VM_COLLECT: received ${shields.size} shields from repo Flow")
+                        DbLogBuffer.d("ZenithGoalShield", "VM_COLLECT: received ${shields.size} shields from repo Flow")
                         updateShieldedLists(shields)
                         updateInstalledAppsFilter()
                     } catch (e: Exception) {
@@ -194,6 +197,9 @@ class FocusViewModel(
                 val shields = liveShields.filter { it.type == FocusType.SHIELD }
                 val goals = liveShields.filter { it.type == FocusType.GOAL }
 
+                android.util.Log.d("ZenithGoalShield", "UI_UPDATE: shields=${shields.size} goals=${goals.size} (from ${latestShields.size} total)")
+                DbLogBuffer.d("ZenithGoalShield", "UI_UPDATE: shields=${shields.size} goals=${goals.size} (from ${latestShields.size} total)")
+
                 _uiState.update { currentState ->
                     currentState.copy(
                         activeShields = sortShields(shields, currentState.shieldSortType),
@@ -202,6 +208,8 @@ class FocusViewModel(
                 }
             } catch (e: Exception) {
                 android.util.Log.e("FocusViewModel", "Critical error in updateShieldedLists: ${e.message}")
+                android.util.Log.e("ZenithGoalShield", "UI_UPDATE_ERROR: ${e.message}")
+                DbLogBuffer.e("ZenithGoalShield", "UI_UPDATE_ERROR: ${e.message}")
                 val shields = latestShields.filter { it.type == FocusType.SHIELD }
                 val goals = latestShields.filter { it.type == FocusType.GOAL }
                 _uiState.update { currentState ->
@@ -583,7 +591,11 @@ class FocusViewModel(
         val websiteUrl = if (isWebsite) (url ?: _uiState.value.selectedWebsiteUrl) else null
         viewModelScope.launch {
             try {
+                android.util.Log.d("ZenithGoalShield", "SAVE_START: pkg=$packageName type=$type isWebsite=$isWebsite appName=$appName timeLimit=${timeLimitMinutes}m")
+                DbLogBuffer.d("ZenithGoalShield", "SAVE_START: pkg=$packageName type=$type isWebsite=$isWebsite appName=$appName timeLimit=${timeLimitMinutes}m")
                 val existing = allShields.find { it.packageName == packageName }
+                android.util.Log.d("ZenithGoalShield", "SAVE_EXISTING: ${if (existing != null) "UPDATE existing ${existing.type}" else "NEW insert"}")
+                DbLogBuffer.d("ZenithGoalShield", "SAVE_EXISTING: ${if (existing != null) "UPDATE existing ${existing.type}" else "NEW insert"}")
 
                 val shouldResetStreak = existing?.let {
                     if (it.type == type) {
@@ -631,7 +643,11 @@ class FocusViewModel(
                     url = websiteUrl
                 )
                 shieldRepository.insertShield(shield); com.etrisad.zenith.service.SharedMonitoringState.notifiedGoals.remove(packageName)
+                android.util.Log.d("ZenithGoalShield", "SAVE_DONE: pkg=$packageName type=$type - insertShield called, cache will update via Flow")
+                DbLogBuffer.d("ZenithGoalShield", "SAVE_DONE: pkg=$packageName type=$type - insertShield called, cache will update via Flow")
             } catch (e: Exception) {
+                android.util.Log.e("ZenithGoalShield", "SAVE_ERROR: pkg=$packageName type=$type error=${e.message}", e)
+                DbLogBuffer.e("ZenithGoalShield", "SAVE_ERROR: pkg=$packageName type=$type error=${e.message}")
                 android.util.Log.e("FocusViewModel", "Error saving focus: ${e.message}")
             } finally {
                 closeSettingsSheet()
