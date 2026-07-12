@@ -218,6 +218,8 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         const val ACTION_RE_TRIGGER = "com.etrisad.zenith.action.RE_TRIGGER_ALARM"
         const val EXTRA_IS_ONCE = "extra_is_once"
 
+        private const val NOTIFICATION_ID_SMART_WAKE_REMINDER = 2004
+
         private const val REQUEST_CODE_ALARM_BASE = 1000
         private const val REQUEST_CODE_CHECK_BASE = 5000
         private const val REQUEST_CODE_RE_TRIGGER_BASE = 8000
@@ -486,6 +488,69 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 Log.d("AlarmReceiver", "disableAlarm: $alarmTime disabled")
             } catch (e: Exception) {
                 Log.w("AlarmReceiver", "disableAlarm failed: ${e.message}")
+            }
+        }
+
+        fun showAutoRepeatReminderNotification(context: Context, alarmTime: String) {
+            try {
+                val channelId = "zenith_alarm_smart_wake_channel"
+                val manager = context.getSystemService(NotificationManager::class.java)
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    if (manager.getNotificationChannel(channelId) == null) {
+                        val channel = NotificationChannel(
+                            channelId, "Smart Wake Reminder", NotificationManager.IMPORTANCE_HIGH
+                        ).apply {
+                            description = "Silent heads-up reminder after alarm dismissal"
+                            setSound(null, null)
+                            enableVibration(false)
+                        }
+                        manager.createNotificationChannel(channel)
+                    }
+                }
+
+                val reTriggerAt = System.currentTimeMillis() + 300_000L
+                val formatter = DateTimeFormatter.ofPattern("HH:mm")
+                val nextTime = java.time.Instant.ofEpochMilli(reTriggerAt)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .toLocalTime()
+                    .format(formatter)
+
+                val alarmName = try {
+                    val app = context.applicationContext as ZenithApplication
+                    runBlocking {
+                        val prefs = app.userPreferencesRepository.userPreferencesFlow.first()
+                        app.userPreferencesRepository.parseAlarms(prefs.alarmsJson)
+                            .find { it.timeString == alarmTime }?.name
+                    }
+                } catch (_: Exception) { null }
+                val namePart = alarmName?.let { "\"$it\" " } ?: ""
+
+                val contentIntent = PendingIntent.getActivity(
+                    context, 0,
+                    context.packageManager.getLaunchIntentForPackage(context.packageName)
+                        ?: Intent(context, com.etrisad.zenith.MainActivity::class.java),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+
+                val builder = NotificationCompat.Builder(context, channelId)
+                    .setContentTitle("Smart Wake Reminder")
+                    .setContentText("${namePart}Alarm berikutnya ~$nextTime. Bangun dan buka HP!")
+                    .setStyle(NotificationCompat.BigTextStyle()
+                        .bigText("${namePart}Alarm akan berbunyi lagi dalam ~5 menit (~$nextTime).\n\n" +
+                                "Bangun sekarang dan gunakan HPmu agar alarm tidak perlu berbunyi lagi!"))
+                    .setSmallIcon(R.drawable.ic_alarm_smart_wake)
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                    .setSilent(true)
+                    .setAutoCancel(true)
+                    .setOngoing(false)
+                    .setContentIntent(contentIntent)
+
+                manager.notify(NOTIFICATION_ID_SMART_WAKE_REMINDER, builder.build())
+                Log.d("AlarmReceiver", "showAutoRepeatReminderNotification: posted for $alarmTime, next ~$nextTime")
+            } catch (e: Exception) {
+                Log.e("AlarmReceiver", "showAutoRepeatReminderNotification failed: ${e.message}", e)
             }
         }
 

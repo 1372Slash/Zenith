@@ -221,6 +221,7 @@ class AlarmOverlayActivity : ComponentActivity() {
                 val nextAlarmTime = if (currentAlarm != null) currentAlarm.timeString else alarmTime
                 val nextDays = currentAlarm?.days ?: emptySet()
                 AlarmBroadcastReceiver.scheduleAlarm(this@AlarmOverlayActivity, nextAlarmTime, nextDays)
+                AlarmBroadcastReceiver.showAutoRepeatReminderNotification(this@AlarmOverlayActivity, alarmTime)
             } else {
                 Log.d("ZenithAlarm", "dismissWithAutoRepeat: autoRepeat disabled")
             }
