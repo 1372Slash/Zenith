@@ -465,14 +465,19 @@ class HomeViewModel(
 
     private suspend fun performUsageStatsRefresh(showLoading: Boolean = true) {
         if (showLoading) _uiState.update { it.copy(isLoading = true) }
-        android.util.Log.d("ZenithDB", "REFRESH_START: allHistory=${allHistory.size} records, allShields=${allShields.size}, globalHistory=${globalHistory.size}")
-        DbLogBuffer.d("ZenithDB", "REFRESH_START: allHistory=${allHistory.size} records, allShields=${allShields.size}, globalHistory=${globalHistory.size}")
+        val refreshId = System.currentTimeMillis() % 100000
+        android.util.Log.d("ZenithDB", "REFRESH_START[$refreshId]: allHistory=${allHistory.size} allShields=${allShields.size} globalHistory=${globalHistory.size}")
+        DbLogBuffer.d("ZenithDB", "REFRESH_START[$refreshId]: allHistory=${allHistory.size} allShields=${allShields.size} globalHistory=${globalHistory.size}")
 
+        try {
         val usm = this@HomeViewModel.context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val pm = this@HomeViewModel.context.packageManager
 
         val (launcherApps, launcherPackage) = usageHistoryManager.getLauncherInfo()
         val excludePackages = setOfNotNull(this@HomeViewModel.context.packageName, launcherPackage)
+
+        android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: launcherApps=${launcherApps.size} launcherPkg=$launcherPackage exclude=$excludePackages")
+        DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: launcherApps=${launcherApps.size} launcherPkg=$launcherPackage exclude=$excludePackages")
 
         val now = System.currentTimeMillis()
         val selectedDate = _uiState.value.selectedDateMillis
@@ -498,9 +503,12 @@ class HomeViewModel(
 
         val dateFormat = usageHistoryManager.getDateFormat()
 
+        android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: fetching todayDetailed isSelectedToday=$isSelectedToday")
         val todayDetailed = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = isSelectedToday, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute)
         }
+        android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: todayDetailed apps=${todayDetailed.appUsageMap.size} hourlyKeys=${todayDetailed.hourlyUsageMap.size}")
+        DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: todayDetailed apps=${todayDetailed.appUsageMap.size} hourlyKeys=${todayDetailed.hourlyUsageMap.size}")
         val filteredTodayUsage = todayDetailed.appUsageMap.filter { (pkg, _) ->
             val isUserApp = pkg in launcherApps || pm.getLaunchIntentForPackage(pkg) != null
             pkg !in excludePackages && isUserApp
@@ -643,6 +651,9 @@ class HomeViewModel(
                 }
             }
         }
+
+        android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: appList=${appList.size} appTotals=${appTotals.size} filteredToday=${filteredTodayUsage.size} selectedDayHistory=${allHistory.filter { it.date == dateFormat.format(Date(if (selectedDate == 0L) todayStart else selectedDate)) }.size}")
+        DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: appList=${appList.size} appTotals=${appTotals.size} filteredToday=${filteredTodayUsage.size} selectedDayHistory=${allHistory.filter { it.date == dateFormat.format(Date(if (selectedDate == 0L) todayStart else selectedDate)) }.size}")
 
         val allAppsUsage = appList.sortedByDescending { it.totalTimeVisible }
         val topApps = allAppsUsage.take(5)
@@ -942,6 +953,9 @@ class HomeViewModel(
         val curToday = history.reversed().firstOrNull()
         val todayBarChanged = prevToday?.totalTime != curToday?.totalTime
 
+        android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: UI_UPDATE prevTotal=${prevState.totalScreenTime} selectedDayTotal=$selectedDayTotal todayChanged=$todayChanged todayBarChanged=$todayBarChanged appListSize=${allAppsUsage.size} hourlySize=${hourlyUsage.size} shields=${liveShields.size} websiteSize=${websiteUsage.size}")
+        DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: UI_UPDATE prevTotal=${prevState.totalScreenTime} selectedDayTotal=$selectedDayTotal todayChanged=$todayChanged todayBarChanged=$todayBarChanged appListSize=${allAppsUsage.size} hourlySize=${hourlyUsage.size} shields=${liveShields.size} websiteSize=${websiteUsage.size}")
+
         if (!todayChanged && !todayBarChanged) {
             _uiState.update { state -> state.copy(
                 hourlyUsage      = hourlyUsage,
@@ -974,6 +988,13 @@ class HomeViewModel(
             ) }
         }
 
+        android.util.Log.d("ZenithDB", "REFRESH_DONE[$refreshId]: totalScreenTime=${_uiState.value.totalScreenTime} appListSize=${_uiState.value.allAppsUsage.size} hourlySize=${_uiState.value.hourlyUsage.size} shields=${_uiState.value.activeShields.size} websiteSize=${_uiState.value.websiteUsage.size}")
+        DbLogBuffer.d("ZenithDB", "REFRESH_DONE[$refreshId]: totalScreenTime=${_uiState.value.totalScreenTime} appListSize=${_uiState.value.allAppsUsage.size} hourlySize=${_uiState.value.hourlyUsage.size} shields=${_uiState.value.activeShields.size} websiteSize=${_uiState.value.websiteUsage.size}")
+
+        } catch (e: Exception) {
+            android.util.Log.e("ZenithDB", "REFRESH_FAILED[$refreshId]: ${e::class.simpleName}: ${e.message}")
+            DbLogBuffer.e("ZenithDB", "REFRESH_FAILED[$refreshId]: ${e::class.simpleName}: ${e.message}")
+        }
     }
 
     fun loadAppDetail(packageName: String, forceRefresh: Boolean = false) {
