@@ -312,6 +312,8 @@ fun AlarmOverlayContent(
                     modifier = Modifier.padding(top = 12.dp)
                 )
 
+                Spacer(modifier = Modifier.height(32.dp))
+
                 AlarmInfoCard(
                     alarmTime = timeInfo.second,
                     currentTime = timeInfo.first,
