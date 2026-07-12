@@ -392,7 +392,7 @@ private fun ZenithButtonCore(
 
     val targetContent = contentColor ?: when {
         !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
-        type == ZenithButtonType.Filled || type == ZenithButtonType.Hold -> if (isLoading || isDelaying) primary else MaterialTheme.colorScheme.onPrimary
+        type == ZenithButtonType.Filled || type == ZenithButtonType.Hold -> MaterialTheme.colorScheme.onPrimary
         type == ZenithButtonType.Tonal -> MaterialTheme.colorScheme.onSecondaryContainer
         else -> primary
     }
