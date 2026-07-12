@@ -30,7 +30,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             ACTION_FIRE_ALARM -> {
                 val alarmTime = intent.getStringExtra(AlarmOverlayActivity.EXTRA_ALARM_TIME) ?: "07:00"
                 Log.d("AlarmReceiver", "onReceive: ACTION_FIRE_ALARM alarmTime=$alarmTime")
-                // Immediately schedule auto-repeat so it works even if the activity doesn't appear
                 scheduleReTrigger(context, alarmTime)
                 showAlarm(context, alarmTime, intent)
             }
@@ -66,8 +65,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             }
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
         }
-
-        // Try all three mechanisms — any one might succeed depending on Android version & permissions
         Log.d("AlarmReceiver", "showAlarm: trying startActivity")
         try {
             context.startActivity(activityIntent)
@@ -222,19 +219,9 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         const val EXTRA_IS_ONCE = "extra_is_once"
 
         private const val REQUEST_CODE_ALARM_BASE = 1000
-        // NOTE: these two used to be single fixed constants (203 / 204).
-        // That meant re-trigger/usage-check PendingIntents for DIFFERENT alarms
-        // shared the same request code, so scheduling one would silently
-        // overwrite (FLAG_UPDATE_CURRENT) the pending re-trigger of another
-        // alarm — that alarm's auto-repeat would then never fire again.
-        // Fix: derive the request code from the alarm's own time, same as
-        // REQUEST_CODE_ALARM_BASE does for scheduleAlarm().
         private const val REQUEST_CODE_CHECK_BASE = 5000
         private const val REQUEST_CODE_RE_TRIGGER_BASE = 8000
         private const val REQUEST_CODE_SNOOZE_BASE = 3000
-
-        /** Derives a stable, alarm-specific request code so different alarms' pending
-         * broadcasts (re-trigger / usage-check) never collide with one another. */
         private fun requestCodeFor(base: Int, alarmTime: String): Int {
             val parts = alarmTime.split(":")
             val hour = parts.getOrNull(0)?.toIntOrNull() ?: 0

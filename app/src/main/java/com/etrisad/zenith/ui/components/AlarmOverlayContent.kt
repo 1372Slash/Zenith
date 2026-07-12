@@ -756,7 +756,6 @@ private fun AlarmInfoCard(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Alarm Time Card (Left)
             Surface(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp, topEnd = 8.dp, bottomEnd = 8.dp),
@@ -780,8 +779,6 @@ private fun AlarmInfoCard(
                     )
                 }
             }
-
-            // Current Time Card (Right)
             Surface(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp, topStart = 8.dp, bottomStart = 8.dp),

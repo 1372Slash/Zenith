@@ -543,7 +543,7 @@ fun <T> ZenithDropdown(
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            onClick = { /* Handled by onExpandedChange */ }
+            onClick = { }
         ) {
             Row(
                 modifier = Modifier
