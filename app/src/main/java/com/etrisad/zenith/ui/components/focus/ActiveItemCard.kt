@@ -72,6 +72,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -725,12 +726,15 @@ fun SwipeableItemContainer(
     enabled: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    val currentOnEdit by rememberUpdatedState(onEdit)
+    val currentOnDelete by rememberUpdatedState(onDelete)
+
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = {
             if (!enabled) return@rememberSwipeToDismissBoxState false
             when (it) {
-                SwipeToDismissBoxValue.StartToEnd -> { onDelete(); false }
-                SwipeToDismissBoxValue.EndToStart -> { onEdit(); false }
+                SwipeToDismissBoxValue.StartToEnd -> { currentOnDelete(); false }
+                SwipeToDismissBoxValue.EndToStart -> { currentOnEdit(); false }
                 else -> false
             }
         }

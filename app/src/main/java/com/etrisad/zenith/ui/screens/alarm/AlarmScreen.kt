@@ -61,6 +61,7 @@ fun AlarmScreen(
     var sortType by remember { mutableStateOf(AlarmSortType.TIME) }
 
     val allAlarms = remember(prefs.alarmsJson) {
+        android.util.Log.d("AlarmDebug", "allAlarms reparsed, raw json=${prefs.alarmsJson}")
         preferencesRepository.parseAlarms(prefs.alarmsJson)
     }
 
@@ -143,7 +144,7 @@ fun AlarmScreen(
     fun openNewAlarm() {
         val name = AlarmItem.nextName(allAlarms)
         pendingName = name
-        newAlarm = AlarmItem(hour = 7, minute = 0, name = name)
+        newAlarm = AlarmItem.createNew(hour = 7, minute = 0, name = name)
     }
 
     val animatedTopPadding by animateDpAsState(
@@ -291,7 +292,10 @@ fun AlarmScreen(
                         )
                     ) {
                         SwipeableItemContainer(
-                            onEdit = { editingAlarm = alarm },
+                            onEdit = {
+                                android.util.Log.d("AlarmDebug", "Opening edit sheet (swipe) for id=${alarm.id}, name=${alarm.name}, time=${alarm.hour}:${alarm.minute}")
+                                editingAlarm = alarm
+                            },
                             onDelete = {
                                 scope.launch {
                                     preferencesRepository.deleteAlarm(alarm.id)
@@ -321,6 +325,7 @@ fun AlarmScreen(
                                     if (isSelectionMode) {
                                         toggleSelection(alarm.id)
                                     } else {
+                                        android.util.Log.d("AlarmDebug", "Opening edit sheet (tap) for id=${alarm.id}, name=${alarm.name}, time=${alarm.hour}:${alarm.minute}")
                                         editingAlarm = alarm
                                     }
                                 },

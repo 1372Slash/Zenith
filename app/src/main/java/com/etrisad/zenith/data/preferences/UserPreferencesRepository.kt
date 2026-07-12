@@ -1283,7 +1283,9 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setAlarms(alarms: List<AlarmItem>) {
         val json = serializeAlarms(alarms)
+        android.util.Log.d("AlarmDebug", "setAlarms() writing json=$json")
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.ALARMS_JSON] = json }
+        android.util.Log.d("AlarmDebug", "setAlarms() write completed")
     }
 
     suspend fun addAlarm(alarm: AlarmItem) {
@@ -1292,18 +1294,50 @@ class UserPreferencesRepository(private val context: Context) {
     }
 
     suspend fun updateAlarm(alarm: AlarmItem) {
+        android.util.Log.d("AlarmDebug", "updateAlarm() called with id=${alarm.id}, name=${alarm.name}, time=${alarm.hour}:${alarm.minute}")
         val current = parseAlarms(getCachedAlarmsJson()).toMutableList()
+        android.util.Log.d("AlarmDebug", "updateAlarm() current list ids=${current.map { it.id }}")
         val index = current.indexOfFirst { it.id == alarm.id }
+        android.util.Log.d("AlarmDebug", "updateAlarm() found index=$index")
         if (index >= 0) {
             current[index] = alarm
             setAlarms(current)
+            android.util.Log.d("AlarmDebug", "updateAlarm() SAVED, new list ids=${current.map { it.id }}, names=${current.map { it.name }}")
+        } else {
+            android.util.Log.w("AlarmDebug", "updateAlarm() id NOT FOUND, no-op")
         }
     }
 
     suspend fun deleteAlarm(alarmId: Long) {
         val current = parseAlarms(getCachedAlarmsJson()).toMutableList()
-        current.removeAll { it.id == alarmId }
+        val removed = current.removeAll { it.id == alarmId }
+        if (!removed) {
+            android.util.Log.w("Zenith", "deleteAlarm: id $alarmId not found in alarm list")
+        }
         setAlarms(current)
+    }
+
+    suspend fun migrateAlarmIdsIfNeeded() {
+        val rawType = com.squareup.moshi.Types.newParameterizedType(List::class.java, Map::class.java)
+        val rawAdapter: com.squareup.moshi.JsonAdapter<List<Map<String, Any?>>> = moshi.adapter(rawType)
+
+        context.dataStore.edit { prefs ->
+            val json = prefs[PreferencesKeys.ALARMS_JSON]
+            if (json.isNullOrBlank() || json == "[]") return@edit
+
+            val raw = try { rawAdapter.fromJson(json) } catch (_: Exception) { null }
+            if (raw == null || raw.isEmpty()) return@edit
+
+            val migrated = raw.map { entry ->
+                if (entry.containsKey("id")) entry
+                else entry.toMutableMap().apply { put("id", com.etrisad.zenith.data.model.AlarmItem.createNew().id) }
+            }
+
+            val needsSave = raw.size != migrated.size || raw.zip(migrated).any { (o, n) -> o !== n }
+            if (needsSave) {
+                prefs[PreferencesKeys.ALARMS_JSON] = rawAdapter.toJson(migrated)
+            }
+        }
     }
 
     private suspend fun getCachedAlarmsJson(): String {

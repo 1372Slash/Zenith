@@ -74,6 +74,12 @@ class ZenithApplication : Application(), ImageLoaderFactory {
 
         applicationScope.launch {
             try {
+                userPreferencesRepository.migrateAlarmIdsIfNeeded()
+            } catch (_: Exception) {}
+        }
+
+        applicationScope.launch {
+            try {
                 kotlinx.coroutines.delay(1000)
                 AppStreakWidget().updateAll(this@ZenithApplication)
                 GlobalStreakWidget().updateAll(this@ZenithApplication)

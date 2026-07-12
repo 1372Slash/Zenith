@@ -3,7 +3,7 @@ package com.etrisad.zenith.data.model
 import java.util.concurrent.atomic.AtomicLong
 
 data class AlarmItem(
-    val id: Long = nextId(),
+    val id: Long,
     val hour: Int = 7,
     val minute: Int = 0,
     val name: String = "Alarm",
@@ -36,7 +36,8 @@ data class AlarmItem(
     companion object {
         private val idCounter = AtomicLong(System.currentTimeMillis())
 
-        private fun nextId(): Long = idCounter.getAndIncrement()
+        fun createNew(hour: Int = 7, minute: Int = 0, name: String = "Alarm") =
+            AlarmItem(id = idCounter.getAndIncrement(), hour = hour, minute = minute, name = name)
 
         fun nextName(existingAlarms: List<AlarmItem>): String {
             val takenNumbers = existingAlarms.mapNotNull { alarm ->
