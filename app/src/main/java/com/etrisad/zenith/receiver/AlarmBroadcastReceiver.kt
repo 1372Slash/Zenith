@@ -535,10 +535,10 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
 
                 val builder = NotificationCompat.Builder(context, channelId)
                     .setContentTitle("Smart Wake Reminder")
-                    .setContentText("${namePart}Alarm berikutnya ~$nextTime. Bangun dan buka HP!")
+                    .setContentText("${namePart}Next alarm ~$nextTime. Wake up and use your phone!")
                     .setStyle(NotificationCompat.BigTextStyle()
-                        .bigText("${namePart}Alarm akan berbunyi lagi dalam ~5 menit (~$nextTime).\n\n" +
-                                "Bangun sekarang dan gunakan HPmu agar alarm tidak perlu berbunyi lagi!"))
+                        .bigText("${namePart}Alarm will ring again in ~5 minutes (~$nextTime).\n\n" +
+                                "Wake up now and use your phone so the alarm doesn't need to ring again!"))
                     .setSmallIcon(R.drawable.ic_alarm_smart_wake)
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
                     .setCategory(NotificationCompat.CATEGORY_REMINDER)
