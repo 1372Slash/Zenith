@@ -42,6 +42,7 @@ import com.etrisad.zenith.ui.components.ZenithGroupedButton
 import com.etrisad.zenith.ui.viewmodel.AppInfo
 import com.etrisad.zenith.ui.viewmodel.FocusUiState
 import com.etrisad.zenith.ui.viewmodel.PickerTab
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
 
@@ -338,10 +339,99 @@ private fun AlarmSettingsSheetContent(
 
                         Spacer(modifier = Modifier.height(24.dp))
 
+                        val countdownHour = currentTimeText?.split(":")?.getOrNull(0)?.toIntOrNull() ?: 7
+                        val countdownMinute = currentTimeText?.split(":")?.getOrNull(1)?.toIntOrNull() ?: 0
+
+                        var countdownSubText by remember { mutableStateOf("calculating...") }
+
+                        LaunchedEffect(countdownHour, countdownMinute, selectedDays) {
+                            while (true) {
+                                val now = java.time.LocalDateTime.now()
+                                val alarmTime = java.time.LocalTime.of(countdownHour, countdownMinute)
+
+                                var nextAlarm = now.toLocalDate().atTime(alarmTime)
+                                if (!nextAlarm.isAfter(now)) {
+                                    nextAlarm = nextAlarm.plusDays(1)
+                                }
+
+                                if (selectedDays.isNotEmpty()) {
+                                    var found = false
+                                    for (i in 0..7) {
+                                        val dow = when (nextAlarm.dayOfWeek) {
+                                            java.time.DayOfWeek.SUNDAY -> 1
+                                            java.time.DayOfWeek.MONDAY -> 2
+                                            java.time.DayOfWeek.TUESDAY -> 3
+                                            java.time.DayOfWeek.WEDNESDAY -> 4
+                                            java.time.DayOfWeek.THURSDAY -> 5
+                                            java.time.DayOfWeek.FRIDAY -> 6
+                                            java.time.DayOfWeek.SATURDAY -> 7
+                                        }
+                                        if (selectedDays.contains(dow) && nextAlarm.isAfter(now)) {
+                                            found = true
+                                            break
+                                        }
+                                        nextAlarm = nextAlarm.plusDays(1)
+                                    }
+                                    if (!found) {
+                                        countdownSubText = "no upcoming schedule"
+                                        delay(60_000)
+                                        continue
+                                    }
+                                }
+
+                                val duration = java.time.Duration.between(now, nextAlarm)
+                                val totalMinutes = duration.toMinutes()
+                                val days = duration.toHours() / 24
+                                val hours = duration.toHours() % 24
+                                val minutes = totalMinutes % 60
+
+                                countdownSubText = when {
+                                    days > 0 && hours > 0 -> "in ${days}d ${hours}h"
+                                    days > 0 -> "in ${days}d"
+                                    hours > 0 && minutes > 0 -> "in ${hours}h ${minutes}m"
+                                    hours > 0 -> "in ${hours}h"
+                                    totalMinutes > 0 -> "in ${totalMinutes}m"
+                                    else -> "<1m"
+                                }
+
+                                val sleepMillis = when {
+                                    days > 0 -> 60_000L
+                                    hours > 0 -> 60_000L
+                                    else -> 10_000L
+                                }
+                                delay(sleepMillis)
+                            }
+                        }
+
+                        CardGroup(shape = topShape, containerColor = MaterialTheme.colorScheme.tertiary) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.HourglassTop,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onTertiary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = countdownSubText,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onTertiary
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
                         Surface(
                             onClick = { onTimeClick?.invoke() },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
+                            shape = middleShape,
                             color = containerColor
                         ) {
                             Column(
