@@ -1,7 +1,9 @@
 package com.etrisad.zenith.data.model
 
+import java.util.concurrent.atomic.AtomicLong
+
 data class AlarmItem(
-    val id: Long = System.currentTimeMillis(),
+    val id: Long = nextId(),
     val hour: Int = 7,
     val minute: Int = 0,
     val name: String = "Alarm",
@@ -32,6 +34,10 @@ data class AlarmItem(
         }
 
     companion object {
+        private val idCounter = AtomicLong(System.currentTimeMillis())
+
+        private fun nextId(): Long = idCounter.getAndIncrement()
+
         fun nextName(existingAlarms: List<AlarmItem>): String {
             val takenNumbers = existingAlarms.mapNotNull { alarm ->
                 val match = Regex("""^Alarm #(\d+)$""").find(alarm.name)

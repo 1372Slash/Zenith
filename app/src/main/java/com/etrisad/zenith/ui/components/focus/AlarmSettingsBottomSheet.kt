@@ -149,6 +149,7 @@ private fun AlarmSettingsSheetContent(
     var wakeUpAppDurationSeconds by remember { mutableStateOf(initialWakeUpAppDurationSeconds) }
     var useCertainAppEnabled by remember { mutableStateOf(initialWakeUpAppPackageNames.isNotEmpty()) }
     var showWakeUpAppPicker by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
     var isPlayingPreview by remember { mutableStateOf(false) }
     val previewPlayer = remember {
         android.media.MediaPlayer()
@@ -1322,29 +1323,35 @@ private fun AlarmSettingsSheetContent(
                 ZenithButton(
                     onClick = {
                         scope.launch {
-                            onSave(
-                                alarmName,
-                                alarmSoundUri,
-                                alarmSoundEnabled,
-                                alarmAutoRepeatEnabled,
-                                selectedDays,
-                                vibrateEnabled,
-                                snoozeDurationMinutes,
-                                snoozeMaxCount,
-                                gradualVolumeEnabled,
-                                mathChallengeEnabled,
-                                ttsEnabled,
-                                ttsCustomPhrase,
-                                ttsLanguage,
-                                if (useCertainAppEnabled) wakeUpAppPackageNames else emptyList(),
-                                wakeUpAppDurationSeconds
-                            )
-                            sheetState.hide()
-                            onDismiss()
+                            isSaving = true
+                            try {
+                                onSave(
+                                    alarmName,
+                                    alarmSoundUri,
+                                    alarmSoundEnabled,
+                                    alarmAutoRepeatEnabled,
+                                    selectedDays,
+                                    vibrateEnabled,
+                                    snoozeDurationMinutes,
+                                    snoozeMaxCount,
+                                    gradualVolumeEnabled,
+                                    mathChallengeEnabled,
+                                    ttsEnabled,
+                                    ttsCustomPhrase,
+                                    ttsLanguage,
+                                    if (useCertainAppEnabled) wakeUpAppPackageNames else emptyList(),
+                                    wakeUpAppDurationSeconds
+                                )
+                                sheetState.hide()
+                                onDismiss()
+                            } finally {
+                                isSaving = false
+                            }
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    text = "Save Settings"
+                    text = "Save Settings",
+                    isLoading = isSaving
                 )
             }
         }
