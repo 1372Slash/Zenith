@@ -1325,6 +1325,7 @@ private fun AlarmSettingsSheetContent(
                         scope.launch {
                             isSaving = true
                             try {
+                                val tSaveStart = System.currentTimeMillis()
                                 onSave(
                                     alarmName,
                                     alarmSoundUri,
@@ -1342,7 +1343,10 @@ private fun AlarmSettingsSheetContent(
                                     if (useCertainAppEnabled) wakeUpAppPackageNames else emptyList(),
                                     wakeUpAppDurationSeconds
                                 )
+                                android.util.Log.d("AlarmPerf", "onSave callback took ${System.currentTimeMillis() - tSaveStart}ms")
+                                val tHide = System.currentTimeMillis()
                                 sheetState.hide()
+                                android.util.Log.d("AlarmPerf", "sheetState.hide() took ${System.currentTimeMillis() - tHide}ms")
                                 onDismiss()
                             } finally {
                                 isSaving = false

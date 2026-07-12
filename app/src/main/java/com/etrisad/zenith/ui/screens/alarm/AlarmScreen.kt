@@ -39,7 +39,6 @@ import com.etrisad.zenith.ui.components.focus.AlarmItemSettingsBottomSheet
 import com.etrisad.zenith.ui.components.focus.SwipeableItemContainer
 import com.etrisad.zenith.ui.screens.bedtime.TimePickerDialog
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -136,8 +135,10 @@ fun AlarmScreen(
             selectedAlarmIds.forEach { id ->
                 preferencesRepository.deleteAlarm(id)
             }
-            rescheduleAlarms(context, preferencesRepository, prefs.alarmMasterEnabled)
             exitSelectionMode()
+            scope.launch(Dispatchers.IO) {
+                rescheduleAlarms(context, preferencesRepository, prefs.alarmMasterEnabled)
+            }
         }
     }
 
@@ -299,7 +300,9 @@ fun AlarmScreen(
                             onDelete = {
                                 scope.launch {
                                     preferencesRepository.deleteAlarm(alarm.id)
-                                    rescheduleAlarms(context, preferencesRepository, prefs.alarmMasterEnabled)
+                                    scope.launch(Dispatchers.IO) {
+                                        rescheduleAlarms(context, preferencesRepository, prefs.alarmMasterEnabled)
+                                    }
                                 }
                             },
                             shape = animatedShape,
@@ -317,7 +320,9 @@ fun AlarmScreen(
                                     } else {
                                         scope.launch {
                                             preferencesRepository.updateAlarm(alarm.copy(enabled = enabled))
-                                            rescheduleAlarms(context, preferencesRepository, prefs.alarmMasterEnabled)
+                                            scope.launch(Dispatchers.IO) {
+                                                rescheduleAlarms(context, preferencesRepository, prefs.alarmMasterEnabled)
+                                            }
                                         }
                                     }
                                 },
@@ -463,7 +468,9 @@ fun AlarmScreen(
                             enabled = if (timeChanged || daysChanged) true else currentEditing.enabled
                         )
                     )
-                    rescheduleAlarms(context, preferencesRepository, prefs.alarmMasterEnabled)
+                    scope.launch(Dispatchers.IO) {
+                        rescheduleAlarms(context, preferencesRepository, prefs.alarmMasterEnabled)
+                    }
                 },
                 onTimeClick = { showTimePicker = true },
                 alarmTimeText = currentEditing.timeString
@@ -509,7 +516,9 @@ fun AlarmScreen(
                             wakeUpAppDurationSeconds = wakeUpAppDurationSeconds
                         )
                     )
-                    rescheduleAlarms(context, preferencesRepository, prefs.alarmMasterEnabled)
+                    scope.launch(Dispatchers.IO) {
+                        rescheduleAlarms(context, preferencesRepository, prefs.alarmMasterEnabled)
+                    }
                     newAlarm = null
                 },
                 onTimeClick = { showTimePicker = true },
@@ -888,14 +897,22 @@ private suspend fun rescheduleAlarms(
     preferencesRepository: UserPreferencesRepository,
     masterEnabled: Boolean
 ) = withContext(Dispatchers.IO) {
+    val t0 = System.currentTimeMillis()
+
+    val tCancel = System.currentTimeMillis()
     AlarmBroadcastReceiver.cancelAlarm(context)
+    android.util.Log.d("AlarmPerf", "rescheduleAlarms: cancelAlarm took ${System.currentTimeMillis() - tCancel}ms")
 
     if (masterEnabled) {
-        val prefs = preferencesRepository.userPreferencesFlow.first()
-        val alarms = preferencesRepository.parseAlarms(prefs.alarmsJson)
+        val tRead = System.currentTimeMillis()
+        val alarms = preferencesRepository.getAlarmsSnapshot()
+        android.util.Log.d("AlarmPerf", "rescheduleAlarms: getAlarmsSnapshot took ${System.currentTimeMillis() - tRead}ms")
+
         val enabledAlarms = alarms.filter { it.enabled }
         for (alarm in enabledAlarms) {
             AlarmBroadcastReceiver.scheduleAlarm(context, alarm.timeString, alarm.days)
         }
     }
+
+    android.util.Log.d("AlarmPerf", "rescheduleAlarms() total took ${System.currentTimeMillis() - t0}ms, masterEnabled=$masterEnabled")
 }

@@ -1281,40 +1281,41 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.ALARM_MASTER_ENABLED] = enabled }
     }
 
-    suspend fun setAlarms(alarms: List<AlarmItem>) {
-        val json = serializeAlarms(alarms)
-        android.util.Log.d("AlarmDebug", "setAlarms() writing json=$json")
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.ALARMS_JSON] = json }
-        android.util.Log.d("AlarmDebug", "setAlarms() write completed")
+    suspend fun getAlarmsSnapshot(): List<AlarmItem> {
+        val json = context.dataStore.data.first()[PreferencesKeys.ALARMS_JSON] ?: "[]"
+        return parseAlarms(json)
     }
 
     suspend fun addAlarm(alarm: AlarmItem) {
-        val current = parseAlarms(getCachedAlarmsJson())
-        setAlarms(current + alarm)
+        val t0 = System.currentTimeMillis()
+        context.dataStore.edit { prefs ->
+            val current = parseAlarms(prefs[PreferencesKeys.ALARMS_JSON] ?: "[]")
+            prefs[PreferencesKeys.ALARMS_JSON] = serializeAlarms(current + alarm)
+        }
+        android.util.Log.d("AlarmPerf", "addAlarm() took ${System.currentTimeMillis() - t0}ms")
     }
 
     suspend fun updateAlarm(alarm: AlarmItem) {
-        android.util.Log.d("AlarmDebug", "updateAlarm() called with id=${alarm.id}, name=${alarm.name}, time=${alarm.hour}:${alarm.minute}")
-        val current = parseAlarms(getCachedAlarmsJson()).toMutableList()
-        android.util.Log.d("AlarmDebug", "updateAlarm() current list ids=${current.map { it.id }}")
-        val index = current.indexOfFirst { it.id == alarm.id }
-        android.util.Log.d("AlarmDebug", "updateAlarm() found index=$index")
-        if (index >= 0) {
-            current[index] = alarm
-            setAlarms(current)
-            android.util.Log.d("AlarmDebug", "updateAlarm() SAVED, new list ids=${current.map { it.id }}, names=${current.map { it.name }}")
-        } else {
-            android.util.Log.w("AlarmDebug", "updateAlarm() id NOT FOUND, no-op")
+        val t0 = System.currentTimeMillis()
+        context.dataStore.edit { prefs ->
+            val current = parseAlarms(prefs[PreferencesKeys.ALARMS_JSON] ?: "[]").toMutableList()
+            val index = current.indexOfFirst { it.id == alarm.id }
+            if (index >= 0) {
+                current[index] = alarm
+                prefs[PreferencesKeys.ALARMS_JSON] = serializeAlarms(current)
+            }
         }
+        android.util.Log.d("AlarmPerf", "updateAlarm() took ${System.currentTimeMillis() - t0}ms")
     }
 
     suspend fun deleteAlarm(alarmId: Long) {
-        val current = parseAlarms(getCachedAlarmsJson()).toMutableList()
-        val removed = current.removeAll { it.id == alarmId }
-        if (!removed) {
-            android.util.Log.w("Zenith", "deleteAlarm: id $alarmId not found in alarm list")
+        val t0 = System.currentTimeMillis()
+        context.dataStore.edit { prefs ->
+            val current = parseAlarms(prefs[PreferencesKeys.ALARMS_JSON] ?: "[]").toMutableList()
+            current.removeAll { it.id == alarmId }
+            prefs[PreferencesKeys.ALARMS_JSON] = serializeAlarms(current)
         }
-        setAlarms(current)
+        android.util.Log.d("AlarmPerf", "deleteAlarm($alarmId) took ${System.currentTimeMillis() - t0}ms")
     }
 
     suspend fun migrateAlarmIdsIfNeeded() {
@@ -1338,10 +1339,6 @@ class UserPreferencesRepository(private val context: Context) {
                 prefs[PreferencesKeys.ALARMS_JSON] = rawAdapter.toJson(migrated)
             }
         }
-    }
-
-    private suspend fun getCachedAlarmsJson(): String {
-        return context.dataStore.data.first()[PreferencesKeys.ALARMS_JSON] ?: "[]"
     }
 
 

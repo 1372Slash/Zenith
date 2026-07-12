@@ -1,7 +1,9 @@
 package com.etrisad.zenith.data.model
 
+import com.squareup.moshi.JsonClass
 import java.util.concurrent.atomic.AtomicLong
 
+@JsonClass(generateAdapter = true)
 data class AlarmItem(
     val id: Long,
     val hour: Int = 7,
