@@ -437,14 +437,20 @@ fun AlarmScreen(
                 snoozeDurationMinutes = currentEditing.snoozeDurationMinutes,
                 snoozeMaxCount = currentEditing.snoozeMaxCount,
                 gradualVolumeEnabled = currentEditing.gradualVolumeEnabled,
+                gradualVolumeDurationSeconds = currentEditing.gradualVolumeDurationSeconds,
                 mathChallengeEnabled = currentEditing.mathChallengeEnabled,
+                alarmVolume = currentEditing.alarmVolume,
                 ttsEnabled = currentEditing.ttsEnabled,
                 ttsCustomPhrase = currentEditing.ttsCustomPhrase,
                 ttsLanguage = currentEditing.ttsLanguage,
+                ttsTalkAfterSeconds = currentEditing.ttsTalkAfterSeconds,
+                ttsRepeatCount = currentEditing.ttsRepeatCount,
+                ttsIntervalSeconds = currentEditing.ttsIntervalSeconds,
+                preventVolumeDrop = currentEditing.preventVolumeDrop,
                 wakeUpAppPackageNames = currentEditing.wakeUpAppPackageNames,
                 wakeUpAppDurationSeconds = currentEditing.wakeUpAppDurationSeconds,
                 onDismiss = { editingAlarm = null },
-                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, mathChallengeEnabled, ttsEnabled, ttsCustomPhrase, ttsLanguage, wakeUpAppPackageNames, wakeUpAppDurationSeconds ->
+                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, gradualVolumeDurationSeconds, mathChallengeEnabled, alarmVolume, ttsEnabled, ttsCustomPhrase, ttsLanguage, ttsTalkAfterSeconds, ttsRepeatCount, ttsIntervalSeconds, preventVolumeDrop, wakeUpAppPackageNames, wakeUpAppDurationSeconds ->
                     val original = alarmList.find { it.id == currentEditing.id }
                     val timeChanged = original != null && (original.hour != currentEditing.hour || original.minute != currentEditing.minute)
                     val daysChanged = original != null && original.days != selectedDays
@@ -459,10 +465,16 @@ fun AlarmScreen(
                             snoozeDurationMinutes = snoozeDurationMinutes,
                             snoozeMaxCount = snoozeMaxCount,
                             gradualVolumeEnabled = gradualVolumeEnabled,
+                            gradualVolumeDurationSeconds = gradualVolumeDurationSeconds,
                             mathChallengeEnabled = mathChallengeEnabled,
+                            alarmVolume = alarmVolume,
                             ttsEnabled = ttsEnabled,
                             ttsCustomPhrase = ttsCustomPhrase,
                             ttsLanguage = ttsLanguage,
+                            ttsTalkAfterSeconds = ttsTalkAfterSeconds,
+                            ttsRepeatCount = ttsRepeatCount,
+                            ttsIntervalSeconds = ttsIntervalSeconds,
+                            preventVolumeDrop = preventVolumeDrop,
                             wakeUpAppPackageNames = wakeUpAppPackageNames,
                             wakeUpAppDurationSeconds = wakeUpAppDurationSeconds,
                             enabled = if (timeChanged || daysChanged) true else currentEditing.enabled
@@ -489,14 +501,20 @@ fun AlarmScreen(
                 snoozeDurationMinutes = currentNew.snoozeDurationMinutes,
                 snoozeMaxCount = currentNew.snoozeMaxCount,
                 gradualVolumeEnabled = currentNew.gradualVolumeEnabled,
+                gradualVolumeDurationSeconds = currentNew.gradualVolumeDurationSeconds,
                 mathChallengeEnabled = currentNew.mathChallengeEnabled,
+                alarmVolume = currentNew.alarmVolume,
                 ttsEnabled = currentNew.ttsEnabled,
                 ttsCustomPhrase = currentNew.ttsCustomPhrase,
                 ttsLanguage = currentNew.ttsLanguage,
+                ttsTalkAfterSeconds = currentNew.ttsTalkAfterSeconds,
+                ttsRepeatCount = currentNew.ttsRepeatCount,
+                ttsIntervalSeconds = currentNew.ttsIntervalSeconds,
+                preventVolumeDrop = currentNew.preventVolumeDrop,
                 wakeUpAppPackageNames = currentNew.wakeUpAppPackageNames,
                 wakeUpAppDurationSeconds = currentNew.wakeUpAppDurationSeconds,
                 onDismiss = { newAlarm = null },
-                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, mathChallengeEnabled, ttsEnabled, ttsCustomPhrase, ttsLanguage, wakeUpAppPackageNames, wakeUpAppDurationSeconds ->
+                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, gradualVolumeDurationSeconds, mathChallengeEnabled, alarmVolume, ttsEnabled, ttsCustomPhrase, ttsLanguage, ttsTalkAfterSeconds, ttsRepeatCount, ttsIntervalSeconds, preventVolumeDrop, wakeUpAppPackageNames, wakeUpAppDurationSeconds ->
                     preferencesRepository.addAlarm(
                         currentNew.copy(
                             name = name,
@@ -508,10 +526,16 @@ fun AlarmScreen(
                             snoozeDurationMinutes = snoozeDurationMinutes,
                             snoozeMaxCount = snoozeMaxCount,
                             gradualVolumeEnabled = gradualVolumeEnabled,
+                            gradualVolumeDurationSeconds = gradualVolumeDurationSeconds,
                             mathChallengeEnabled = mathChallengeEnabled,
+                            alarmVolume = alarmVolume,
                             ttsEnabled = ttsEnabled,
                             ttsCustomPhrase = ttsCustomPhrase,
                             ttsLanguage = ttsLanguage,
+                            ttsTalkAfterSeconds = ttsTalkAfterSeconds,
+                            ttsRepeatCount = ttsRepeatCount,
+                            ttsIntervalSeconds = ttsIntervalSeconds,
+                            preventVolumeDrop = preventVolumeDrop,
                             wakeUpAppPackageNames = wakeUpAppPackageNames,
                             wakeUpAppDurationSeconds = wakeUpAppDurationSeconds
                         )

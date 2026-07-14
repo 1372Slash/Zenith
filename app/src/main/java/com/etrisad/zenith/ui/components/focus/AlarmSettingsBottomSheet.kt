@@ -15,6 +15,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.filled.*
@@ -58,14 +59,20 @@ fun AlarmItemSettingsBottomSheet(
     snoozeDurationMinutes: Int = 5,
     snoozeMaxCount: Int = 3,
     gradualVolumeEnabled: Boolean = false,
+    gradualVolumeDurationSeconds: Int = 30,
     mathChallengeEnabled: Boolean = false,
+    alarmVolume: Float = 1.0f,
     ttsEnabled: Boolean = false,
     ttsCustomPhrase: String? = null,
     ttsLanguage: String? = null,
+    ttsTalkAfterSeconds: Int = 0,
+    ttsRepeatCount: Int = 0,
+    ttsIntervalSeconds: Int = 3,
+    preventVolumeDrop: Boolean = false,
     wakeUpAppPackageNames: List<String> = emptyList(),
     wakeUpAppDurationSeconds: Int = 120,
     onDismiss: () -> Unit,
-    onSave: suspend (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, mathChallengeEnabled: Boolean, ttsEnabled: Boolean, ttsCustomPhrase: String?, ttsLanguage: String?, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int) -> Unit,
+    onSave: suspend (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, gradualVolumeDurationSeconds: Int, mathChallengeEnabled: Boolean, alarmVolume: Float, ttsEnabled: Boolean, ttsCustomPhrase: String?, ttsLanguage: String?, ttsTalkAfterSeconds: Int, ttsRepeatCount: Int, ttsIntervalSeconds: Int, preventVolumeDrop: Boolean, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int) -> Unit,
     onTimeClick: (() -> Unit)? = null,
     alarmTimeText: String? = null
 ) {
@@ -79,10 +86,16 @@ fun AlarmItemSettingsBottomSheet(
         initialSnoozeDurationMinutes = snoozeDurationMinutes,
         initialSnoozeMaxCount = snoozeMaxCount,
         initialGradualVolumeEnabled = gradualVolumeEnabled,
+        initialGradualVolumeDurationSeconds = gradualVolumeDurationSeconds,
         initialMathChallengeEnabled = mathChallengeEnabled,
+        initialAlarmVolume = alarmVolume,
         initialTtsEnabled = ttsEnabled,
         initialTtsCustomPhrase = ttsCustomPhrase,
         initialTtsLanguage = ttsLanguage,
+        initialTtsTalkAfterSeconds = ttsTalkAfterSeconds,
+        initialTtsRepeatCount = ttsRepeatCount,
+        initialTtsIntervalSeconds = ttsIntervalSeconds,
+        initialPreventVolumeDrop = preventVolumeDrop,
         initialWakeUpAppPackageNames = wakeUpAppPackageNames,
         initialWakeUpAppDurationSeconds = wakeUpAppDurationSeconds,
         onDismiss = onDismiss,
@@ -104,14 +117,20 @@ private fun AlarmSettingsSheetContent(
     initialSnoozeDurationMinutes: Int = 5,
     initialSnoozeMaxCount: Int = 3,
     initialGradualVolumeEnabled: Boolean = false,
+    initialGradualVolumeDurationSeconds: Int = 30,
     initialMathChallengeEnabled: Boolean = false,
+    initialAlarmVolume: Float = 1.0f,
     initialTtsEnabled: Boolean = false,
     initialTtsCustomPhrase: String? = null,
     initialTtsLanguage: String? = null,
+    initialTtsTalkAfterSeconds: Int = 0,
+    initialTtsRepeatCount: Int = 0,
+    initialTtsIntervalSeconds: Int = 3,
+    initialPreventVolumeDrop: Boolean = false,
     initialWakeUpAppPackageNames: List<String> = emptyList(),
     initialWakeUpAppDurationSeconds: Int = 120,
     onDismiss: () -> Unit,
-    onSave: suspend (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, mathChallengeEnabled: Boolean, ttsEnabled: Boolean, ttsCustomPhrase: String?, ttsLanguage: String?, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int) -> Unit,
+    onSave: suspend (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, gradualVolumeDurationSeconds: Int, mathChallengeEnabled: Boolean, alarmVolume: Float, ttsEnabled: Boolean, ttsCustomPhrase: String?, ttsLanguage: String?, ttsTalkAfterSeconds: Int, ttsRepeatCount: Int, ttsIntervalSeconds: Int, preventVolumeDrop: Boolean, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int) -> Unit,
     onTimeClick: (() -> Unit)?,
     alarmTimeText: String?
 ) {
@@ -142,10 +161,16 @@ private fun AlarmSettingsSheetContent(
     var snoozeDurationMinutes by remember { mutableStateOf(initialSnoozeDurationMinutes) }
     var snoozeMaxCount by remember { mutableStateOf(initialSnoozeMaxCount) }
     var gradualVolumeEnabled by remember { mutableStateOf(initialGradualVolumeEnabled) }
+    var gradualVolumeDurationSeconds by remember { mutableStateOf(initialGradualVolumeDurationSeconds) }
     var mathChallengeEnabled by remember { mutableStateOf(initialMathChallengeEnabled) }
+    var alarmVolume by remember { mutableFloatStateOf(initialAlarmVolume) }
     var ttsEnabled by remember { mutableStateOf(initialTtsEnabled) }
     var ttsCustomPhrase by remember { mutableStateOf(initialTtsCustomPhrase) }
     var ttsLanguage by remember { mutableStateOf(initialTtsLanguage) }
+    var ttsTalkAfterSeconds by remember { mutableStateOf(initialTtsTalkAfterSeconds) }
+    var ttsRepeatCount by remember { mutableStateOf(initialTtsRepeatCount) }
+    var ttsIntervalSeconds by remember { mutableStateOf(initialTtsIntervalSeconds) }
+    var preventVolumeDrop by remember { mutableStateOf(initialPreventVolumeDrop) }
     var wakeUpAppPackageNames by remember { mutableStateOf(initialWakeUpAppPackageNames) }
     var wakeUpAppDurationSeconds by remember { mutableStateOf(initialWakeUpAppDurationSeconds) }
     var useCertainAppEnabled by remember { mutableStateOf(initialWakeUpAppPackageNames.isNotEmpty()) }
@@ -620,7 +645,7 @@ private fun AlarmSettingsSheetContent(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        CardGroup(shape = middleShape, containerColor = containerColor) {
+                        CardGroup(shape = bottomShape, containerColor = containerColor) {
                             Column {
                                 Row(
                                     modifier = Modifier
@@ -865,9 +890,11 @@ private fun AlarmSettingsSheetContent(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(24.dp))
 
-                        CardGroup(shape = bottomShape, containerColor = containerColor) {
+                        PreferenceCategory(title = "Wake Mission")
+
+                        CardGroup(shape = RoundedCornerShape(28.dp), containerColor = containerColor) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1107,14 +1134,132 @@ private fun AlarmSettingsSheetContent(
                         Spacer(modifier = Modifier.height(4.dp))
 
                         CardGroup(shape = middleShape, containerColor = containerColor) {
-                            SettingsToggle(
-                                title = "Gradual Volume",
-                                description = "Volume increases slowly from 0 to full",
-                                checked = gradualVolumeEnabled,
-                                onCheckedChange = { gradualVolumeEnabled = it },
-                                icon = Icons.Outlined.TrendingUp,
-                                shape = middleShape
+                            val gradualVolumeOptions = listOf(
+                                "Off" to 0,
+                                "15 sec" to 15,
+                                "30 sec" to 30,
+                                "45 sec" to 45,
+                                "1 min" to 60,
+                                "2 min" to 120,
+                                "3 min" to 180,
+                                "5 min" to 300
                             )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Outlined.TrendingUp,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Gradual Volume",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Volume increases slowly from 0 to full",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                ZenithDropdown(
+                                    options = gradualVolumeOptions,
+                                    selectedOption = gradualVolumeDurationSeconds,
+                                    onOptionSelected = {
+                                        gradualVolumeDurationSeconds = it
+                                        gradualVolumeEnabled = it > 0
+                                    },
+                                    width = 120.dp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        CardGroup(shape = middleShape, containerColor = containerColor) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Alarm Volume",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Set the volume level for the alarm",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Outlined.VolumeOff,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Slider(
+                                    value = alarmVolume,
+                                    onValueChange = { alarmVolume = it },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(horizontal = 8.dp),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = MaterialTheme.colorScheme.primary,
+                                        activeTrackColor = MaterialTheme.colorScheme.primary
+                                    )
+                                )
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "${(alarmVolume * 100).toInt()}%",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(4.dp))
@@ -1318,6 +1463,23 @@ private fun AlarmSettingsSheetContent(
                                         Column(
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
+                                            val ttsTalkAfterOptions = listOf(
+                                                "Immediately" to 0,
+                                                "3 sec" to 3,
+                                                "5 sec" to 5,
+                                                "10 sec" to 10,
+                                                "15 sec" to 15,
+                                                "30 sec" to 30
+                                            )
+                                            val ttsRepeatOptions = listOf(
+                                                "Once" to 1,
+                                                "2 times" to 2,
+                                                "3 times" to 3,
+                                                "5 times" to 5,
+                                                "10 times" to 10,
+                                                "Unlimited" to 0
+                                            )
+
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
@@ -1331,7 +1493,7 @@ private fun AlarmSettingsSheetContent(
                                                     contentAlignment = Alignment.Center
                                                 ) {
                                                     Icon(
-                                                        imageVector = Icons.Outlined.TextFields,
+                                                        imageVector = Icons.Outlined.Timer,
                                                         contentDescription = null,
                                                         tint = MaterialTheme.colorScheme.onTertiaryContainer,
                                                         modifier = Modifier.size(20.dp)
@@ -1340,28 +1502,174 @@ private fun AlarmSettingsSheetContent(
                                                 Spacer(modifier = Modifier.width(16.dp))
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Text(
-                                                        text = "Custom Phrase",
+                                                        text = "Talk After",
                                                         style = MaterialTheme.typography.titleMedium,
                                                         fontWeight = FontWeight.Bold
                                                     )
                                                     Text(
-                                                        text = "Default: \"Wake up, it's {time}\". Use {time} to include current time.",
+                                                        text = "Delay before TTS starts after alarm",
                                                         style = MaterialTheme.typography.bodySmall,
                                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                                     )
                                                 }
+                                                ZenithDropdown(
+                                                    options = ttsTalkAfterOptions,
+                                                    selectedOption = ttsTalkAfterSeconds,
+                                                    onOptionSelected = { ttsTalkAfterSeconds = it },
+                                                    width = 120.dp
+                                                )
                                             }
-                                            OutlinedTextField(
-                                                value = ttsCustomPhrase ?: "",
-                                                onValueChange = { ttsCustomPhrase = it.ifEmpty { null } },
+
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(horizontal = 16.dp),
+                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                            )
+
+                                            Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .padding(horizontal = 16.dp)
-                                                    .padding(bottom = 16.dp),
-                                                singleLine = true,
-                                                placeholder = { Text("Wake up, it's {time}") },
-                                                shape = RoundedCornerShape(16.dp)
+                                                    .padding(16.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(40.dp)
+                                                        .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Repeat,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(16.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = "Repeat",
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    Text(
+                                                        text = "How many times TTS repeats",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                                ZenithDropdown(
+                                                    options = ttsRepeatOptions,
+                                                    selectedOption = ttsRepeatCount,
+                                                    onOptionSelected = { ttsRepeatCount = it },
+                                                    width = 120.dp
+                                                )
+                                            }
+
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(horizontal = 16.dp),
+                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                                             )
+
+                                            val ttsIntervalOptions = listOf(
+                                                "3 sec" to 3,
+                                                "5 sec" to 5,
+                                                "8 sec" to 8,
+                                                "10 sec" to 10,
+                                                "15 sec" to 15
+                                            )
+
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(16.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(40.dp)
+                                                        .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Speed,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(16.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = "TTS Interval",
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    Text(
+                                                        text = "Pause between TTS repeats",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                                ZenithDropdown(
+                                                    options = ttsIntervalOptions,
+                                                    selectedOption = ttsIntervalSeconds,
+                                                    onOptionSelected = { ttsIntervalSeconds = it },
+                                                    width = 120.dp
+                                                )
+                                            }
+
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(horizontal = 16.dp),
+                                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                            )
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(16.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(40.dp)
+                                                            .background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.TextFields,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.width(16.dp))
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = "Custom Phrase",
+                                                            style = MaterialTheme.typography.titleMedium,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                        Text(
+                                                            text = "Default: \"Wake up, it's {time}\". Use {time} to include current time.",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                                OutlinedTextField(
+                                                    value = ttsCustomPhrase ?: "",
+                                                    onValueChange = { ttsCustomPhrase = it.ifEmpty { null } },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(horizontal = 16.dp)
+                                                        .padding(bottom = 16.dp),
+                                                    singleLine = true,
+                                                    placeholder = { Text("Wake up, it's {time}") },
+                                                    shape = RoundedCornerShape(16.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -1370,13 +1678,26 @@ private fun AlarmSettingsSheetContent(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        CardGroup(shape = bottomShape, containerColor = containerColor) {
+                        CardGroup(shape = middleShape, containerColor = containerColor) {
                             SettingsToggle(
                                 title = "Vibrate",
                                 description = "Vibrate device when alarm rings",
                                 checked = vibrateEnabled,
                                 onCheckedChange = { vibrateEnabled = it },
                                 icon = Icons.Outlined.NotificationsActive,
+                                shape = middleShape
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        CardGroup(shape = bottomShape, containerColor = containerColor) {
+                            SettingsToggle(
+                                title = "Prevent Volume Drop",
+                                description = "Keep alarm volume from being lowered by the system",
+                                checked = preventVolumeDrop,
+                                onCheckedChange = { preventVolumeDrop = it },
+                                icon = Icons.AutoMirrored.Outlined.VolumeUp,
                                 shape = bottomShape
                             )
                         }
@@ -1426,10 +1747,16 @@ private fun AlarmSettingsSheetContent(
                                     snoozeDurationMinutes,
                                     snoozeMaxCount,
                                     gradualVolumeEnabled,
+                                    gradualVolumeDurationSeconds,
                                     mathChallengeEnabled,
+                                    alarmVolume,
                                     ttsEnabled,
                                     ttsCustomPhrase,
                                     ttsLanguage,
+                                    ttsTalkAfterSeconds,
+                                    ttsRepeatCount,
+                                    ttsIntervalSeconds,
+                                    preventVolumeDrop,
                                     if (useCertainAppEnabled) wakeUpAppPackageNames else emptyList(),
                                     wakeUpAppDurationSeconds
                                 )

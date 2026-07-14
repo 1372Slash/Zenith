@@ -12,6 +12,9 @@ import android.media.MediaPlayer
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
@@ -35,6 +38,7 @@ class AlarmPlaybackService : Service() {
     private var ttsLoopJob: Job? = null
     private var gradualVolumeJob: Job? = null
     private var ttsRetryCount = 0
+    private var vibrator: Vibrator? = null
 
     @Volatile
     private var isAlarmActive = false
@@ -63,7 +67,17 @@ class AlarmPlaybackService : Service() {
 
         isAlarmActive = true
         _isPlaying.value = true
-        forceAlarmVolume()
+        serviceScope.launch {
+            try {
+                val app = applicationContext as ZenithApplication
+                val prefs = app.userPreferencesRepository.userPreferencesFlow.first()
+                val alarms = app.userPreferencesRepository.parseAlarms(prefs.alarmsJson)
+                val alarm = alarms.find { it.timeString == alarmTime }
+                forceAlarmVolume(preventVolumeDrop = alarm?.preventVolumeDrop ?: false)
+            } catch (_: Exception) {
+                forceAlarmVolume(preventVolumeDrop = false)
+            }
+        }
         playAlarmSound()
 
         return START_STICKY
@@ -112,6 +126,15 @@ class AlarmPlaybackService : Service() {
                 val alarms = app.userPreferencesRepository.parseAlarms(prefs.alarmsJson)
                 val currentAlarm = alarms.find { it.timeString == alarmTime }
                 val gradualVolume = currentAlarm?.gradualVolumeEnabled ?: false
+                val gradualVolumeDuration = currentAlarm?.gradualVolumeDurationSeconds ?: 30
+                val alarmVolumeLevel = currentAlarm?.alarmVolume ?: 1.0f
+                val ttsTalkAfter = currentAlarm?.ttsTalkAfterSeconds ?: 0
+                val ttsRepeat = currentAlarm?.ttsRepeatCount ?: 0
+                val ttsInterval = currentAlarm?.ttsIntervalSeconds ?: 3
+                val preventVolDrop = currentAlarm?.preventVolumeDrop ?: false
+                val vibrateEnabled = currentAlarm?.vibrateEnabled ?: true
+
+                Log.d("AlarmPlayback", "playAlarmSound: alarmTime=$alarmTime gradualVolume=$gradualVolume gradualVolumeDuration=${gradualVolumeDuration}s alarmVolume=$alarmVolumeLevel vibrate=$vibrateEnabled ttsTalkAfter=${ttsTalkAfter}s ttsRepeat=$ttsRepeat")
 
                 if (!prefs.alarmSoundEnabled) return@launch
 
@@ -138,7 +161,7 @@ class AlarmPlaybackService : Service() {
                                     .build()
                             )
                             isLooping = true
-                            if (gradualVolume) setVolume(0f, 0f) else setVolume(1.0f, 1.0f)
+                            if (gradualVolume) setVolume(0f, 0f) else setVolume(alarmVolumeLevel, alarmVolumeLevel)
 
                             setOnErrorListener { mp, what, extra ->
                                 Log.e("AlarmPlayback", "MediaPlayer error: what=$what extra=$extra")
@@ -157,8 +180,9 @@ class AlarmPlaybackService : Service() {
                             setOnPreparedListener {
                                 if (!isAlarmActive) return@setOnPreparedListener
                                 it.start()
-                                if (gradualVolume) rampUpVolume()
-                                if (ttsEnabled) speakAlarmTime(ttsPhrase, ttsLanguage)
+                                if (vibrateEnabled) startVibration()
+                                if (gradualVolume) rampUpVolume(gradualVolumeDuration, alarmVolumeLevel)
+                                if (ttsEnabled) speakAlarmTime(ttsPhrase, ttsLanguage, talkAfterSeconds = ttsTalkAfter, repeatCount = ttsRepeat, intervalSeconds = ttsInterval)
                             }
                             prepareAsync()
                         }
@@ -172,7 +196,7 @@ class AlarmPlaybackService : Service() {
         }
     }
 
-    private fun speakAlarmTime(customPhrase: String?, language: String?, isRetry: Boolean = false) {
+    private fun speakAlarmTime(customPhrase: String?, language: String?, isRetry: Boolean = false, talkAfterSeconds: Int = 0, repeatCount: Int = 0, intervalSeconds: Int = 3) {
         if (!isRetry) ttsRetryCount = 0
         try {
             val hour = alarmTime.split(":").getOrNull(0)?.toIntOrNull() ?: 7
@@ -197,20 +221,28 @@ class AlarmPlaybackService : Service() {
             tts = android.speech.tts.TextToSpeech(this@AlarmPlaybackService) { status ->
                 if (status == android.speech.tts.TextToSpeech.SUCCESS && isAlarmActive) {
                     tts?.language = locale
-                    mediaPlayer?.setVolume(0.3f, 0.3f)
-                    tts?.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "alarm_tts")
-
                     ttsLoopJob?.cancel()
                     ttsLoopJob = serviceScope.launch {
-                        while (isAlarmActive) {
-                            delay(3000L)
+                        if (talkAfterSeconds > 0) {
+                            delay(talkAfterSeconds * 1000L)
+                            if (!isAlarmActive) return@launch
+                        }
+                        mediaPlayer?.setVolume(0.3f, 0.3f)
+                        tts?.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "alarm_tts")
+
+                        var speakCount = 1
+                        val maxSpeaks = if (repeatCount > 0) repeatCount else Int.MAX_VALUE
+                        val intervalMs = intervalSeconds.coerceAtLeast(1) * 1000L
+                        while (isAlarmActive && speakCount < maxSpeaks) {
+                            delay(intervalMs)
                             if (!isAlarmActive) break
                             withContext(Dispatchers.Main) { mediaPlayer?.setVolume(1.0f, 1.0f) }
-                            delay(3000L)
+                            delay(intervalMs)
                             if (!isAlarmActive) break
                             withContext(Dispatchers.Main) { mediaPlayer?.setVolume(0.3f, 0.3f) }
                             try {
                                 val result = tts?.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "alarm_tts")
+                                speakCount++
                                 if (result == android.speech.tts.TextToSpeech.ERROR) {
                                     ttsRetryCount++
                                     if (ttsRetryCount >= 3) {
@@ -218,7 +250,7 @@ class AlarmPlaybackService : Service() {
                                         return@launch
                                     }
                                     tts?.stop(); tts?.shutdown()
-                                    withContext(Dispatchers.Main) { speakAlarmTime(customPhrase, language, isRetry = true) }
+                                    withContext(Dispatchers.Main) { speakAlarmTime(customPhrase, language, isRetry = true, talkAfterSeconds = talkAfterSeconds, repeatCount = repeatCount, intervalSeconds = intervalSeconds) }
                                     return@launch
                                 }
                             } catch (e: Exception) {
@@ -228,7 +260,7 @@ class AlarmPlaybackService : Service() {
                                     return@launch
                                 }
                                 tts?.stop(); tts?.shutdown()
-                                withContext(Dispatchers.Main) { speakAlarmTime(customPhrase, language, isRetry = true) }
+                                withContext(Dispatchers.Main) { speakAlarmTime(customPhrase, language, isRetry = true, talkAfterSeconds = talkAfterSeconds, repeatCount = repeatCount, intervalSeconds = intervalSeconds) }
                                 return@launch
                             }
                         }
@@ -240,24 +272,55 @@ class AlarmPlaybackService : Service() {
         }
     }
 
-    private fun rampUpVolume() {
+    private fun rampUpVolume(durationSeconds: Int = 30, targetVolume: Float = 1.0f) {
         gradualVolumeJob = serviceScope.launch {
             val steps = 100
-            val stepDelay = 30_000L / steps
+            val totalMs = (durationSeconds.coerceAtLeast(1) * 1000L)
+            val stepDelay = totalMs / steps
             for (i in 1..steps) {
                 delay(stepDelay)
-                val volume = i.toFloat() / steps
+                val volume = (i.toFloat() / steps) * targetVolume
                 withContext(Dispatchers.Main) { mediaPlayer?.setVolume(volume, volume) }
             }
         }
     }
 
-    private fun forceAlarmVolume() {
+    @Suppress("DEPRECATION")
+    private fun startVibration() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                vibrator = vibratorManager?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            }
+            val pattern = longArrayOf(0, 500, 300)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0))
+            } else {
+                vibrator?.vibrate(pattern, 0)
+            }
+        } catch (e: Exception) {
+            Log.w("AlarmPlayback", "Failed to start vibration: ${e.message}")
+        }
+    }
+
+    private fun stopVibration() {
+        try {
+            vibrator?.cancel()
+            vibrator = null
+        } catch (_: Exception) {}
+    }
+
+    private fun forceAlarmVolume(preventVolumeDrop: Boolean = false) {
         try {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM)
             val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_ALARM)
-            if (currentVol < maxVol / 2) {
+            if (preventVolumeDrop) {
+                audioManager.setStreamVolume(AudioManager.STREAM_ALARM, maxVol, 0)
+            } else if (currentVol < maxVol / 2) {
                 audioManager.setStreamVolume(AudioManager.STREAM_ALARM, maxVol / 2, 0)
             }
         } catch (e: Exception) {
@@ -272,6 +335,7 @@ class AlarmPlaybackService : Service() {
         gradualVolumeJob?.cancel(); gradualVolumeJob = null
         mediaPlayer?.stop(); mediaPlayer?.release(); mediaPlayer = null
         tts?.stop(); tts?.shutdown(); tts = null
+        stopVibration()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -283,6 +347,7 @@ class AlarmPlaybackService : Service() {
         gradualVolumeJob?.cancel()
         mediaPlayer?.stop(); mediaPlayer?.release(); mediaPlayer = null
         tts?.stop(); tts?.shutdown(); tts = null
+        stopVibration()
         serviceScope.cancel()
         super.onDestroy()
     }
