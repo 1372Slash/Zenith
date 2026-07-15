@@ -117,6 +117,7 @@ fun UsageStatsScreen(
     var isOtherAppsExpanded by rememberSaveable { mutableStateOf(false) }
     var isOtherHourAppsExpanded by rememberSaveable(selectedHour) { mutableStateOf(false) }
     var isWebsiteExpanded by rememberSaveable { mutableStateOf(false) }
+    var isHourlyWebsiteExpanded by rememberSaveable(selectedHour) { mutableStateOf(false) }
 
     val (regularApps, lowUsageApps, totalLowUsageTime) = remember(uiState.allAppsUsage, uiState.activeShields, uiState.activeGoals, uiState.websiteUsage) {
         val shieldedOrGoaledPkgs = (uiState.activeShields + uiState.activeGoals).map { it.packageName }.toSet()
@@ -139,23 +140,38 @@ fun UsageStatsScreen(
         regularApps.size + otherWebSize + otherAppSize
     }
 
-    val hourlyAppsData = remember(uiState.hourlyUsage, selectedHour) {
+    val hourlyAppsData = remember(uiState.hourlyUsage, selectedHour, uiState.activeShields, uiState.activeGoals) {
         val hourData = uiState.hourlyUsage.find { it.hour == selectedHour }
         if (hourData != null && hourData.apps.isNotEmpty()) {
-            val (regular, low) = hourData.apps.partition { it.totalTimeVisible >= 60000L }
+            val shieldedOrGoaledPkgs = (uiState.activeShields + uiState.activeGoals).map { it.packageName }.toSet()
+            val nonWebsiteApps = hourData.apps.filterNot {
+                WebsiteRepository.isWebsitePackageName(it.packageName) && it.packageName !in shieldedOrGoaledPkgs
+            }
+            val (regular, low) = nonWebsiteApps.partition { it.totalTimeVisible >= 60000L }
             val totalLowTime = low.sumOf { it.totalTimeVisible }
             Triple(hourData, regular, Triple(low, totalLowTime, hourData.hour))
         } else null
     }
 
-    val hourlyGroupTotal = remember(hourlyAppsData, isOtherHourAppsExpanded) {
+    val hourlyWebsiteUsage = remember(uiState.hourlyUsage, selectedHour, uiState.activeShields, uiState.activeGoals) {
+        val hourData = uiState.hourlyUsage.find { it.hour == selectedHour }
+        if (hourData != null && hourData.apps.isNotEmpty()) {
+            val shieldedOrGoaledPkgs = (uiState.activeShields + uiState.activeGoals).map { it.packageName }.toSet()
+            hourData.apps.filter {
+                WebsiteRepository.isWebsitePackageName(it.packageName) && it.packageName !in shieldedOrGoaledPkgs
+            }
+        } else emptyList()
+    }
+
+    val hourlyGroupTotal = remember(hourlyAppsData, isOtherHourAppsExpanded, hourlyWebsiteUsage.size, isHourlyWebsiteExpanded) {
         val appsCount = if (hourlyAppsData != null) {
             val (_, regular, lowData) = hourlyAppsData
             val (low, totalLowTime, _) = lowData
             val appsListSize = regular.size + (if (totalLowTime > 0) (if (isOtherHourAppsExpanded) 1 + low.size else 1) else 0)
             1 + appsListSize
         } else 0
-        2 + appsCount
+        val webSize = if (hourlyWebsiteUsage.isNotEmpty()) 1 + (if (isHourlyWebsiteExpanded) hourlyWebsiteUsage.size else 0) else 0
+        2 + appsCount + webSize
     }
 
     val appTypes = remember(uiState.activeShields, uiState.activeGoals) {
@@ -384,10 +400,104 @@ fun UsageStatsScreen(
                 }
             }
 
+            if (hourlyWebsiteUsage.isNotEmpty()) {
+                val otherWebIndex = 2 + regularHourApps.size
+                item(key = "hourly_other_web_header_$currentTargetHour") {
+                    Column(modifier = Modifier.animateItem()) {
+                        GroupedCard(
+                            index = otherWebIndex,
+                            total = hourlyGroupTotal,
+                            onClick = { isHourlyWebsiteExpanded = !isHourlyWebsiteExpanded },
+                            containerColor = hourlyAccentContainerColor
+                        ) {
+                            ListItem(
+                                headlineContent = {
+                                    Text(
+                                        text = "Other Websites",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                },
+                                supportingContent = {
+                                    Text(
+                                        text = "${hourlyWebsiteUsage.size} domains visited",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = hourlyAccentColor
+                                    )
+                                },
+                                trailingContent = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = viewModel.formatDuration(hourlyWebsiteUsage.sumOf { it.totalTimeVisible }),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = hourlyAccentColor
+                                        )
+                                        Icon(
+                                            imageVector = if (isHourlyWebsiteExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp).padding(start = 4.dp),
+                                            tint = hourlyAccentColor
+                                        )
+                                    }
+                                },
+                                leadingContent = {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(CircleShape)
+                                            .background(hourlyAccentColor.copy(alpha = 0.1f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Language,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(24.dp),
+                                            tint = hourlyAccentColor
+                                        )
+                                    }
+                                },
+                                colors = ListItemDefaults.colors(
+                                    containerColor = Color.Transparent
+                                )
+                            )
+                        }
+                        if (isHourlyWebsiteExpanded) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                    }
+                }
+
+                if (isHourlyWebsiteExpanded) {
+                    itemsIndexed(
+                        items = hourlyWebsiteUsage,
+                        key = { _, site -> "hourly-web-$currentTargetHour-${site.packageName}" }
+                    ) { index, site ->
+                        Column(modifier = Modifier.animateItem()) {
+                            UsageItem(
+                                app = site,
+                                type = "WEBSITE",
+                                formatDuration = viewModel::formatDuration,
+                                index = otherWebIndex + 1 + index,
+                                total = hourlyGroupTotal,
+                                onClick = {},
+                                containerColor = hourlyAccentContainerColor,
+                                accentColor = hourlyAccentColor
+                            )
+                            if (index < hourlyWebsiteUsage.size - 1) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+                        }
+                    }
+                }
+            }
+
             if (totalLowUsageHourTime > 0) {
-                val otherIndexInGroup = 2 + regularHourApps.size
+                val otherWebSectionSize = if (hourlyWebsiteUsage.isNotEmpty()) 1 + (if (isHourlyWebsiteExpanded) hourlyWebsiteUsage.size else 0) else 0
+                val otherIndexInGroup = 2 + regularHourApps.size + otherWebSectionSize
                 item(key = "hourly_other_header_$currentTargetHour") {
                     Column(modifier = Modifier.animateItem()) {
+                    Spacer(modifier = Modifier.height(4.dp))
                     GroupedCard(
                             index = otherIndexInGroup,
                             total = hourlyGroupTotal,
@@ -454,7 +564,8 @@ fun UsageStatsScreen(
                         items = lowUsageHourApps,
                         key = { _, app -> "hourly-low-$currentTargetHour-${app.packageName}" }
                     ) { index, app ->
-                        val groupIndex = 2 + regularHourApps.size + 1 + index
+                        val otherWebSectionSize = if (hourlyWebsiteUsage.isNotEmpty()) 1 + (if (isHourlyWebsiteExpanded) hourlyWebsiteUsage.size else 0) else 0
+                        val groupIndex = 2 + regularHourApps.size + otherWebSectionSize + 1 + index
                         Column(modifier = Modifier.animateItem()) {
                             Spacer(modifier = Modifier.height(4.dp))
                             UsageItem(
