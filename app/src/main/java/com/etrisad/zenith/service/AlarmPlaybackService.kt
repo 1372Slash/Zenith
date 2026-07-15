@@ -138,10 +138,11 @@ class AlarmPlaybackService : Service() {
 
                 if (!prefs.alarmSoundEnabled) return@launch
 
-                val soundUri = if (prefs.alarmSoundUri != null) {
-                    prefs.alarmSoundUri!!.toUri()
-                } else {
-                    android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
+                val soundUri = when {
+                    currentAlarm?.soundEnabled == false -> return@launch
+                    currentAlarm?.soundUri != null -> currentAlarm.soundUri!!.toUri()
+                    prefs.alarmSoundUri != null -> prefs.alarmSoundUri!!.toUri()
+                    else -> android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
                 }
 
                 val ttsEnabled = currentAlarm?.ttsEnabled ?: false
