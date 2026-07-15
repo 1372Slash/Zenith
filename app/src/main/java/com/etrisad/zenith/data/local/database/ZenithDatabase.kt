@@ -274,29 +274,31 @@ abstract class ZenithDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): ZenithDatabase {
             return INSTANCE ?: synchronized(this) {
-                android.util.Log.d("ZenithDB", "Creating database instance (version=28, journal=WAL)")
-                DbLogBuffer.d("ZenithDB", "Creating database instance (version=28, journal=WAL)")
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    ZenithDatabase::class.java,
-                    "zenith_database"
-                )
-                    .addMigrations(
-                        MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
-                        MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-                        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
-                        MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18,
-                        MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
-                        MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28
+                INSTANCE ?: run {
+                    android.util.Log.d("ZenithDB", "Creating database instance (version=28, journal=WAL)")
+                    DbLogBuffer.d("ZenithDB", "Creating database instance (version=28, journal=WAL)")
+                    val instance = Room.databaseBuilder(
+                        context.applicationContext,
+                        ZenithDatabase::class.java,
+                        "zenith_database"
                     )
-                    .setQueryExecutor(Executors.newFixedThreadPool(4))
-                    .setTransactionExecutor(Executors.newSingleThreadExecutor())
-                    .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-                    .fallbackToDestructiveMigration()
-                    .fallbackToDestructiveMigrationOnDowngrade()
-                    .build()
-                INSTANCE = instance
-                instance
+                        .addMigrations(
+                            MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+                            MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+                            MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
+                            MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18,
+                            MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
+                            MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28
+                        )
+                        .setQueryExecutor(Executors.newFixedThreadPool(4))
+                        .setTransactionExecutor(Executors.newSingleThreadExecutor())
+                        .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+                        .fallbackToDestructiveMigration()
+                        .fallbackToDestructiveMigrationOnDowngrade()
+                        .build()
+                    INSTANCE = instance
+                    instance
+                }
             }
         }
 

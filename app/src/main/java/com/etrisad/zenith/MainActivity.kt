@@ -1,6 +1,7 @@
 package com.etrisad.zenith
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -125,5 +126,17 @@ class MainActivity : ComponentActivity() {
         if (pkg != null) {
             initialPackageName = pkg
         }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val uiMode = newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        val uiModeStr = when (uiMode) {
+            Configuration.UI_MODE_NIGHT_YES -> "DARK"
+            Configuration.UI_MODE_NIGHT_NO -> "LIGHT"
+            else -> "UNDEFINED"
+        }
+        android.util.Log.d("ZenithDB", "CONFIG_CHANGED: uiMode=$uiModeStr orientation=${newConfig.orientation} locale=${newConfig.locale} fontScale=${newConfig.fontScale} density=${newConfig.densityDpi}")
+        com.etrisad.zenith.data.local.database.DbLogBuffer.d("ZenithDB", "CONFIG_CHANGED: uiMode=$uiModeStr orientation=${newConfig.orientation} locale=${newConfig.locale} fontScale=${newConfig.fontScale} density=${newConfig.densityDpi}")
     }
 }
