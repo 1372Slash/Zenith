@@ -24,6 +24,13 @@
     <img src="https://img.shields.io/github/v/release/1372Slash/Zenith?label=Download%20Zenith&style=for-the-badge&color=6750A4&logo=android&logoColor=white">
   </a>
   <br>
+  <a href="https://apt.izzysoft.de/fdroid/index/apk/com.etrisad.zenith">
+    <img src="https://img.shields.io/badge/IzzyOnDroid-Download-blue?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyIDJMMyA5djExaDE4VjlMMTIgNHptMCAxMy41bC03LjUtNy41aDE1TDExIDE3LjV6IiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPg==&logoColor=white">
+  </a>
+  <a href="https://www.openapk.net/zenith/com.etrisad.zenith/">
+    <img src="https://img.shields.io/badge/OpenAPK-Download-green?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTExLjUgMEgwdjI0aDEzLjV2LTFIMXYtMjJoMTAuNVYwek0xMi41IDExaDEydiEybC0xMCAxMC0yLTIgOC04SDUuNXYyaDEwLjVMMTIuNSAxMXoiIGZpbGw9IndoaXRlIi8+PC9zdmc+&logoColor=white">
+  </a>
+  <br>
   <a href="https://ko-fi.com/1372slash">
     <img src="https://img.shields.io/badge/Support%20me%20on%20Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white">
   </a>

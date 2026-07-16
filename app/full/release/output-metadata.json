@@ -11,9 +11,9 @@
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 11,
-      "versionName": "1.5.7",
-      "outputFile": "Zenith-full-1.5.7.apk"
+      "versionCode": 12,
+      "versionName": "1.5.8",
+      "outputFile": "Zenith-full-1.5.8.apk"
     }
   ],
   "elementType": "File",
@@ -22,14 +22,14 @@
       "minApi": 28,
       "maxApi": 30,
       "baselineProfiles": [
-        "baselineProfiles/1/Zenith-full-1.5.7.dm"
+        "baselineProfiles/1/Zenith-full-1.5.8.dm"
       ]
     },
     {
       "minApi": 31,
       "maxApi": 2147483647,
       "baselineProfiles": [
-        "baselineProfiles/0/Zenith-full-1.5.7.dm"
+        "baselineProfiles/0/Zenith-full-1.5.8.dm"
       ]
     }
   ],

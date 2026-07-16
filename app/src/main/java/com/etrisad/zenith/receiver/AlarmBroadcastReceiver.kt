@@ -315,8 +315,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 )
                 alarmManager.cancel(pendingIntent)
                 pendingIntent.cancel()
-                // Also stop that alarm's own repeat/usage-check cycle, otherwise it
-                // keeps re-firing every 5 minutes even after being "cancelled".
                 cancelReTrigger(context, alarmTime)
                 cancelUsageCheck(context, alarmTime)
             } else {
@@ -394,11 +392,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
 
             val triggerAtMillis = System.currentTimeMillis() + (snoozeDurationMinutes * 60_000L)
             setExactAlarm(context, triggerAtMillis, pendingIntent)
-
-            // A snooze replaces the "nag every 5 min" safety net for this alarm — otherwise
-            // the earlier scheduleReTrigger() call (from the fire/retrigger that led to this
-            // snooze) is still pending and can fire the alarm again *before* the snooze
-            // duration is up.
             cancelReTrigger(context, alarmTime)
         }
 
