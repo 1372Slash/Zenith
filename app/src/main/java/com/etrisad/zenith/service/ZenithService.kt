@@ -1037,6 +1037,10 @@ class ZenithService : AccessibilityService() {
             if (actualTargetPackage == InterceptOverlayManager.lastKickedPackage && System.currentTimeMillis() - InterceptOverlayManager.lastKickTime < 500) {
                 return
             }
+            if (actualTargetPackage == InterceptOverlayManager.lastClosedPackage && System.currentTimeMillis() - InterceptOverlayManager.lastClosedTime < 2000) {
+                Log.d("Zenith_HPC", "Skipping overlay for recently closed package: $actualTargetPackage")
+                return
+            }
 
             var shield = currentShieldCache?.takeIf { it.packageName == actualTargetPackage } ?: SharedMonitoringState.allShieldsCache[actualTargetPackage]
 

@@ -664,6 +664,8 @@ class OverlayActionHandler(
         val now = System.currentTimeMillis()
         InterceptOverlayManager.lastKickTime = now
         InterceptOverlayManager.lastKickedPackage = targetPackageName
+        InterceptOverlayManager.lastClosedPackage = targetPackageName
+        InterceptOverlayManager.lastClosedTime = now
 
         scope.launch {
             val s = SharedMonitoringState.allShieldsCache[targetPackageName]
@@ -737,6 +739,8 @@ class OverlayActionHandler(
                     val now = System.currentTimeMillis()
                     InterceptOverlayManager.lastKickTime = now
                     InterceptOverlayManager.lastKickedPackage = packageName
+                    InterceptOverlayManager.lastClosedPackage = packageName
+                    InterceptOverlayManager.lastClosedTime = now
                     if (WebsiteRepository.isWebsitePackageName(packageName)) {
                         quitWebsite()
                     } else {
@@ -762,6 +766,8 @@ class OverlayActionHandler(
                     val now = System.currentTimeMillis()
                     InterceptOverlayManager.lastKickTime = now
                     InterceptOverlayManager.lastKickedPackage = packageName
+                    InterceptOverlayManager.lastClosedPackage = packageName
+                    InterceptOverlayManager.lastClosedTime = now
                     if (WebsiteRepository.isWebsitePackageName(packageName)) {
                         quitWebsite()
                     } else {
@@ -815,6 +821,8 @@ class OverlayActionHandler(
                     val now = System.currentTimeMillis()
                     InterceptOverlayManager.lastKickTime = now
                     InterceptOverlayManager.lastKickedPackage = packageName
+                    InterceptOverlayManager.lastClosedPackage = packageName
+                    InterceptOverlayManager.lastClosedTime = now
                     if (WebsiteRepository.isWebsitePackageName(packageName)) {
                         quitWebsite()
                     } else {
