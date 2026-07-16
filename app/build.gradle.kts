@@ -73,6 +73,11 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+configurations.configureEach {
+    exclude(group = "io.opencensus", module = "opencensus-api")
+    exclude(group = "io.opencensus", module = "opencensus-proto")
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
