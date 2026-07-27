@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Timer
@@ -65,6 +66,19 @@ fun ScheduleOverlay(
     val currentSchedule by produceState(initialValue = schedule) {
         value = shieldRepository.allSchedules.first().find { it.id == schedule.id } ?: schedule
     }
+
+    val linkedGoal by produceState(initialValue = null as com.etrisad.zenith.data.local.entity.ShieldEntity?) {
+        val goalPkg = currentSchedule.linkedGoalPackageName ?: return@produceState
+        val shields = shieldRepository.allShields.first()
+        value = shields.find { it.packageName == goalPkg && it.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL }
+    }
+
+    val goalProgress by produceState(initialValue = 1f, currentSchedule.linkedGoalPackageName) {
+        val goalPkg = currentSchedule.linkedGoalPackageName ?: run { value = 1f; return@produceState }
+        shieldRepository.getSingleGoalProgress(goalPkg).collect { value = it }
+    }
+
+    val isGoalLocked = currentSchedule.linkedGoalPackageName != null && goalProgress < 1f
 
     val currentTotalGlobalUsageTodayState = produceState(
         initialValue = totalGlobalUsageToday,
@@ -231,7 +245,10 @@ fun ScheduleOverlay(
                     }
                 },
                 isWebsite = isWebsite,
-                packageName = packageName
+                packageName = packageName,
+                isGoalLocked = isGoalLocked,
+                goalProgress = goalProgress,
+                linkedGoal = linkedGoal
             )
         } else {
             PortraitScheduleLayout(
@@ -260,7 +277,10 @@ fun ScheduleOverlay(
                     }
                 },
                 isWebsite = isWebsite,
-                packageName = packageName
+                packageName = packageName,
+                isGoalLocked = isGoalLocked,
+                goalProgress = goalProgress,
+                linkedGoal = linkedGoal
             )
         }
     }
@@ -282,7 +302,10 @@ fun PortraitScheduleLayout(
     onAllowUse: (Int) -> Unit,
     onCloseApp: () -> Unit,
     isWebsite: Boolean = false,
-    packageName: String = ""
+    packageName: String = "",
+    isGoalLocked: Boolean = false,
+    goalProgress: Float = 1f,
+    linkedGoal: com.etrisad.zenith.data.local.entity.ShieldEntity? = null
 ) {
     Column(
         modifier = Modifier
@@ -349,16 +372,67 @@ fun PortraitScheduleLayout(
                     fontWeight = FontWeight.Bold
                 )
 
-                val modeText = if (schedule.mode == ScheduleMode.BLOCK)
-                    "This app is blocked by your schedule."
-                else "Only selected apps are allowed during this schedule."
+                if (isGoalLocked) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Outlined.Flag,
+                            null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.tertiary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Goal-Locked by: ${linkedGoal?.appName ?: "Unknown Goal"}",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val animatedGoalProgress by animateFloatAsState(
+                        targetValue = goalProgress.coerceIn(0f, 1f),
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
+                        label = "goalProgress"
+                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "Goal Progress: ${(goalProgress * 100).toInt()}%",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearWavyProgressIndicator(
+                            progress = { animatedGoalProgress },
+                            modifier = Modifier
+                                .fillMaxWidth(0.7f)
+                                .height(8.dp),
+                            color = MaterialTheme.colorScheme.tertiary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Complete the linked goal to unlock this app.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else {
+                    val modeText = if (schedule.mode == ScheduleMode.BLOCK)
+                        "This app is blocked by your schedule."
+                    else "Only selected apps are allowed during this schedule."
 
-                Text(
-                    text = modeText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
+                    Text(
+                        text = modeText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
 
             Row(
@@ -440,7 +514,10 @@ fun LandscapeScheduleLayout(
     onAllowUse: (Int) -> Unit,
     onCloseApp: () -> Unit,
     isWebsite: Boolean = false,
-    packageName: String = ""
+    packageName: String = "",
+    isGoalLocked: Boolean = false,
+    goalProgress: Float = 1f,
+    linkedGoal: com.etrisad.zenith.data.local.entity.ShieldEntity? = null
 ) {
     Column(
         modifier = modifier.then(
@@ -533,16 +610,36 @@ fun LandscapeScheduleLayout(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                val modeText = if (schedule.mode == ScheduleMode.BLOCK)
-                    "This app is blocked by your schedule."
-                else "Only selected apps are allowed during this schedule."
+                if (isGoalLocked) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                        Icon(Icons.Outlined.Flag, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.tertiary)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Goal-Locked: ${linkedGoal?.appName ?: "Unknown"}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Progress: ${(goalProgress * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                } else {
+                    val modeText = if (schedule.mode == ScheduleMode.BLOCK)
+                        "This app is blocked by your schedule."
+                    else "Only selected apps are allowed during this schedule."
 
-                Text(
-                    text = modeText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
+                    Text(
+                        text = modeText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -588,7 +685,40 @@ fun LandscapeScheduleLayout(
                 verticalArrangement = Arrangement.Center
             ) {
                 Spacer(modifier = Modifier.weight(1f))
-                if (!isEmergencyUnlocked) {
+                if (isGoalLocked) {
+                    Text(
+                        text = "Goal Not Completed",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val animatedGP by animateFloatAsState(
+                        targetValue = goalProgress.coerceIn(0f, 1f),
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
+                        label = "landscapeGoalProgress"
+                    )
+                    LinearWavyProgressIndicator(
+                        progress = { animatedGP },
+                        modifier = Modifier
+                            .fillMaxWidth(0.6f)
+                            .height(6.dp),
+                        color = MaterialTheme.colorScheme.tertiary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Complete the linked goal to unlock",
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (schedule.emergencyUseCount > 0) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        EmergencyButton(onEmergencyUse = onEmergencyClick, onHoldingChange = onEmergencyHoldingChange)
+                    }
+                } else if (!isEmergencyUnlocked) {
                     Text(
                         text = if (schedule.mode == ScheduleMode.BLOCK) "Blocked by Schedule" else "Not on Allow-list",
                         style = MaterialTheme.typography.titleMedium,

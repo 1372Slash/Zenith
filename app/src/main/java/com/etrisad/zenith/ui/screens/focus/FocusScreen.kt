@@ -245,8 +245,8 @@ fun FocusScreen(
                 uiState = uiState,
                 editingSchedule = uiState.editingSchedule,
                 onDismiss = { viewModel.closeScheduleSettings() },
-                onSave = { name, start, end, mode, maxEmergency, intercept ->
-                    viewModel.saveSchedule(name, start, end, mode, maxEmergency, intercept)
+                onSave = { name, start, end, mode, maxEmergency, intercept, linkedGoal ->
+                    viewModel.saveSchedule(name, start, end, mode, maxEmergency, intercept, linkedGoal)
                 },
                 onEditApps = {
                     viewModel.openSchedulePicker(resetSelection = false)

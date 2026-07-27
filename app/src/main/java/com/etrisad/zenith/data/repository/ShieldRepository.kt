@@ -320,6 +320,20 @@ class ShieldRepository(
         return (tier.bonusUses - prefs.incentiveBonusUsesUsed).coerceAtLeast(0)
     }
 
+    fun getSingleGoalProgress(packageName: String): Flow<Float> {
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        return combine(
+            allShields,
+            dailyUsageDao.getUsagesForDateFlow(today)
+        ) { shields, usages ->
+            val goal = shields.find { it.packageName == packageName && it.type == FocusType.GOAL }
+            if (goal == null) return@combine 1f
+            val usage = usages.find { it.packageName == packageName }?.usageTimeMillis ?: 0L
+            val target = goal.timeLimitMinutes * 60000L
+            if (target > 0) (usage.toDouble() / target).coerceAtMost(1.0).toFloat() else 1f
+        }
+    }
+
     fun getIncentiveGoalProgress(): Flow<Float> {
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         return combine(

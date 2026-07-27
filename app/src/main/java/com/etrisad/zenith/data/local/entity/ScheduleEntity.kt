@@ -23,5 +23,6 @@ data class ScheduleEntity(
     val isActive: Boolean = true,
     val interceptNotifications: Boolean = false,
     val emergencyUseCount: Int = 0,
-    val maxEmergencyUses: Int = 3
+    val maxEmergencyUses: Int = 3,
+    val linkedGoalPackageName: String? = null
 )

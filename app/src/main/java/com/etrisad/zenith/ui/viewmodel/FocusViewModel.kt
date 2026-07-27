@@ -281,7 +281,9 @@ class FocusViewModel(
                     installedApps
                         .filter { app ->
                             val isSystem = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                            !isSystem || app.packageName in whitelist
+                            val isWhitelisted = app.packageName in whitelist
+                            if (isWhitelisted) false
+                            else !isSystem
                         }
                         .filter { it.packageName != context.packageName }
                         .map {
@@ -508,7 +510,8 @@ class FocusViewModel(
         endTime: String,
         mode: ScheduleMode,
         maxEmergencyUses: Int = 3,
-        interceptNotifications: Boolean = false
+        interceptNotifications: Boolean = false,
+        linkedGoalPackageName: String? = null
     ) {
         val packageNames = _uiState.value.selectedAppsForSchedule.toList()
         if (packageNames.isEmpty()) return
@@ -524,7 +527,8 @@ class FocusViewModel(
                     mode = mode,
                     interceptNotifications = interceptNotifications,
                     emergencyUseCount = editing.emergencyUseCount,
-                    maxEmergencyUses = maxEmergencyUses
+                    maxEmergencyUses = maxEmergencyUses,
+                    linkedGoalPackageName = linkedGoalPackageName
                 )
             } else {
                 ScheduleEntity(
@@ -535,7 +539,8 @@ class FocusViewModel(
                     mode = mode,
                     interceptNotifications = interceptNotifications,
                     emergencyUseCount = maxEmergencyUses,
-                    maxEmergencyUses = maxEmergencyUses
+                    maxEmergencyUses = maxEmergencyUses,
+                    linkedGoalPackageName = linkedGoalPackageName
                 )
             }
 
