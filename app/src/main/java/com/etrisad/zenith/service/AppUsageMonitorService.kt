@@ -100,6 +100,8 @@ class AppUsageMonitorService : Service() {
     private var baseGlobalUsageAtSessionStart = 0L
     @Volatile
     private var cachedTotalGlobalUsage = 0L
+    @Volatile
+    private var lastGlobalUsageCacheTime = 0L
 
     private val notificationManager by lazy { getSystemService(NotificationManager::class.java) }
 
@@ -395,6 +397,7 @@ class AppUsageMonitorService : Service() {
             lastUsageFetchTime = 0L
             cachedTotalUsage = 0L
             cachedTotalGlobalUsage = 0L
+            lastGlobalUsageCacheTime = 0L
             currentShieldCache = null
 
             val currentTime = System.currentTimeMillis()
@@ -1505,6 +1508,7 @@ class AppUsageMonitorService : Service() {
             lastUsageFetchTime = 0L
             cachedTotalUsage = 0L
             cachedTotalGlobalUsage = 0L
+            lastGlobalUsageCacheTime = 0L
             currentShieldCache = null
 
             sessionStartTime = currentTime
@@ -1677,13 +1681,14 @@ class AppUsageMonitorService : Service() {
 
         var updatedShield = shield
         if (shield.emergencyUseCount < shield.maxEmergencyUses && rechargeDurationMillis > 0) {
-            val timeSinceLastRecharge = currentTime - shield.lastEmergencyRechargeTimestamp
+            val effectiveLastRecharge = if (shield.lastEmergencyRechargeTimestamp == 0L) currentTime else shield.lastEmergencyRechargeTimestamp
+            val timeSinceLastRecharge = currentTime - effectiveLastRecharge
             if (timeSinceLastRecharge >= rechargeDurationMillis) {
                 val chargesToAdd = (timeSinceLastRecharge / rechargeDurationMillis).toInt()
                 val newCount = (shield.emergencyUseCount + chargesToAdd).coerceAtMost(shield.maxEmergencyUses)
                 updatedShield = updatedShield.copy(
                     emergencyUseCount = newCount,
-                    lastEmergencyRechargeTimestamp = shield.lastEmergencyRechargeTimestamp + (chargesToAdd * rechargeDurationMillis)
+                    lastEmergencyRechargeTimestamp = effectiveLastRecharge + (chargesToAdd * rechargeDurationMillis)
                 )
             }
         }
@@ -1998,8 +2003,15 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun getTotalGlobalUsageToday(): Long {
-        if (cachedTotalGlobalUsage > 0) return cachedTotalGlobalUsage
-        return getSystemGlobalUsageToday()
+        val currentTime = System.currentTimeMillis()
+        val cacheDuration = (SharedMonitoringState.performanceConfig.usageStatsCacheMs / 2).coerceIn(15000L, 600000L)
+        if (cachedTotalGlobalUsage > 0 && currentTime - lastGlobalUsageCacheTime < cacheDuration) {
+            return cachedTotalGlobalUsage
+        }
+        val result = getSystemGlobalUsageToday()
+        cachedTotalGlobalUsage = result
+        lastGlobalUsageCacheTime = currentTime
+        return result
     }
 
     private fun getSystemGlobalUsageToday(): Long {
@@ -2115,7 +2127,7 @@ class AppUsageMonitorService : Service() {
         val cfg = SharedMonitoringState.performanceConfig
         val cacheDuration = cfg.usageStatsCacheMs.coerceIn(60000L, 3600000L)
         
-        if ((currentTime - lastUsageCacheTime < cacheDuration || currentTime - SharedMonitoringState.lastDailyUsageFetchTime < cacheDuration) && SharedMonitoringState.dailyUsageCache.isNotEmpty()) {
+        if ((currentTime - lastUsageCacheTime < cacheDuration && currentTime - SharedMonitoringState.lastDailyUsageFetchTime < cacheDuration) && SharedMonitoringState.dailyUsageCache.isNotEmpty()) {
             return
         }
 

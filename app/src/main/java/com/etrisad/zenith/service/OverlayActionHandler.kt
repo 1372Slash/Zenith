@@ -107,12 +107,13 @@ class OverlayActionHandler(
         var updated = existing
         val rechargeDurationMillis = (SharedMonitoringState.currentPreferences?.emergencyRechargeDurationMinutes ?: 60) * 60 * 1000L
         if (updated.emergencyUseCount < updated.maxEmergencyUses && rechargeDurationMillis > 0) {
-            val timeSinceLastRecharge = currentTime - updated.lastEmergencyRechargeTimestamp
+            val effectiveLastRecharge = if (updated.lastEmergencyRechargeTimestamp == 0L) currentTime else updated.lastEmergencyRechargeTimestamp
+            val timeSinceLastRecharge = currentTime - effectiveLastRecharge
             if (timeSinceLastRecharge >= rechargeDurationMillis) {
                 val chargesToAdd = (timeSinceLastRecharge / rechargeDurationMillis).toInt()
                 updated = updated.copy(
                     emergencyUseCount = (updated.emergencyUseCount + chargesToAdd).coerceAtMost(updated.maxEmergencyUses),
-                    lastEmergencyRechargeTimestamp = updated.lastEmergencyRechargeTimestamp + (chargesToAdd * rechargeDurationMillis)
+                    lastEmergencyRechargeTimestamp = effectiveLastRecharge + (chargesToAdd * rechargeDurationMillis)
                 )
             }
         }

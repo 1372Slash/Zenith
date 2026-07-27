@@ -281,7 +281,7 @@ class FocusViewModel(
                     installedApps
                         .filter { app ->
                             val isSystem = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                            !isSystem || app.packageName !in whitelist
+                            !isSystem || app.packageName in whitelist
                         }
                         .filter { it.packageName != context.packageName }
                         .map {

@@ -1197,7 +1197,7 @@ class ZenithService : AccessibilityService() {
     private fun getTotalGlobalUsageToday(): Long {
         val currentTime = System.currentTimeMillis()
         val cfg = SharedMonitoringState.performanceConfig
-        val cacheDuration = (cfg.usageStatsCacheMs / 2).coerceIn(15000L, 1800000L)
+        val cacheDuration = (cfg.usageStatsCacheMs / 2).coerceIn(15000L, 60000L)
         
         if (currentTime - lastGlobalUsageCacheTime < cacheDuration) {
             return cachedTotalGlobalUsage
