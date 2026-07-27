@@ -39,7 +39,7 @@ class AppGoalOverlayActivity : ComponentActivity() {
 
         val packageList = intent.getStringArrayListExtra(EXTRA_PACKAGE_NAMES) ?: arrayListOf()
         if (packageList.isEmpty()) {
-            finish()
+            finishAndRemoveTask()
             return
         }
         
@@ -85,7 +85,7 @@ class AppGoalOverlayActivity : ComponentActivity() {
                                 val intent = WebsiteRepository.createLaunchIntent(url)
                                 withContext(Dispatchers.Main) {
                                     startActivity(intent)
-                                    finish()
+                                    finishAndRemoveTask()
                                 }
                             }
                         } else {
@@ -93,7 +93,7 @@ class AppGoalOverlayActivity : ComponentActivity() {
                             if (launchIntent != null) {
                                 startActivity(launchIntent)
                             }
-                            finish()
+                            finishAndRemoveTask()
                         }
                     },
                     onSnooze = {
@@ -110,10 +110,10 @@ class AppGoalOverlayActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        finish()
+                        finishAndRemoveTask()
                     },
                     onHangUp = {
-                        finish()
+                        finishAndRemoveTask()
                     }
                 )
             }

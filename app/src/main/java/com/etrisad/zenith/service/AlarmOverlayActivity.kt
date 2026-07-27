@@ -297,7 +297,7 @@ class AlarmOverlayActivity : ComponentActivity() {
         }
         wakeLock?.release()
         wakeLock = null
-        finish()
+        finishAndRemoveTask()
     }
 
     override fun onDestroy() {
