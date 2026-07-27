@@ -64,7 +64,8 @@ fun DeveloperSettings(
     onTestUsageGlimpse: () -> Unit,
     onTestGoalCallerDelayed: () -> Unit,
     onTestAlarmOverlay: () -> Unit,
-    onShowDbLogViewer: () -> Unit = {}
+    onShowDbLogViewer: () -> Unit = {},
+    onShowOverlayLogViewer: () -> Unit = {}
 ) {
     var showAppPickerForStreak by remember { mutableStateOf(false) }
     var showAppPickerForUsage by remember { mutableStateOf(false) }
@@ -156,12 +157,23 @@ fun DeveloperSettings(
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+            PreferenceCategory(title = "Logs")
+
             SettingsActionItem(
                 title = "DB Log Viewer",
                 summary = "View database and goal/shield operation logs in real-time",
                 onClick = onShowDbLogViewer,
                 icon = Icons.Outlined.BugReport,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+            SettingsActionItem(
+                title = "Overlay Log Viewer",
+                summary = "View overlay show/hide lifecycle and detection logs in real-time",
+                onClick = onShowOverlayLogViewer,
+                icon = Icons.Outlined.Visibility,
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
             )
 

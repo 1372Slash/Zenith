@@ -21,6 +21,7 @@ import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.local.entity.ShieldEntity
+import com.etrisad.zenith.data.local.database.OverlayLogBuffer
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
@@ -346,6 +347,7 @@ class ZenithService : AccessibilityService() {
                     val realPkg = queryCurrentForegroundApp()
                     if (realPkg != null && realPkg != lastForegroundApp && !InterceptOverlayManager.isSystemUiPackage(realPkg) && !isKeyboardApp(realPkg)) {
                         Log.d("ZenithAS", "Monitoring job detected package shift: $lastForegroundApp -> $realPkg")
+                        OverlayLogBuffer.d("Monitor", "Stale detection: $lastForegroundApp -> $realPkg")
                         lastForegroundApp = realPkg
                         AppStateHolder.foregroundApp.value = realPkg
                         packageChangeFlow.tryEmit(realPkg)
@@ -361,6 +363,7 @@ class ZenithService : AccessibilityService() {
                             }
                             sessionUsageOverlayManager.updateForegroundApp(currentPkg)
                         } else if (!InterceptOverlayManager.isShowing) {
+                            OverlayLogBuffer.d("Monitor", "Session check for: $currentPkg (stale may cause duplicate)")
                             sessionUsageOverlayManager.ensureSessionHUDActive(currentPkg)
                             try {
                                 checkAndHandleSessionExpiry(currentPkg, currentShieldCache)
@@ -676,11 +679,13 @@ class ZenithService : AccessibilityService() {
     }
 
     private suspend fun handlePackageChange(currentApp: String) {
+        OverlayLogBuffer.d("Zenith_HPC", "handlePackageChange: $currentApp (lfga=$lastForegroundApp, isShowing=${InterceptOverlayManager.isShowing})")
         val actualPkg = withContext(Dispatchers.Main) {
             rootInActiveWindow?.packageName?.toString()
         }
         if (actualPkg != null && actualPkg != currentApp && actualPkg != packageName && 
             !InterceptOverlayManager.isSystemUiPackage(actualPkg) && !isKeyboardApp(actualPkg)) {
+            OverlayLogBuffer.d("Zenith_HPC", "EARLY RETURN: pkg mismatch (actual=$actualPkg, current=$currentApp)")
             return
         }
         if (com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(currentApp) &&
@@ -760,6 +765,7 @@ class ZenithService : AccessibilityService() {
         }
 
         Log.d("Zenith_HPC", "Non-bypass: $currentApp (lfga was $lastForegroundApp, updating)")
+        OverlayLogBuffer.d("Zenith_HPC", "Non-bypass: $currentApp -> checking blocking")
         lastForegroundApp = currentApp
 
         val shield = SharedMonitoringState.allShieldsCache[currentApp]
@@ -1131,6 +1137,7 @@ class ZenithService : AccessibilityService() {
                     }
                 }
 
+                OverlayLogBuffer.d("Zenith_HPC", "SHOWING overlay for: $actualTargetPackage (shield=${effectiveShield?.type})")
                 overlayActionHandler.showShieldOverlay(
                     targetPackageName = actualTargetPackage,
                     shield = effectiveShield,

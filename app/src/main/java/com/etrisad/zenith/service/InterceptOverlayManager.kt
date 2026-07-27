@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.Gravity
+import com.etrisad.zenith.data.local.database.OverlayLogBuffer
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.layout.Box
@@ -140,6 +141,7 @@ class InterceptOverlayManager(
             }
 
             if (overlayView != null) {
+                OverlayLogBuffer.d("OverlayMgr", "updateOverlayContent: $packageName")
                 updateOverlayContent(packageName, appName, shield, totalUsageToday, totalGlobalUsageToday, delayDurationSeconds, onAllowUse, onCloseApp, onGoalDismiss)
                 isShowing = true
                 currentPackage = packageName
@@ -149,6 +151,8 @@ class InterceptOverlayManager(
             isShowing = true
             currentPackage = packageName
         }
+
+        OverlayLogBuffer.d("OverlayMgr", "showOverlay: $packageName (shield=$shield)")
 
         recreateOverlay = {
             showOverlay(packageName, appName, shield, totalUsageToday, totalGlobalUsageToday, delayDurationSeconds, onAllowUse, onCloseApp, onGoalDismiss)
@@ -214,6 +218,7 @@ class InterceptOverlayManager(
             }
         }
         setupAndAddView(composeView, lOwner)
+        OverlayLogBuffer.d("OverlayMgr", "showOverlay SUCCESS: $packageName")
     }
 
     fun showScheduleOverlay(
@@ -632,13 +637,23 @@ class InterceptOverlayManager(
     }
 
     fun checkAndHide(newPackage: String) {
-        if (!isShowing) return
+        if (!isShowing) {
+            OverlayLogBuffer.d("OverlayMgr", "checkAndHide SKIP (not showing): $newPackage")
+            return
+        }
         
         val target = currentPackage ?: return
 
-        if (newPackage == target || newPackage == context.packageName) return
-        if (SYSTEM_UI_PACKAGES.contains(newPackage) || isKeyboardApp(newPackage)) return
+        if (newPackage == target || newPackage == context.packageName) {
+            OverlayLogBuffer.d("OverlayMgr", "checkAndHide SKIP (same pkg): $newPackage")
+            return
+        }
+        if (SYSTEM_UI_PACKAGES.contains(newPackage) || isKeyboardApp(newPackage)) {
+            OverlayLogBuffer.d("OverlayMgr", "checkAndHide SKIP (sys/keyboard): $newPackage")
+            return
+        }
 
+        OverlayLogBuffer.d("OverlayMgr", "checkAndHide: $target -> $newPackage")
         hideOverlay()
     }
 
@@ -648,12 +663,18 @@ class InterceptOverlayManager(
         val vStoreToClear: ViewModelStore?
 
         synchronized(this) {
-            if (!isShowing && overlayView == null) return
+            if (!isShowing && overlayView == null) {
+                OverlayLogBuffer.d("OverlayMgr", "hideOverlay SKIP (already hidden)")
+                return
+            }
 
+            val hiddenPkg = currentPackage
             isShowing = false
-            lastHiddenPackage = currentPackage
+            lastHiddenPackage = hiddenPkg
             lastHiddenTime = System.currentTimeMillis()
             currentPackage = null
+
+            OverlayLogBuffer.d("OverlayMgr", "hideOverlay: $hiddenPkg")
 
             resumeMedia()
 

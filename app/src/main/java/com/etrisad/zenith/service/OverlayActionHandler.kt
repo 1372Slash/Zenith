@@ -4,6 +4,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.util.Log
 import android.view.inputmethod.InputMethodManager
+import com.etrisad.zenith.data.local.database.OverlayLogBuffer
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
@@ -151,6 +152,7 @@ class OverlayActionHandler(
             Log.d("Zenith_SCREEN", "showShieldOverlay($targetPackageName) SKIPPED: screen OFF")
             return
         }
+        OverlayLogBuffer.d("OverlayAct", "showShieldOverlay: $targetPackageName (shield type=${shield.type})")
         val shieldWithTimestamp = processDelayForShield(shield, isMindfulGateway, delayDurationSeconds, targetPackageName)
 
         if (targetPackageName.startsWith("zenith-web:")) {
@@ -668,6 +670,7 @@ class OverlayActionHandler(
         InterceptOverlayManager.lastKickedPackage = targetPackageName
         InterceptOverlayManager.lastClosedPackage = targetPackageName
         InterceptOverlayManager.lastClosedTime = now
+        OverlayLogBuffer.d("OverlayAct", "handleCloseApp: $targetPackageName")
 
         scope.launch {
             val s = SharedMonitoringState.allShieldsCache[targetPackageName]

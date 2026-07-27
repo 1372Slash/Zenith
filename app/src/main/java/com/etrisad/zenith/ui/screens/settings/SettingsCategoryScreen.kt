@@ -57,6 +57,7 @@ fun SettingsCategoryScreen(
     var showUpdateSheet by remember { mutableStateOf(false) }
     var showRestoreSheet by remember { mutableStateOf(false) }
     var showDbLogSheet by remember { mutableStateOf(false) }
+    var showOverlayLogSheet by remember { mutableStateOf(false) }
     var latestRelease by remember { mutableStateOf<GitHubRelease?>(null) }
     var backupMetadata by remember { mutableStateOf<BackupUtils.BackupMetadata?>(null) }
     var pendingRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
@@ -399,7 +400,8 @@ fun SettingsCategoryScreen(
                             val intent = android.content.Intent(context, com.etrisad.zenith.service.AlarmOverlayActivity::class.java)
                             context.startActivity(intent)
                         },
-                        onShowDbLogViewer = { showDbLogSheet = true }
+                        onShowDbLogViewer = { showDbLogSheet = true },
+                        onShowOverlayLogViewer = { showOverlayLogSheet = true }
                     )
                 }
             }
@@ -484,6 +486,9 @@ fun SettingsCategoryScreen(
 
         if (showDbLogSheet) {
             DbLogBottomSheet(onDismiss = { showDbLogSheet = false })
+        }
+        if (showOverlayLogSheet) {
+            OverlayLogBottomSheet(onDismiss = { showOverlayLogSheet = false })
         }
     }
 }
