@@ -57,7 +57,7 @@ fun GoalSettingsBottomSheet(
     usageToday: Long,
     existingShield: ShieldEntity?,
     onDismiss: () -> Unit,
-    onSave: (Int, Boolean, Int, Boolean, Boolean, String?, LimitPeriod) -> Unit
+    onSave: (Int, Boolean, Int, Boolean, Boolean, String?, LimitPeriod, Boolean) -> Unit
 ) {
     val configuration = LocalConfiguration.current
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -82,6 +82,7 @@ fun GoalSettingsBottomSheet(
     var isGoalCallerEnabled by remember { mutableStateOf(existingShield?.isGoalCallerEnabled ?: false) }
     var isGoalCallerSoundEnabled by remember { mutableStateOf(existingShield?.isGoalCallerSoundEnabled ?: true) }
     var goalCallerSoundUri by remember { mutableStateOf(existingShield?.goalCallerSoundUri) }
+    var isHUDEnabled by remember { mutableStateOf(existingShield?.isHUDEnabled ?: true) }
 
     val ringtonePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
@@ -409,6 +410,19 @@ fun GoalSettingsBottomSheet(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
+                CardGroup(shape = middleShape, containerColor = containerColor) {
+                    SettingsToggle(
+                        title = "Floating HUD",
+                        description = "Show remaining time pill when app is open",
+                        checked = isHUDEnabled,
+                        onCheckedChange = { isHUDEnabled = it },
+                        icon = Icons.Outlined.Timer,
+                        shape = middleShape
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
                 CardGroup(
                     shape = if (isGoalCallerEnabled) middleShape else bottomShape,
                     containerColor = containerColor
@@ -623,7 +637,8 @@ fun GoalSettingsBottomSheet(
                             isGoalCallerEnabled,
                             isGoalCallerSoundEnabled,
                             goalCallerSoundUri,
-                            selectedPeriod
+                            selectedPeriod,
+                            isHUDEnabled
                         )
                         scope.launch {
                             sheetState.hide()

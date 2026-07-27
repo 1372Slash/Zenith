@@ -787,21 +787,23 @@ class ZenithService : AccessibilityService() {
         val isGoal = shield.type == FocusType.GOAL
         val remainingMinutes = (remainingMs / 60000).toInt().coerceAtLeast(1)
 
-        serviceScope.launch(Dispatchers.Main) {
-            sessionUsageOverlayManager.showHUD(
-                websitePkg,
-                if (isGoal) shield.timeLimitMinutes else remainingMinutes,
-                prefs.sessionUsageOverlaySize,
-                prefs.sessionUsageOverlayOpacity,
-                isGoal = isGoal,
-                initialSeconds = if (isGoal) (getTotalUsageToday(websitePkg) / 1000).toInt() else 0,
-                onSessionEnd = {
-                    allowedApps.remove(websitePkg)
-                    overlayActionHandler.restoreBrowserFromWebsite()
+        if (!isGoal || shield.isHUDEnabled) {
+            serviceScope.launch(Dispatchers.Main) {
+                sessionUsageOverlayManager.showHUD(
+                    websitePkg,
+                    if (isGoal) shield.timeLimitMinutes else remainingMinutes,
+                    prefs.sessionUsageOverlaySize,
+                    prefs.sessionUsageOverlayOpacity,
+                    isGoal = isGoal,
+                    initialSeconds = if (isGoal) (getTotalUsageToday(websitePkg) / 1000).toInt() else 0,
+                    onSessionEnd = {
+                        allowedApps.remove(websitePkg)
+                        overlayActionHandler.restoreBrowserFromWebsite()
+                    }
+                )
+                if (isGoal) {
+                    sessionUsageOverlayManager.updateHUDUsage(websitePkg, getTotalUsageToday(websitePkg))
                 }
-            )
-            if (isGoal) {
-                sessionUsageOverlayManager.updateHUDUsage(websitePkg, getTotalUsageToday(websitePkg))
             }
         }
     }
@@ -1070,6 +1072,10 @@ class ZenithService : AccessibilityService() {
             val isMindfulGateway = shield == null && prefs.mindfulGatewayEnabled && !shouldBypassBlocking(actualTargetPackage)
             val appName = shield?.appName ?: overlayActionHandler.getAppName(actualTargetPackage)
             val effectiveShield = if (isMindfulGateway) overlayActionHandler.getMindfulShield(actualTargetPackage, appName) else shield
+
+            if (effectiveShield?.type == FocusType.GOAL && SharedMonitoringState.notifiedGoals.contains(actualTargetPackage)) {
+                return
+            }
 
             if (effectiveShield != null && (!InterceptOverlayManager.isShowing || InterceptOverlayManager.currentPackage != actualTargetPackage)) {
                 if (isWebsite && effectiveShield.isAutoQuitEnabled) {

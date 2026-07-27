@@ -24,7 +24,8 @@ class ShieldOperationsManager(
         limitPeriod: LimitPeriod = LimitPeriod.DAILY,
         type: FocusType = FocusType.SHIELD,
         scope: CoroutineScope,
-        onComplete: () -> Unit
+        onComplete: () -> Unit,
+        isHUDEnabled: Boolean = true
     ) {
         scope.launch {
             try {
@@ -42,7 +43,8 @@ class ShieldOperationsManager(
                     isAutoQuitEnabled = isAutoQuitEnabled, maxUsesPerPeriod = maxUsesPerPeriod,
                     refreshPeriodMinutes = refreshPeriodMinutes, goalReminderPeriodMinutes = goalReminderPeriodMinutes,
                     isDelayAppEnabled = isDelayAppEnabled, isGoalCallerEnabled = isGoalCallerEnabled,
-                    isGoalCallerSoundEnabled = isGoalCallerSoundEnabled, goalCallerSoundUri = goalCallerSoundUri
+                    isGoalCallerSoundEnabled = isGoalCallerSoundEnabled, goalCallerSoundUri = goalCallerSoundUri,
+                    isHUDEnabled = isHUDEnabled
                 ) ?: ShieldEntity(
                     packageName = packageName, appName = appName, type = type,
                     timeLimitMinutes = timeLimitMinutes, limitPeriod = limitPeriod,
@@ -51,7 +53,8 @@ class ShieldOperationsManager(
                     isAutoQuitEnabled = isAutoQuitEnabled, maxUsesPerPeriod = maxUsesPerPeriod,
                     refreshPeriodMinutes = refreshPeriodMinutes, goalReminderPeriodMinutes = goalReminderPeriodMinutes,
                     isDelayAppEnabled = isDelayAppEnabled, isGoalCallerEnabled = isGoalCallerEnabled,
-                    isGoalCallerSoundEnabled = isGoalCallerSoundEnabled, goalCallerSoundUri = goalCallerSoundUri
+                    isGoalCallerSoundEnabled = isGoalCallerSoundEnabled, goalCallerSoundUri = goalCallerSoundUri,
+                    isHUDEnabled = isHUDEnabled
                 )
                 shieldRepository.insertShield(shield)
                 android.util.Log.d("ZenithGoalShield", "OPS_SAVE_DONE: pkg=$packageName type=$type - insertShield called, cache will update via Flow")

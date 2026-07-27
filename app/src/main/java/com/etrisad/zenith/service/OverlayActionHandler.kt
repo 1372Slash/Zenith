@@ -194,7 +194,8 @@ class OverlayActionHandler(
                         }
                         val currentUsage = getTotalUsageTodayFn()
 
-                        if (!(isGoal && (currentUsage >= limitMillis || SharedMonitoringState.notifiedGoals.contains(targetPackageName)) && limitMillis > 0)) {
+                        val shouldShowHUD = !(isGoal && (!shieldWithTimestamp.isHUDEnabled || ((currentUsage >= limitMillis || SharedMonitoringState.notifiedGoals.contains(targetPackageName)) && limitMillis > 0)))
+                        if (shouldShowHUD) {
                             val duration = shieldWithTimestamp.timeLimitMinutes
                             val currentUsageSeconds = (currentUsage / 1000).toInt()
 
@@ -334,7 +335,8 @@ class OverlayActionHandler(
                 }
                 val currentUsage = getTotalUsageTodayFn()
 
-                if (!(isGoal && (currentUsage >= limitMillis || SharedMonitoringState.notifiedGoals.contains(targetPackageName)) && limitMillis > 0)) {
+                val shouldShowHUD = !(isGoal && (!shieldWithTimestamp.isHUDEnabled || ((currentUsage >= limitMillis || SharedMonitoringState.notifiedGoals.contains(targetPackageName)) && limitMillis > 0)))
+                if (shouldShowHUD) {
                     val duration = if (isGoal) shieldWithTimestamp.timeLimitMinutes else minutes
                     val currentUsageSeconds = (currentUsage / 1000).toInt()
 

@@ -1446,14 +1446,16 @@ class HomeViewModel(
         isStrictModeEnabled: Boolean, isAutoQuitEnabled: Boolean, maxUsesPerPeriod: Int, refreshPeriodMinutes: Int,
         goalReminderPeriodMinutes: Int, isDelayAppEnabled: Boolean, isGoalCallerEnabled: Boolean = false,
         isGoalCallerSoundEnabled: Boolean = true, goalCallerSoundUri: String? = null,
-        limitPeriod: LimitPeriod = LimitPeriod.DAILY
+        limitPeriod: LimitPeriod = LimitPeriod.DAILY,
+        isHUDEnabled: Boolean = true
     ) {
         val type = _appDetailUiState.value.type ?: FocusType.SHIELD
         shieldOperationsManager.saveFocus(
             packageName, appName, timeLimitMinutes, maxEmergencyUses, isRemindersEnabled,
             isStrictModeEnabled, isAutoQuitEnabled, maxUsesPerPeriod, refreshPeriodMinutes,
             goalReminderPeriodMinutes, isDelayAppEnabled, isGoalCallerEnabled, isGoalCallerSoundEnabled,
-            goalCallerSoundUri, limitPeriod, type, viewModelScope, ::closeSettingsSheet
+            goalCallerSoundUri, limitPeriod, type, viewModelScope, ::closeSettingsSheet,
+            isHUDEnabled = isHUDEnabled
         )
     }
 

@@ -584,7 +584,8 @@ class FocusViewModel(
         isGoalCallerSoundEnabled: Boolean = true,
         goalCallerSoundUri: String? = null,
         limitPeriod: LimitPeriod = LimitPeriod.DAILY,
-        url: String? = null
+        url: String? = null,
+        isHUDEnabled: Boolean = true
     ) {
         val type = _uiState.value.selectedFocusType
         val isWebsite = WebsiteRepository.isWebsitePackageName(packageName)
@@ -631,6 +632,7 @@ class FocusViewModel(
                     isGoalCallerEnabled = isGoalCallerEnabled,
                     isGoalCallerSoundEnabled = isGoalCallerSoundEnabled,
                     goalCallerSoundUri = goalCallerSoundUri,
+                    isHUDEnabled = isHUDEnabled,
                     currentStreak = if (shouldResetStreak) 0 else (existing?.currentStreak ?: 0),
                     bestStreak = existing?.bestStreak ?: 0,
                     lastStreakUpdateTimestamp = existing?.lastStreakUpdateTimestamp ?: 0L,

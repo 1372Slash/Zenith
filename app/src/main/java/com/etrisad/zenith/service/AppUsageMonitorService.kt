@@ -1344,7 +1344,8 @@ class AppUsageMonitorService : Service() {
                 }
                 val currentUsage = if (isGoal) getTotalUsageToday(currentApp) else cachedTotalUsage
 
-                if (!(isGoal && (currentUsage >= limitMillis || SharedMonitoringState.notifiedGoals.contains(currentApp)) && limitMillis > 0)) {
+                val shouldShowHUD = !(isGoal && (!(sh?.isHUDEnabled ?: true) || ((currentUsage >= limitMillis || SharedMonitoringState.notifiedGoals.contains(currentApp)) && limitMillis > 0)))
+                if (shouldShowHUD) {
                     val duration = if (isGoal) sh?.timeLimitMinutes ?: 0 else remainingMinutes
                     val currentUsageSeconds = (currentUsage / 1000).toInt()
                     withContext(Dispatchers.Main) {
@@ -1883,6 +1884,10 @@ class AppUsageMonitorService : Service() {
         val isMindfulGateway = shield == null && prefs.mindfulGatewayEnabled && !shouldBypassBlocking(actualTargetPackage)
         val appName = shield?.appName ?: overlayActionHandler.getAppName(actualTargetPackage)
         val effectiveShield = if (isMindfulGateway) overlayActionHandler.getMindfulShield(actualTargetPackage, appName) else shield
+
+        if (effectiveShield?.type == FocusType.GOAL && SharedMonitoringState.notifiedGoals.contains(actualTargetPackage)) {
+            return
+        }
 
         if (effectiveShield != null && !InterceptOverlayManager.isShowing) {
             if (effectiveShield.type == FocusType.GOAL && !isWebsite) {

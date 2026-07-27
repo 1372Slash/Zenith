@@ -52,6 +52,8 @@ data class ShieldEntity(
     val isPaused: Boolean = false,
     @androidx.room.ColumnInfo(defaultValue = "0")
     val pauseEndTimestamp: Long = 0L,
+    @androidx.room.ColumnInfo(defaultValue = "1")
+    val isHUDEnabled: Boolean = true,
     @androidx.room.ColumnInfo(defaultValue = "0")
     val isGoalCallerEnabled: Boolean = false,
     @androidx.room.ColumnInfo(defaultValue = "1")

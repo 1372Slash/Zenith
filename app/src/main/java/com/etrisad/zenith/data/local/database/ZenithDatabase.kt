@@ -32,7 +32,7 @@ import com.etrisad.zenith.data.local.Converters
         InterceptedNotificationEntity::class,
         WebsiteUsageEntity::class
     ],
-    version = 28,
+    version = 29,
     exportSchema = true,
     autoMigrations = [
         androidx.room.AutoMigration(from = 12, to = 13),
@@ -82,6 +82,14 @@ abstract class ZenithDatabase : RoomDatabase() {
                 } catch (_: Exception) {}
                 try {
                     db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_website_usage_date_domain` ON `website_usage` (`date`, `domain`)")
+                } catch (_: Exception) {}
+            }
+        }
+
+        private val MIGRATION_28_29 = object : Migration(28, 29) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN isHUDEnabled INTEGER NOT NULL DEFAULT 1")
                 } catch (_: Exception) {}
             }
         }
@@ -275,8 +283,8 @@ abstract class ZenithDatabase : RoomDatabase() {
         fun getDatabase(context: Context): ZenithDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: run {
-                    android.util.Log.d("ZenithDB", "Creating database instance (version=28, journal=WAL)")
-                    DbLogBuffer.d("ZenithDB", "Creating database instance (version=28, journal=WAL)")
+                    android.util.Log.d("ZenithDB", "Creating database instance (version=29, journal=WAL)")
+                    DbLogBuffer.d("ZenithDB", "Creating database instance (version=29, journal=WAL)")
                     val instance = Room.databaseBuilder(
                         context.applicationContext,
                         ZenithDatabase::class.java,
@@ -288,7 +296,7 @@ abstract class ZenithDatabase : RoomDatabase() {
                             MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
                             MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18,
                             MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
-                            MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28
+                            MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29
                         )
                         .setQueryExecutor(Executors.newFixedThreadPool(4))
                         .setTransactionExecutor(Executors.newSingleThreadExecutor())
