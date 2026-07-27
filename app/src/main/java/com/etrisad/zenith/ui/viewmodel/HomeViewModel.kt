@@ -1071,7 +1071,7 @@ class HomeViewModel(
                 android.util.Log.e("ZenithDB", "  $line")
                 DbLogBuffer.e("ZenithDB", "  $line")
             }
-            throw e
+            if (jobActive == false) throw e
         } catch (e: Exception) {
             android.util.Log.e("ZenithDB", "REFRESH_FAILED[$refreshId]: ${e::class.simpleName}: ${e.message}")
             DbLogBuffer.e("ZenithDB", "REFRESH_FAILED[$refreshId]: ${e::class.simpleName}: ${e.message}")
@@ -1304,7 +1304,7 @@ class HomeViewModel(
     }
 
     private fun startRealTimeUpdates() {
-        val job = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val cal = Calendar.getInstance()
             var lastUpdateDay = cal.get(Calendar.DAY_OF_YEAR)
             var lastSanityCheck = 0L
@@ -1350,22 +1350,13 @@ class HomeViewModel(
                     }
                     delay(interval)
                 } catch (e: kotlinx.coroutines.CancellationException) {
-                    val scopeActive = viewModelScope.isActive
-                    android.util.Log.w("HomeVM", "Real-time update coroutine cancelled, scopeActive=$scopeActive")
-                    DbLogBuffer.w("ZenithDB", "REALTIME_CANCELLED: scopeActive=$scopeActive message=${e.message}")
-                    throw e
+                    val jobActive = kotlin.coroutines.coroutineContext[kotlinx.coroutines.Job]?.isActive ?: false
+                    if (!jobActive) throw e
+                    DbLogBuffer.w("ZenithDB", "REALTIME_CANCELLED: scopeActive=true message=${e.message}")
+                    delay(5000)
                 } catch (e: Exception) {
                     android.util.Log.e("HomeVM", "Real-time update failed: ${e.message}")
                     delay(5000)
-                }
-            }
-        }
-        job.invokeOnCompletion { cause ->
-            if (cause is kotlinx.coroutines.CancellationException && viewModelScope.isActive) {
-                DbLogBuffer.w("ZenithDB", "REALTIME_RESTART: rescheduling real-time updates")
-                viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                    kotlinx.coroutines.delay(5000)
-                    startRealTimeUpdates()
                 }
             }
         }
