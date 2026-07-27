@@ -76,6 +76,10 @@ class InterceptOverlayManager(
         var lastClosedPackage: String? = null
         @Volatile
         var lastClosedTime: Long = 0L
+        @Volatile
+        var lastHiddenPackage: String? = null
+        @Volatile
+        var lastHiddenTime: Long = 0L
         private var audioFocusRequest: AudioFocusRequest? = null
         private var focusRequestJob: kotlinx.coroutines.Job? = null
         private val afChangeListener = AudioManager.OnAudioFocusChangeListener { }
@@ -647,6 +651,8 @@ class InterceptOverlayManager(
             if (!isShowing && overlayView == null) return
 
             isShowing = false
+            lastHiddenPackage = currentPackage
+            lastHiddenTime = System.currentTimeMillis()
             currentPackage = null
 
             resumeMedia()

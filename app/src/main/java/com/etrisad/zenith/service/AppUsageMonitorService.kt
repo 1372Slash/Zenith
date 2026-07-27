@@ -1851,6 +1851,7 @@ class AppUsageMonitorService : Service() {
 
         if (actualTargetPackage == InterceptOverlayManager.lastKickedPackage && System.currentTimeMillis() - InterceptOverlayManager.lastKickTime < 500) return
         if (actualTargetPackage == InterceptOverlayManager.lastClosedPackage && System.currentTimeMillis() - InterceptOverlayManager.lastClosedTime < 2000) return
+        if (actualTargetPackage == InterceptOverlayManager.lastHiddenPackage && System.currentTimeMillis() - InterceptOverlayManager.lastHiddenTime < 2000) return
 
         val currentForeground = getForegroundApp() ?: lastForegroundApp
         if (!isWebsite && actualTargetPackage != currentForeground && actualTargetPackage != lastForegroundApp) return
