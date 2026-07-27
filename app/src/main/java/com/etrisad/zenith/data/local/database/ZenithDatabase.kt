@@ -32,7 +32,7 @@ import com.etrisad.zenith.data.local.Converters
         InterceptedNotificationEntity::class,
         WebsiteUsageEntity::class
     ],
-    version = 29,
+    version = 30,
     exportSchema = true,
     autoMigrations = [
         androidx.room.AutoMigration(from = 12, to = 13),
@@ -90,6 +90,88 @@ abstract class ZenithDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 try {
                     db.execSQL("ALTER TABLE shields ADD COLUMN isHUDEnabled INTEGER NOT NULL DEFAULT 1")
+                } catch (_: Exception) {}
+            }
+        }
+
+        private val MIGRATION_29_30 = object : Migration(29, 30) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                try {
+                    db.execSQL("""
+                        CREATE TABLE IF NOT EXISTS `shields_new` (
+                            `packageName` TEXT NOT NULL,
+                            `appName` TEXT NOT NULL,
+                            `type` TEXT NOT NULL,
+                            `timeLimitMinutes` INTEGER NOT NULL,
+                            `emergencyUseCount` INTEGER NOT NULL,
+                            `maxEmergencyUses` INTEGER NOT NULL,
+                            `isRemindersEnabled` INTEGER NOT NULL,
+                            `isStrictModeEnabled` INTEGER NOT NULL,
+                            `isAutoQuitEnabled` INTEGER NOT NULL,
+                            `remainingTimeMillis` INTEGER NOT NULL,
+                            `lastUsedTimestamp` INTEGER NOT NULL,
+                            `maxUsesPerPeriod` INTEGER NOT NULL,
+                            `refreshPeriodMinutes` INTEGER NOT NULL,
+                            `currentPeriodUses` INTEGER NOT NULL,
+                            `lastPeriodResetTimestamp` INTEGER NOT NULL,
+                            `lastEmergencyRechargeTimestamp` INTEGER NOT NULL,
+                            `goalReminderPeriodMinutes` INTEGER NOT NULL,
+                            `lastGoalReminderTimestamp` INTEGER NOT NULL DEFAULT 0,
+                            `isDelayAppEnabled` INTEGER NOT NULL,
+                            `lastDelayStartTimestamp` INTEGER NOT NULL,
+                            `currentStreak` INTEGER NOT NULL,
+                            `bestStreak` INTEGER NOT NULL,
+                            `lastStreakUpdateTimestamp` INTEGER NOT NULL,
+                            `lastSessionEndTimestamp` INTEGER NOT NULL DEFAULT 0,
+                            `isPaused` INTEGER NOT NULL DEFAULT 0,
+                            `pauseEndTimestamp` INTEGER NOT NULL DEFAULT 0,
+                            `isHUDEnabled` INTEGER NOT NULL DEFAULT 1,
+                            `isGoalCallerEnabled` INTEGER NOT NULL DEFAULT 0,
+                            `isGoalCallerSoundEnabled` INTEGER NOT NULL DEFAULT 1,
+                            `goalCallerSoundUri` TEXT,
+                            `limitPeriod` TEXT NOT NULL DEFAULT 'DAILY',
+                            `timeAdded` INTEGER NOT NULL DEFAULT 0,
+                            `isWebsite` INTEGER NOT NULL DEFAULT 0,
+                            `url` TEXT,
+                            PRIMARY KEY(`packageName`)
+                        )
+                    """.trimIndent())
+                    db.execSQL("""
+                        INSERT INTO `shields_new` (
+                            `packageName`, `appName`, `type`, `timeLimitMinutes`,
+                            `emergencyUseCount`, `maxEmergencyUses`, `isRemindersEnabled`,
+                            `isStrictModeEnabled`, `isAutoQuitEnabled`, `remainingTimeMillis`,
+                            `lastUsedTimestamp`, `maxUsesPerPeriod`, `refreshPeriodMinutes`,
+                            `currentPeriodUses`, `lastPeriodResetTimestamp`,
+                            `lastEmergencyRechargeTimestamp`, `goalReminderPeriodMinutes`,
+                            `lastGoalReminderTimestamp`, `isDelayAppEnabled`,
+                            `lastDelayStartTimestamp`, `currentStreak`, `bestStreak`,
+                            `lastStreakUpdateTimestamp`, `lastSessionEndTimestamp`,
+                            `isPaused`, `pauseEndTimestamp`,
+                            `isHUDEnabled`,
+                            `isGoalCallerEnabled`, `isGoalCallerSoundEnabled`,
+                            `goalCallerSoundUri`, `limitPeriod`, `timeAdded`,
+                            `isWebsite`, `url`
+                        ) SELECT
+                            `packageName`, `appName`, `type`, `timeLimitMinutes`,
+                            `emergencyUseCount`, `maxEmergencyUses`, `isRemindersEnabled`,
+                            `isStrictModeEnabled`, `isAutoQuitEnabled`, `remainingTimeMillis`,
+                            `lastUsedTimestamp`, `maxUsesPerPeriod`, `refreshPeriodMinutes`,
+                            `currentPeriodUses`, `lastPeriodResetTimestamp`,
+                            `lastEmergencyRechargeTimestamp`, `goalReminderPeriodMinutes`,
+                            `lastGoalReminderTimestamp`, `isDelayAppEnabled`,
+                            `lastDelayStartTimestamp`, `currentStreak`, `bestStreak`,
+                            `lastStreakUpdateTimestamp`, `lastSessionEndTimestamp`,
+                            `isPaused`, `pauseEndTimestamp`,
+                            1,
+                            `isGoalCallerEnabled`, `isGoalCallerSoundEnabled`,
+                            `goalCallerSoundUri`, `limitPeriod`, `timeAdded`,
+                            `isWebsite`, `url`
+                        FROM `shields`
+                    """.trimIndent())
+                    db.execSQL("DROP TABLE `shields`")
+                    db.execSQL("ALTER TABLE `shields_new` RENAME TO `shields`")
+                    db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shields_packageName` ON `shields` (`packageName`)")
                 } catch (_: Exception) {}
             }
         }
@@ -283,8 +365,8 @@ abstract class ZenithDatabase : RoomDatabase() {
         fun getDatabase(context: Context): ZenithDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: run {
-                    android.util.Log.d("ZenithDB", "Creating database instance (version=29, journal=WAL)")
-                    DbLogBuffer.d("ZenithDB", "Creating database instance (version=29, journal=WAL)")
+                    android.util.Log.d("ZenithDB", "Creating database instance (version=30, journal=WAL)")
+                    DbLogBuffer.d("ZenithDB", "Creating database instance (version=30, journal=WAL)")
                     val instance = Room.databaseBuilder(
                         context.applicationContext,
                         ZenithDatabase::class.java,
@@ -296,7 +378,7 @@ abstract class ZenithDatabase : RoomDatabase() {
                             MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
                             MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18,
                             MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
-                            MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29
+                            MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30
                         )
                         .setQueryExecutor(Executors.newFixedThreadPool(4))
                         .setTransactionExecutor(Executors.newSingleThreadExecutor())
