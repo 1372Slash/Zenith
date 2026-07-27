@@ -229,15 +229,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             return base + hour * 100 + minute
         }
 
-        private fun buildShowIntent(context: Context): PendingIntent {
-            val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-                ?: Intent(context, com.etrisad.zenith.MainActivity::class.java)
-            return PendingIntent.getActivity(
-                context, 0, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-        }
-
         fun hasExactAlarmPermission(context: Context): Boolean {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -292,7 +283,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             val triggerAtMillis = calculateTriggerMillis(alarmTime, days)
             Log.d("AlarmReceiver", "scheduleAlarm: $alarmTime at $triggerAtMillis (now=${System.currentTimeMillis()})")
 
-            setExactAlarm(context, triggerAtMillis, pendingIntent, useAlarmClock = true)
+            setExactAlarm(context, triggerAtMillis, pendingIntent)
         }
 
         fun cancelAlarm(context: Context) {
@@ -371,7 +362,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
 
             val triggerAtMillis = System.currentTimeMillis() + 60_000L
             Log.d("AlarmReceiver", "scheduleUsageCheck: $alarmTime +60s (requestCode=$requestCode)")
-            setExactAlarm(context, triggerAtMillis, pendingIntent, useAlarmClock = false)
+            setExactAlarm(context, triggerAtMillis, pendingIntent)
         }
 
         fun scheduleSnoozeAlarm(context: Context, alarmTime: String, snoozeDurationMinutes: Int, snoozeCount: Int) {
@@ -389,7 +380,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             )
 
             val triggerAtMillis = System.currentTimeMillis() + (snoozeDurationMinutes * 60_000L)
-            setExactAlarm(context, triggerAtMillis, pendingIntent, useAlarmClock = true)
+            setExactAlarm(context, triggerAtMillis, pendingIntent)
             cancelReTrigger(context, alarmTime)
         }
 
@@ -421,7 +412,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
 
             val triggerAtMillis = System.currentTimeMillis() + 300_000L
             Log.d("AlarmReceiver", "scheduleReTrigger: $alarmTime +5min (requestCode=$requestCode)")
-            setExactAlarm(context, triggerAtMillis, pendingIntent, useAlarmClock = false)
+            setExactAlarm(context, triggerAtMillis, pendingIntent)
         }
 
         fun cancelReTrigger(context: Context, alarmTime: String) {
@@ -438,20 +429,8 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             pendingIntent.cancel()
         }
 
-        private fun setExactAlarm(context: Context, triggerAtMillis: Long, pendingIntent: PendingIntent, useAlarmClock: Boolean = false) {
+        private fun setExactAlarm(context: Context, triggerAtMillis: Long, pendingIntent: PendingIntent) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-
-            if (useAlarmClock) {
-                try {
-                    val showIntent = buildShowIntent(context)
-                    val alarmClockInfo = AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent)
-                    alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
-                    Log.d("AlarmReceiver", "setExactAlarm: setAlarmClock at $triggerAtMillis")
-                    return
-                } catch (e: Exception) {
-                    Log.e("AlarmReceiver", "setAlarmClock failed, falling back: ${e.message}")
-                }
-            }
 
             try {
                 alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
