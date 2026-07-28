@@ -24,5 +24,7 @@ data class ScheduleEntity(
     val interceptNotifications: Boolean = false,
     val emergencyUseCount: Int = 0,
     val maxEmergencyUses: Int = 3,
-    val linkedGoalPackageName: String? = null
+    val linkedGoalPackageName: String? = null,
+    @androidx.room.ColumnInfo(defaultValue = "1,2,3,4,5,6,7")
+    val activeDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7)
 )

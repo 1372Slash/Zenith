@@ -511,7 +511,8 @@ class FocusViewModel(
         mode: ScheduleMode,
         maxEmergencyUses: Int = 3,
         interceptNotifications: Boolean = false,
-        linkedGoalPackageName: String? = null
+        linkedGoalPackageName: String? = null,
+        activeDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7)
     ) {
         val packageNames = _uiState.value.selectedAppsForSchedule.toList()
         if (packageNames.isEmpty()) return
@@ -528,7 +529,8 @@ class FocusViewModel(
                     interceptNotifications = interceptNotifications,
                     emergencyUseCount = editing.emergencyUseCount,
                     maxEmergencyUses = maxEmergencyUses,
-                    linkedGoalPackageName = linkedGoalPackageName
+                    linkedGoalPackageName = linkedGoalPackageName,
+                    activeDays = activeDays
                 )
             } else {
                 ScheduleEntity(
@@ -540,7 +542,8 @@ class FocusViewModel(
                     interceptNotifications = interceptNotifications,
                     emergencyUseCount = maxEmergencyUses,
                     maxEmergencyUses = maxEmergencyUses,
-                    linkedGoalPackageName = linkedGoalPackageName
+                    linkedGoalPackageName = linkedGoalPackageName,
+                    activeDays = activeDays
                 )
             }
 
@@ -590,7 +593,8 @@ class FocusViewModel(
         goalCallerSoundUri: String? = null,
         limitPeriod: LimitPeriod = LimitPeriod.DAILY,
         url: String? = null,
-        isHUDEnabled: Boolean = true
+        isHUDEnabled: Boolean = true,
+        activeDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7)
     ) {
         val type = _uiState.value.selectedFocusType
         val isWebsite = WebsiteRepository.isWebsitePackageName(packageName)
@@ -647,7 +651,8 @@ class FocusViewModel(
                     lastDelayStartTimestamp = existing?.lastDelayStartTimestamp ?: 0L,
                     timeAdded = existing?.timeAdded?.takeIf { it > 0L } ?: System.currentTimeMillis(),
                     isWebsite = isWebsite,
-                    url = websiteUrl
+                    url = websiteUrl,
+                    activeDays = activeDays
                 )
                 shieldRepository.insertShield(shield); com.etrisad.zenith.service.SharedMonitoringState.notifiedGoals.remove(packageName)
                 android.util.Log.d("ZenithGoalShield", "SAVE_DONE: pkg=$packageName type=$type - insertShield called, cache will update via Flow")

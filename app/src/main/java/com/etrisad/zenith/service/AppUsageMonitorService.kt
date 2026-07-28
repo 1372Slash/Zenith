@@ -312,7 +312,8 @@ class AppUsageMonitorService : Service() {
                                 startMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 0) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0),
                                 endMinutes = (endParts.getOrNull(0)?.toIntOrNull() ?: 0) * 60 + (endParts.getOrNull(1)?.toIntOrNull() ?: 0),
                                 mode = s.mode,
-                                packageNames = s.packageNames.toSet()
+                                packageNames = s.packageNames.toSet(),
+                                activeDays = s.activeDays
                             )
                         }
                     }
@@ -833,7 +834,8 @@ class AppUsageMonitorService : Service() {
                         startMinutes = (startParts.getOrNull(0)?.toIntOrNull() ?: 0) * 60 + (startParts.getOrNull(1)?.toIntOrNull() ?: 0),
                         endMinutes = (endParts.getOrNull(0)?.toIntOrNull() ?: 0) * 60 + (endParts.getOrNull(1)?.toIntOrNull() ?: 0),
                         mode = s.mode,
-                        packageNames = s.packageNames.toSet()
+                        packageNames = s.packageNames.toSet(),
+                        activeDays = s.activeDays
                     )
                 }
                 SharedMonitoringState.updateRestrictedPackages()
@@ -1882,6 +1884,11 @@ class AppUsageMonitorService : Service() {
             }
             actualTargetPackage = targetPackageName
             shield = SharedMonitoringState.allShieldsCache[targetPackageName]
+        }
+        if (shield != null) {
+            val todayCal = java.util.Calendar.getInstance()
+            val currentDayOfWeek = todayCal.get(java.util.Calendar.DAY_OF_WEEK)
+            if (currentDayOfWeek !in shield.activeDays) return
         }
         val activeAllowedUntil = allowedApps[actualTargetPackage] ?: 0L
         if (System.currentTimeMillis() < activeAllowedUntil) return

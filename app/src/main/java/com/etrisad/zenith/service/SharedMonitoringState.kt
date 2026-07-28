@@ -14,7 +14,8 @@ class ParsedSchedule(
     val startMinutes: Int,
     val endMinutes: Int,
     val mode: ScheduleMode,
-    val packageNames: Set<String>
+    val packageNames: Set<String>,
+    val activeDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7)
 )
 
 object SharedMonitoringState {

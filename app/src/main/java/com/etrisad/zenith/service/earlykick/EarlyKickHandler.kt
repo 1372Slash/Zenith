@@ -70,6 +70,9 @@ class EarlyKickHandler(
         if (shield == null || shield.type == FocusType.GOAL || isAppPaused(shield) || isOverlayShowing) {
             return EarlyKickDecision(false)
         }
+        val todayCal = java.util.Calendar.getInstance()
+        val currentDayOfWeek = todayCal.get(java.util.Calendar.DAY_OF_WEEK)
+        if (currentDayOfWeek !in shield.activeDays) return EarlyKickDecision(false)
 
         val limitMillis = shield.timeLimitMinutes * 60 * 1000L
         val actualRemaining = (limitMillis - cachedTotalUsage).coerceAtLeast(0L)
@@ -112,6 +115,9 @@ class EarlyKickHandler(
         if (websiteShield == null || websiteShield.type == FocusType.GOAL || isAppPaused(websiteShield)) {
             return EarlyKickDecision(false)
         }
+        val todayCal = java.util.Calendar.getInstance()
+        val currentDayOfWeek = todayCal.get(java.util.Calendar.DAY_OF_WEEK)
+        if (currentDayOfWeek !in websiteShield.activeDays) return EarlyKickDecision(false)
 
         val websiteLimitMillis = websiteShield.timeLimitMinutes * 60 * 1000L
         val websiteUsage = getWebsiteUsageToday(websiteDomain)

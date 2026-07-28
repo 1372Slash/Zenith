@@ -65,5 +65,7 @@ data class ShieldEntity(
     val timeAdded: Long = System.currentTimeMillis(),
     @androidx.room.ColumnInfo(defaultValue = "0")
     val isWebsite: Boolean = false,
-    val url: String? = null
+    val url: String? = null,
+    @androidx.room.ColumnInfo(defaultValue = "1,2,3,4,5,6,7")
+    val activeDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7)
 )

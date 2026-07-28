@@ -14,6 +14,16 @@ class Converters {
     }
 
     @TypeConverter
+    fun fromIntSet(set: Set<Int>): String {
+        return set.joinToString(",")
+    }
+
+    @TypeConverter
+    fun toIntSet(data: String): Set<Int> {
+        return if (data.isEmpty()) emptySet() else data.split(",").map { it.toInt() }.toSet()
+    }
+
+    @TypeConverter
     fun fromFocusType(type: com.etrisad.zenith.data.local.entity.FocusType): String {
         return type.name
     }

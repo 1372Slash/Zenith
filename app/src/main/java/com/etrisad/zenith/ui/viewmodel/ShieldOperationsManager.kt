@@ -25,7 +25,8 @@ class ShieldOperationsManager(
         type: FocusType = FocusType.SHIELD,
         scope: CoroutineScope,
         onComplete: () -> Unit,
-        isHUDEnabled: Boolean = true
+        isHUDEnabled: Boolean = true,
+        activeDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7)
     ) {
         scope.launch {
             try {
@@ -44,7 +45,8 @@ class ShieldOperationsManager(
                     refreshPeriodMinutes = refreshPeriodMinutes, goalReminderPeriodMinutes = goalReminderPeriodMinutes,
                     isDelayAppEnabled = isDelayAppEnabled, isGoalCallerEnabled = isGoalCallerEnabled,
                     isGoalCallerSoundEnabled = isGoalCallerSoundEnabled, goalCallerSoundUri = goalCallerSoundUri,
-                    isHUDEnabled = isHUDEnabled
+                    isHUDEnabled = isHUDEnabled,
+                    activeDays = activeDays
                 ) ?: ShieldEntity(
                     packageName = packageName, appName = appName, type = type,
                     timeLimitMinutes = timeLimitMinutes, limitPeriod = limitPeriod,
@@ -54,7 +56,8 @@ class ShieldOperationsManager(
                     refreshPeriodMinutes = refreshPeriodMinutes, goalReminderPeriodMinutes = goalReminderPeriodMinutes,
                     isDelayAppEnabled = isDelayAppEnabled, isGoalCallerEnabled = isGoalCallerEnabled,
                     isGoalCallerSoundEnabled = isGoalCallerSoundEnabled, goalCallerSoundUri = goalCallerSoundUri,
-                    isHUDEnabled = isHUDEnabled
+                    isHUDEnabled = isHUDEnabled,
+                    activeDays = activeDays
                 )
                 shieldRepository.insertShield(shield)
                 android.util.Log.d("ZenithGoalShield", "OPS_SAVE_DONE: pkg=$packageName type=$type - insertShield called, cache will update via Flow")

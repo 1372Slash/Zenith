@@ -44,7 +44,7 @@ fun ScheduleSettingsBottomSheet(
     uiState: FocusUiState,
     editingSchedule: ScheduleEntity? = null,
     onDismiss: () -> Unit,
-    onSave: (String, String, String, ScheduleMode, Int, Boolean, String?) -> Unit,
+    onSave: (String, String, String, ScheduleMode, Int, Boolean, String?, Set<Int>) -> Unit,
     onEditApps: () -> Unit
 ) {
     val configuration = LocalConfiguration.current
@@ -65,6 +65,7 @@ fun ScheduleSettingsBottomSheet(
     var maxEmergencyUses by remember { mutableStateOf(editingSchedule?.maxEmergencyUses?.toString() ?: "3") }
     var interceptNotifications by remember { mutableStateOf(editingSchedule?.interceptNotifications ?: false) }
     var linkedGoalPackageName by remember { mutableStateOf(editingSchedule?.linkedGoalPackageName ?: "") }
+    var activeDays by remember { mutableStateOf(editingSchedule?.activeDays ?: setOf(1, 2, 3, 4, 5, 6, 7)) }
 
     val initialStart = editingSchedule?.startTime?.split(":")?.map { it.toInt() } ?: listOf(9, 0)
     val initialEnd = editingSchedule?.endTime?.split(":")?.map { it.toInt() } ?: listOf(17, 0)
@@ -273,6 +274,38 @@ fun ScheduleSettingsBottomSheet(
                             }
                         }
 
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        val dayNames = listOf("S", "M", "T", "W", "T", "F", "S")
+                        ZenithGroupedButton(size = ZenithButtonSize.Small) {
+                            dayNames.forEachIndexed { index, dayLabel ->
+                                val dayNum = index + 1
+                                val isSelected = dayNum in activeDays
+                                val pShape = when (index) {
+                                    0 -> RoundedCornerShape(bottomStart = 28.dp, topStart = 8.dp, topEnd = 8.dp, bottomEnd = 8.dp)
+                                    dayNames.lastIndex -> RoundedCornerShape(bottomEnd = 28.dp, topEnd = 8.dp, topStart = 8.dp, bottomStart = 8.dp)
+                                    else -> RoundedCornerShape(8.dp)
+                                }
+                                ZenithButtonWeighted(
+                                    onClick = {
+                                        activeDays = if (isSelected) {
+                                            if (activeDays.size > 1) activeDays - dayNum else activeDays
+                                        } else {
+                                            activeDays + dayNum
+                                        }
+                                    },
+                                    text = dayLabel,
+                                    type = if (isSelected) ZenithButtonType.Filled else ZenithButtonType.Tonal,
+                                    size = ZenithButtonSize.Small,
+                                    selected = isSelected,
+                                    shape = pShape,
+                                    isFirst = index == 0,
+                                    isLast = index == dayNames.lastIndex,
+                                    contentScaleEnabled = false
+                                )
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(24.dp))
 
                         PreferenceCategory(title = "Limits")
@@ -448,7 +481,7 @@ fun ScheduleSettingsBottomSheet(
             ) {
                 ZenithButton(
                     onClick = {
-                        scope.launch {
+                            scope.launch {
                             val startStr = String.format(
                                 currentLocale,
                                 "%02d:%02d",
@@ -462,7 +495,7 @@ fun ScheduleSettingsBottomSheet(
                                 endTimeState.minute
                             )
                             sheetState.hide()
-                            onSave(name, startStr, endStr, mode, maxEmergencyUses.toIntOrNull() ?: 3, interceptNotifications, linkedGoalPackageName.ifBlank { null })
+                            onSave(name, startStr, endStr, mode, maxEmergencyUses.toIntOrNull() ?: 3, interceptNotifications, linkedGoalPackageName.ifBlank { null }, activeDays)
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),

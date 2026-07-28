@@ -912,12 +912,18 @@ class OverlayActionHandler(
         val schedules = SharedMonitoringState.parsedSchedulesCache
         if (schedules.isNotEmpty()) {
             val now = System.currentTimeMillis()
+            val currentDayOfWeek = synchronized(reusableCalendar) {
+                reusableCalendar.timeInMillis = now
+                reusableCalendar.get(Calendar.DAY_OF_WEEK)
+            }
             val currentTotalMinutes = synchronized(reusableCalendar) {
                 reusableCalendar.timeInMillis = now
                 reusableCalendar.get(Calendar.HOUR_OF_DAY) * 60 + reusableCalendar.get(Calendar.MINUTE)
             }
 
             for (ps in schedules) {
+                if (currentDayOfWeek !in ps.activeDays) continue
+
                 val isInInterval = if (ps.startMinutes <= ps.endMinutes) {
                     currentTotalMinutes in ps.startMinutes..ps.endMinutes
                 } else {

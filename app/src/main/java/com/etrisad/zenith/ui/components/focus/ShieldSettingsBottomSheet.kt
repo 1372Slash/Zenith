@@ -54,7 +54,7 @@ fun ShieldSettingsBottomSheet(
     usageToday: Long,
     existingShield: ShieldEntity?,
     onDismiss: () -> Unit,
-    onSave: (Int, Int, Boolean, Boolean, Boolean, Int, Int, Boolean, LimitPeriod) -> Unit
+    onSave: (Int, Int, Boolean, Boolean, Boolean, Int, Int, Boolean, LimitPeriod, Set<Int>) -> Unit
 ) {
     val configuration = LocalConfiguration.current
     val context = LocalContext.current
@@ -80,6 +80,7 @@ fun ShieldSettingsBottomSheet(
     var maxUses by remember { mutableStateOf(existingShield?.maxUsesPerPeriod?.toString() ?: "5") }
     var refreshPeriodMinutes by remember { mutableIntStateOf(existingShield?.refreshPeriodMinutes ?: 60) }
     var selectedPeriod by remember { mutableStateOf(existingShield?.limitPeriod ?: LimitPeriod.DAILY) }
+    var activeDays by remember { mutableStateOf(existingShield?.activeDays ?: setOf(1, 2, 3, 4, 5, 6, 7)) }
 
     val isPreventEdit = remember(existingShield, usageToday) {
         if (existingShield != null) {
@@ -214,8 +215,6 @@ fun ShieldSettingsBottomSheet(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(4.dp))
-
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -304,11 +303,7 @@ fun ShieldSettingsBottomSheet(
                             }
                             presets.forEachIndexed { index, preset ->
                                 val isPresetSelected = ((hourText.toIntOrNull() ?: 0) * 60 + (minuteText.toIntOrNull() ?: 0)) == preset
-                                val pShape = when(index) {
-                                    0 -> RoundedCornerShape(bottomStart = 28.dp, topStart = 8.dp, topEnd = 8.dp, bottomEnd = 8.dp)
-                                    presets.lastIndex -> RoundedCornerShape(bottomEnd = 28.dp, topEnd = 8.dp, topStart = 8.dp, bottomStart = 8.dp)
-                                    else -> RoundedCornerShape(8.dp)
-                                }
+                                val pShape = RoundedCornerShape(8.dp)
                                 ZenithButtonWeighted(
                                     onClick = {
                                         hourText = (preset / 60).toString()
@@ -325,6 +320,38 @@ fun ShieldSettingsBottomSheet(
                                 )
                             }
                         }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                val dayNames = listOf("S", "M", "T", "W", "T", "F", "S")
+                ZenithGroupedButton(size = ZenithButtonSize.Small) {
+                    dayNames.forEachIndexed { index, dayLabel ->
+                        val dayNum = index + 1
+                        val isSelected = dayNum in activeDays
+                        val pShape = when (index) {
+                            0 -> RoundedCornerShape(bottomStart = 28.dp, topStart = 8.dp, topEnd = 8.dp, bottomEnd = 8.dp)
+                            dayNames.lastIndex -> RoundedCornerShape(bottomEnd = 28.dp, topEnd = 8.dp, topStart = 8.dp, bottomStart = 8.dp)
+                            else -> RoundedCornerShape(8.dp)
+                        }
+                        ZenithButtonWeighted(
+                            onClick = {
+                                activeDays = if (isSelected) {
+                                    if (activeDays.size > 1) activeDays - dayNum else activeDays
+                                } else {
+                                    activeDays + dayNum
+                                }
+                            },
+                            text = dayLabel,
+                            type = if (isSelected) ZenithButtonType.Filled else ZenithButtonType.Tonal,
+                            size = ZenithButtonSize.Small,
+                            selected = isSelected,
+                            shape = pShape,
+                            isFirst = index == 0,
+                            isLast = index == dayNames.lastIndex,
+                            contentScaleEnabled = false
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -590,14 +617,15 @@ fun ShieldSettingsBottomSheet(
                     val remindersChanged = remindersEnabled != existingShield.isRemindersEnabled
                     val refreshChanged = refreshPeriodMinutes != existingShield.refreshPeriodMinutes
                     val periodChanged = selectedPeriod != existingShield.limitPeriod
+                    val daysChanged = activeDays != existingShield.activeDays
 
                     val hasPositiveChange = limitDecreased || usesDecreased || emergencyDecreased ||
-                            strictEnabled || autoQuitEnabledNew || delayEnabledNew || remindersEnabledNew
+                            strictEnabled || autoQuitEnabledNew || delayEnabledNew || remindersEnabledNew || daysChanged
 
                     val hasNegativeChange = limitIncreased || usesIncreased || emergencyIncreased ||
                             strictDisabled || autoQuitDisabled || delayDisabled || (!remindersEnabledNew && remindersChanged)
 
-                    val hasAnyChange = hasPositiveChange || hasNegativeChange || remindersChanged || refreshChanged || periodChanged
+                    val hasAnyChange = hasPositiveChange || hasNegativeChange || remindersChanged || refreshChanged || periodChanged || daysChanged
 
                     if (isPreventEdit) {
                         hasPositiveChange && !hasNegativeChange
@@ -677,7 +705,8 @@ fun ShieldSettingsBottomSheet(
                             currentMaxUses,
                             refreshPeriodMinutes,
                             isDelayAppEnabled,
-                            selectedPeriod
+                            selectedPeriod,
+                            activeDays
                         )
                         scope.launch {
                             sheetState.hide()

@@ -419,7 +419,7 @@ fun AppDetailScreen(
                 usageToday = uiState.todayUsage,
                 existingShield = existingShield,
                 onDismiss = { viewModel.closeSettingsSheet() },
-                onSave = { limit, emergency, reminders, strict, autoQuit, maxUses, refresh, delayApp, period ->
+                onSave = { limit, emergency, reminders, strict, autoQuit, maxUses, refresh, delayApp, period, days ->
                     viewModel.saveFocus(
                         packageName = uiState.packageName,
                         appName = uiState.appName,
@@ -432,7 +432,8 @@ fun AppDetailScreen(
                         refreshPeriodMinutes = refresh,
                         goalReminderPeriodMinutes = 120,
                         isDelayAppEnabled = delayApp,
-                        limitPeriod = period
+                        limitPeriod = period,
+                        activeDays = days
                     )
                 }
             )

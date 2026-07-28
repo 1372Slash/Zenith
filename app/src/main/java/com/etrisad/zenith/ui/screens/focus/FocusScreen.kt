@@ -245,8 +245,8 @@ fun FocusScreen(
                 uiState = uiState,
                 editingSchedule = uiState.editingSchedule,
                 onDismiss = { viewModel.closeScheduleSettings() },
-                onSave = { name, start, end, mode, maxEmergency, intercept, linkedGoal ->
-                    viewModel.saveSchedule(name, start, end, mode, maxEmergency, intercept, linkedGoal)
+                onSave = { name, start, end, mode, maxEmergency, intercept, linkedGoal, days ->
+                    viewModel.saveSchedule(name, start, end, mode, maxEmergency, intercept, linkedGoal, days)
                 },
                 onEditApps = {
                     viewModel.openSchedulePicker(resetSelection = false)
@@ -304,7 +304,7 @@ fun FocusScreen(
                     usageToday = uiState.selectedAppUsageToday,
                     existingShield = existingShield,
                     onDismiss = { viewModel.closeSettingsSheet() },
-                    onSave = { limit, emergency, reminders, strict, autoQuit, maxUses, refresh, delayApp, period ->
+                    onSave = { limit, emergency, reminders, strict, autoQuit, maxUses, refresh, delayApp, period, days ->
                         viewModel.saveFocus(
                             packageName = appInfo.packageName,
                             appName = appInfo.appName,
@@ -317,7 +317,8 @@ fun FocusScreen(
                             refreshPeriodMinutes = refresh,
                             goalReminderPeriodMinutes = 120,
                             isDelayAppEnabled = delayApp,
-                            limitPeriod = period
+                            limitPeriod = period,
+                            activeDays = days
                         )
                     }
                 )
