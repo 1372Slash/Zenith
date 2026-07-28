@@ -143,7 +143,14 @@ fun GoalOverlay(
         backgroundAlpha = backgroundAlpha,
         isLandscape = isLandscape,
         showBedtimePill = true,
-        userPreferences = userPrefs
+        userPreferences = userPrefs,
+        onCloseApp = {
+            scope.launch {
+                showContent = false
+                delay(400)
+                currentOnGoalDismiss()
+            }
+        }
     ) { _ ->
         if (isLandscape) {
             LandscapeGoalLayout(

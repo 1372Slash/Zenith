@@ -186,7 +186,8 @@ class ZenithService : AccessibilityService() {
         val info = android.accessibilityservice.AccessibilityServiceInfo().apply {
             flags = android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
                     android.accessibilityservice.AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
-                    android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+                    android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+                    android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
             eventTypes = android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
                     android.view.accessibility.AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED or
                     android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
@@ -1539,6 +1540,20 @@ class ZenithService : AccessibilityService() {
             totalGlobalUsageToday = totalGlobalUsageToday,
             updateShieldCache = { updated -> currentShieldCache = updated }
         )
+    }
+
+    override fun onKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.keyCode == android.view.KeyEvent.KEYCODE_BACK &&
+            event.action == android.view.KeyEvent.ACTION_DOWN &&
+            InterceptOverlayManager.isShowing
+        ) {
+            serviceScope.launch(Dispatchers.Main) {
+                overlayManager.hideOverlay()
+                goToHomeScreen()
+            }
+            return true
+        }
+        return super.onKeyEvent(event)
     }
 
     override fun onInterrupt() {}

@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -14,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.toArgb
@@ -21,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.preferences.ThemeConfig
 import com.etrisad.zenith.data.preferences.UserPreferences
+import kotlinx.coroutines.launch
 
 @Composable
 fun InterceptBottomSheet(
@@ -40,6 +43,7 @@ fun InterceptBottomSheet(
     dragHandleBonusUsesLeft: Int = 0,
     sheetContentAlpha: Float = 1f,
     contentKey: Any? = Unit,
+    onCloseApp: () -> Unit = {},
     content: @Composable ColumnScope.(key: Any?) -> Unit
 ) {
     val isDark = when (userPreferences?.themeConfig) {
@@ -86,6 +90,11 @@ fun InterceptBottomSheet(
             else -> currentScheme
         }
     }
+
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+    val dragOffset = remember { Animatable(0f) }
+    val closeThresholdPx = with(density) { 120.dp.toPx() }
 
     MaterialTheme(colorScheme = paletteScheme) {
         Box(
@@ -146,13 +155,16 @@ fun InterceptBottomSheet(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .graphicsLayer {
+                                translationY = if (dragOffset.value > 0f) dragOffset.value else 0f
+                                alpha = sheetContentAlpha
+                            }
                             .then(
                                 if (maxHeightFraction != null || userPreferences?.overlayFullScreen == true)
                                     Modifier.weight(1f)
                                 else Modifier.wrapContentHeight()
                             )
-                            .imePadding()
-                            .graphicsLayer { alpha = sheetContentAlpha },
+                            .imePadding(),
                         shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = if (userPreferences?.overlayPaletteId == "monochrome") {
@@ -163,26 +175,85 @@ fun InterceptBottomSheet(
                         ),
                         elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
                     ) {
-                        Column(
-                            modifier = if (maxHeightFraction != null || userPreferences?.overlayFullScreen == true)
-                                Modifier.fillMaxSize()
-                            else Modifier.fillMaxWidth()
-                        ) {
-                            OverlayDragHandleWithIndicators(
-                                currentUses = if (isLandscape) null else dragHandleCurrentUses,
-                                maxUses = if (isLandscape) null else dragHandleMaxUses,
-                                emergencyCount = if (isLandscape) null else dragHandleEmergencyCount,
-                                isIncentiveLocked = if (isLandscape) false else dragHandleIsIncentiveLocked,
-                                incentiveTier = if (isLandscape) null else dragHandleIncentiveTier,
-                                bonusUsesLeft = if (isLandscape) 0 else dragHandleBonusUsesLeft
-                            )
-                            Box(
-                                modifier = Modifier.then(
-                                    if (maxHeightFraction != null || userPreferences?.overlayFullScreen == true)
-                                        Modifier.weight(1f)
-                                    else Modifier.wrapContentHeight()
-                                )
+                            Column(
+                                modifier = if (maxHeightFraction != null || userPreferences?.overlayFullScreen == true)
+                                    Modifier.fillMaxSize()
+                                else Modifier.fillMaxWidth()
                             ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .pointerInput(onCloseApp) {
+                                            detectVerticalDragGestures(
+                                                onDragStart = {
+                                                    scope.launch {
+                                                        dragOffset.snapTo(dragOffset.value)
+                                                    }
+                                                },
+                                                onVerticalDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    if (dragAmount > 0f) {
+                                                        scope.launch {
+                                                            dragOffset.snapTo(
+                                                                (dragOffset.value + dragAmount * 0.5f).coerceAtLeast(0f)
+                                                            )
+                                                        }
+                                                    }
+                                                },
+                                                onDragEnd = {
+                                                    if (dragOffset.value > closeThresholdPx) {
+                                                        scope.launch {
+                                                            dragOffset.animateTo(
+                                                                targetValue = closeThresholdPx * 5f,
+                                                                animationSpec = spring(
+                                                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                                                    stiffness = Spring.StiffnessMedium
+                                                                )
+                                                            )
+                                                            onCloseApp()
+                                                        }
+                                                    } else {
+                                                        scope.launch {
+                                                            dragOffset.animateTo(
+                                                                targetValue = 0f,
+                                                                animationSpec = spring(
+                                                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                                    stiffness = Spring.StiffnessMedium
+                                                                )
+                                                            )
+                                                        }
+                                                    }
+                                                },
+                                                onDragCancel = {
+                                                    scope.launch {
+                                                        dragOffset.animateTo(
+                                                            targetValue = 0f,
+                                                            animationSpec = spring(
+                                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                                stiffness = Spring.StiffnessMedium
+                                                            )
+                                                        )
+                                                    }
+                                                }
+                                            )
+                                        }
+                                ) {
+                                    OverlayDragHandleWithIndicators(
+                                        currentUses = if (isLandscape) null else dragHandleCurrentUses,
+                                        maxUses = if (isLandscape) null else dragHandleMaxUses,
+                                        emergencyCount = if (isLandscape) null else dragHandleEmergencyCount,
+                                        isIncentiveLocked = if (isLandscape) false else dragHandleIsIncentiveLocked,
+                                        incentiveTier = if (isLandscape) null else dragHandleIncentiveTier,
+                                        bonusUsesLeft = if (isLandscape) 0 else dragHandleBonusUsesLeft
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier.then(
+                                        if (maxHeightFraction != null || userPreferences?.overlayFullScreen == true)
+                                            Modifier.weight(1f)
+                                        else Modifier.wrapContentHeight()
+                                    )
+                                ) {
                                 AnimatedContent(
                                     targetState = contentKey,
                                     transitionSpec = {

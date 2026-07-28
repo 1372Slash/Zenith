@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.etrisad.zenith.data.preferences.UserPreferences
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -57,7 +58,14 @@ fun EyeCareOverlayContent(
         visible = showContent,
         backgroundAlpha = 0.6f,
         isLandscape = isLandscape,
-        userPreferences = userPrefs
+        userPreferences = userPrefs,
+        onCloseApp = {
+            scope.launch {
+                showContent = false
+                delay(400)
+                onRestComplete()
+            }
+        }
     ) { _ ->
         Column(
             modifier = Modifier

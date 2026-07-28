@@ -149,7 +149,14 @@ fun WindDownOverlayContent(
         isLandscape = isLandscape,
         maxWidthLandscape = 720.dp,
         showBedtimePill = true,
-        userPreferences = userPreferences
+        userPreferences = userPreferences,
+        onCloseApp = {
+            scope.launch {
+                showContent = false
+                delay(400)
+                onCloseApp()
+            }
+        }
     ) { _ ->
         if (isLandscape) {
             LandscapeWindDownLayout(

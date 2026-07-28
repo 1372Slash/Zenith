@@ -137,7 +137,14 @@ fun BedtimeOverlayContent(
         maxWidthLandscape = 720.dp,
         userPreferences = userPreferences,
         maxHeightFraction = if (isLandscape) 0.95f else 0.9f,
-        showBedtimePill = false
+        showBedtimePill = false,
+        onCloseApp = {
+            scope.launch {
+                showContent = false
+                delay(400)
+                onCloseApp()
+            }
+        }
     ) { _ ->
         if (isLandscape) {
             LandscapeBedtimeLayout(

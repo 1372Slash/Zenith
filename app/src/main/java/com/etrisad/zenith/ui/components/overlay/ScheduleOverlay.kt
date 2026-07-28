@@ -215,7 +215,14 @@ fun ScheduleOverlay(
         isLandscape = isLandscape,
         showBedtimePill = true,
         userPreferences = userPrefs,
-        dragHandleEmergencyCount = currentSchedule.emergencyUseCount
+        dragHandleEmergencyCount = currentSchedule.emergencyUseCount,
+        onCloseApp = {
+            scope.launch {
+                showContent = false
+                delay(400)
+                onCloseApp()
+            }
+        }
     ) { _ ->
         if (isLandscape) {
             LandscapeScheduleLayout(

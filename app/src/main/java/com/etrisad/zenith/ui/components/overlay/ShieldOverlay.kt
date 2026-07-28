@@ -403,7 +403,14 @@ fun ShieldOverlay(
         dragHandleEmergencyCount = if (currentShield?.type == FocusType.SHIELD) currentShield.emergencyUseCount else null,
         dragHandleIsIncentiveLocked = isIncentiveActive && !incentiveTier.isUnlocked,
         dragHandleIncentiveTier = if (isIncentiveActive) incentiveTier else null,
-        dragHandleBonusUsesLeft = bonusUsesLeft
+        dragHandleBonusUsesLeft = bonusUsesLeft,
+        onCloseApp = {
+            scope.launch {
+                showContent = false
+                delay(400)
+                currentOnCloseApp()
+            }
+        }
     ) { _ ->
         if (isLandscape) {
             LandscapeInterceptLayout(
