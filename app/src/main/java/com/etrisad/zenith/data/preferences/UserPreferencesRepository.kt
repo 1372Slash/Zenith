@@ -320,6 +320,7 @@ class UserPreferencesRepository(private val context: Context) {
         val DISABLE_TRACKING_AT_UNUSED_HOURS = booleanPreferencesKey("disable_tracking_at_unused_hours")
         val DISABLE_TRACKING_START_HOUR = intPreferencesKey("disable_tracking_start_hour")
         val DISABLE_TRACKING_END_HOUR = intPreferencesKey("disable_tracking_end_hour")
+        val EXCLUDED_FROM_TRACKING_PACKAGES = stringPreferencesKey("excluded_from_tracking_packages")
 
         val ALARM_ENABLED = booleanPreferencesKey("alarm_enabled")
         val ALARM_TIME = stringPreferencesKey("alarm_time")
@@ -328,6 +329,7 @@ class UserPreferencesRepository(private val context: Context) {
         val ALARM_AUTO_REPEAT_ENABLED = booleanPreferencesKey("alarm_auto_repeat_enabled")
         val ALARM_MASTER_ENABLED = booleanPreferencesKey("alarm_master_enabled")
         val ALARMS_JSON = stringPreferencesKey("alarms_json")
+        val EXCLUDED_FROM_TRACKING_OVERRIDES_JSON = stringPreferencesKey("excluded_from_tracking_overrides_json")
     }
 
     private object RuntimeKeys {
@@ -374,6 +376,7 @@ class UserPreferencesRepository(private val context: Context) {
             sessionUsageOverlaySize = settings[PreferencesKeys.SESSION_USAGE_OVERLAY_SIZE] ?: 100,
             sessionUsageOverlayOpacity = settings[PreferencesKeys.SESSION_USAGE_OVERLAY_OPACITY] ?: 90,
             whitelistedPackages = settings[PreferencesKeys.WHITELISTED_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
+            excludedFromTrackingPackages = settings[PreferencesKeys.EXCLUDED_FROM_TRACKING_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
             lastResetDate = runtime[RuntimeKeys.LAST_RESET_DATE] ?: "",
             lastWeeklyResetDate = runtime[RuntimeKeys.LAST_WEEKLY_RESET_DATE] ?: 0L,
             lastStreakCheckDate = runtime[RuntimeKeys.LAST_STREAK_CHECK_DATE] ?: "",
@@ -516,6 +519,7 @@ class UserPreferencesRepository(private val context: Context) {
             alarmAutoRepeatEnabled = settings[PreferencesKeys.ALARM_AUTO_REPEAT_ENABLED] ?: true,
             alarmMasterEnabled = settings[PreferencesKeys.ALARM_MASTER_ENABLED] ?: false,
             alarmsJson = settings[PreferencesKeys.ALARMS_JSON] ?: "[]",
+            excludedFromTrackingOverridesJson = settings[PreferencesKeys.EXCLUDED_FROM_TRACKING_OVERRIDES_JSON] ?: "{}",
             streakRecoveryPerformed = runtime[RuntimeKeys.STREAK_RECOVERY_PERFORMED] ?: false,
             dismissedUninstalledApps = runtime[RuntimeKeys.DISMISSED_UNINSTALLED_APPS]
                 ?.split(",")
@@ -628,6 +632,24 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setWhitelistedPackages(packages: Set<String>) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.WHITELISTED_PACKAGES] = packages.joinToString(",") }
+    }
+
+    suspend fun setExcludedFromTrackingPackages(packages: Set<String>) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.EXCLUDED_FROM_TRACKING_PACKAGES] = packages.joinToString(",") }
+    }
+
+    suspend fun setExcludedFromTrackingOverrides(overrides: Map<String, Set<String>>) {
+        val json = moshi.adapter(Map::class.java).toJson(overrides)
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.EXCLUDED_FROM_TRACKING_OVERRIDES_JSON] = json }
+    }
+
+    suspend fun getExcludedFromTrackingOverrides(): Map<String, Set<String>> {
+        val json = context.dataStore.data.first()[PreferencesKeys.EXCLUDED_FROM_TRACKING_OVERRIDES_JSON] ?: "{}"
+        return try {
+            @Suppress("UNCHECKED_CAST")
+            (moshi.adapter(Map::class.java).fromJson(json) as? Map<String, List<String>>)
+                ?.mapValues { (_, v) -> v.toSet() } ?: emptyMap()
+        } catch (_: Exception) { emptyMap() }
     }
 
     suspend fun setIncentiveLockEnabled(enabled: Boolean) {
@@ -783,7 +805,7 @@ class UserPreferencesRepository(private val context: Context) {
             lPkg to lApps
         }
 
-        val excludePackages = setOfNotNull(context.packageName, launcherPackage) + prefs.whitelistedPackages + prefs.bedtimeWhitelistedPackages
+        val excludePackages = setOfNotNull(context.packageName, launcherPackage) + prefs.whitelistedPackages + prefs.bedtimeWhitelistedPackages + prefs.excludedFromTrackingPackages
 
         var liveStreak = 0
         var currentBest = prefs.bedtimeBestStreak
@@ -1357,6 +1379,7 @@ data class UserPreferences(
     val sessionUsageOverlaySize: Int = 100,
     val sessionUsageOverlayOpacity: Int = 90,
     val whitelistedPackages: Set<String> = emptySet(),
+    val excludedFromTrackingPackages: Set<String> = emptySet(),
     val lastResetDate: String = "",
     val lastWeeklyResetDate: Long = 0L,
     val lastStreakCheckDate: String = "",
@@ -1463,6 +1486,7 @@ data class UserPreferences(
     val alarmAutoRepeatEnabled: Boolean = true,
     val alarmMasterEnabled: Boolean = false,
     val alarmsJson: String = "[]",
+    val excludedFromTrackingOverridesJson: String = "{}",
 ) {
     fun buildPerformanceConfig(): PerformanceConfig {
         if (performanceLevel.isPreset()) return performanceLevel.toConfig()

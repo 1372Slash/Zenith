@@ -267,6 +267,7 @@ class ZenithService : AccessibilityService() {
                 com.etrisad.zenith.util.ScreenUsageHelper.updateCacheDuration(cfg.usageStatsCacheMs)
                 SharedMonitoringState.whitelistedPackages = preferences.whitelistedPackages
                 SharedMonitoringState.bedtimeWhitelistedPackages = preferences.bedtimeWhitelistedPackages
+                SharedMonitoringState.excludedFromTrackingPackages = preferences.excludedFromTrackingPackages
                 
                 val isFirstLoad = SharedMonitoringState.lastBankingAppsCount == -1
                 if (isFirstLoad) {
@@ -1215,7 +1216,7 @@ class ZenithService : AccessibilityService() {
             refreshLauncherCache()
         }
 
-        val excludePackages = setOfNotNull(packageName, SharedMonitoringState.defaultLauncherPackage)
+        val excludePackages = setOfNotNull(packageName, SharedMonitoringState.defaultLauncherPackage) + SharedMonitoringState.excludedFromTrackingPackages
 
         val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager, dayStartHour = SharedMonitoringState.cachedDayStartHour, dayStartMinute = SharedMonitoringState.cachedDayStartMinute)
         val accurateUsageMap = detailedUsage.appUsageMap

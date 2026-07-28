@@ -47,6 +47,7 @@ fun SettingsScreen(
     var latestRelease by remember { mutableStateOf<GitHubRelease?>(null) }
     var allReleases by remember { mutableStateOf<List<GitHubRelease>>(emptyList()) }
     var showWhitelistSheet by remember { mutableStateOf(false) }
+    var showExcludeFromTrackingSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         if (preferences.checkUpdateOnStart) {
@@ -133,6 +134,7 @@ fun SettingsScreen(
                     onSetDelayAppDuration = { secs -> coroutineScope.launch { preferencesRepository.setDelayAppDuration(secs) } },
                     onSetDayStartTime = { hour, minute -> coroutineScope.launch { preferencesRepository.setDayStartTime(hour, minute) } },
                     onShowWhitelistSheetChange = { showWhitelistSheet = it },
+                    onShowExcludeFromTrackingSheetChange = { showExcludeFromTrackingSheet = it },
                     onOpenPermissions = onOpenPermissions,
                     permissionsMissing = permissionsMissing
                 )
@@ -261,6 +263,19 @@ fun SettingsScreen(
                     preferencesRepository.setWhitelistedPackages(packages)
                 }
                 showWhitelistSheet = false
+            }
+        )
+    }
+
+    if (showExcludeFromTrackingSheet) {
+        ExcludeFromTrackingBottomSheet(
+            initialExcluded = preferences.excludedFromTrackingPackages,
+            onDismiss = { showExcludeFromTrackingSheet = false },
+            onSave = { packages ->
+                coroutineScope.launch {
+                    preferencesRepository.setExcludedFromTrackingPackages(packages)
+                }
+                showExcludeFromTrackingSheet = false
             }
         )
     }

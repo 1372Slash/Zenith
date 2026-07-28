@@ -99,7 +99,7 @@ class StreakCalculator(
             } catch (_: Exception) { emptySet<String>() to null }
         }
 
-        val excludePackages = setOfNotNull(context.packageName, launcherPackage)
+        val excludePackages = setOfNotNull(context.packageName, launcherPackage) + prefs.excludedFromTrackingPackages
 
         val todayStart = DateTimeUtils.getDayStartTime(now, prefs.dayStartHour, prefs.dayStartMinute)
 
@@ -711,7 +711,7 @@ class StreakCalculator(
                     apps to lPkg
                 } catch (_: Exception) { emptySet<String>() to null }
             }
-            val excludePackages = setOfNotNull(context.packageName, launcherPackage)
+        val excludePackages = setOfNotNull(context.packageName, launcherPackage) + prefs.excludedFromTrackingPackages
 
             val globalHistory = dbUsage.filter { it.packageName == "TOTAL" }
             val oldestHistoryDate = globalHistory.map { it.date }.minOrNull()

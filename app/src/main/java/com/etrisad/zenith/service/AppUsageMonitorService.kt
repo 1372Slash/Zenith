@@ -852,6 +852,7 @@ class AppUsageMonitorService : Service() {
                 com.etrisad.zenith.util.ScreenUsageHelper.updateCacheDuration(cfg.usageStatsCacheMs)
                 SharedMonitoringState.whitelistedPackages = preferences.whitelistedPackages
                 SharedMonitoringState.bedtimeWhitelistedPackages = preferences.bedtimeWhitelistedPackages
+                SharedMonitoringState.excludedFromTrackingPackages = preferences.excludedFromTrackingPackages
 
                 val startParts = preferences.bedtimeStartTime.split(":")
                 val endParts = preferences.bedtimeEndTime.split(":")
@@ -2047,7 +2048,7 @@ class AppUsageMonitorService : Service() {
             refreshLauncherCache()
         }
 
-        val excludePackages = setOfNotNull(packageName, SharedMonitoringState.defaultLauncherPackage)
+        val excludePackages = setOfNotNull(packageName, SharedMonitoringState.defaultLauncherPackage) + SharedMonitoringState.excludedFromTrackingPackages
 
         var totalSum = 0L
         appUsageMap.forEach { (pkg, time) ->

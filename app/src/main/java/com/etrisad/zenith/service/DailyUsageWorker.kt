@@ -102,7 +102,7 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val launcherPackage = try {
             pm.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
         } catch (_: Exception) { null }
-        val excludePackages = setOfNotNull(applicationContext.packageName, launcherPackage)
+        val excludePackages = setOfNotNull(applicationContext.packageName, launcherPackage) + prefs.excludedFromTrackingPackages
 
         val timeSinceMidnight = if (isDateToday) (System.currentTimeMillis() - startTime).coerceAtLeast(0L) else (24 * 60 * 60 * 1000L)
 

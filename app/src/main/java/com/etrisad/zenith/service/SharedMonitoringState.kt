@@ -25,6 +25,7 @@ object SharedMonitoringState {
     @Volatile var currentPreferences: UserPreferences? = null
     @Volatile var whitelistedPackages = emptySet<String>()
     @Volatile var bedtimeWhitelistedPackages = emptySet<String>()
+    @Volatile var excludedFromTrackingPackages = emptySet<String>()
     @Volatile var restrictedPackages = emptySet<String>()
     @Volatile var hasGlobalAllowSchedule = false
     @Volatile var launcherAppsCache = emptySet<String>()

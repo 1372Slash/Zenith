@@ -19,6 +19,7 @@ import com.etrisad.zenith.data.local.database.DbLogBuffer
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.preferences.UserPreferences
+import com.etrisad.zenith.service.SharedMonitoringState
 import com.etrisad.zenith.service.UsageSyncManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -525,7 +526,7 @@ class HomeViewModel(
         val pm = this@HomeViewModel.context.packageManager
 
         val (launcherApps, launcherPackage) = usageHistoryManager.getLauncherInfo()
-        val excludePackages = setOfNotNull(this@HomeViewModel.context.packageName, launcherPackage)
+        val excludePackages = setOfNotNull(this@HomeViewModel.context.packageName, launcherPackage) + SharedMonitoringState.excludedFromTrackingPackages
 
         android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: launcherApps=${launcherApps.size} launcherPkg=$launcherPackage exclude=$excludePackages")
         DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: launcherApps=${launcherApps.size} launcherPkg=$launcherPackage exclude=$excludePackages")

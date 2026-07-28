@@ -264,7 +264,7 @@ class UsageHistoryManager(
         scope.launch(Dispatchers.Default) {
             val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val (launcherApps, launcherPackage) = getLauncherInfo()
-            val excludePackages = setOfNotNull(context.packageName, launcherPackage)
+            val excludePackages = setOfNotNull(context.packageName, launcherPackage) + com.etrisad.zenith.service.SharedMonitoringState.excludedFromTrackingPackages
 
             val now = System.currentTimeMillis()
             val history = mutableListOf<DailyUsage>()
@@ -485,7 +485,7 @@ class UsageHistoryManager(
 
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val (launcherApps, launcherPackage) = getLauncherInfo()
-        val excludePackages = setOfNotNull(context.packageName, launcherPackage)
+        val excludePackages = setOfNotNull(context.packageName, launcherPackage) + com.etrisad.zenith.service.SharedMonitoringState.excludedFromTrackingPackages
 
         if (isFullNeeded && !isUpdatingFullHistory) {
             lastFullFallbackRefresh = now
@@ -534,7 +534,7 @@ class UsageHistoryManager(
             val now = System.currentTimeMillis()
             val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val (launcherApps, launcherPackage) = getLauncherInfo()
-            val excludePackages = setOfNotNull(context.packageName, launcherPackage)
+            val excludePackages = setOfNotNull(context.packageName, launcherPackage) + com.etrisad.zenith.service.SharedMonitoringState.excludedFromTrackingPackages
             val results = fetchFallbackForDays(1..7, usm, launcherApps, excludePackages, now)
             _globalFallbackMap.update { current -> current + results.toMap() }
         } finally {

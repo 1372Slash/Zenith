@@ -56,7 +56,8 @@ class UsageSyncManager(
 
         val launcherPackage = cachedLauncherPackage
         val launcherApps = cachedLauncherApps ?: emptySet()
-        val excludePackages = setOfNotNull(context.packageName, launcherPackage)
+        val excludedFromTracking = preferencesRepository.userPreferencesFlow.first().excludedFromTrackingPackages
+        val excludePackages = setOfNotNull(context.packageName, launcherPackage) + excludedFromTracking
 
         val startOfToday = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
