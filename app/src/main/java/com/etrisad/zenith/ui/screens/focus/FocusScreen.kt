@@ -72,12 +72,14 @@ import com.etrisad.zenith.ui.components.ShieldSortHeader
 import com.etrisad.zenith.ui.components.UninstalledAppCard
 import com.etrisad.zenith.ui.theme.ZenithTheme
 import com.etrisad.zenith.data.website.WebsiteRepository
+import com.etrisad.zenith.ZenithApplication
 import com.etrisad.zenith.ui.viewmodel.AppInfo
 import com.etrisad.zenith.ui.viewmodel.FocusUiState
 import com.etrisad.zenith.ui.viewmodel.FocusViewModel
 import com.etrisad.zenith.ui.viewmodel.ShieldSortType
 import com.etrisad.zenith.ui.components.focus.*
 import com.etrisad.zenith.util.isAccessibilityServiceEnabled
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -90,6 +92,13 @@ fun FocusScreen(
     onDismissUninstalled: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val app = context.applicationContext as com.etrisad.zenith.ZenithApplication
+    val preferences by app.userPreferencesRepository.userPreferencesFlow.collectAsState(initial = null)
+    val isInLockdown = preferences?.isInLockdown() ?: false
+
+    var lockdownShakeTrigger by remember { mutableIntStateOf(0) }
+
     val isAppPickerOpen = remember { mutableStateOf(false) }
     var isFabMenuExpanded by remember { mutableStateOf(false) }
 
@@ -118,31 +127,50 @@ fun FocusScreen(
             uiState = uiState,
             innerPadding = innerPadding,
             scrollBehavior = scrollBehavior,
-            onEditShield = onEditShield,
-            onDeleteShield = { pendingDeleteShield = it },
+            isInLockdown = isInLockdown,
+            onEditShield = { shield ->
+                if (!isInLockdown) onEditShield(shield)
+                else lockdownShakeTrigger++
+            },
+            onDeleteShield = { shield ->
+                if (!isInLockdown) pendingDeleteShield = shield
+                else lockdownShakeTrigger++
+            },
             onDismissUninstalled = onDismissUninstalled,
-            onEditSchedule = onEditSchedule,
-            onDeleteSchedule = { pendingDeleteSchedule = it },
+            onEditSchedule = { schedule ->
+                if (!isInLockdown) onEditSchedule(schedule)
+                else lockdownShakeTrigger++
+            },
+            onDeleteSchedule = { schedule ->
+                if (!isInLockdown) pendingDeleteSchedule = schedule
+                else lockdownShakeTrigger++
+            },
             onShieldSortTypeChange = onShieldSortTypeChange,
             onGoalSortTypeChange = onGoalSortTypeChange,
             onAppClick = { pkg ->
-                if (uiState.isSelectionMode) {
-                    viewModel.toggleShieldSelection(pkg)
-                } else {
-                    onAppClick(pkg)
-                }
+                if (!isInLockdown) {
+                    if (uiState.isSelectionMode) {
+                        viewModel.toggleShieldSelection(pkg)
+                    } else {
+                        onAppClick(pkg)
+                    }
+                } else lockdownShakeTrigger++
             },
             onAppLongClick = { pkg ->
-                if (!uiState.isSelectionMode) {
-                    viewModel.toggleSelectionMode()
-                }
-                viewModel.toggleShieldSelection(pkg)
+                if (!isInLockdown) {
+                    if (!uiState.isSelectionMode) {
+                        viewModel.toggleSelectionMode()
+                    }
+                    viewModel.toggleShieldSelection(pkg)
+                } else lockdownShakeTrigger++
             },
             onScheduleLongClick = { id ->
-                if (!uiState.isSelectionMode) {
-                    viewModel.toggleSelectionMode()
-                }
-                viewModel.toggleScheduleSelection(id)
+                if (!isInLockdown) {
+                    if (!uiState.isSelectionMode) {
+                        viewModel.toggleSelectionMode()
+                    }
+                    viewModel.toggleScheduleSelection(id)
+                } else lockdownShakeTrigger++
             },
             isSelectionMode = uiState.isSelectionMode,
             selectedShields = uiState.selectedShields,
@@ -151,75 +179,141 @@ fun FocusScreen(
             onToggleScheduleSelection = onToggleScheduleSelection
         )
 
-        FloatingActionButtonMenu(
-            expanded = isFabMenuExpanded,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(bottom = 110.dp),
-            button = {
-                ToggleFloatingActionButton(
-                    checked = isFabMenuExpanded,
-                    onCheckedChange = { isFabMenuExpanded = it },
-                    modifier = Modifier
-                        .size(80.dp)
-                        .offset(x = fabOffset, y = -fabOffset),
-                    containerColor = ToggleFloatingActionButtonDefaults.containerColor(
-                        MaterialTheme.colorScheme.primaryContainer,
-                        MaterialTheme.colorScheme.primary
-                    ),
-                    containerCornerRadius = ToggleFloatingActionButtonDefaults.containerCornerRadius(
-                        28.dp,
-                        50.dp
-                    ),
-                    containerSize = ToggleFloatingActionButtonDefaults.containerSize(
-                        80.dp,
-                        56.dp
-                    )
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
+        if (isInLockdown) {
+            var isLockDetailExpanded by remember { mutableStateOf(false) }
+            val shakeOffset = remember { Animatable(0f) }
+            val haptic = LocalHapticFeedback.current
+            LaunchedEffect(lockdownShakeTrigger) {
+                if (lockdownShakeTrigger > 0) {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    shakeOffset.snapTo(0f)
+                    shakeOffset.animateTo(-10f, animationSpec = spring(stiffness = Spring.StiffnessHigh))
+                    shakeOffset.animateTo(10f, animationSpec = spring(stiffness = Spring.StiffnessHigh))
+                    shakeOffset.animateTo(-8f, animationSpec = spring(stiffness = Spring.StiffnessHigh))
+                    shakeOffset.animateTo(8f, animationSpec = spring(stiffness = Spring.StiffnessHigh))
+                    shakeOffset.animateTo(-5f, animationSpec = spring(stiffness = Spring.StiffnessHigh))
+                    shakeOffset.animateTo(5f, animationSpec = spring(stiffness = Spring.StiffnessHigh))
+                    shakeOffset.animateTo(0f, animationSpec = spring(stiffness = Spring.StiffnessMedium))
+                }
+            }
+            Card(
+                onClick = { isLockDetailExpanded = !isLockDetailExpanded },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 16.dp, vertical = 110.dp)
+                    .fillMaxWidth()
+                    .offset(x = shakeOffset.value.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Outlined.Add,
-                            contentDescription = if (isFabMenuExpanded) "Close Menu" else "Add Shield",
-                            modifier = Modifier
-                                .size(iconSize)
-                                .rotate(rotation),
-                            tint = if (isFabMenuExpanded) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
+                            Icons.Outlined.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.size(20.dp)
                         )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            "Editing is currently restricted",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            imageVector = if (isLockDetailExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                    AnimatedVisibility(visible = isLockDetailExpanded) {
+                        Column {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "Editing shields, goals, and schedules is restricted during your set lockdown hours. Disable lockdown in settings to make changes.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
                     }
                 }
             }
-        ) {
-            ExpressiveFabMenuItem(
-                onClick = {
-                    isFabMenuExpanded = false
-                    viewModel.selectAppForFocus(null, FocusType.SHIELD)
-                    isAppPickerOpen.value = true
-                },
-                icon = { Icon(Icons.Outlined.Shield, contentDescription = null) },
-                text = { Text("Add Shield") }
-            )
+        } else {
+            FloatingActionButtonMenu(
+                expanded = isFabMenuExpanded,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 110.dp),
+                button = {
+                    ToggleFloatingActionButton(
+                        checked = isFabMenuExpanded,
+                        onCheckedChange = { isFabMenuExpanded = it },
+                        modifier = Modifier
+                            .size(80.dp)
+                            .offset(x = fabOffset, y = -fabOffset),
+                        containerColor = ToggleFloatingActionButtonDefaults.containerColor(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            MaterialTheme.colorScheme.primary
+                        ),
+                        containerCornerRadius = ToggleFloatingActionButtonDefaults.containerCornerRadius(
+                            28.dp,
+                            50.dp
+                        ),
+                        containerSize = ToggleFloatingActionButtonDefaults.containerSize(
+                            80.dp,
+                            56.dp
+                        )
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Add,
+                                contentDescription = if (isFabMenuExpanded) "Close Menu" else "Add Shield",
+                                modifier = Modifier
+                                    .size(iconSize)
+                                    .rotate(rotation),
+                                tint = if (isFabMenuExpanded) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
+            ) {
+                ExpressiveFabMenuItem(
+                    onClick = {
+                        isFabMenuExpanded = false
+                        viewModel.selectAppForFocus(null, FocusType.SHIELD)
+                        isAppPickerOpen.value = true
+                    },
+                    icon = { Icon(Icons.Outlined.Shield, contentDescription = null) },
+                    text = { Text("Add Shield") }
+                )
 
-            ExpressiveFabMenuItem(
-                onClick = {
-                    isFabMenuExpanded = false
-                    viewModel.selectAppForFocus(null, FocusType.GOAL)
-                    isAppPickerOpen.value = true
-                },
-                icon = { Icon(Icons.Outlined.Flag, contentDescription = null) },
-                text = { Text("Add Goal") }
-            )
+                ExpressiveFabMenuItem(
+                    onClick = {
+                        isFabMenuExpanded = false
+                        viewModel.selectAppForFocus(null, FocusType.GOAL)
+                        isAppPickerOpen.value = true
+                    },
+                    icon = { Icon(Icons.Outlined.Flag, contentDescription = null) },
+                    text = { Text("Add Goal") }
+                )
 
-            ExpressiveFabMenuItem(
-                onClick = {
-                    isFabMenuExpanded = false
-                    viewModel.openSchedulePicker()
-                },
-                icon = { Icon(Icons.Outlined.Schedule, contentDescription = null) },
-                text = { Text("Add Schedule") }
-            )
+                ExpressiveFabMenuItem(
+                    onClick = {
+                        isFabMenuExpanded = false
+                        viewModel.openSchedulePicker()
+                    },
+                    icon = { Icon(Icons.Outlined.Schedule, contentDescription = null) },
+                    text = { Text("Add Schedule") }
+                )
+            }
         }
 
         if (isAppPickerOpen.value) {
@@ -267,7 +361,7 @@ fun FocusScreen(
             )
         }
 
-        if (uiState.isSettingsSheetOpen && uiState.selectedAppForFocus != null) {
+        if (uiState.isSettingsSheetOpen && uiState.selectedAppForFocus != null && !isInLockdown) {
             val appInfo = uiState.selectedAppForFocus!!
             val existingShield = (uiState.activeShields + uiState.activeGoals).find { it.packageName == appInfo.packageName }
 
@@ -359,6 +453,7 @@ fun FocusScreenContent(
     uiState: FocusUiState,
     innerPadding: PaddingValues,
     scrollBehavior: TopAppBarScrollBehavior,
+    isInLockdown: Boolean = false,
     onEditShield: (ShieldEntity) -> Unit,
     onDeleteShield: (ShieldEntity) -> Unit,
     onEditSchedule: (ScheduleEntity) -> Unit,

@@ -191,19 +191,8 @@ fun SettingsScreen(
                     summary = "Backup, Restore, and Usage Sync",
                     onClick = { navController.navigate(Screen.SettingsCategory.createRoute("Data Management")) },
                     icon = Icons.Outlined.Storage,
-                    shape = if (preferences.developerModeEnabled) RoundedCornerShape(8.dp) else RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                 )
-
-                if (preferences.developerModeEnabled) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    SettingsActionItem(
-                        title = "Developer",
-                        summary = "Advanced debugging and experimental tools",
-                        onClick = { navController.navigate(Screen.SettingsCategory.createRoute("Developer")) },
-                        icon = Icons.Outlined.BugReport,
-                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                    )
-                }
             }
 
             item {

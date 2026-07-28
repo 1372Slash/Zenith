@@ -64,6 +64,7 @@ import com.etrisad.zenith.ui.screens.alarm.AlarmScreen
 import com.etrisad.zenith.ui.screens.bedtime.BedtimeScreen
 import com.etrisad.zenith.ui.screens.graceperiod.GracePeriodScreen
 import com.etrisad.zenith.ui.screens.settings.EyeCareScreen
+import com.etrisad.zenith.ui.screens.settings.LockdownSettings
 import com.etrisad.zenith.ui.screens.settings.SettingsScreen
 import com.etrisad.zenith.ui.viewmodel.FocusViewModel
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
@@ -140,6 +141,7 @@ fun MainScreen(
                 currentRoute == Screen.Alarm.route ||
                 currentRoute == Screen.GracePeriod.route ||
                 currentRoute == Screen.EyeCare.route ||
+                currentRoute == Screen.Lockdown.route ||
                 currentRoute == Screen.DatabaseDebug.route ||
                 currentRoute == Screen.DataRepairment.route ||
                 currentRoute == Screen.FontTest.route ||
@@ -182,6 +184,8 @@ fun MainScreen(
     var gracePeriodSwitchInLayout by remember { mutableStateOf(false) }
     var eyeCareSwitchVisible by remember { mutableStateOf(false) }
     var eyeCareSwitchInLayout by remember { mutableStateOf(false) }
+    var lockdownSwitchVisible by remember { mutableStateOf(false) }
+    var lockdownSwitchInLayout by remember { mutableStateOf(false) }
     var alarmSwitchVisible by remember { mutableStateOf(false) }
     var alarmSwitchInLayout by remember { mutableStateOf(false) }
     val performanceBackInterceptor = remember { mutableStateOf<() -> Boolean>({ false }) }
@@ -229,6 +233,28 @@ fun MainScreen(
             if (gracePeriodSwitchInLayout) {
                 delay(1500)
                 gracePeriodSwitchInLayout = false
+            }
+        }
+    }
+
+    LaunchedEffect(currentRoute, preferences.lockdownEnabled) {
+        val isLockdownScreen = currentRoute == Screen.Lockdown.route
+        val shouldShow = isLockdownScreen && preferences.lockdownEnabled
+
+        if (shouldShow) {
+            if (!lockdownSwitchInLayout) {
+                lockdownSwitchInLayout = true
+                delay(1200)
+            }
+            lockdownSwitchVisible = true
+        } else {
+            if (lockdownSwitchVisible) {
+                lockdownSwitchVisible = false
+                delay(800)
+            }
+            if (lockdownSwitchInLayout) {
+                delay(1500)
+                lockdownSwitchInLayout = false
             }
         }
     }
@@ -421,6 +447,7 @@ fun MainScreen(
                     currentRoute != Screen.Alarm.route &&
                     currentRoute != Screen.GracePeriod.route &&
                     currentRoute != Screen.EyeCare.route &&
+                    currentRoute != Screen.Lockdown.route &&
                     currentRoute != Screen.DatabaseDebug.route &&
                     currentRoute != Screen.DataRepairment.route &&
                     currentRoute != Screen.FontTest.route &&
@@ -806,8 +833,73 @@ fun MainScreen(
                                         )
                                     }
                                 }
-                            }
-                            if (alarmSwitchInLayout) {
+                             }
+                             if (lockdownSwitchInLayout) {
+                                 Box(
+                                     modifier = Modifier
+                                         .padding(end = 16.dp)
+                                         .width(52.dp)
+                                         .height(32.dp),
+                                     contentAlignment = Alignment.Center
+                                 ) {
+                                     androidx.compose.animation.AnimatedVisibility(
+                                         visible = lockdownSwitchVisible,
+                                         enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                 scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
+                                                 slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+                                         exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                 scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                 slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                                     ) {
+                                         Switch(
+                                             checked = preferences.lockdownEnabled,
+                                             onCheckedChange = {
+                                                 scope.launch {
+                                                     userPreferencesRepository.setLockdownEnabled(!preferences.lockdownEnabled)
+                                                 }
+                                             },
+                                             thumbContent = {
+                                                 val thumbSize by animateDpAsState(
+                                                     targetValue = if (preferences.lockdownEnabled) 28.dp else 24.dp,
+                                                     animationSpec = spring(
+                                                         dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                         stiffness = Spring.StiffnessMediumLow
+                                                     ),
+                                                     label = "thumb_size"
+                                                 )
+                                                 val iconColor by animateColorAsState(
+                                                     targetValue = if (preferences.lockdownEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                     animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                                                     label = "switch_icon_color"
+                                                 )
+                                                 Box(
+                                                     modifier = Modifier.size(thumbSize),
+                                                     contentAlignment = Alignment.Center
+                                                 ) {
+                                                     AnimatedContent(
+                                                         targetState = preferences.lockdownEnabled,
+                                                         transitionSpec = {
+                                                             (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                                     scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
+                                                                 .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                                         scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
+                                                         },
+                                                         label = "switch_icon_anim"
+                                                     ) { isChecked ->
+                                                         Icon(
+                                                             imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
+                                                             contentDescription = null,
+                                                             modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
+                                                             tint = iconColor
+                                                         )
+                                                     }
+                                                 }
+                                             }
+                                         )
+                                     }
+                                 }
+                             }
+                             if (alarmSwitchInLayout) {
                                 Box(
                                     modifier = Modifier
                                         .padding(end = 16.dp)
@@ -967,6 +1059,7 @@ fun MainScreen(
                                     targetRoute == Screen.Alarm.route ||
                                     targetRoute == Screen.GracePeriod.route ||
                                     targetRoute == Screen.EyeCare.route ||
+                                    targetRoute == Screen.Lockdown.route ||
                                     targetRoute == Screen.DatabaseDebug.route ||
                                     targetRoute == Screen.DataRepairment.route ||
                                     targetRoute == Screen.FontTest.route ||
@@ -981,6 +1074,7 @@ fun MainScreen(
                                     initialRoute == Screen.Alarm.route ||
                                     initialRoute == Screen.GracePeriod.route ||
                                     initialRoute == Screen.EyeCare.route ||
+                                    initialRoute == Screen.Lockdown.route ||
                                     initialRoute == Screen.DatabaseDebug.route ||
                                     initialRoute == Screen.DataRepairment.route ||
                                     initialRoute == Screen.FontTest.route ||
@@ -1027,6 +1121,7 @@ fun MainScreen(
                                     targetRoute == Screen.Alarm.route ||
                                     targetRoute == Screen.GracePeriod.route ||
                                     targetRoute == Screen.EyeCare.route ||
+                                    targetRoute == Screen.Lockdown.route ||
                                     targetRoute == Screen.DatabaseDebug.route ||
                                     targetRoute == Screen.DataRepairment.route ||
                                     targetRoute == Screen.FontTest.route ||
@@ -1042,6 +1137,7 @@ fun MainScreen(
                                     initialRoute == Screen.Alarm.route ||
                                     initialRoute == Screen.GracePeriod.route ||
                                     initialRoute == Screen.EyeCare.route ||
+                                    initialRoute == Screen.Lockdown.route ||
                                     initialRoute == Screen.DatabaseDebug.route ||
                                     initialRoute == Screen.DataRepairment.route ||
                                     initialRoute == Screen.FontTest.route ||
@@ -1169,6 +1265,13 @@ fun MainScreen(
                             innerPadding = innerPadding
                         )
                     }
+                    composable(Screen.Lockdown.route) {
+                        LockdownSettings(
+                            preferences = preferences,
+                            innerPadding = innerPadding,
+                            preferencesRepository = userPreferencesRepository
+                        )
+                    }
                     composable(Screen.UsageStats.route) {
                         UsageStatsScreen(
                             viewModel = homeViewModel,
@@ -1261,6 +1364,7 @@ fun MainScreen(
                             currentRoute != Screen.Alarm.route &&
                             currentRoute != Screen.GracePeriod.route &&
                             currentRoute != Screen.EyeCare.route &&
+                            currentRoute != Screen.Lockdown.route &&
                             currentRoute != Screen.DatabaseDebug.route &&
                             currentRoute != Screen.DataRepairment.route &&
                             currentRoute != Screen.FontTest.route &&

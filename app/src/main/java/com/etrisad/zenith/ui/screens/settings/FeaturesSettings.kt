@@ -54,6 +54,7 @@ fun FeaturesSettings(
     onIncentiveLockCancelDisableRequest: () -> Unit,
     onNavigateToGracePeriod: () -> Unit,
     onWebsiteAutoTrackingEnabledChange: (Boolean) -> Unit,
+    onNavigateToLockdown: () -> Unit,
     goalCount: Int
 ) {
     val context = LocalContext.current
@@ -293,6 +294,15 @@ fun FeaturesSettings(
             summary = "Remind you to look away every ${preferences.eyeCareWorkMinutes} minutes to reduce eye strain",
             onClick = onNavigateToEyeCare,
             icon = Icons.Outlined.RemoveRedEye,
+            shape = RoundedCornerShape(8.dp)
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+        SettingsActionItem(
+            title = "Lockdown",
+            summary = if (preferences.lockdownEnabled && preferences.isInLockdown()) "Editing is currently restricted" else "Restrict editing during specific hours",
+            onClick = onNavigateToLockdown,
+            icon = Icons.Outlined.Lock,
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
         )
 

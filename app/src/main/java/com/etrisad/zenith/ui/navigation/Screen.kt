@@ -57,6 +57,8 @@ sealed class Screen(
     object SettingsCategory : Screen("settings_category/{category}", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings) {
         fun createRoute(category: String) = "settings_category/$category"
     }
+
+    object Lockdown : Screen("lockdown", "Lockdown", Icons.Filled.Settings, Icons.Outlined.Settings)
 }
 
 val navItems = listOf(

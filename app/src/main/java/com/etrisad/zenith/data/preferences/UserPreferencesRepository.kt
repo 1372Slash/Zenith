@@ -330,6 +330,11 @@ class UserPreferencesRepository(private val context: Context) {
         val ALARM_MASTER_ENABLED = booleanPreferencesKey("alarm_master_enabled")
         val ALARMS_JSON = stringPreferencesKey("alarms_json")
         val EXCLUDED_FROM_TRACKING_OVERRIDES_JSON = stringPreferencesKey("excluded_from_tracking_overrides_json")
+
+        val LOCKDOWN_ENABLED = booleanPreferencesKey("lockdown_enabled")
+        val LOCKDOWN_START_TIME = stringPreferencesKey("lockdown_start_time")
+        val LOCKDOWN_END_TIME = stringPreferencesKey("lockdown_end_time")
+        val LOCKDOWN_DAYS = stringPreferencesKey("lockdown_days")
     }
 
     private object RuntimeKeys {
@@ -521,6 +526,10 @@ class UserPreferencesRepository(private val context: Context) {
             alarmsJson = settings[PreferencesKeys.ALARMS_JSON] ?: "[]",
             excludedFromTrackingOverridesJson = settings[PreferencesKeys.EXCLUDED_FROM_TRACKING_OVERRIDES_JSON] ?: "{}",
             streakRecoveryPerformed = runtime[RuntimeKeys.STREAK_RECOVERY_PERFORMED] ?: false,
+            lockdownEnabled = settings[PreferencesKeys.LOCKDOWN_ENABLED] ?: false,
+            lockdownStartTime = settings[PreferencesKeys.LOCKDOWN_START_TIME] ?: "22:00",
+            lockdownEndTime = settings[PreferencesKeys.LOCKDOWN_END_TIME] ?: "07:00",
+            lockdownDays = settings[PreferencesKeys.LOCKDOWN_DAYS]?.split(",")?.filter { it.isNotEmpty() }?.map { it.toInt() }?.toSet() ?: setOf(1, 2, 3, 4, 5, 6, 7),
             dismissedUninstalledApps = runtime[RuntimeKeys.DISMISSED_UNINSTALLED_APPS]
                 ?.split(",")
                 ?.filter { it.isNotEmpty() }
@@ -1267,6 +1276,22 @@ class UserPreferencesRepository(private val context: Context) {
         context.runtimeDataStore.edit { preferences -> preferences[RuntimeKeys.STREAK_RECOVERY_PERFORMED] = performed }
     }
 
+    suspend fun setLockdownEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.LOCKDOWN_ENABLED] = enabled }
+    }
+
+    suspend fun setLockdownStartTime(time: String) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.LOCKDOWN_START_TIME] = time }
+    }
+
+    suspend fun setLockdownEndTime(time: String) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.LOCKDOWN_END_TIME] = time }
+    }
+
+    suspend fun setLockdownDays(days: Set<Int>) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.LOCKDOWN_DAYS] = days.joinToString(",") }
+    }
+
     suspend fun setDisableTrackingAtUnusedHours(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.DISABLE_TRACKING_AT_UNUSED_HOURS] = enabled }
     }
@@ -1458,6 +1483,10 @@ data class UserPreferences(
     val manualResetTimestamps: Map<String, Long> = emptyMap(),
     val gsFlexSettings: GSFlexSettings = GSFlexSettings(),
     val streakRecoveryPerformed: Boolean = false,
+    val lockdownEnabled: Boolean = false,
+    val lockdownStartTime: String = "22:00",
+    val lockdownEndTime: String = "07:00",
+    val lockdownDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7),
     val dismissedUninstalledApps: Map<String, String> = emptyMap(),
     val incentiveLockEnabled: Boolean = false,
     val incentiveLockDisableRequestTimestamp: Long = 0L,
@@ -1488,6 +1517,23 @@ data class UserPreferences(
     val alarmsJson: String = "[]",
     val excludedFromTrackingOverridesJson: String = "{}",
 ) {
+    fun isInLockdown(): Boolean {
+        if (!lockdownEnabled) return false
+        val cal = Calendar.getInstance()
+        val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
+        if (dayOfWeek !in lockdownDays) return false
+        val nowMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+        val startParts = lockdownStartTime.split(":")
+        val endParts = lockdownEndTime.split(":")
+        val startMinutes = try { startParts[0].toInt() * 60 + startParts[1].toInt() } catch (_: Exception) { 22 * 60 }
+        val endMinutes = try { endParts[0].toInt() * 60 + endParts[1].toInt() } catch (_: Exception) { 7 * 60 }
+        return if (endMinutes > startMinutes) {
+            nowMinutes in startMinutes until endMinutes
+        } else {
+            nowMinutes >= startMinutes || nowMinutes < endMinutes
+        }
+    }
+
     fun buildPerformanceConfig(): PerformanceConfig {
         if (performanceLevel.isPreset()) return performanceLevel.toConfig()
         return PerformanceConfig(
