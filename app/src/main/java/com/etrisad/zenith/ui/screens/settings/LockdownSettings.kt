@@ -25,6 +25,9 @@ import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
+import com.etrisad.zenith.ui.components.ZenithButton
+import com.etrisad.zenith.ui.components.ZenithButtonSize
+import com.etrisad.zenith.ui.components.ZenithButtonType
 import com.etrisad.zenith.ui.screens.bedtime.DaysSelectionCard
 import com.etrisad.zenith.ui.screens.bedtime.TimePickerDialog
 import com.etrisad.zenith.ui.screens.bedtime.TimeSelectionRow
@@ -148,14 +151,15 @@ fun LockdownSettings(
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-                TextButton(
+                ZenithButton(
                     onClick = { showDisableSheet = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Disable Lockdown")
-                }
+                    text = "Disable Lockdown",
+                    icon = Icons.Outlined.Lock,
+                    type = ZenithButtonType.Text,
+                    size = ZenithButtonSize.Large,
+                    contentColor = MaterialTheme.colorScheme.error,
+                    fillMaxWidth = true
+                )
             }
         }
     }

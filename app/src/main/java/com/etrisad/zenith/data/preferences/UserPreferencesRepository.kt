@@ -335,6 +335,13 @@ class UserPreferencesRepository(private val context: Context) {
         val LOCKDOWN_START_TIME = stringPreferencesKey("lockdown_start_time")
         val LOCKDOWN_END_TIME = stringPreferencesKey("lockdown_end_time")
         val LOCKDOWN_DAYS = stringPreferencesKey("lockdown_days")
+
+        val DEEP_FOCUS_ENABLED = booleanPreferencesKey("deep_focus_enabled")
+        val DEEP_FOCUS_ALLOWED_PACKAGES = stringPreferencesKey("deep_focus_allowed_packages")
+        val DEEP_FOCUS_BREAK_DURATION_MINUTES = intPreferencesKey("deep_focus_break_duration_minutes")
+        val DEEP_FOCUS_BLOCK_ALLOWED_APPS = booleanPreferencesKey("deep_focus_block_allowed_apps")
+        val DEEP_FOCUS_SESSION_DURATION_MINUTES = intPreferencesKey("deep_focus_session_duration_minutes")
+        val DEEP_FOCUS_MAX_ALLOWED_APPS = intPreferencesKey("deep_focus_max_allowed_apps")
     }
 
     private object RuntimeKeys {
@@ -362,6 +369,8 @@ class UserPreferencesRepository(private val context: Context) {
         val INCENTIVE_BONUS_USES_DATE = stringPreferencesKey("incentive_bonus_uses_date")
         val LAST_WEEKLY_RESET_DATE = longPreferencesKey("last_weekly_reset_date")
         val DISMISSED_UNINSTALLED_APPS = stringPreferencesKey("dismissed_uninstalled_apps")
+        val DEEP_FOCUS_SESSION_END_TIMESTAMP = longPreferencesKey("deep_focus_session_end_timestamp")
+        val DEEP_FOCUS_BREAK_END_TIMESTAMP = longPreferencesKey("deep_focus_break_end_timestamp")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = combine(
@@ -536,7 +545,15 @@ class UserPreferencesRepository(private val context: Context) {
                 ?.associate { entry ->
                     val parts = entry.split(":")
                     parts[0] to parts.getOrElse(1) { "" }
-                } ?: emptyMap()
+                } ?: emptyMap(),
+            deepFocusEnabled = settings[PreferencesKeys.DEEP_FOCUS_ENABLED] ?: false,
+            deepFocusAllowedPackages = settings[PreferencesKeys.DEEP_FOCUS_ALLOWED_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
+            deepFocusBreakDurationMinutes = settings[PreferencesKeys.DEEP_FOCUS_BREAK_DURATION_MINUTES] ?: 15,
+            deepFocusBlockAllowedApps = settings[PreferencesKeys.DEEP_FOCUS_BLOCK_ALLOWED_APPS] ?: true,
+            deepFocusSessionDurationMinutes = settings[PreferencesKeys.DEEP_FOCUS_SESSION_DURATION_MINUTES] ?: 60,
+            deepFocusMaxAllowedApps = settings[PreferencesKeys.DEEP_FOCUS_MAX_ALLOWED_APPS] ?: 7,
+            deepFocusSessionEndTimestamp = runtime[RuntimeKeys.DEEP_FOCUS_SESSION_END_TIMESTAMP] ?: 0L,
+            deepFocusBreakEndTimestamp = runtime[RuntimeKeys.DEEP_FOCUS_BREAK_END_TIMESTAMP] ?: 0L
         )
     }.distinctUntilChanged()
 
@@ -808,9 +825,11 @@ class UserPreferencesRepository(private val context: Context) {
             val lPkg = try {
                 context.packageManager.resolveActivity(launcherIntent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
             } catch (_: Exception) { null }
-            val lApps = context.packageManager.queryIntentActivities(
-                Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
-            ).map { it.activityInfo.packageName }.toSet()
+            val lApps = try {
+                context.packageManager.queryIntentActivities(
+                    Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
+                ).map { it.activityInfo.packageName }.toSet()
+            } catch (_: Exception) { emptySet() }
             lPkg to lApps
         }
 
@@ -1292,6 +1311,38 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.LOCKDOWN_DAYS] = days.joinToString(",") }
     }
 
+    suspend fun setDeepFocusEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DEEP_FOCUS_ENABLED] = enabled }
+    }
+
+    suspend fun setDeepFocusAllowedPackages(packages: Set<String>) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DEEP_FOCUS_ALLOWED_PACKAGES] = packages.joinToString(",") }
+    }
+
+    suspend fun setDeepFocusBreakDurationMinutes(minutes: Int) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DEEP_FOCUS_BREAK_DURATION_MINUTES] = minutes }
+    }
+
+    suspend fun setDeepFocusBlockAllowedApps(block: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DEEP_FOCUS_BLOCK_ALLOWED_APPS] = block }
+    }
+
+    suspend fun setDeepFocusSessionDurationMinutes(minutes: Int) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DEEP_FOCUS_SESSION_DURATION_MINUTES] = minutes }
+    }
+
+    suspend fun setDeepFocusSessionEndTimestamp(timestamp: Long) {
+        context.runtimeDataStore.edit { preferences -> preferences[RuntimeKeys.DEEP_FOCUS_SESSION_END_TIMESTAMP] = timestamp }
+    }
+
+    suspend fun setDeepFocusBreakEndTimestamp(timestamp: Long) {
+        context.runtimeDataStore.edit { preferences -> preferences[RuntimeKeys.DEEP_FOCUS_BREAK_END_TIMESTAMP] = timestamp }
+    }
+
+    suspend fun setDeepFocusMaxAllowedApps(max: Int) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.DEEP_FOCUS_MAX_ALLOWED_APPS] = max }
+    }
+
     suspend fun setDisableTrackingAtUnusedHours(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.DISABLE_TRACKING_AT_UNUSED_HOURS] = enabled }
     }
@@ -1488,6 +1539,14 @@ data class UserPreferences(
     val lockdownEndTime: String = "07:00",
     val lockdownDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7),
     val dismissedUninstalledApps: Map<String, String> = emptyMap(),
+    val deepFocusEnabled: Boolean = false,
+    val deepFocusAllowedPackages: Set<String> = emptySet(),
+    val deepFocusBreakDurationMinutes: Int = 15,
+    val deepFocusBlockAllowedApps: Boolean = true,
+    val deepFocusSessionDurationMinutes: Int = 60,
+    val deepFocusMaxAllowedApps: Int = 7,
+    val deepFocusSessionEndTimestamp: Long = 0L,
+    val deepFocusBreakEndTimestamp: Long = 0L,
     val incentiveLockEnabled: Boolean = false,
     val incentiveLockDisableRequestTimestamp: Long = 0L,
     val incentiveLockGoalsMetToday: Boolean = false,

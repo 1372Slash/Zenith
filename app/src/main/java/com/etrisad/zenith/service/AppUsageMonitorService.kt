@@ -288,6 +288,7 @@ class AppUsageMonitorService : Service() {
                         SharedMonitoringState.cachedDayStartMinute = prefs.dayStartMinute
                         updateBedtimeStatus(prefs)
                         updateGracePeriodStatus(prefs)
+                        updateDeepFocusStatus(prefs)
                     }
 
                     val shields = kotlinx.coroutines.withTimeoutOrNull(5000) {
@@ -449,6 +450,7 @@ class AppUsageMonitorService : Service() {
             recheckShield = { pkg -> serviceScope.launch { checkIfAppIsShielded(pkg) } },
             getTotalUsageToday = { pkg -> getTotalUsageToday(pkg) },
             getTotalGlobalUsageToday = { getTotalGlobalUsageToday() },
+            preferencesRepository = preferencesRepository,
         )
 
         usageGlimpseManager = UsageGlimpseOverlayManager(this)
@@ -871,6 +873,7 @@ class AppUsageMonitorService : Service() {
 
                 updateBedtimeStatus(preferences)
                 updateGracePeriodStatus(preferences)
+                updateDeepFocusStatus(preferences)
                 if (preferences.eyeCareEnabled) startEyeCareTimer() else stopEyeCareTimer()
                 if (preferences.usageGlimpseEnabled) startUsageGlimpseTimer() else usageGlimpseJob?.cancel()
                 refreshForegroundNotification(force = true)
@@ -1387,7 +1390,7 @@ class AppUsageMonitorService : Service() {
         }
 
         val isBedtimeBlocking = SharedMonitoringState.isBedtimeActive || (SharedMonitoringState.isWindDownActive && SharedMonitoringState.currentPreferences?.bedtimeWindDownEnabled == true)
-        val shouldCheckSchedules = (isBedtimeBlocking && currentApp !in SharedMonitoringState.bedtimeWhitelistedPackages) || (allowedUntilVal == null || currentTime > allowedUntilVal)
+        val shouldCheckSchedules = (isBedtimeBlocking && currentApp !in SharedMonitoringState.bedtimeWhitelistedPackages) || SharedMonitoringState.isDeepFocusActive || (allowedUntilVal == null || currentTime > allowedUntilVal)
 
         if (!isAppPaused && shouldCheckSchedules && !InterceptOverlayManager.isShowing && !ZenithService.isServiceRunning) {
             if (checkSchedules(currentApp)) {
@@ -2275,6 +2278,18 @@ class AppUsageMonitorService : Service() {
         }
 
         SharedMonitoringState.isGracePeriodActive = active
+    }
+
+    private fun updateDeepFocusStatus(prefs: UserPreferences) {
+        val now = System.currentTimeMillis()
+        val isActive = prefs.deepFocusEnabled && prefs.deepFocusSessionEndTimestamp > now
+        val isBreak = isActive && prefs.deepFocusBreakEndTimestamp > now
+
+        SharedMonitoringState.isDeepFocusActive = isActive
+        SharedMonitoringState.isDeepFocusBlockingActive = isActive
+        SharedMonitoringState.isDeepFocusBreakActive = isBreak
+        SharedMonitoringState.deepFocusAllowedPackages = prefs.deepFocusAllowedPackages
+        SharedMonitoringState.deepFocusBlockAllowedApps = prefs.deepFocusBlockAllowedApps
     }
 
     private fun checkSchedulesTransition(currentTotalMinutes: Int) {

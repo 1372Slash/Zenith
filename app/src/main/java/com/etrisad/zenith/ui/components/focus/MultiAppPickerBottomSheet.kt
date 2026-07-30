@@ -44,7 +44,9 @@ fun MultiAppPickerBottomSheet(
     onTabChange: ((PickerTab) -> Unit)? = null,
     onWebsiteSearchChange: ((String) -> Unit)? = null,
     onWebsiteToggled: ((String) -> Unit)? = null,
-    showTabs: Boolean = true
+    showTabs: Boolean = true,
+    title: String = "Select Apps for Schedule",
+    maxSelection: Int? = null
 ) {
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
@@ -74,12 +76,24 @@ fun MultiAppPickerBottomSheet(
                         .padding(horizontal = 16.dp)
                         .padding(top = 24.dp)
                 ) {
-                    Text(
-                        text = "Select Apps for Schedule",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (maxSelection != null) {
+                            Text(
+                                text = "${uiState.selectedAppsForSchedule.size}/$maxSelection",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
 
                     if (showTabs) {
                         TabRow(

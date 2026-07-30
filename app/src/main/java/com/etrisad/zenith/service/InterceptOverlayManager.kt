@@ -26,10 +26,13 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.etrisad.zenith.ui.components.overlay.BedtimeOverlayContent
+import com.etrisad.zenith.ui.components.overlay.DeepFocusAfterType
+import com.etrisad.zenith.ui.components.overlay.DeepFocusPuzzleContent
 import com.etrisad.zenith.ui.components.overlay.EyeCareOverlayContent
 import com.etrisad.zenith.ui.components.overlay.InterceptOverlayContent
 import com.etrisad.zenith.ui.components.overlay.ScheduleOverlayContent
 import com.etrisad.zenith.ui.components.overlay.WindDownOverlayContent
+import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.ui.theme.GSFlexSettings
 import com.etrisad.zenith.ui.theme.ZenithTheme
 import kotlinx.coroutines.CoroutineScope
@@ -859,6 +862,93 @@ class InterceptOverlayManager(
             } catch (_: Exception) {
             }
         }
+    }
+
+    fun showDeepFocusPuzzleOverlay(
+        packageName: String,
+        appName: String,
+        afterContentType: DeepFocusAfterType = DeepFocusAfterType.BREAK_STARTED,
+        skipPuzzle: Boolean = false,
+        shield: ShieldEntity? = null,
+        totalUsageToday: Long = 0,
+        totalGlobalUsageToday: Long = 0,
+        onAllowUse: (Int, Boolean) -> Unit = { _, _ -> },
+        onGoalDismiss: () -> Unit = {},
+        onComplete: () -> Unit,
+        onCloseApp: () -> Unit
+    ) {
+        synchronized(this) {
+            if (isShowing && currentPackage == packageName) return
+
+            if (Looper.myLooper() != Looper.getMainLooper()) {
+                mainHandler.post {
+                    showDeepFocusPuzzleOverlay(packageName, appName, afterContentType, skipPuzzle, shield, totalUsageToday, totalGlobalUsageToday, onAllowUse, onGoalDismiss, onComplete, onCloseApp)
+                }
+                return
+            }
+
+            if (isShowing || overlayView != null) hideOverlay()
+
+            isShowing = true
+            currentPackage = packageName
+        }
+
+        val vStore = ViewModelStore()
+        viewModelStore = vStore
+
+        val lOwner = MyLifecycleOwner()
+        lOwner.performRestore(null)
+        lOwner.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+        lifecycleOwner = lOwner
+
+        val composeView = ComposeView(context).apply {
+            setContent {
+                val userPrefs by sharedPrefs.collectAsState(initial = null)
+                val darkTheme = when (userPrefs?.themeConfig) {
+                    com.etrisad.zenith.data.preferences.ThemeConfig.LIGHT -> false
+                    com.etrisad.zenith.data.preferences.ThemeConfig.DARK -> true
+                    else -> androidx.compose.foundation.isSystemInDarkTheme()
+                }
+
+                ZenithTheme(
+                    darkTheme = darkTheme,
+                    fontOption = userPrefs?.fontOption ?: com.etrisad.zenith.data.preferences.FontOption.SYSTEM,
+                    dynamicColor = userPrefs?.dynamicColor ?: true,
+                    expressiveColors = userPrefs?.expressiveColors ?: false,
+                    gsFlexSettings = userPrefs?.gsFlexSettings ?: GSFlexSettings()
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        DeepFocusPuzzleContent(
+                            userPreferences = userPrefs,
+                            afterContentType = afterContentType,
+                            skipPuzzle = skipPuzzle,
+                            packageName = packageName,
+                            appName = appName,
+                            shield = shield,
+                            totalUsageToday = totalUsageToday,
+                            totalGlobalUsageToday = totalGlobalUsageToday,
+                            onAllowUse = { minutes, isEmergency ->
+                                onAllowUse(minutes, isEmergency)
+                                hideOverlay()
+                            },
+                            onGoalDismiss = {
+                                onGoalDismiss()
+                                hideOverlay()
+                            },
+                            onComplete = {
+                                onComplete()
+                                hideOverlay()
+                            },
+                            onCloseApp = {
+                                onCloseApp()
+                                hideOverlay()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        setupAndAddView(composeView, lOwner)
     }
 
     fun destroy() {

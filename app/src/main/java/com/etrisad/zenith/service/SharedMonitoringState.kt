@@ -40,6 +40,13 @@ object SharedMonitoringState {
     @Volatile var isBedtimeActive = false
     @Volatile var isWindDownActive = false
     @Volatile var isBedtimeBlockingActive = false
+    @Volatile var isDeepFocusActive = false
+    @Volatile var isDeepFocusBlockingActive = false
+    @Volatile var isDeepFocusBreakActive = false
+    @Volatile var deepFocusAllowedPackages = emptySet<String>()
+    @Volatile var deepFocusBlockAllowedApps = true
+    @Volatile var deepFocusNextBreakAllowedTimestamp: Long = 0L
+    const val DEEP_FOCUS_BREAK_COOLDOWN_MINUTES = 30
     @Volatile var lastBankingAppsCount = -1
     val windDownUsedPackages = ConcurrentHashMap<String, Boolean>()
     val systemAppCache = ConcurrentHashMap<String, Boolean>()

@@ -11,7 +11,9 @@ import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.entity.WebsiteUsageEntity
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
+import com.etrisad.zenith.ui.components.overlay.DeepFocusAfterType
 import com.etrisad.zenith.ui.components.overlay.SessionUsageOverlayManager
 import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.data.website.WebsiteStateHolder
@@ -40,6 +42,7 @@ class OverlayActionHandler(
     private val recheckShield: (String) -> Unit,
     private val getTotalUsageToday: (String) -> Long,
     private val getTotalGlobalUsageToday: () -> Long,
+    private val preferencesRepository: UserPreferencesRepository? = null,
 ) {
     private val allowedApps get() = shieldRepository.allowedApps
     private val mindfulGatewayStates get() = shieldRepository.mindfulGatewayStates
@@ -842,6 +845,31 @@ class OverlayActionHandler(
     fun shouldBypassBlocking(packageName: String): Boolean {
         if (packageName == contextPkg) return true
 
+        if (SharedMonitoringState.isDeepFocusActive) {
+            if (packageName in SharedMonitoringState.CRITICAL_SYSTEM_PACKAGES) return true
+            if (packageName in SharedMonitoringState.whitelistedPackages) return true
+            if (isKeyboardApp(packageName)) return true
+            if (SharedMonitoringState.launcherPackages.contains(packageName) ||
+                SharedMonitoringState.defaultLauncherPackage == packageName ||
+                packageName.contains("launcher", ignoreCase = true) ||
+                packageName.contains("home", ignoreCase = true)) return true
+            if (packageName in SharedMonitoringState.restrictedPackages) return false
+            if (packageName in SharedMonitoringState.deepFocusAllowedPackages) {
+                if (!SharedMonitoringState.isDeepFocusBreakActive && SharedMonitoringState.deepFocusBlockAllowedApps) return false
+                return true
+            }
+            if (SharedMonitoringState.isDeepFocusBreakActive) return false
+            val isSystem = SharedMonitoringState.systemAppCache.getOrPut(packageName) {
+                try {
+                    val appInfo = packageManager.getApplicationInfo(packageName, 0)
+                    (appInfo.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
+                } catch (_: Exception) { false }
+            }
+            return if (isSystem) {
+                packageName !in SharedMonitoringState.restrictedPackages
+            } else false
+        }
+
         if (SharedMonitoringState.isGracePeriodActive) return true
 
         if (SharedMonitoringState.isFinancialApp(packageName)) return true
@@ -878,12 +906,99 @@ class OverlayActionHandler(
         } else false
     }
 
+    private fun showDeepFocusPuzzle(packageName: String, isBlocked: Boolean = false) {
+        if (!AppStateHolder.isScreenOn.value) return
+        scope.launch(Dispatchers.Main) {
+            val shield = SharedMonitoringState.allShieldsCache[packageName]
+            val now = System.currentTimeMillis()
+            val inCooldown = shield == null && !isBlocked &&
+                SharedMonitoringState.deepFocusNextBreakAllowedTimestamp > 0L &&
+                now < SharedMonitoringState.deepFocusNextBreakAllowedTimestamp
+
+            val afterType = when {
+                isBlocked || inCooldown -> DeepFocusAfterType.BLOCKED
+                shield == null -> DeepFocusAfterType.BREAK_STARTED
+                shield.type == FocusType.GOAL -> DeepFocusAfterType.GOAL
+                else -> DeepFocusAfterType.SHIELD
+            }
+
+            val appName = getAppName(packageName)
+            val totalUsageToday = getTotalUsageToday(packageName)
+            val totalGlobalUsageToday = getTotalGlobalUsageToday()
+
+            val startBreak: () -> Unit = {
+                val prefs = SharedMonitoringState.currentPreferences
+                if (preferencesRepository != null && prefs != null) {
+                    val breakDuration = prefs.deepFocusBreakDurationMinutes.coerceAtLeast(1)
+                    val breakEnd = System.currentTimeMillis() + (breakDuration * 60 * 1000L)
+                    scope.launch {
+                        preferencesRepository.setDeepFocusBreakEndTimestamp(breakEnd)
+                        SharedMonitoringState.isDeepFocusBreakActive = true
+                        SharedMonitoringState.deepFocusNextBreakAllowedTimestamp = breakEnd + (SharedMonitoringState.DEEP_FOCUS_BREAK_COOLDOWN_MINUTES * 60 * 1000L)
+                    }
+                }
+            }
+
+            overlayManager.showDeepFocusPuzzleOverlay(
+                packageName = packageName,
+                appName = appName,
+                afterContentType = afterType,
+                skipPuzzle = isBlocked || inCooldown,
+                shield = shield,
+                totalUsageToday = totalUsageToday,
+                totalGlobalUsageToday = totalGlobalUsageToday,
+                onAllowUse = { minutes, _ ->
+                    if (!isBlocked) {
+                        startBreak()
+                        val endTime = System.currentTimeMillis() + (minutes * 60 * 1000L)
+                        allowedApps[packageName] = endTime
+                    }
+                },
+                onGoalDismiss = {
+                    if (!isBlocked) {
+                        startBreak()
+                        if (shield != null) {
+                            val goalEnd = System.currentTimeMillis() + (shield.timeLimitMinutes * 60 * 1000L)
+                            allowedApps[packageName] = goalEnd
+                        }
+                    }
+                },
+                onComplete = {
+                    if (!isBlocked) {
+                        startBreak()
+                    }
+                },
+                onCloseApp = {
+                    val now = System.currentTimeMillis()
+                    InterceptOverlayManager.lastKickTime = now
+                    InterceptOverlayManager.lastKickedPackage = packageName
+                    InterceptOverlayManager.lastClosedPackage = packageName
+                    InterceptOverlayManager.lastClosedTime = now
+                    if (WebsiteRepository.isWebsitePackageName(packageName)) quitWebsite()
+                    else goToHomeScreen()
+                }
+            )
+        }
+    }
+
     fun checkSchedules(
         packageName: String,
         updateShieldCache: (ShieldEntity?) -> Unit,
         recheckSchedules: (String) -> Unit,
     ): Boolean {
         if (shouldBypassBlocking(packageName)) return false
+
+        if (SharedMonitoringState.isDeepFocusActive) {
+            if (packageName !in SharedMonitoringState.deepFocusAllowedPackages) {
+                showDeepFocusPuzzle(packageName, isBlocked = true)
+                return true
+            }
+            if (!SharedMonitoringState.isDeepFocusBreakActive && SharedMonitoringState.deepFocusBlockAllowedApps) {
+                showDeepFocusPuzzle(packageName)
+                return true
+            }
+            return false
+        }
 
         if (SharedMonitoringState.isGracePeriodActive) return false
 

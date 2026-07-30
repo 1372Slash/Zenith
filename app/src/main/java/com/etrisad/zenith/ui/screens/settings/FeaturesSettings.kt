@@ -55,6 +55,7 @@ fun FeaturesSettings(
     onNavigateToGracePeriod: () -> Unit,
     onWebsiteAutoTrackingEnabledChange: (Boolean) -> Unit,
     onNavigateToLockdown: () -> Unit,
+    onNavigateToDeepFocus: () -> Unit,
     goalCount: Int
 ) {
     val context = LocalContext.current
@@ -294,6 +295,15 @@ fun FeaturesSettings(
             summary = "Remind you to look away every ${preferences.eyeCareWorkMinutes} minutes to reduce eye strain",
             onClick = onNavigateToEyeCare,
             icon = Icons.Outlined.RemoveRedEye,
+            shape = RoundedCornerShape(8.dp)
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+        SettingsActionItem(
+            title = "Deep Focus",
+            summary = "Lock down distractions and take puzzle-guided breaks",
+            onClick = onNavigateToDeepFocus,
+            icon = Icons.Outlined.Visibility,
             shape = RoundedCornerShape(8.dp)
         )
 
