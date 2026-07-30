@@ -13,7 +13,7 @@ import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.entity.WebsiteUsageEntity
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
-import com.etrisad.zenith.ui.components.overlay.DeepFocusAfterType
+import com.etrisad.zenith.ui.components.overlay.PomodoroAfterType
 import com.etrisad.zenith.ui.components.overlay.SessionUsageOverlayManager
 import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.data.website.WebsiteStateHolder
@@ -845,7 +845,7 @@ class OverlayActionHandler(
     fun shouldBypassBlocking(packageName: String): Boolean {
         if (packageName == contextPkg) return true
 
-        if (SharedMonitoringState.isDeepFocusActive) {
+        if (SharedMonitoringState.isPomodoroActive) {
             if (packageName in SharedMonitoringState.CRITICAL_SYSTEM_PACKAGES) return true
             if (packageName in SharedMonitoringState.whitelistedPackages) return true
             if (isKeyboardApp(packageName)) return true
@@ -854,11 +854,21 @@ class OverlayActionHandler(
                 packageName.contains("launcher", ignoreCase = true) ||
                 packageName.contains("home", ignoreCase = true)) return true
             if (packageName in SharedMonitoringState.restrictedPackages) return false
-            if (packageName in SharedMonitoringState.deepFocusAllowedPackages) {
-                if (!SharedMonitoringState.isDeepFocusBreakActive && SharedMonitoringState.deepFocusBlockAllowedApps) return false
+            if (SharedMonitoringState.isPomodoroPaused) {
+                if (packageName in SharedMonitoringState.pomodoroAllowedPackages) return true
+                val isSystem = SharedMonitoringState.systemAppCache.getOrPut(packageName) {
+                    try {
+                        val appInfo = packageManager.getApplicationInfo(packageName, 0)
+                        (appInfo.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
+                    } catch (_: Exception) { false }
+                }
+                return isSystem
+            }
+            if (packageName in SharedMonitoringState.pomodoroAllowedPackages) {
+                if (!SharedMonitoringState.isPomodoroBreakActive && SharedMonitoringState.pomodoroBlockAllowedApps) return false
                 return true
             }
-            if (SharedMonitoringState.isDeepFocusBreakActive) return false
+            if (SharedMonitoringState.isPomodoroBreakActive) return false
             val isSystem = SharedMonitoringState.systemAppCache.getOrPut(packageName) {
                 try {
                     val appInfo = packageManager.getApplicationInfo(packageName, 0)
@@ -906,20 +916,20 @@ class OverlayActionHandler(
         } else false
     }
 
-    private fun showDeepFocusPuzzle(packageName: String, isBlocked: Boolean = false) {
+    private fun showPomodoroPuzzle(packageName: String, isBlocked: Boolean = false) {
         if (!AppStateHolder.isScreenOn.value) return
         scope.launch(Dispatchers.Main) {
             val shield = SharedMonitoringState.allShieldsCache[packageName]
             val now = System.currentTimeMillis()
             val inCooldown = shield == null && !isBlocked &&
-                SharedMonitoringState.deepFocusNextBreakAllowedTimestamp > 0L &&
-                now < SharedMonitoringState.deepFocusNextBreakAllowedTimestamp
+                SharedMonitoringState.pomodoroNextBreakAllowedTimestamp > 0L &&
+                now < SharedMonitoringState.pomodoroNextBreakAllowedTimestamp
 
             val afterType = when {
-                isBlocked || inCooldown -> DeepFocusAfterType.BLOCKED
-                shield == null -> DeepFocusAfterType.BREAK_STARTED
-                shield.type == FocusType.GOAL -> DeepFocusAfterType.GOAL
-                else -> DeepFocusAfterType.SHIELD
+                isBlocked || inCooldown -> PomodoroAfterType.BLOCKED
+                shield == null -> PomodoroAfterType.BREAK_STARTED
+                shield.type == FocusType.GOAL -> PomodoroAfterType.GOAL
+                else -> PomodoroAfterType.SHIELD
             }
 
             val appName = getAppName(packageName)
@@ -929,17 +939,17 @@ class OverlayActionHandler(
             val startBreak: () -> Unit = {
                 val prefs = SharedMonitoringState.currentPreferences
                 if (preferencesRepository != null && prefs != null) {
-                    val breakDuration = prefs.deepFocusBreakDurationMinutes.coerceAtLeast(1)
+                    val breakDuration = prefs.pomodoroBreakDurationMinutes.coerceAtLeast(1)
                     val breakEnd = System.currentTimeMillis() + (breakDuration * 60 * 1000L)
                     scope.launch {
-                        preferencesRepository.setDeepFocusBreakEndTimestamp(breakEnd)
-                        SharedMonitoringState.isDeepFocusBreakActive = true
-                        SharedMonitoringState.deepFocusNextBreakAllowedTimestamp = breakEnd + (SharedMonitoringState.DEEP_FOCUS_BREAK_COOLDOWN_MINUTES * 60 * 1000L)
+                        preferencesRepository.setPomodoroBreakEndTimestamp(breakEnd)
+                        SharedMonitoringState.isPomodoroBreakActive = true
+                        SharedMonitoringState.pomodoroNextBreakAllowedTimestamp = breakEnd + (SharedMonitoringState.POMODORO_BREAK_COOLDOWN_MINUTES * 60 * 1000L)
                     }
                 }
             }
 
-            overlayManager.showDeepFocusPuzzleOverlay(
+            overlayManager.showPomodoroPuzzleOverlay(
                 packageName = packageName,
                 appName = appName,
                 afterContentType = afterType,
@@ -988,13 +998,13 @@ class OverlayActionHandler(
     ): Boolean {
         if (shouldBypassBlocking(packageName)) return false
 
-        if (SharedMonitoringState.isDeepFocusActive) {
-            if (packageName !in SharedMonitoringState.deepFocusAllowedPackages) {
-                showDeepFocusPuzzle(packageName, isBlocked = true)
+        if (SharedMonitoringState.isPomodoroActive) {
+            if (packageName !in SharedMonitoringState.pomodoroAllowedPackages) {
+                showPomodoroPuzzle(packageName, isBlocked = true)
                 return true
             }
-            if (!SharedMonitoringState.isDeepFocusBreakActive && SharedMonitoringState.deepFocusBlockAllowedApps) {
-                showDeepFocusPuzzle(packageName)
+            if (!SharedMonitoringState.isPomodoroBreakActive && SharedMonitoringState.pomodoroBlockAllowedApps) {
+                showPomodoroPuzzle(packageName)
                 return true
             }
             return false

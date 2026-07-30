@@ -112,7 +112,8 @@ fun HomeScreen(
     onBedtimeClick: () -> Unit,
     onDeleteShield: (ShieldEntity) -> Unit,
     onDismissUninstalled: (String) -> Unit,
-    onAlarmClick: () -> Unit = {}
+    onAlarmClick: () -> Unit = {},
+    onPomodoroClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val preferences by viewModel.homeScreenPreferences.collectAsState()
@@ -143,6 +144,7 @@ fun HomeScreen(
         onAppClick = onAppClick,
         onBedtimeClick = onBedtimeClick,
         onAlarmClick = onAlarmClick,
+        onPomodoroClick = onPomodoroClick,
         onStatsClick = onSeeFullList,
         onDaySelected = onDaySelected,
         onRefresh = { viewModel.onRefresh() },
@@ -165,6 +167,7 @@ fun HomeScreenContent(
     onAppClick: (String) -> Unit,
     onBedtimeClick: () -> Unit,
     onAlarmClick: () -> Unit = {},
+    onPomodoroClick: () -> Unit = {},
     onStatsClick: () -> Unit,
     onDaySelected: (Long?) -> Unit,
     onRefresh: () -> Unit,
@@ -375,7 +378,8 @@ fun HomeScreenContent(
                     bedtimeStatus = bedtimeStatus,
                     onAlarmClick = onAlarmClick,
                     onBedtimeClick = onBedtimeClick,
-                    onStatsClick = onStatsClick
+                    onStatsClick = onStatsClick,
+                    onPomodoroClick = onPomodoroClick
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -1314,7 +1318,8 @@ fun QuickActionsSection(
     bedtimeStatus: BedtimeStatus,
     onAlarmClick: () -> Unit,
     onBedtimeClick: () -> Unit,
-    onStatsClick: () -> Unit
+    onStatsClick: () -> Unit,
+    onPomodoroClick: () -> Unit = {}
 ) {
     var showRemainingTime by remember { mutableStateOf(false) }
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -1345,7 +1350,8 @@ fun QuickActionsSection(
         )
         QuickActionCard(
             icon = Icons.Outlined.Timer,
-            label = "Pomodoro"
+            label = "Pomodoro",
+            onClick = onPomodoroClick
         )
         QuickActionCard(
             icon = Icons.Outlined.Insights,

@@ -63,7 +63,7 @@ import com.etrisad.zenith.ui.screens.home.UsageStatsScreen
 import com.etrisad.zenith.ui.screens.alarm.AlarmScreen
 import com.etrisad.zenith.ui.screens.bedtime.BedtimeScreen
 import com.etrisad.zenith.ui.screens.graceperiod.GracePeriodScreen
-import com.etrisad.zenith.ui.screens.deepfocus.DeepFocusScreen
+import com.etrisad.zenith.ui.screens.pomodoro.PomodoroScreen
 import com.etrisad.zenith.ui.screens.settings.EyeCareScreen
 import com.etrisad.zenith.ui.screens.settings.LockdownSettings
 import com.etrisad.zenith.ui.screens.settings.SettingsScreen
@@ -73,8 +73,8 @@ import com.etrisad.zenith.ui.viewmodel.BedtimeViewModel
 import com.etrisad.zenith.ui.viewmodel.BedtimeViewModelFactory
 import com.etrisad.zenith.ui.viewmodel.GracePeriodViewModel
 import com.etrisad.zenith.ui.viewmodel.GracePeriodViewModelFactory
-import com.etrisad.zenith.ui.viewmodel.DeepFocusViewModel
-import com.etrisad.zenith.ui.viewmodel.DeepFocusViewModelFactory
+import com.etrisad.zenith.ui.viewmodel.PomodoroViewModel
+import com.etrisad.zenith.ui.viewmodel.PomodoroViewModelFactory
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.data.manager.GitHubUpdateManager
@@ -102,8 +102,8 @@ fun MainScreen(
     val gracePeriodViewModel: GracePeriodViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         factory = GracePeriodViewModelFactory(userPreferencesRepository)
     )
-    val deepFocusViewModel: DeepFocusViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
-        factory = DeepFocusViewModelFactory(context, userPreferencesRepository)
+    val PomodoroViewModel: PomodoroViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = PomodoroViewModelFactory(context, userPreferencesRepository)
     )
     val navController = rememberNavController()
 
@@ -148,7 +148,7 @@ fun MainScreen(
                 currentRoute == Screen.GracePeriod.route ||
                 currentRoute == Screen.EyeCare.route ||
                 currentRoute == Screen.Lockdown.route ||
-                currentRoute == Screen.DeepFocus.route ||
+                currentRoute == Screen.Pomodoro.route ||
                 currentRoute == Screen.DatabaseDebug.route ||
                 currentRoute == Screen.DataRepairment.route ||
                 currentRoute == Screen.FontTest.route ||
@@ -197,9 +197,6 @@ fun MainScreen(
     var alarmSwitchInLayout by remember { mutableStateOf(false) }
     val performanceBackInterceptor = remember { mutableStateOf<() -> Boolean>({ false }) }
 
-    var deepFocusSwitchVisible by remember { mutableStateOf(false) }
-    var deepFocusSwitchInLayout by remember { mutableStateOf(false) }
-    var showDeepFocusDisableSheet by remember { mutableStateOf(false) }
     var showBatchDeleteSheet by remember { mutableStateOf(false) }
     var showBatchPauseSheet by remember { mutableStateOf(false) }
 
@@ -306,26 +303,6 @@ fun MainScreen(
             if (alarmSwitchInLayout) {
                 delay(1500)
                 alarmSwitchInLayout = false
-            }
-        }
-    }
-
-    LaunchedEffect(currentRoute, preferences.deepFocusEnabled) {
-        val isDeepFocusScreen = currentRoute == Screen.DeepFocus.route
-        val shouldShow = isDeepFocusScreen && preferences.deepFocusEnabled
-
-        if (shouldShow) {
-            deepFocusSwitchInLayout = true
-            delay(1200)
-            deepFocusSwitchVisible = true
-        } else {
-            if (deepFocusSwitchVisible) {
-                deepFocusSwitchVisible = false
-                delay(800)
-            }
-            if (deepFocusSwitchInLayout) {
-                delay(1500)
-                deepFocusSwitchInLayout = false
             }
         }
     }
@@ -478,7 +455,7 @@ fun MainScreen(
                     currentRoute != Screen.GracePeriod.route &&
                     currentRoute != Screen.EyeCare.route &&
                     currentRoute != Screen.Lockdown.route &&
-                    currentRoute != Screen.DeepFocus.route &&
+                    currentRoute != Screen.Pomodoro.route &&
                     currentRoute != Screen.DatabaseDebug.route &&
                     currentRoute != Screen.DataRepairment.route &&
                     currentRoute != Screen.FontTest.route &&
@@ -1007,90 +984,12 @@ fun MainScreen(
                                     }
                                 }
                             }
-                            if (deepFocusSwitchInLayout) {
-                                Box(
-                                    modifier = Modifier
-                                        .padding(end = 16.dp)
-                                        .width(52.dp)
-                                        .height(32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    androidx.compose.animation.AnimatedVisibility(
-                                        visible = deepFocusSwitchVisible,
-                                        enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
-                                                slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
-                                        exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
-                                    ) {
-                                        Switch(
-                                            checked = preferences.deepFocusEnabled,
-                                            onCheckedChange = {
-                                                if (preferences.deepFocusEnabled) {
-                                                    showDeepFocusDisableSheet = true
-                                                } else {
-                                                    deepFocusViewModel.startSession()
-                                                }
-                                            },
-                                            thumbContent = {
-                                                val thumbSize by animateDpAsState(
-                                                    targetValue = if (preferences.deepFocusEnabled) 28.dp else 24.dp,
-                                                    animationSpec = spring(
-                                                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                        stiffness = Spring.StiffnessMediumLow
-                                                    ),
-                                                    label = "thumb_size"
-                                                )
-                                                val iconColor by animateColorAsState(
-                                                    targetValue = if (preferences.deepFocusEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                                                    label = "switch_icon_color"
-                                                )
-                                                Box(
-                                                    modifier = Modifier.size(thumbSize),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    AnimatedContent(
-                                                        targetState = preferences.deepFocusEnabled,
-                                                        transitionSpec = {
-                                                            (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                                    scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
-                                                                .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                                        scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
-                                                        },
-                                                        label = "switch_icon_anim"
-                                                    ) { isChecked ->
-                                                        Icon(
-                                                            imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
-                                                            contentDescription = null,
-                                                            modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
-                                                            tint = iconColor
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        )
-                                    }
-                                }
-                            }
+
                         }
                     }
                 )
             }
         ) { innerPadding ->
-            if (showDeepFocusDisableSheet) {
-                ConfirmBottomSheet(
-                    onDismiss = { showDeepFocusDisableSheet = false },
-                    onConfirm = { _ ->
-                        deepFocusViewModel.endSession()
-                        showDeepFocusDisableSheet = false
-                    },
-                    leverCount = 10,
-                    puzzleTimeoutSeconds = 10,
-                    showTimeSelection = false
-                )
-            }
             if (showBatchDeleteSheet) {
                 ConfirmBottomSheet(
                     onDismiss = { showBatchDeleteSheet = false },
@@ -1170,7 +1069,7 @@ fun MainScreen(
                                     targetRoute == Screen.GracePeriod.route ||
                                     targetRoute == Screen.EyeCare.route ||
                                     targetRoute == Screen.Lockdown.route ||
-                                    targetRoute == Screen.DeepFocus.route ||
+                                    targetRoute == Screen.Pomodoro.route ||
                                     targetRoute == Screen.DatabaseDebug.route ||
                                     targetRoute == Screen.DataRepairment.route ||
                                     targetRoute == Screen.FontTest.route ||
@@ -1186,7 +1085,7 @@ fun MainScreen(
                                     initialRoute == Screen.GracePeriod.route ||
                                     initialRoute == Screen.EyeCare.route ||
                                     initialRoute == Screen.Lockdown.route ||
-                                    initialRoute == Screen.DeepFocus.route ||
+                                    initialRoute == Screen.Pomodoro.route ||
                                     initialRoute == Screen.DatabaseDebug.route ||
                                     initialRoute == Screen.DataRepairment.route ||
                                     initialRoute == Screen.FontTest.route ||
@@ -1210,7 +1109,7 @@ fun MainScreen(
                             val initialIndex = navItems.indexOfFirst { it.route == initialRoute }
                             val targetIndex = navItems.indexOfFirst { it.route == targetRoute }
 
-                            if (targetIndex > initialIndex) {
+                            if (targetIndex > initialIndex && initialIndex != -1) {
                                 slideInHorizontally(
                                     initialOffsetX = { it },
                                     animationSpec = animationSpec
@@ -1264,9 +1163,14 @@ fun MainScreen(
                             stiffness = Spring.StiffnessLow
                         )
 
-                        if (isTargetDeep || (isInitialDeep && !isTargetDeep)) {
+                        if (isTargetDeep) {
                             slideOutHorizontally(
                                 targetOffsetX = { -it / 3 },
+                                animationSpec = animationSpec
+                            ) + fadeOut()
+                        } else if (isInitialDeep) {
+                            slideOutHorizontally(
+                                targetOffsetX = { it },
                                 animationSpec = animationSpec
                             ) + fadeOut()
                         } else {
@@ -1317,6 +1221,7 @@ fun MainScreen(
                             },
                             onBedtimeClick = { navController.navigate(Screen.Bedtime.route) },
                             onAlarmClick = { navController.navigate(Screen.Alarm.route) },
+                            onPomodoroClick = { navController.navigate(Screen.Pomodoro.route) },
                             onDeleteShield = { shield -> homeViewModel.deleteShield(shield) },
                             onDismissUninstalled = { pkg ->
                                 homeScope.launch {
@@ -1384,9 +1289,9 @@ fun MainScreen(
                             preferencesRepository = userPreferencesRepository
                         )
                     }
-                    composable(Screen.DeepFocus.route) {
-                        DeepFocusScreen(
-                            viewModel = deepFocusViewModel,
+                    composable(Screen.Pomodoro.route) {
+                        PomodoroScreen(
+                            viewModel = PomodoroViewModel,
                             innerPadding = innerPadding,
                             preferencesRepository = userPreferencesRepository
                         )
@@ -1490,7 +1395,7 @@ fun MainScreen(
                             currentRoute != Screen.GSFlexCustomizer.route &&
                             currentRoute != Screen.SystemUsageDebug.route &&
                             currentRoute != Screen.OverlayAppearance.route &&
-                            currentRoute != Screen.DeepFocus.route &&
+                            currentRoute != Screen.Pomodoro.route &&
                             currentRoute?.startsWith("settings_category") == false &&
                             currentRoute?.startsWith("app_detail") == false
 

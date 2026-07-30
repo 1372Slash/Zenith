@@ -288,7 +288,7 @@ class AppUsageMonitorService : Service() {
                         SharedMonitoringState.cachedDayStartMinute = prefs.dayStartMinute
                         updateBedtimeStatus(prefs)
                         updateGracePeriodStatus(prefs)
-                        updateDeepFocusStatus(prefs)
+                        updatePomodoroStatus(prefs)
                     }
 
                     val shields = kotlinx.coroutines.withTimeoutOrNull(5000) {
@@ -873,7 +873,7 @@ class AppUsageMonitorService : Service() {
 
                 updateBedtimeStatus(preferences)
                 updateGracePeriodStatus(preferences)
-                updateDeepFocusStatus(preferences)
+                updatePomodoroStatus(preferences)
                 if (preferences.eyeCareEnabled) startEyeCareTimer() else stopEyeCareTimer()
                 if (preferences.usageGlimpseEnabled) startUsageGlimpseTimer() else usageGlimpseJob?.cancel()
                 refreshForegroundNotification(force = true)
@@ -1390,7 +1390,7 @@ class AppUsageMonitorService : Service() {
         }
 
         val isBedtimeBlocking = SharedMonitoringState.isBedtimeActive || (SharedMonitoringState.isWindDownActive && SharedMonitoringState.currentPreferences?.bedtimeWindDownEnabled == true)
-        val shouldCheckSchedules = (isBedtimeBlocking && currentApp !in SharedMonitoringState.bedtimeWhitelistedPackages) || SharedMonitoringState.isDeepFocusActive || (allowedUntilVal == null || currentTime > allowedUntilVal)
+        val shouldCheckSchedules = (isBedtimeBlocking && currentApp !in SharedMonitoringState.bedtimeWhitelistedPackages) || SharedMonitoringState.isPomodoroActive || (allowedUntilVal == null || currentTime > allowedUntilVal)
 
         if (!isAppPaused && shouldCheckSchedules && !InterceptOverlayManager.isShowing && !ZenithService.isServiceRunning) {
             if (checkSchedules(currentApp)) {
@@ -2280,16 +2280,17 @@ class AppUsageMonitorService : Service() {
         SharedMonitoringState.isGracePeriodActive = active
     }
 
-    private fun updateDeepFocusStatus(prefs: UserPreferences) {
+    private fun updatePomodoroStatus(prefs: UserPreferences) {
         val now = System.currentTimeMillis()
-        val isActive = prefs.deepFocusEnabled && prefs.deepFocusSessionEndTimestamp > now
-        val isBreak = isActive && prefs.deepFocusBreakEndTimestamp > now
+        val isActive = prefs.pomodoroEnabled && prefs.pomodoroSessionEndTimestamp > now
+        val isBreak = isActive && prefs.pomodoroBreakEndTimestamp > now
+        val isPaused = SharedMonitoringState.isPomodoroPaused
 
-        SharedMonitoringState.isDeepFocusActive = isActive
-        SharedMonitoringState.isDeepFocusBlockingActive = isActive
-        SharedMonitoringState.isDeepFocusBreakActive = isBreak
-        SharedMonitoringState.deepFocusAllowedPackages = prefs.deepFocusAllowedPackages
-        SharedMonitoringState.deepFocusBlockAllowedApps = prefs.deepFocusBlockAllowedApps
+        SharedMonitoringState.isPomodoroActive = isActive
+        SharedMonitoringState.isPomodoroBlockingActive = isActive && !isPaused
+        SharedMonitoringState.isPomodoroBreakActive = isBreak
+        SharedMonitoringState.pomodoroAllowedPackages = prefs.pomodoroAllowedPackages
+        SharedMonitoringState.pomodoroBlockAllowedApps = prefs.pomodoroBlockAllowedApps
     }
 
     private fun checkSchedulesTransition(currentTotalMinutes: Int) {

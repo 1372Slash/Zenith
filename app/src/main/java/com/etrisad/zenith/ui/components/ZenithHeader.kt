@@ -52,7 +52,7 @@ fun ZenithHeader(
         currentRoute == Screen.SystemUsageDebug.route ||
         currentRoute == Screen.OverlayAppearance.route ||
         currentRoute == Screen.Alarm.route ||
-        currentRoute == Screen.DeepFocus.route ||
+        currentRoute == Screen.Pomodoro.route ||
         currentRoute?.startsWith("settings_category") == true ||
         currentRoute?.startsWith("app_detail") == true
 
@@ -139,7 +139,7 @@ fun ZenithHeader(
                 currentRoute == Screen.SystemUsageDebug.route -> "System Usage Fetch"
                 currentRoute == Screen.OverlayAppearance.route -> "Overlay Appearance"
                 currentRoute == Screen.Alarm.route -> "Alarm"
-                currentRoute == Screen.DeepFocus.route -> "Deep Focus"
+                currentRoute == Screen.Pomodoro.route -> "Pomodoro"
                 currentRoute?.startsWith("settings_category") == true -> {
                     val raw = categoryName ?: ""
                     when (raw.lowercase()) {

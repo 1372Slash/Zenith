@@ -47,7 +47,7 @@ import com.etrisad.zenith.ui.components.ZenithButtonType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-enum class DeepFocusAfterType {
+enum class PomodoroAfterType {
     SHIELD,
     GOAL,
     BREAK_STARTED,
@@ -56,9 +56,9 @@ enum class DeepFocusAfterType {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun DeepFocusPuzzleContent(
+fun PomodoroPuzzleContent(
     userPreferences: UserPreferences?,
-    afterContentType: DeepFocusAfterType = DeepFocusAfterType.BREAK_STARTED,
+    afterContentType: PomodoroAfterType = PomodoroAfterType.BREAK_STARTED,
     skipPuzzle: Boolean = false,
     packageName: String = "",
     appName: String = "",
@@ -122,7 +122,7 @@ fun DeepFocusPuzzleContent(
             )
         } else {
             when (afterContentType) {
-                DeepFocusAfterType.SHIELD -> {
+                PomodoroAfterType.SHIELD -> {
                     ShieldAfterContent(
                         packageName = packageName,
                         appName = appName,
@@ -140,7 +140,7 @@ fun DeepFocusPuzzleContent(
                         }
                     )
                 }
-                DeepFocusAfterType.GOAL -> {
+                PomodoroAfterType.GOAL -> {
                     GoalAfterContent(
                         packageName = packageName,
                         appName = appName,
@@ -158,13 +158,13 @@ fun DeepFocusPuzzleContent(
                         }
                     )
                 }
-                DeepFocusAfterType.BREAK_STARTED -> {
+                PomodoroAfterType.BREAK_STARTED -> {
                     BreakStartedContent {
                         showContent = false
                         currentOnComplete()
                     }
                 }
-                DeepFocusAfterType.BLOCKED -> {
+                PomodoroAfterType.BLOCKED -> {
                     BlockedAfterContent(
                         appName = appName,
                         onCloseApp = {

@@ -55,7 +55,7 @@ fun FeaturesSettings(
     onNavigateToGracePeriod: () -> Unit,
     onWebsiteAutoTrackingEnabledChange: (Boolean) -> Unit,
     onNavigateToLockdown: () -> Unit,
-    onNavigateToDeepFocus: () -> Unit,
+    onNavigateToPomodoro: () -> Unit,
     goalCount: Int
 ) {
     val context = LocalContext.current
@@ -300,9 +300,9 @@ fun FeaturesSettings(
 
         Spacer(modifier = Modifier.height(4.dp))
         SettingsActionItem(
-            title = "Deep Focus",
+            title = "Pomodoro",
             summary = "Lock down distractions and take puzzle-guided breaks",
-            onClick = onNavigateToDeepFocus,
+            onClick = onNavigateToPomodoro,
             icon = Icons.Outlined.Visibility,
             shape = RoundedCornerShape(8.dp)
         )

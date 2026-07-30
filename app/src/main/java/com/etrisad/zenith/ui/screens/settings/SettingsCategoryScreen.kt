@@ -209,7 +209,7 @@ fun SettingsCategoryScreen(
                         onNavigateToGracePeriod = { navController.navigate(Screen.GracePeriod.route) },
                         onWebsiteAutoTrackingEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setWebsiteAutoTrackingEnabled(enabled) } },
                         onNavigateToLockdown = { navController.navigate(Screen.Lockdown.route) },
-                        onNavigateToDeepFocus = { navController.navigate(Screen.DeepFocus.route) },
+                        onNavigateToPomodoro = { navController.navigate(Screen.Pomodoro.route) },
                         goalCount = goalCount
                     )
                     "appearance" -> AppearanceSettings(

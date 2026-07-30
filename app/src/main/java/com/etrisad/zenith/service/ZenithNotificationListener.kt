@@ -53,6 +53,29 @@ class ZenithNotificationListener : NotificationListenerService() {
         }
 
         serviceScope.launch {
+            if (SharedMonitoringState.isPomodoroActive && !SharedMonitoringState.isPomodoroPaused) {
+                val pkg = sbn.packageName
+                val isAllowed = pkg in SharedMonitoringState.pomodoroAllowedPackages ||
+                    pkg in SharedMonitoringState.CRITICAL_SYSTEM_PACKAGES ||
+                    pkg in SharedMonitoringState.whitelistedPackages
+                if (!isAllowed) {
+                    cancelNotification(sbn.key)
+                    val extras = sbn.notification.extras
+                    val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
+                    val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
+                    database.interceptedNotificationDao().insert(
+                        InterceptedNotificationEntity(
+                            packageName = pkg,
+                            title = title,
+                            text = text,
+                            timestamp = System.currentTimeMillis(),
+                            scheduleId = -1L
+                        )
+                    )
+                    return@launch
+                }
+            }
+
             val activeSchedules = getActiveSchedulesCached()
             val currentTime = LocalTime.now()
             val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
@@ -71,20 +94,6 @@ class ZenithNotificationListener : NotificationListenerService() {
 
                 if (isCurrentlyActive && schedule.packageNames.contains(sbn.packageName)) {
                     cancelNotification(sbn.key)
-
-                    val extras = sbn.notification.extras
-                    val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
-                    val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
-
-                    database.interceptedNotificationDao().insert(
-                        InterceptedNotificationEntity(
-                            packageName = sbn.packageName,
-                            title = title,
-                            text = text,
-                            timestamp = System.currentTimeMillis(),
-                            scheduleId = schedule.id
-                        )
-                    )
                     return@launch
                 }
             }
@@ -101,6 +110,77 @@ class ZenithNotificationListener : NotificationListenerService() {
     }
 
     companion object {
+        fun restorePomodoroNotifications(context: Context) {
+            val database = ZenithDatabase.getDatabase(context)
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+            CoroutineScope(Dispatchers.IO).launch {
+                val notifications = database.interceptedNotificationDao().getNotificationsByScheduleId(-1L)
+                if (notifications.isEmpty()) return@launch
+
+                val channelId = "zenith_restored_notifications"
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    val channel = NotificationChannel(
+                        channelId,
+                        "Restored Notifications",
+                        NotificationManager.IMPORTANCE_DEFAULT
+                    )
+                    notificationManager.createNotificationChannel(channel)
+                }
+
+                notifications.forEach { intercepted ->
+                    val launchIntent = context.packageManager.getLaunchIntentForPackage(intercepted.packageName)
+                    val pendingIntent = if (launchIntent != null) {
+                        PendingIntent.getActivity(context, intercepted.id.toInt(), launchIntent, PendingIntent.FLAG_IMMUTABLE)
+                    } else null
+
+                    val appName = try {
+                        val ai = context.packageManager.getApplicationInfo(intercepted.packageName, 0)
+                        context.packageManager.getApplicationLabel(ai).toString()
+                    } catch (e: Exception) {
+                        intercepted.packageName
+                    }
+
+                    val appIcon = try {
+                        val drawable = context.packageManager.getApplicationIcon(intercepted.packageName)
+                        if (drawable is BitmapDrawable) {
+                            drawable.bitmap
+                        } else {
+                            val bitmap = Bitmap.createBitmap(
+                                drawable.intrinsicWidth.coerceAtLeast(1),
+                                drawable.intrinsicHeight.coerceAtLeast(1),
+                                Bitmap.Config.ARGB_8888
+                            )
+                            val canvas = Canvas(bitmap)
+                            drawable.setBounds(0, 0, canvas.width, canvas.height)
+                            drawable.draw(canvas)
+                            bitmap
+                        }
+                    } catch (e: Exception) {
+                        null
+                    }
+
+                    val builder = NotificationCompat.Builder(context, channelId)
+                        .setContentTitle(intercepted.title ?: appName)
+                        .setContentText(intercepted.text)
+                        .setSubText(appName)
+                        .setSmallIcon(R.drawable.ic_notifications)
+                        .setLargeIcon(appIcon)
+                        .setAutoCancel(true)
+                        .setWhen(intercepted.timestamp)
+                        .setShowWhen(true)
+                        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                        .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                        .setGroup("zenith_restored")
+
+                    pendingIntent?.let { builder.setContentIntent(it) }
+
+                    notificationManager.notify(intercepted.id.toInt(), builder.build())
+                }
+                database.interceptedNotificationDao().deleteByScheduleId(-1L)
+            }
+        }
+
         fun restoreNotifications(context: Context, scheduleId: Long) {
             val database = ZenithDatabase.getDatabase(context)
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

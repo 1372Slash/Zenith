@@ -60,8 +60,8 @@ sealed class Screen(
 
     object Lockdown : Screen("lockdown", "Lockdown", Icons.Filled.Settings, Icons.Outlined.Settings)
 
-    object DeepFocus :
-        Screen("deep_focus", "Deep Focus", Icons.Filled.Settings, Icons.Outlined.Settings)
+    object Pomodoro :
+        Screen("pomodoro", "Pomodoro", Icons.Filled.Settings, Icons.Outlined.Settings)
 }
 
 val navItems = listOf(

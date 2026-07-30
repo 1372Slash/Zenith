@@ -26,8 +26,8 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.etrisad.zenith.ui.components.overlay.BedtimeOverlayContent
-import com.etrisad.zenith.ui.components.overlay.DeepFocusAfterType
-import com.etrisad.zenith.ui.components.overlay.DeepFocusPuzzleContent
+import com.etrisad.zenith.ui.components.overlay.PomodoroAfterType
+import com.etrisad.zenith.ui.components.overlay.PomodoroPuzzleContent
 import com.etrisad.zenith.ui.components.overlay.EyeCareOverlayContent
 import com.etrisad.zenith.ui.components.overlay.InterceptOverlayContent
 import com.etrisad.zenith.ui.components.overlay.ScheduleOverlayContent
@@ -864,10 +864,10 @@ class InterceptOverlayManager(
         }
     }
 
-    fun showDeepFocusPuzzleOverlay(
+    fun showPomodoroPuzzleOverlay(
         packageName: String,
         appName: String,
-        afterContentType: DeepFocusAfterType = DeepFocusAfterType.BREAK_STARTED,
+        afterContentType: PomodoroAfterType = PomodoroAfterType.BREAK_STARTED,
         skipPuzzle: Boolean = false,
         shield: ShieldEntity? = null,
         totalUsageToday: Long = 0,
@@ -882,7 +882,7 @@ class InterceptOverlayManager(
 
             if (Looper.myLooper() != Looper.getMainLooper()) {
                 mainHandler.post {
-                    showDeepFocusPuzzleOverlay(packageName, appName, afterContentType, skipPuzzle, shield, totalUsageToday, totalGlobalUsageToday, onAllowUse, onGoalDismiss, onComplete, onCloseApp)
+                    showPomodoroPuzzleOverlay(packageName, appName, afterContentType, skipPuzzle, shield, totalUsageToday, totalGlobalUsageToday, onAllowUse, onGoalDismiss, onComplete, onCloseApp)
                 }
                 return
             }
@@ -918,7 +918,7 @@ class InterceptOverlayManager(
                     gsFlexSettings = userPrefs?.gsFlexSettings ?: GSFlexSettings()
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
-                        DeepFocusPuzzleContent(
+                        PomodoroPuzzleContent(
                             userPreferences = userPrefs,
                             afterContentType = afterContentType,
                             skipPuzzle = skipPuzzle,

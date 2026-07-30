@@ -136,7 +136,7 @@ class ZenithService : AccessibilityService() {
                 SharedMonitoringState.cachedGracePeriodEndMinutes = (gpEnd.getOrNull(0)?.toIntOrNull() ?: 13) * 60 + (gpEnd.getOrNull(1)?.toIntOrNull() ?: 0)
                 updateBedtimeStatus(prefs)
                 updateGracePeriodStatus(prefs)
-                updateDeepFocusStatus(prefs)
+                updatePomodoroStatus(prefs)
 
                 usageStatsCache = null
                 lastUsageCacheTime = 0L
@@ -299,7 +299,7 @@ class ZenithService : AccessibilityService() {
 
                 updateBedtimeStatus(preferences)
                 updateGracePeriodStatus(preferences)
-                updateDeepFocusStatus(preferences)
+                updatePomodoroStatus(preferences)
             }
         }
 
@@ -896,7 +896,7 @@ class ZenithService : AccessibilityService() {
         if (!isAppPaused) {
             val allowedUntil = allowedApps[currentApp] ?: 0L
             val isBedtimeBlocking = SharedMonitoringState.isBedtimeActive || (SharedMonitoringState.isWindDownActive && (SharedMonitoringState.currentPreferences?.bedtimeWindDownEnabled == true))
-            val shouldCheckSchedules = (isBedtimeBlocking && currentApp !in SharedMonitoringState.bedtimeWhitelistedPackages) || SharedMonitoringState.isDeepFocusActive || currentTime > allowedUntil
+            val shouldCheckSchedules = (isBedtimeBlocking && currentApp !in SharedMonitoringState.bedtimeWhitelistedPackages) || SharedMonitoringState.isPomodoroActive || currentTime > allowedUntil
 
             if (shouldCheckSchedules && !isOverlayCheckInProgress) {
                 val websiteDomain = WebsiteStateHolder.currentWebsiteDomain.value
@@ -1450,16 +1450,17 @@ class ZenithService : AccessibilityService() {
         SharedMonitoringState.isGracePeriodActive = active
     }
 
-    private fun updateDeepFocusStatus(prefs: UserPreferences) {
+    private fun updatePomodoroStatus(prefs: UserPreferences) {
         val now = System.currentTimeMillis()
-        val isActive = prefs.deepFocusEnabled && prefs.deepFocusSessionEndTimestamp > now
-        val isBreak = isActive && prefs.deepFocusBreakEndTimestamp > now
+        val isActive = prefs.pomodoroEnabled && prefs.pomodoroSessionEndTimestamp > now
+        val isBreak = isActive && prefs.pomodoroBreakEndTimestamp > now
+        val isPaused = SharedMonitoringState.isPomodoroPaused
 
-        SharedMonitoringState.isDeepFocusActive = isActive
-        SharedMonitoringState.isDeepFocusBlockingActive = isActive
-        SharedMonitoringState.isDeepFocusBreakActive = isBreak
-        SharedMonitoringState.deepFocusAllowedPackages = prefs.deepFocusAllowedPackages
-        SharedMonitoringState.deepFocusBlockAllowedApps = prefs.deepFocusBlockAllowedApps
+        SharedMonitoringState.isPomodoroActive = isActive
+        SharedMonitoringState.isPomodoroBlockingActive = isActive && !isPaused
+        SharedMonitoringState.isPomodoroBreakActive = isBreak
+        SharedMonitoringState.pomodoroAllowedPackages = prefs.pomodoroAllowedPackages
+        SharedMonitoringState.pomodoroBlockAllowedApps = prefs.pomodoroBlockAllowedApps
     }
 
     private fun createBedtimeNotificationChannel() {
