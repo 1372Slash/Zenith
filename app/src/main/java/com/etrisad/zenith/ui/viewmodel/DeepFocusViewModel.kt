@@ -88,13 +88,13 @@ class DeepFocusViewModel(
             while (true) {
                 kotlinx.coroutines.delay(1000)
                 val now = System.currentTimeMillis()
-                val prefs = userPreferencesRepository.userPreferencesFlow.first()
-                val isActive = prefs.deepFocusEnabled && prefs.deepFocusSessionEndTimestamp > now
-                val isBreak = isActive && prefs.deepFocusBreakEndTimestamp > now
+                val state = _uiState.value
+                val isActive = state.sessionEndTimestamp > now
+                val isBreak = isActive && state.breakEndTimestamp > now
                 _uiState.update {
                     it.copy(
-                        remainingBreakMillis = (prefs.deepFocusBreakEndTimestamp - now).coerceAtLeast(0L),
-                        remainingSessionMillis = (prefs.deepFocusSessionEndTimestamp - now).coerceAtLeast(0L),
+                        remainingBreakMillis = (state.breakEndTimestamp - now).coerceAtLeast(0L),
+                        remainingSessionMillis = (state.sessionEndTimestamp - now).coerceAtLeast(0L),
                         isSessionActive = isActive,
                         isBreakActive = isBreak
                     )
