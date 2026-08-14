@@ -22,13 +22,20 @@ fun hasAllPermissions(context: Context): Boolean {
 }
 
 fun isAccessibilityServiceEnabled(context: Context): Boolean {
-    val expectedId = android.content.ComponentName(context.packageName, "com.etrisad.zenith.service.ZenithService").flattenToString()
+    val expected = android.content.ComponentName(context.packageName, "com.etrisad.zenith.service.ZenithService")
     val enabledServices = android.provider.Settings.Secure.getString(
         context.contentResolver,
         android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-    ) ?: return false
-    
-    return enabledServices.split(':').any { it.equals(expectedId, ignoreCase = true) }
+    ) ?: ""
+
+    val inSettings = enabledServices.split(':').any { raw ->
+        android.content.ComponentName.unflattenFromString(raw) == expected
+    }
+    if (inSettings) return true
+
+    val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager ?: return false
+    return am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+        .any { it.resolveInfo?.serviceInfo?.packageName == context.packageName }
 }
 
 fun hasUsageStatsPermission(context: Context): Boolean {

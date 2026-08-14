@@ -112,7 +112,8 @@ fun PermissionBottomSheet(
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         })
         scope.launch {
-            while (true) {
+            val deadline = System.currentTimeMillis() + 120_000L
+            while (System.currentTimeMillis() < deadline) {
                 delay(500)
                 if (isAccessibilityServiceEnabled(ctx)) {
                     delay(300)
