@@ -27,7 +27,6 @@ import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Check
@@ -83,6 +82,8 @@ import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.data.manager.GitHubUpdateManager
 import com.etrisad.zenith.data.remote.model.GitHubRelease
 import com.etrisad.zenith.ui.components.UpdateBottomSheet
+import com.etrisad.zenith.ui.components.FeatureInfoSheet
+import com.etrisad.zenith.ui.components.FeatureInfoRegistry
 import com.etrisad.zenith.data.preferences.UserPreferences
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -162,6 +163,14 @@ fun MainScreen(
                 currentRoute == Screen.OverlayAppearance.route ||
                 currentRoute?.startsWith("settings_category") == true ||
                 currentRoute?.startsWith("app_detail") == true
+
+    val isInfoNextToSwitch =
+        currentRoute == Screen.Bedtime.route ||
+                currentRoute == Screen.GracePeriod.route ||
+                currentRoute == Screen.EyeCare.route ||
+                currentRoute == Screen.Lockdown.route ||
+                currentRoute == Screen.PausePoint.route ||
+                currentRoute == Screen.Alarm.route
 
     val enterAlwaysScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     val pinnedScrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -336,8 +345,7 @@ fun MainScreen(
         }
     }
 
-    var showPausePointInfoSheet by remember { mutableStateOf(false) }
-    var showPomodoroInfoSheet by remember { mutableStateOf(false) }
+    var showFeatureInfoSheet by remember { mutableStateOf(false) }
     var showPermissionSheet by remember { mutableStateOf(false) }
     var showOnboardingStatsSheet by remember { mutableStateOf(false) }
     var showOnboardingUpdateSheet by remember { mutableStateOf(false) }
@@ -476,59 +484,14 @@ fun MainScreen(
         )
     }
 
-    if (showPausePointInfoSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showPausePointInfoSheet = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 32.dp)
-            ) {
-                Text(
-                    text = "Pause Point",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Require completing a random task before seeing the block overlay. " +
-                           "Choose which types of tasks you want to appear from the settings below. " +
-                           "The switch in the header can be used to quickly enable or disable this feature.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-
-    if (showPomodoroInfoSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showPomodoroInfoSheet = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 32.dp)
-            ) {
-                Text(
-                    text = "Pomodoro",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "A time management method that uses a timer to break work into intervals, traditionally 25 minutes in length, separated by short breaks. " +
-                            "This helps you stay focused and avoid burnout. You can customize session and break durations, and select which apps you want to allow during focus sessions.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
+    if (showFeatureInfoSheet) {
+        FeatureInfoSheet(
+            info = FeatureInfoRegistry.infoFor(
+                currentRoute,
+                navBackStackEntry?.arguments?.getString("category")
+            ),
+            onDismissRequest = { showFeatureInfoSheet = false }
+        )
     }
 
     Row(
@@ -609,6 +572,13 @@ fun MainScreen(
                             performanceBackInterceptor.value()
                         if (!intercepted) navController.popBackStack()
                     },
+                    showInfoButton = preferences.headerInfoButtonEnabled && FeatureInfoRegistry.infoFor(
+                        currentRoute,
+                        navBackStackEntry?.arguments?.getString("category")
+                    ) != null && !focusUiState.isSelectionMode,
+                    onInfoClick = { showFeatureInfoSheet = true },
+                    infoFadeOnly = isInfoNextToSwitch,
+                    infoNextToAction = !isDeepScreen || currentRoute?.startsWith("app_detail") == true,
                     navigationIcon = {
                         AnimatedContent(
                             targetState = if (currentRoute == Screen.Focus.route) "focus" else "none",
@@ -659,7 +629,6 @@ fun MainScreen(
                             AnimatedContent(
                                 targetState = when {
                                     isSelectionMode -> "selection"
-                                    currentRoute == Screen.Pomodoro.route -> "pomodoro"
                                     currentRoute?.startsWith("app_detail") == true -> "app_detail"
                                     !isDeepScreen -> "user"
                                     else -> "none"
@@ -726,17 +695,6 @@ fun MainScreen(
                                             Icon(
                                                 imageVector = Icons.Outlined.AccountCircle,
                                                 contentDescription = "User Profile"
-                                            )
-                                        }
-                                    }
-                                    "pomodoro" -> {
-                                        IconButton(
-                                            onClick = { showPomodoroInfoSheet = true },
-                                            modifier = Modifier.padding(end = 12.dp).clip(CircleShape)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Info,
-                                                contentDescription = "Pomodoro Info"
                                             )
                                         }
                                     }
@@ -1024,23 +982,12 @@ fun MainScreen(
                                                   scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
                                                   slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
                                       ) {
-                                          Row(
-                                              verticalAlignment = Alignment.CenterVertically,
-                                              modifier = Modifier.height(48.dp)
-                                          ) {
-                                              IconButton(
-                                                  onClick = { showPausePointInfoSheet = true },
-                                                  modifier = Modifier.clip(CircleShape)
-                                              ) {
-                                                  Icon(
-                                                      imageVector = Icons.Outlined.Info,
-                                                      contentDescription = "Info",
-                                                      tint = if (preferences.pausePointEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                                  )
-                                              }
-                                              Spacer(modifier = Modifier.width(4.dp))
-                                              Switch(
-                                                  checked = preferences.pausePointEnabled,
+                                           Row(
+                                               verticalAlignment = Alignment.CenterVertically,
+                                               modifier = Modifier.height(48.dp)
+                                           ) {
+                                               Switch(
+                                                   checked = preferences.pausePointEnabled,
                                                   onCheckedChange = {
                                                       scope.launch {
                                                           userPreferencesRepository.setPausePointEnabled(!preferences.pausePointEnabled)

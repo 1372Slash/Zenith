@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.BiasAlignment
@@ -36,6 +37,10 @@ fun ZenithHeader(
     categoryName: String? = null,
     onBack: () -> Unit,
     navigationIcon: @Composable (() -> Unit)? = null,
+    showInfoButton: Boolean = false,
+    onInfoClick: () -> Unit = {},
+    infoFadeOnly: Boolean = false,
+    infoNextToAction: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {}
 ) {
     val isHome = currentRoute == Screen.Home.route
@@ -59,6 +64,12 @@ fun ZenithHeader(
         currentRoute?.startsWith("app_detail") == true
 
     val sideSlotWidth = 68.dp
+
+    val infoButtonOffset by animateDpAsState(
+        targetValue = if (infoNextToAction) 8.dp else 0.dp,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "InfoButtonOffset"
+    )
 
     val smoothedAlpha by animateFloatAsState(
         targetValue = (1f - scrollBehavior.state.collapsedFraction).coerceIn(0f, 1f),
@@ -270,6 +281,49 @@ fun ZenithHeader(
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                AnimatedVisibility(
+                    visible = showInfoButton,
+                    enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+                    exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                ) {
+                    AnimatedContent(
+                        targetState = currentRoute to infoFadeOnly,
+                        transitionSpec = {
+                            if (targetState.second) {
+                                fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) togetherWith
+                                        fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                            } else {
+                                (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                        scaleIn(
+                                            initialScale = 0.7f,
+                                            animationSpec = spring(
+                                                dampingRatio = Spring.DampingRatioLowBouncy,
+                                                stiffness = Spring.StiffnessMediumLow
+                                            )
+                                        ) +
+                                        slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
+                                    .togetherWith(
+                                        fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                                    )
+                            }
+                        },
+                        label = "HeaderInfoButtonAnimation",
+                        modifier = Modifier.offset(x = infoButtonOffset)
+                    ) { _ ->
+                        IconButton(
+                            onClick = onInfoClick,
+                            modifier = Modifier.clip(CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Info,
+                                contentDescription = "Screen info",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
                 actions()
             }
         }

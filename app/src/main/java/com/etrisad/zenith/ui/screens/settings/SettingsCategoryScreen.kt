@@ -220,6 +220,7 @@ fun SettingsCategoryScreen(
                         onDynamicColorChange = { enabled -> coroutineScope.launch { preferencesRepository.setDynamicColor(enabled) } },
                         onExpressiveColorsChange = { enabled -> coroutineScope.launch { preferencesRepository.setExpressiveColors(enabled) } },
                         onFloatingTabBarEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setFloatingTabBarEnabled(enabled) } },
+                        onHeaderInfoButtonEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setHeaderInfoButtonEnabled(enabled) } },
                         onNavigateToGSFlexCustomizer = { navController.navigate(Screen.GSFlexCustomizer.route) },
                         onNavigateToOverlayAppearance = { navController.navigate(Screen.OverlayAppearance.route) }
                     )

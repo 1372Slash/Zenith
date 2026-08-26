@@ -224,6 +224,7 @@ class UserPreferencesRepository(private val context: Context) {
         val BACKUP_DIRECTORY_URI = stringPreferencesKey("backup_directory_uri")
         val BACKUP_INTERVAL_HOURS = intPreferencesKey("backup_interval_hours")
         val FLOATING_TAB_BAR_ENABLED = booleanPreferencesKey("floating_tab_bar_enabled")
+        val HEADER_INFO_BUTTON_ENABLED = booleanPreferencesKey("header_info_button_enabled")
         val EXPRESSIVE_COLORS = booleanPreferencesKey("expressive_colors")
         val TOTAL_USAGE_PILL_ENABLED = booleanPreferencesKey("total_usage_pill_enabled")
         val FOREGROUND_NOTIFICATION_STATUS_MODE = stringPreferencesKey("foreground_notification_status_mode")
@@ -413,6 +414,7 @@ class UserPreferencesRepository(private val context: Context) {
             backupIntervalHours = settings[PreferencesKeys.BACKUP_INTERVAL_HOURS] ?: 3,
             lastBackupTimestamp = runtime[RuntimeKeys.LAST_BACKUP_TIMESTAMP] ?: 0L,
             floatingTabBarEnabled = settings[PreferencesKeys.FLOATING_TAB_BAR_ENABLED] ?: false,
+            headerInfoButtonEnabled = settings[PreferencesKeys.HEADER_INFO_BUTTON_ENABLED] ?: true,
             expressiveColors = settings[PreferencesKeys.EXPRESSIVE_COLORS] ?: false,
             totalUsagePillEnabled = settings[PreferencesKeys.TOTAL_USAGE_PILL_ENABLED] ?: false,
             foregroundNotificationStatusMode = settings[PreferencesKeys.FOREGROUND_NOTIFICATION_STATUS_MODE]
@@ -1014,6 +1016,10 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.FLOATING_TAB_BAR_ENABLED] = enabled }
     }
 
+    suspend fun setHeaderInfoButtonEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.HEADER_INFO_BUTTON_ENABLED] = enabled }
+    }
+
     suspend fun setExpressiveColors(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.EXPRESSIVE_COLORS] = enabled }
     }
@@ -1545,6 +1551,7 @@ data class UserPreferences(
     val backupIntervalHours: Int = 3,
     val lastBackupTimestamp: Long = 0L,
     val floatingTabBarEnabled: Boolean = false,
+    val headerInfoButtonEnabled: Boolean = true,
     val expressiveColors: Boolean = false,
     val totalUsagePillEnabled: Boolean = false,
     val foregroundNotificationStatusMode: ForegroundNotificationStatusMode = ForegroundNotificationStatusMode.DEFAULT,

@@ -20,6 +20,7 @@ fun AppearanceSettings(
     onDynamicColorChange: (Boolean) -> Unit,
     onExpressiveColorsChange: (Boolean) -> Unit,
     onFloatingTabBarEnabledChange: (Boolean) -> Unit,
+    onHeaderInfoButtonEnabledChange: (Boolean) -> Unit,
     onNavigateToGSFlexCustomizer: () -> Unit,
     onNavigateToOverlayAppearance: () -> Unit
 ) {
@@ -70,6 +71,16 @@ fun AppearanceSettings(
             onCheckedChange = onFloatingTabBarEnabledChange,
             icon = Icons.Outlined.Flaky,
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+        SettingsToggle(
+            title = "Header Info Button",
+            description = "Show the info button in the top bar for help about each screen",
+            checked = preferences.headerInfoButtonEnabled,
+            onCheckedChange = onHeaderInfoButtonEnabledChange,
+            icon = Icons.Outlined.Info,
+            shape = RoundedCornerShape(8.dp)
         )
 
         Spacer(modifier = Modifier.height(4.dp))
