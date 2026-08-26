@@ -210,6 +210,7 @@ fun SettingsCategoryScreen(
                         onWebsiteAutoTrackingEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setWebsiteAutoTrackingEnabled(enabled) } },
                         onNavigateToLockdown = { navController.navigate(Screen.Lockdown.route) },
                         onNavigateToPomodoro = { navController.navigate(Screen.Pomodoro.route) },
+                        onNavigateToPausePoint = { navController.navigate(Screen.PausePoint.route) },
                         goalCount = goalCount
                     )
                     "appearance" -> AppearanceSettings(

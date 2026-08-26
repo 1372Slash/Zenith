@@ -53,6 +53,8 @@ fun ZenithHeader(
         currentRoute == Screen.OverlayAppearance.route ||
         currentRoute == Screen.Alarm.route ||
         currentRoute == Screen.Pomodoro.route ||
+        currentRoute == Screen.PausePoint.route ||
+        currentRoute == Screen.PausePointQr.route ||
         currentRoute?.startsWith("settings_category") == true ||
         currentRoute?.startsWith("app_detail") == true
 
@@ -140,6 +142,8 @@ fun ZenithHeader(
                 currentRoute == Screen.OverlayAppearance.route -> "Overlay Appearance"
                 currentRoute == Screen.Alarm.route -> "Alarm"
                 currentRoute == Screen.Pomodoro.route -> "Pomodoro"
+                currentRoute == Screen.PausePoint.route -> "Pause Point"
+                currentRoute == Screen.PausePointQr.route -> "QR Codes"
                 currentRoute?.startsWith("settings_category") == true -> {
                     val raw = categoryName ?: ""
                     when (raw.lowercase()) {

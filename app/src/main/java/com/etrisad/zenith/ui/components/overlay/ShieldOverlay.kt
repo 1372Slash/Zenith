@@ -81,6 +81,154 @@ fun ShieldOverlay(
     val shieldRepository = app.shieldRepository
     val scope = rememberCoroutineScope()
 
+    val userPrefsRepo = remember(context.applicationContext) { UserPreferencesRepository(context.applicationContext) }
+    val userPrefs by produceState(initialValue = UserPreferences()) {
+        userPrefsRepo.userPreferencesFlow.collect { value = it }
+    }
+
+    if (shield?.type == FocusType.GOAL) {
+        GoalOverlay(
+            packageName = packageName,
+            appName = appName,
+            shield = shield,
+            totalUsageToday = totalUsageToday,
+            totalGlobalUsageToday = totalGlobalUsageToday,
+            userPrefs = userPrefs,
+            onGoalDismiss = onGoalDismiss
+        )
+        return
+    }
+
+    var showContent by remember { mutableStateOf(false) }
+
+    val backgroundAlpha by animateFloatAsState(
+        targetValue = if (showContent) 0.6f else 0f,
+        animationSpec = tween(durationMillis = 400),
+        label = "backgroundAlpha"
+    )
+
+    LaunchedEffect(Unit) {
+        showContent = true
+    }
+
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    val dragUses = if (shield?.type == FocusType.SHIELD) shield.currentPeriodUses else null
+    val dragMaxUses = if (shield?.type == FocusType.SHIELD) shield.maxUsesPerPeriod else null
+    val dragEmergency = if (shield?.type == FocusType.SHIELD) shield.emergencyUseCount else null
+
+    val incentiveProgress by produceState(initialValue = 0f) {
+        shieldRepository.getIncentiveGoalProgress().collect { value = it }
+    }
+    val incentiveTier = remember(incentiveProgress) { IncentiveTier.fromProgress(incentiveProgress) }
+    val isIncentiveActive = userPrefs.incentiveLockEnabled && !userPrefs.incentiveLockGoalsMetToday && shield?.type == FocusType.SHIELD
+    var bonusUsesLeft by remember { mutableIntStateOf(Int.MAX_VALUE) }
+    var bonusConsumedThisSession by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isIncentiveActive, incentiveTier, userPrefs.incentiveBonusUsesUsed) {
+        if (isIncentiveActive && incentiveTier.bonusUses < Int.MAX_VALUE) {
+            bonusUsesLeft = shieldRepository.getIncentiveBonusUsesLeft()
+        } else {
+            bonusUsesLeft = Int.MAX_VALUE
+        }
+    }
+
+    val onConsumeBonusUse: () -> Unit = {
+        scope.launch {
+            if (shieldRepository.consumeIncentiveBonusUse()) {
+                bonusUsesLeft--
+                bonusConsumedThisSession = true
+            }
+        }
+    }
+
+    val currentOnAllowUse by rememberUpdatedState(onAllowUse)
+    val currentOnCloseApp by rememberUpdatedState(onCloseApp)
+
+    InterceptBottomSheet(
+        visible = showContent,
+        backgroundAlpha = backgroundAlpha,
+        isLandscape = isLandscape,
+        showBedtimePill = true,
+        maxHeightFraction = maxHeightFraction,
+        sheetContentAlpha = sheetContentAlpha,
+        userPreferences = userPrefs,
+        dragHandleCurrentUses = dragUses,
+        dragHandleMaxUses = dragMaxUses,
+        dragHandleEmergencyCount = dragEmergency,
+        dragHandleIsIncentiveLocked = isIncentiveActive && !incentiveTier.isUnlocked,
+        dragHandleIncentiveTier = if (isIncentiveActive) incentiveTier else null,
+        dragHandleBonusUsesLeft = bonusUsesLeft,
+        onCloseApp = {
+            scope.launch {
+                showContent = false
+                delay(400)
+                currentOnCloseApp()
+            }
+        }
+    ) { _ ->
+        ShieldOverlaySheetContent(
+            packageName = packageName,
+            appName = appName,
+            shield = shield,
+            totalUsageToday = totalUsageToday,
+            totalGlobalUsageToday = totalGlobalUsageToday,
+            delayDurationSeconds = delayDurationSeconds,
+            previewMode = previewMode,
+            userPrefs = userPrefs,
+            isLandscape = isLandscape,
+            sheetVisible = showContent,
+            incentiveProgress = incentiveProgress,
+            incentiveTier = if (isIncentiveActive) incentiveTier else null,
+            isIncentiveActive = isIncentiveActive,
+            bonusUsesLeft = bonusUsesLeft,
+            bonusConsumedThisSession = bonusConsumedThisSession,
+            onConsumeBonusUse = onConsumeBonusUse,
+            onAllowUse = { minutes, emergency ->
+                scope.launch {
+                    showContent = false
+                    delay(400)
+                    currentOnAllowUse(minutes, emergency)
+                }
+            },
+            onCloseApp = {
+                scope.launch {
+                    showContent = false
+                    delay(400)
+                    currentOnCloseApp()
+                }
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun ShieldOverlaySheetContent(
+    packageName: String,
+    appName: String,
+    shield: ShieldEntity?,
+    totalUsageToday: Long,
+    totalGlobalUsageToday: Long,
+    delayDurationSeconds: Int = 0,
+    previewMode: Boolean = false,
+    userPrefs: UserPreferences,
+    isLandscape: Boolean,
+    sheetVisible: Boolean,
+    incentiveProgress: Float = 0f,
+    incentiveTier: IncentiveTier? = null,
+    isIncentiveActive: Boolean = false,
+    bonusUsesLeft: Int = 0,
+    bonusConsumedThisSession: Boolean = false,
+    onConsumeBonusUse: () -> Unit = {},
+    onAllowUse: (Int, Boolean) -> Unit,
+    onCloseApp: () -> Unit
+) {
+    val context = LocalContext.current
+    val app = context.applicationContext as com.etrisad.zenith.ZenithApplication
+    val shieldRepository = app.shieldRepository
+
     data class ShieldOverlayCombinedState(
         val shield: ShieldEntity?,
         val totalUsageToday: Long,
@@ -151,38 +299,13 @@ fun ShieldOverlay(
     val currentShield = combinedState.shield
     val currentTotalUsageToday = combinedState.totalUsageToday
     val currentTotalGlobalUsageToday = combinedState.totalGlobalUsageToday
-    val isRealShield = combinedState.isRealShield
-    
-    var showContent by remember { mutableStateOf(false) }
+
     var isEmergencyUnlocked by remember { mutableStateOf(false) }
 
-    val userPrefsRepo = remember(context.applicationContext) { UserPreferencesRepository(context.applicationContext) }
-    val userPrefs by produceState(initialValue = UserPreferences()) {
-        userPrefsRepo.userPreferencesFlow.collect { value = it }
-    }
-
-    val incentiveProgress by produceState(initialValue = 0f) {
-        shieldRepository.getIncentiveGoalProgress().collect { value = it }
-    }
-    val incentiveTier = remember(incentiveProgress) { IncentiveTier.fromProgress(incentiveProgress) }
-    val isIncentiveActive = userPrefs.incentiveLockEnabled && !userPrefs.incentiveLockGoalsMetToday && isRealShield && currentShield?.type == FocusType.SHIELD
-
-    var bonusUsesLeft by remember { mutableIntStateOf(Int.MAX_VALUE) }
-    LaunchedEffect(isIncentiveActive, incentiveTier, userPrefs.incentiveBonusUsesUsed) {
-        if (isIncentiveActive && incentiveTier.bonusUses < Int.MAX_VALUE) {
-            val left = shieldRepository.getIncentiveBonusUsesLeft()
-            bonusUsesLeft = left
-        } else {
-            bonusUsesLeft = Int.MAX_VALUE
-        }
-    }
-
-    var bonusConsumedThisSession by remember { mutableStateOf(false) }
-
-    val isIncentiveBlocked = isIncentiveActive && (incentiveTier == IncentiveTier.LOCKED || (incentiveTier.bonusUses < Int.MAX_VALUE && bonusUsesLeft <= 0))
+    val isIncentiveBlocked = isIncentiveActive && incentiveTier != null && (incentiveTier == IncentiveTier.LOCKED || (incentiveTier.bonusUses < Int.MAX_VALUE && bonusUsesLeft <= 0))
 
     val isDelayEnabled = currentShield != null && currentShield.isDelayAppEnabled && currentShield.type == FocusType.SHIELD
-    
+
     val initialProgress = remember(packageName, delayDurationSeconds) {
         if (isDelayEnabled && currentShield != null && currentShield.lastDelayStartTimestamp > 0 && delayDurationSeconds > 0) {
             val elapsed = System.currentTimeMillis() - currentShield.lastDelayStartTimestamp
@@ -193,14 +316,14 @@ fun ShieldOverlay(
     }
 
     val delayProgressAnimatable = remember(packageName) { Animatable(initialProgress) }
-    var isDelaying by remember(packageName) { 
+    var isDelaying by remember(packageName) {
         mutableStateOf(isDelayEnabled && currentShield != null && currentShield.lastDelayStartTimestamp != 0L && initialProgress < 1f)
     }
 
     val isPeriodExpired = remember(currentShield) {
         currentShield != null && (System.currentTimeMillis() - currentShield.lastPeriodResetTimestamp > currentShield.refreshPeriodMinutes * 60 * 1000L)
     }
-    
+
     val currentUses = remember(currentShield, isPeriodExpired) {
         if (isPeriodExpired) 0 else (currentShield?.currentPeriodUses ?: 0)
     }
@@ -260,21 +383,11 @@ fun ShieldOverlay(
         }
     }
 
-    val backgroundAlpha by animateFloatAsState(
-        targetValue = if (showContent) 0.6f else 0f,
-        animationSpec = tween(durationMillis = 400),
-        label = "backgroundAlpha"
-    )
-
-    LaunchedEffect(Unit) {
-        showContent = true
-    }
-
     LaunchedEffect(isDelaying) {
         if (isDelaying && delayDurationSeconds > 0) {
             val totalDuration = delayDurationSeconds * 1000L
             val startTime = System.currentTimeMillis() - (delayProgressAnimatable.value * totalDuration).toLong()
-            
+
             while (true) {
                 val elapsed = System.currentTimeMillis() - startTime
                 val p = (elapsed.toFloat() / totalDuration).coerceIn(0f, 1f)
@@ -288,7 +401,6 @@ fun ShieldOverlay(
         }
     }
 
-
     val autoKickProgress = remember(packageName) { Animatable(0f) }
     var isEmergencyHolding by remember(packageName) { mutableStateOf(false) }
 
@@ -299,8 +411,11 @@ fun ShieldOverlay(
         val isEmergencyUnlocked: Boolean
     )
 
-    LaunchedEffect(showContent) {
-        if (!showContent) {
+    val currentOnCloseApp by rememberUpdatedState(onCloseApp)
+    val currentOnAllowUse by rememberUpdatedState(onAllowUse)
+
+    LaunchedEffect(sheetVisible) {
+        if (!sheetVisible) {
             autoKickProgress.stop()
             delayProgressAnimatable.stop()
         }
@@ -308,7 +423,7 @@ fun ShieldOverlay(
 
     LaunchedEffect(packageName, previewMode) {
         if (previewMode) return@LaunchedEffect
-        snapshotFlow { 
+        snapshotFlow {
             ShieldOverlayState(isBlocked, isEmergencyHolding, isDelaying, isEmergencyUnlocked)
         }
             .collectLatest { state ->
@@ -323,11 +438,7 @@ fun ShieldOverlay(
                             if (p >= 1f) break
                             delay(16)
                         }
-                        if (showContent) {
-                            showContent = false
-                            delay(300)
-                        }
-                        onCloseApp()
+                        currentOnCloseApp()
                     } else {
                         autoKickProgress.stop()
                         autoKickProgress.snapTo(0f)
@@ -335,7 +446,7 @@ fun ShieldOverlay(
                 } else if (!state.isDelaying && !state.isEmergencyUnlocked && (currentShield?.type == FocusType.SHIELD || currentShield == null)) {
                     autoKickProgress.snapTo(0f)
                     delay(8000)
-                    
+
                     val startTime = System.currentTimeMillis()
                     while (true) {
                         val elapsed = System.currentTimeMillis() - startTime
@@ -344,19 +455,15 @@ fun ShieldOverlay(
                         if (p >= 1f) break
                         delay(16)
                     }
-                    
-                    if (showContent) {
-                        showContent = false
-                        delay(300)
-                    }
-                    onCloseApp()
+
+                    currentOnCloseApp()
                 } else {
                     autoKickProgress.stop()
                     autoKickProgress.snapTo(0f)
                 }
             }
     }
-    
+
     val refreshTimeLeftMillis = remember(currentShield) {
         if (currentShield != null) {
             val nextRefresh = currentShield.lastPeriodResetTimestamp + (currentShield.refreshPeriodMinutes * 60 * 1000L)
@@ -364,158 +471,75 @@ fun ShieldOverlay(
         } else 0L
     }
 
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-
-    val currentOnAllowUse by rememberUpdatedState(onAllowUse)
-    val currentOnCloseApp by rememberUpdatedState(onCloseApp)
-    val currentOnGoalDismiss by rememberUpdatedState(onGoalDismiss)
-
-    if (currentShield?.type == FocusType.GOAL) {
-        GoalOverlay(
-            packageName = packageName,
+    if (isLandscape) {
+        LandscapeInterceptLayout(
+            modifier = Modifier.displayCutoutPadding(),
             appName = appName,
+            packageName = packageName,
             shield = currentShield,
             totalUsageToday = currentTotalUsageToday,
             totalGlobalUsageToday = currentTotalGlobalUsageToday,
             userPrefs = userPrefs,
-            onGoalDismiss = {
-                scope.launch {
-                    showContent = false
-                    delay(400)
-                    currentOnGoalDismiss()
-                }
-            }
+            remainingMinutes = remainingMinutes,
+            isEmergencyUnlocked = isEmergencyUnlocked,
+            isDelaying = isDelaying,
+            randomMessage = randomMessage,
+            currentEvent = currentEvent,
+            delayProgressAnimatable = delayProgressAnimatable,
+            delayDurationSeconds = delayDurationSeconds,
+            isUsesExceeded = isUsesExceeded,
+            isTimeLimitReached = isTimeLimitReached,
+            refreshTimeLeftMillis = refreshTimeLeftMillis,
+            currentUses = currentUses,
+            maxUses = maxUses,
+            incentiveTier = incentiveTier,
+            bonusUsesLeft = bonusUsesLeft,
+            incentiveProgress = incentiveProgress,
+            isIncentiveBlocked = isIncentiveBlocked,
+            bonusConsumedThisSession = bonusConsumedThisSession,
+            onConsumeBonusUse = onConsumeBonusUse,
+            autoKickProgress = { autoKickProgress.value },
+            onEmergencyHoldingChange = { isEmergencyHolding = it },
+            onEmergencyClick = { isEmergencyUnlocked = true },
+            onAllowUse = { minutes ->
+                currentOnAllowUse(minutes, isEmergencyUnlocked)
+            },
+            onCloseApp = currentOnCloseApp
         )
-        return
-    }
-
-    InterceptBottomSheet(
-        visible = showContent,
-        backgroundAlpha = backgroundAlpha,
-        isLandscape = isLandscape,
-        showBedtimePill = true,
-        maxHeightFraction = maxHeightFraction,
-        sheetContentAlpha = sheetContentAlpha,
-        userPreferences = userPrefs,
-        dragHandleCurrentUses = if (currentShield?.type == FocusType.SHIELD) currentUses else null,
-        dragHandleMaxUses = if (currentShield?.type == FocusType.SHIELD) maxUses else null,
-        dragHandleEmergencyCount = if (currentShield?.type == FocusType.SHIELD) currentShield.emergencyUseCount else null,
-        dragHandleIsIncentiveLocked = isIncentiveActive && !incentiveTier.isUnlocked,
-        dragHandleIncentiveTier = if (isIncentiveActive) incentiveTier else null,
-        dragHandleBonusUsesLeft = bonusUsesLeft,
-        onCloseApp = {
-            scope.launch {
-                showContent = false
-                delay(400)
-                currentOnCloseApp()
-            }
-        }
-    ) { _ ->
-        if (isLandscape) {
-            LandscapeInterceptLayout(
-                modifier = Modifier.displayCutoutPadding(),
-                appName = appName,
-                packageName = packageName,
-                shield = currentShield,
-                totalUsageToday = currentTotalUsageToday,
-                totalGlobalUsageToday = currentTotalGlobalUsageToday,
-                userPrefs = userPrefs,
-                remainingMinutes = remainingMinutes,
-                isEmergencyUnlocked = isEmergencyUnlocked,
-                isDelaying = isDelaying,
-                randomMessage = randomMessage,
-                currentEvent = currentEvent,
-                delayProgressAnimatable = delayProgressAnimatable,
-                delayDurationSeconds = delayDurationSeconds,
-                isUsesExceeded = isUsesExceeded,
-                isTimeLimitReached = isTimeLimitReached,
-                refreshTimeLeftMillis = refreshTimeLeftMillis,
-                currentUses = currentUses,
-                maxUses = maxUses,
-                incentiveTier = if (isIncentiveActive) incentiveTier else null,
-                bonusUsesLeft = bonusUsesLeft,
-                incentiveProgress = incentiveProgress,
-                isIncentiveBlocked = isIncentiveBlocked,
-                bonusConsumedThisSession = bonusConsumedThisSession,
-                onConsumeBonusUse = {
-                    scope.launch {
-                        if (shieldRepository.consumeIncentiveBonusUse()) {
-                            bonusUsesLeft--
-                            bonusConsumedThisSession = true
-                        }
-                    }
-                },
-                autoKickProgress = { autoKickProgress.value },
-                onEmergencyHoldingChange = { isEmergencyHolding = it },
-                onEmergencyClick = { isEmergencyUnlocked = true },
-                onAllowUse = { minutes ->
-                    scope.launch {
-                        showContent = false
-                        delay(400)
-                        currentOnAllowUse(minutes, isEmergencyUnlocked)
-                    }
-                },
-                onCloseApp = {
-                    scope.launch {
-                        showContent = false
-                        delay(400)
-                        currentOnCloseApp()
-                    }
-                }
-            )
-        } else {
-            PortraitInterceptLayout(
-                appName = appName,
-                packageName = packageName,
-                shield = currentShield,
-                totalUsageToday = currentTotalUsageToday,
-                totalGlobalUsageToday = currentTotalGlobalUsageToday,
-                userPrefs = userPrefs,
-                remainingMinutes = remainingMinutes,
-                isEmergencyUnlocked = isEmergencyUnlocked,
-                isDelaying = isDelaying,
-                randomMessage = randomMessage,
-                currentEvent = currentEvent,
-                delayProgressAnimatable = delayProgressAnimatable,
-                delayDurationSeconds = delayDurationSeconds,
-                isUsesExceeded = isUsesExceeded,
-                isTimeLimitReached = isTimeLimitReached,
-                refreshTimeLeftMillis = refreshTimeLeftMillis,
-                currentUses = currentUses,
-                maxUses = maxUses,
-                incentiveTier = if (isIncentiveActive) incentiveTier else null,
-                bonusUsesLeft = bonusUsesLeft,
-                incentiveProgress = incentiveProgress,
-                isIncentiveBlocked = isIncentiveBlocked,
-                bonusConsumedThisSession = bonusConsumedThisSession,
-                onConsumeBonusUse = {
-                    scope.launch {
-                        if (shieldRepository.consumeIncentiveBonusUse()) {
-                            bonusUsesLeft--
-                            bonusConsumedThisSession = true
-                        }
-                    }
-                },
-                autoKickProgress = { autoKickProgress.value },
-                onEmergencyHoldingChange = { isEmergencyHolding = it },
-                onEmergencyClick = { isEmergencyUnlocked = true },
-                onAllowUse = { minutes ->
-                    scope.launch {
-                        showContent = false
-                        delay(400)
-                        currentOnAllowUse(minutes, isEmergencyUnlocked)
-                    }
-                },
-                onCloseApp = {
-                    scope.launch {
-                        showContent = false
-                        delay(400)
-                        currentOnCloseApp()
-                    }
-                }
-            )
-        }
+    } else {
+        PortraitInterceptLayout(
+            appName = appName,
+            packageName = packageName,
+            shield = currentShield,
+            totalUsageToday = currentTotalUsageToday,
+            totalGlobalUsageToday = currentTotalGlobalUsageToday,
+            userPrefs = userPrefs,
+            remainingMinutes = remainingMinutes,
+            isEmergencyUnlocked = isEmergencyUnlocked,
+            isDelaying = isDelaying,
+            randomMessage = randomMessage,
+            currentEvent = currentEvent,
+            delayProgressAnimatable = delayProgressAnimatable,
+            delayDurationSeconds = delayDurationSeconds,
+            isUsesExceeded = isUsesExceeded,
+            isTimeLimitReached = isTimeLimitReached,
+            refreshTimeLeftMillis = refreshTimeLeftMillis,
+            currentUses = currentUses,
+            maxUses = maxUses,
+            incentiveTier = incentiveTier,
+            bonusUsesLeft = bonusUsesLeft,
+            incentiveProgress = incentiveProgress,
+            isIncentiveBlocked = isIncentiveBlocked,
+            bonusConsumedThisSession = bonusConsumedThisSession,
+            onConsumeBonusUse = onConsumeBonusUse,
+            autoKickProgress = { autoKickProgress.value },
+            onEmergencyHoldingChange = { isEmergencyHolding = it },
+            onEmergencyClick = { isEmergencyUnlocked = true },
+            onAllowUse = { minutes ->
+                currentOnAllowUse(minutes, isEmergencyUnlocked)
+            },
+            onCloseApp = currentOnCloseApp
+        )
     }
 }
 

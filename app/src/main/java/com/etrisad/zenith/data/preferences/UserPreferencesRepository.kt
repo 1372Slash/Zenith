@@ -18,6 +18,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.model.AlarmItem
+import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
@@ -347,6 +348,10 @@ class UserPreferencesRepository(private val context: Context) {
         val POMODORO_SESSION_COUNT = intPreferencesKey("pomodoro_session_count")
         val POMODORO_SESSIONS_BEFORE_LONG_BREAK = intPreferencesKey("pomodoro_sessions_before_long_break")
         val POMODORO_PRESETS = stringPreferencesKey("pomodoro_presets")
+
+        val PAUSE_POINT_ENABLED = booleanPreferencesKey("pause_point_enabled")
+        val PAUSE_POINT_TASK_TYPES = stringPreferencesKey("pause_point_task_types")
+        val PAUSE_POINT_QR_CODES = stringPreferencesKey("pause_point_qr_codes")
     }
 
     private object RuntimeKeys {
@@ -565,7 +570,14 @@ class UserPreferencesRepository(private val context: Context) {
             pomodoroCurrentSessionNumber = runtime[RuntimeKeys.POMODORO_CURRENT_SESSION_NUMBER] ?: 1,
             pomodoroPresets = settings[PreferencesKeys.POMODORO_PRESETS] ?: "{}",
             pomodoroSessionEndTimestamp = runtime[RuntimeKeys.POMODORO_SESSION_END_TIMESTAMP] ?: 0L,
-            pomodoroBreakEndTimestamp = runtime[RuntimeKeys.POMODORO_BREAK_END_TIMESTAMP] ?: 0L
+            pomodoroBreakEndTimestamp = runtime[RuntimeKeys.POMODORO_BREAK_END_TIMESTAMP] ?: 0L,
+            pausePointEnabled = settings[PreferencesKeys.PAUSE_POINT_ENABLED] ?: false,
+            pausePointTaskTypes = settings[PreferencesKeys.PAUSE_POINT_TASK_TYPES]
+                ?.split(",")
+                ?.filter { it.isNotEmpty() }
+                ?.mapNotNull { runCatching { PausePointTaskType.valueOf(it) }.getOrNull() }
+                ?.toSet() ?: emptySet(),
+            pausePointQrCodes = parseStringList(settings[PreferencesKeys.PAUSE_POINT_QR_CODES])
         )
     }.distinctUntilChanged()
 
@@ -581,6 +593,17 @@ class UserPreferencesRepository(private val context: Context) {
         return try {
             val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, AlarmItem::class.java)
             val adapter: com.squareup.moshi.JsonAdapter<List<AlarmItem>> = moshi.adapter(type)
+            adapter.fromJson(json) ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun parseStringList(json: String?): List<String> {
+        if (json.isNullOrBlank()) return emptyList()
+        return try {
+            val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, String::class.java)
+            val adapter: com.squareup.moshi.JsonAdapter<List<String>> = moshi.adapter(type)
             adapter.fromJson(json) ?: emptyList()
         } catch (_: Exception) {
             emptyList()
@@ -1327,6 +1350,25 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.POMODORO_ENABLED] = enabled }
     }
 
+    suspend fun setPausePointEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.PAUSE_POINT_ENABLED] = enabled }
+    }
+
+    suspend fun setPausePointTaskTypes(types: Set<PausePointTaskType>) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.PAUSE_POINT_TASK_TYPES] = types.joinToString(",") { it.name } }
+    }
+
+    suspend fun setPausePointQrCodes(codes: List<String>) {
+        val json = try {
+            val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, String::class.java)
+            val adapter: com.squareup.moshi.JsonAdapter<List<String>> = moshi.adapter(type)
+            adapter.toJson(codes)
+        } catch (_: Exception) {
+            "[]"
+        }
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.PAUSE_POINT_QR_CODES] = json }
+    }
+
     suspend fun setPomodoroAllowedPackages(packages: Set<String>) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.POMODORO_ALLOWED_PACKAGES] = packages.joinToString(",") }
     }
@@ -1589,6 +1631,9 @@ data class UserPreferences(
     val pomodoroPresets: String = "{}",
     val pomodoroSessionEndTimestamp: Long = 0L,
     val pomodoroBreakEndTimestamp: Long = 0L,
+    val pausePointEnabled: Boolean = false,
+    val pausePointTaskTypes: Set<PausePointTaskType> = emptySet(),
+    val pausePointQrCodes: List<String> = emptyList(),
     val incentiveLockEnabled: Boolean = false,
     val incentiveLockDisableRequestTimestamp: Long = 0L,
     val incentiveLockGoalsMetToday: Boolean = false,

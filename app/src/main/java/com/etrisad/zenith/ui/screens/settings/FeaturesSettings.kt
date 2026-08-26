@@ -56,6 +56,7 @@ fun FeaturesSettings(
     onWebsiteAutoTrackingEnabledChange: (Boolean) -> Unit,
     onNavigateToLockdown: () -> Unit,
     onNavigateToPomodoro: () -> Unit,
+    onNavigateToPausePoint: () -> Unit = {},
     goalCount: Int
 ) {
     val context = LocalContext.current
@@ -314,6 +315,21 @@ fun FeaturesSettings(
             onClick = onNavigateToLockdown,
             icon = Icons.Outlined.Lock,
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        PreferenceCategory(title = "Pause Point")
+
+        SettingsActionItem(
+            title = "Pause Point",
+            summary = if (preferences.pausePointEnabled) {
+                val count = preferences.pausePointTaskTypes.size
+                if (count == 0) "Enabled (no task types selected)"
+                else "Random tasks enabled ($count types)"
+            } else "Disabled",
+            onClick = onNavigateToPausePoint,
+            icon = Icons.Outlined.PauseCircle,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
         )
 
         Spacer(modifier = Modifier.height(16.dp))

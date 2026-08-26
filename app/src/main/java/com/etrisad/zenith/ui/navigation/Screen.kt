@@ -62,6 +62,12 @@ sealed class Screen(
 
     object Pomodoro :
         Screen("pomodoro", "Pomodoro", Icons.Filled.Settings, Icons.Outlined.Settings)
+
+    object PausePoint :
+        Screen("pause_point", "Pause Point", Icons.Filled.Settings, Icons.Outlined.Settings)
+
+    object PausePointQr :
+        Screen("pause_point_qr", "QR Codes", Icons.Filled.Settings, Icons.Outlined.Settings)
 }
 
 val navItems = listOf(

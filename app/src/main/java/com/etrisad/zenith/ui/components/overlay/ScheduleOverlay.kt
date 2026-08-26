@@ -54,15 +54,93 @@ fun ScheduleOverlay(
     onCloseApp: () -> Unit
 ) {
     var showContent by remember { mutableStateOf(false) }
-    var isEmergencyUnlocked by remember { mutableStateOf(false) }
-    val autoKickProgress = remember(packageName) { Animatable(0f) }
-    var isEmergencyHolding by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val app = context.applicationContext as com.etrisad.zenith.ZenithApplication
     val shieldRepository = app.shieldRepository
-    
+
+    val userPrefsRepo = remember { UserPreferencesRepository(context) }
+    val userPrefs by produceState(initialValue = UserPreferences()) {
+        value = userPrefsRepo.userPreferencesFlow.first()
+    }
+
+    val backgroundAlphaState = animateFloatAsState(
+        targetValue = if (showContent) 0.6f else 0f,
+        animationSpec = tween(durationMillis = 400),
+        label = "backgroundAlpha"
+    )
+
+    LaunchedEffect(Unit) {
+        showContent = true
+    }
+
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    val currentOnAllowUse by rememberUpdatedState(onAllowUse)
+    val currentOnCloseApp by rememberUpdatedState(onCloseApp)
+
+    InterceptBottomSheet(
+        visible = showContent,
+        backgroundAlpha = backgroundAlphaState.value,
+        isLandscape = isLandscape,
+        showBedtimePill = true,
+        userPreferences = userPrefs,
+        dragHandleEmergencyCount = schedule.emergencyUseCount,
+        onCloseApp = {
+            scope.launch {
+                showContent = false
+                delay(400)
+                currentOnCloseApp()
+            }
+        }
+    ) { _ ->
+        ScheduleOverlaySheetContent(
+            packageName = packageName,
+            appName = appName,
+            schedule = schedule,
+            totalGlobalUsageToday = totalGlobalUsageToday,
+            userPrefs = userPrefs,
+            isLandscape = isLandscape,
+            onAllowUse = { minutes, emergency ->
+                scope.launch {
+                    showContent = false
+                    delay(400)
+                    currentOnAllowUse(minutes, emergency)
+                }
+            },
+            onCloseApp = {
+                scope.launch {
+                    showContent = false
+                    delay(400)
+                    currentOnCloseApp()
+                }
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun ScheduleOverlaySheetContent(
+    packageName: String,
+    appName: String,
+    schedule: ScheduleEntity,
+    totalGlobalUsageToday: Long,
+    userPrefs: UserPreferences,
+    isLandscape: Boolean,
+    onAllowUse: (Int, Boolean) -> Unit,
+    onCloseApp: () -> Unit
+) {
+    val context = LocalContext.current
+    val app = context.applicationContext as com.etrisad.zenith.ZenithApplication
+    val shieldRepository = app.shieldRepository
+
+    var isEmergencyUnlocked by remember { mutableStateOf(false) }
+    val autoKickProgress = remember(packageName) { Animatable(0f) }
+    var isEmergencyHolding by remember { mutableStateOf(false) }
+
     val currentSchedule by produceState(initialValue = schedule) {
         value = shieldRepository.allSchedules.first().find { it.id == schedule.id } ?: schedule
     }
@@ -100,7 +178,7 @@ fun ScheduleOverlay(
             val detailedUsage = withContext(kotlinx.coroutines.Dispatchers.IO) {
                 com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usm, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute)
             }
-            
+
             var totalToday = 0L
             detailedUsage.appUsageMap.entries.forEach { entry ->
                 if (entry.key != context.packageName) {
@@ -123,11 +201,6 @@ fun ScheduleOverlay(
     }
     val currentTotalGlobalUsageToday = currentTotalGlobalUsageTodayState.value
 
-    val userPrefsRepo = remember { UserPreferencesRepository(context) }
-    val userPrefs by produceState(initialValue = UserPreferences()) {
-        value = userPrefsRepo.userPreferencesFlow.first()
-    }
-
     val isWebsite = WebsiteRepository.isWebsitePackageName(packageName)
     val appIcon = remember(packageName) {
         if (isWebsite) null
@@ -139,15 +212,8 @@ fun ScheduleOverlay(
         }
     }
 
-    val backgroundAlphaState = animateFloatAsState(
-        targetValue = if (showContent) 0.6f else 0f,
-        animationSpec = tween(durationMillis = 400),
-        label = "backgroundAlpha"
-    )
-
-    LaunchedEffect(Unit) {
-        showContent = true
-    }
+    val currentOnCloseApp by rememberUpdatedState(onCloseApp)
+    val currentOnAllowUse by rememberUpdatedState(onAllowUse)
 
     LaunchedEffect(packageName, isEmergencyUnlocked, isEmergencyHolding) {
         if (!isEmergencyUnlocked) {
@@ -164,11 +230,7 @@ fun ScheduleOverlay(
                     if (p >= 1f) break
                     delay(16)
                 }
-                if (showContent) {
-                    showContent = false
-                    delay(300)
-                }
-                onCloseApp()
+                currentOnCloseApp()
             } else {
                 autoKickProgress.stop()
             }
@@ -206,90 +268,51 @@ fun ScheduleOverlay(
         elapsed.toFloat() / total.toFloat()
     }
 
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-
-    InterceptBottomSheet(
-        visible = showContent,
-        backgroundAlpha = backgroundAlphaState.value,
-        isLandscape = isLandscape,
-        showBedtimePill = true,
-        userPreferences = userPrefs,
-        dragHandleEmergencyCount = currentSchedule.emergencyUseCount,
-        onCloseApp = {
-            scope.launch {
-                showContent = false
-                delay(400)
-                onCloseApp()
-            }
-        }
-    ) { _ ->
-        if (isLandscape) {
-            LandscapeScheduleLayout(
-                modifier = Modifier.displayCutoutPadding(),
-                appName = appName,
-                appIcon = appIcon,
-                schedule = currentSchedule,
-                progress = progress,
-                totalGlobalUsageToday = currentTotalGlobalUsageToday,
-                userPrefs = userPrefs,
-                isEmergencyUnlocked = isEmergencyUnlocked,
-                autoKickProgress = { autoKickProgress.value },
-                onEmergencyHoldingChange = { isEmergencyHolding = it },
-                onEmergencyClick = { isEmergencyUnlocked = true },
-                onAllowUse = { minutes ->
-                    scope.launch {
-                        showContent = false
-                        delay(400)
-                        onAllowUse(minutes, isEmergencyUnlocked)
-                    }
-                },
-                onCloseApp = {
-                    scope.launch {
-                        showContent = false
-                        delay(400)
-                        onCloseApp()
-                    }
-                },
-                isWebsite = isWebsite,
-                packageName = packageName,
-                isGoalLocked = isGoalLocked,
-                goalProgress = goalProgress,
-                linkedGoal = linkedGoal
-            )
-        } else {
-            PortraitScheduleLayout(
-                appName = appName,
-                appIcon = appIcon,
-                schedule = currentSchedule,
-                progress = progress,
-                totalGlobalUsageToday = currentTotalGlobalUsageToday,
-                userPrefs = userPrefs,
-                isEmergencyUnlocked = isEmergencyUnlocked,
-                autoKickProgress = { autoKickProgress.value },
-                onEmergencyHoldingChange = { isEmergencyHolding = it },
-                onEmergencyClick = { isEmergencyUnlocked = true },
-                onAllowUse = { minutes ->
-                    scope.launch {
-                        showContent = false
-                        delay(400)
-                        onAllowUse(minutes, isEmergencyUnlocked)
-                    }
-                },
-                onCloseApp = {
-                    scope.launch {
-                        showContent = false
-                        delay(400)
-                        onCloseApp()
-                    }
-                },
-                isWebsite = isWebsite,
-                packageName = packageName,
-                isGoalLocked = isGoalLocked,
-                goalProgress = goalProgress,
-                linkedGoal = linkedGoal
-            )
-        }
+    if (isLandscape) {
+        LandscapeScheduleLayout(
+            modifier = Modifier.displayCutoutPadding(),
+            appName = appName,
+            appIcon = appIcon,
+            schedule = currentSchedule,
+            progress = progress,
+            totalGlobalUsageToday = currentTotalGlobalUsageToday,
+            userPrefs = userPrefs,
+            isEmergencyUnlocked = isEmergencyUnlocked,
+            autoKickProgress = { autoKickProgress.value },
+            onEmergencyHoldingChange = { isEmergencyHolding = it },
+            onEmergencyClick = { isEmergencyUnlocked = true },
+            onAllowUse = { minutes ->
+                currentOnAllowUse(minutes, isEmergencyUnlocked)
+            },
+            onCloseApp = currentOnCloseApp,
+            isWebsite = isWebsite,
+            packageName = packageName,
+            isGoalLocked = isGoalLocked,
+            goalProgress = goalProgress,
+            linkedGoal = linkedGoal
+        )
+    } else {
+        PortraitScheduleLayout(
+            appName = appName,
+            appIcon = appIcon,
+            schedule = currentSchedule,
+            progress = progress,
+            totalGlobalUsageToday = currentTotalGlobalUsageToday,
+            userPrefs = userPrefs,
+            isEmergencyUnlocked = isEmergencyUnlocked,
+            autoKickProgress = { autoKickProgress.value },
+            onEmergencyHoldingChange = { isEmergencyHolding = it },
+            onEmergencyClick = { isEmergencyUnlocked = true },
+            onAllowUse = { minutes ->
+                currentOnAllowUse(minutes, isEmergencyUnlocked)
+            },
+            onCloseApp = currentOnCloseApp,
+            isWebsite = isWebsite,
+            packageName = packageName,
+            isGoalLocked = isGoalLocked,
+            goalProgress = goalProgress,
+            linkedGoal = linkedGoal
+        )
     }
 }
 

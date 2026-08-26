@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Check
@@ -66,6 +67,8 @@ import com.etrisad.zenith.ui.screens.graceperiod.GracePeriodScreen
 import com.etrisad.zenith.ui.screens.pomodoro.PomodoroScreen
 import com.etrisad.zenith.ui.screens.settings.EyeCareScreen
 import com.etrisad.zenith.ui.screens.settings.LockdownSettings
+import com.etrisad.zenith.ui.screens.settings.PausePointScreen
+import com.etrisad.zenith.ui.screens.settings.PausePointQrSettingsScreen
 import com.etrisad.zenith.ui.screens.settings.SettingsScreen
 import com.etrisad.zenith.ui.viewmodel.FocusViewModel
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
@@ -149,6 +152,8 @@ fun MainScreen(
                 currentRoute == Screen.EyeCare.route ||
                 currentRoute == Screen.Lockdown.route ||
                 currentRoute == Screen.Pomodoro.route ||
+                currentRoute == Screen.PausePoint.route ||
+                currentRoute == Screen.PausePointQr.route ||
                 currentRoute == Screen.DatabaseDebug.route ||
                 currentRoute == Screen.DataRepairment.route ||
                 currentRoute == Screen.FontTest.route ||
@@ -193,6 +198,8 @@ fun MainScreen(
     var eyeCareSwitchInLayout by remember { mutableStateOf(false) }
     var lockdownSwitchVisible by remember { mutableStateOf(false) }
     var lockdownSwitchInLayout by remember { mutableStateOf(false) }
+    var pausePointSwitchVisible by remember { mutableStateOf(false) }
+    var pausePointSwitchInLayout by remember { mutableStateOf(false) }
     var alarmSwitchVisible by remember { mutableStateOf(false) }
     var alarmSwitchInLayout by remember { mutableStateOf(false) }
     val performanceBackInterceptor = remember { mutableStateOf<() -> Boolean>({ false }) }
@@ -266,6 +273,28 @@ fun MainScreen(
         }
     }
 
+    LaunchedEffect(currentRoute, preferences.pausePointEnabled) {
+        val isPausePointScreen = currentRoute == Screen.PausePoint.route
+        val shouldShow = isPausePointScreen && preferences.pausePointEnabled
+
+        if (shouldShow) {
+            if (!pausePointSwitchInLayout) {
+                pausePointSwitchInLayout = true
+                delay(1200)
+            }
+            pausePointSwitchVisible = true
+        } else {
+            if (pausePointSwitchVisible) {
+                pausePointSwitchVisible = false
+                delay(800)
+            }
+            if (pausePointSwitchInLayout) {
+                delay(1500)
+                pausePointSwitchInLayout = false
+            }
+        }
+    }
+
     LaunchedEffect(currentRoute, preferences.eyeCareEnabled) {
         val isEyeCareScreen = currentRoute == Screen.EyeCare.route
         val shouldShow = isEyeCareScreen && preferences.eyeCareEnabled
@@ -307,6 +336,8 @@ fun MainScreen(
         }
     }
 
+    var showPausePointInfoSheet by remember { mutableStateOf(false) }
+    var showPomodoroInfoSheet by remember { mutableStateOf(false) }
     var showPermissionSheet by remember { mutableStateOf(false) }
     var showOnboardingStatsSheet by remember { mutableStateOf(false) }
     var showOnboardingUpdateSheet by remember { mutableStateOf(false) }
@@ -445,6 +476,61 @@ fun MainScreen(
         )
     }
 
+    if (showPausePointInfoSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showPausePointInfoSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 32.dp)
+            ) {
+                Text(
+                    text = "Pause Point",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Require completing a random task before seeing the block overlay. " +
+                           "Choose which types of tasks you want to appear from the settings below. " +
+                           "The switch in the header can be used to quickly enable or disable this feature.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+
+    if (showPomodoroInfoSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showPomodoroInfoSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 32.dp)
+            ) {
+                Text(
+                    text = "Pomodoro",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "A time management method that uses a timer to break work into intervals, traditionally 25 minutes in length, separated by short breaks. " +
+                            "This helps you stay focused and avoid burnout. You can customize session and break durations, and select which apps you want to allow during focus sessions.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+
     Row(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -456,6 +542,8 @@ fun MainScreen(
                     currentRoute != Screen.EyeCare.route &&
                     currentRoute != Screen.Lockdown.route &&
                     currentRoute != Screen.Pomodoro.route &&
+                    currentRoute != Screen.PausePoint.route &&
+                    currentRoute != Screen.PausePointQr.route &&
                     currentRoute != Screen.DatabaseDebug.route &&
                     currentRoute != Screen.DataRepairment.route &&
                     currentRoute != Screen.FontTest.route &&
@@ -571,6 +659,7 @@ fun MainScreen(
                             AnimatedContent(
                                 targetState = when {
                                     isSelectionMode -> "selection"
+                                    currentRoute == Screen.Pomodoro.route -> "pomodoro"
                                     currentRoute?.startsWith("app_detail") == true -> "app_detail"
                                     !isDeepScreen -> "user"
                                     else -> "none"
@@ -637,6 +726,17 @@ fun MainScreen(
                                             Icon(
                                                 imageVector = Icons.Outlined.AccountCircle,
                                                 contentDescription = "User Profile"
+                                            )
+                                        }
+                                    }
+                                    "pomodoro" -> {
+                                        IconButton(
+                                            onClick = { showPomodoroInfoSheet = true },
+                                            modifier = Modifier.padding(end = 12.dp).clip(CircleShape)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Info,
+                                                contentDescription = "Pomodoro Info"
                                             )
                                         }
                                     }
@@ -843,71 +943,152 @@ fun MainScreen(
                                 }
                              }
                              if (lockdownSwitchInLayout) {
-                                 Box(
-                                     modifier = Modifier
-                                         .padding(end = 16.dp)
-                                         .width(52.dp)
-                                         .height(32.dp),
-                                     contentAlignment = Alignment.Center
-                                 ) {
-                                     androidx.compose.animation.AnimatedVisibility(
-                                         visible = lockdownSwitchVisible,
-                                         enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                 scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
-                                                 slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
-                                         exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                 scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                 slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
-                                     ) {
-                                         Switch(
-                                             checked = preferences.lockdownEnabled,
-                                             onCheckedChange = {
-                                                 scope.launch {
-                                                     userPreferencesRepository.setLockdownEnabled(!preferences.lockdownEnabled)
-                                                 }
-                                             },
-                                             thumbContent = {
-                                                 val thumbSize by animateDpAsState(
-                                                     targetValue = if (preferences.lockdownEnabled) 28.dp else 24.dp,
-                                                     animationSpec = spring(
-                                                         dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                         stiffness = Spring.StiffnessMediumLow
-                                                     ),
-                                                     label = "thumb_size"
-                                                 )
-                                                 val iconColor by animateColorAsState(
-                                                     targetValue = if (preferences.lockdownEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                     animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                                                     label = "switch_icon_color"
-                                                 )
-                                                 Box(
-                                                     modifier = Modifier.size(thumbSize),
-                                                     contentAlignment = Alignment.Center
-                                                 ) {
-                                                     AnimatedContent(
-                                                         targetState = preferences.lockdownEnabled,
-                                                         transitionSpec = {
-                                                             (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                                     scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
-                                                                 .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                                         scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
-                                                         },
-                                                         label = "switch_icon_anim"
-                                                     ) { isChecked ->
-                                                         Icon(
-                                                             imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
-                                                             contentDescription = null,
-                                                             modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
-                                                             tint = iconColor
-                                                         )
-                                                     }
-                                                 }
-                                             }
-                                         )
-                                     }
-                                 }
-                             }
-                             if (alarmSwitchInLayout) {
+                                  Box(
+                                      modifier = Modifier
+                                          .padding(end = 16.dp)
+                                          .width(52.dp)
+                                          .height(32.dp),
+                                      contentAlignment = Alignment.Center
+                                  ) {
+                                      androidx.compose.animation.AnimatedVisibility(
+                                          visible = lockdownSwitchVisible,
+                                          enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                  scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
+                                                  slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+                                          exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                  scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                  slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                                      ) {
+                                          Switch(
+                                              checked = preferences.lockdownEnabled,
+                                              onCheckedChange = {
+                                                  scope.launch {
+                                                      userPreferencesRepository.setLockdownEnabled(!preferences.lockdownEnabled)
+                                                  }
+                                              },
+                                              thumbContent = {
+                                                  val thumbSize by animateDpAsState(
+                                                      targetValue = if (preferences.lockdownEnabled) 28.dp else 24.dp,
+                                                      animationSpec = spring(
+                                                          dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                          stiffness = Spring.StiffnessMediumLow
+                                                      ),
+                                                      label = "thumb_size"
+                                                  )
+                                                  val iconColor by animateColorAsState(
+                                                      targetValue = if (preferences.lockdownEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                      animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                                                      label = "switch_icon_color"
+                                                  )
+                                                  Box(
+                                                      modifier = Modifier.size(thumbSize),
+                                                      contentAlignment = Alignment.Center
+                                                  ) {
+                                                      AnimatedContent(
+                                                          targetState = preferences.lockdownEnabled,
+                                                          transitionSpec = {
+                                                              (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                                      scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
+                                                                  .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                                          scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
+                                                          },
+                                                          label = "switch_icon_anim"
+                                                      ) { isChecked ->
+                                                          Icon(
+                                                              imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
+                                                              contentDescription = null,
+                                                              modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
+                                                              tint = iconColor
+                                                          )
+                                                      }
+                                                  }
+                                              }
+                                          )
+                                      }
+                                  }
+                              }
+                              if (pausePointSwitchInLayout) {
+                                  Box(
+                                      modifier = Modifier
+                                          .padding(end = 12.dp)
+                                          .height(48.dp)
+                                          .widthIn(min = 52.dp),
+                                      contentAlignment = Alignment.Center
+                                  ) {
+                                      androidx.compose.animation.AnimatedVisibility(
+                                          visible = pausePointSwitchVisible,
+                                          enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                  scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
+                                                  slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+                                          exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                  scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                  slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                                      ) {
+                                          Row(
+                                              verticalAlignment = Alignment.CenterVertically,
+                                              modifier = Modifier.height(48.dp)
+                                          ) {
+                                              IconButton(
+                                                  onClick = { showPausePointInfoSheet = true },
+                                                  modifier = Modifier.clip(CircleShape)
+                                              ) {
+                                                  Icon(
+                                                      imageVector = Icons.Outlined.Info,
+                                                      contentDescription = "Info",
+                                                      tint = if (preferences.pausePointEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                  )
+                                              }
+                                              Spacer(modifier = Modifier.width(4.dp))
+                                              Switch(
+                                                  checked = preferences.pausePointEnabled,
+                                                  onCheckedChange = {
+                                                      scope.launch {
+                                                          userPreferencesRepository.setPausePointEnabled(!preferences.pausePointEnabled)
+                                                      }
+                                                  },
+                                                  thumbContent = {
+                                                      val thumbSize by animateDpAsState(
+                                                          targetValue = if (preferences.pausePointEnabled) 28.dp else 24.dp,
+                                                          animationSpec = spring(
+                                                              dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                              stiffness = Spring.StiffnessMediumLow
+                                                          ),
+                                                          label = "thumb_size"
+                                                      )
+                                                      val iconColor by animateColorAsState(
+                                                          targetValue = if (preferences.pausePointEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                                          animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                                                          label = "switch_icon_color"
+                                                      )
+                                                      Box(
+                                                          modifier = Modifier.size(thumbSize),
+                                                          contentAlignment = Alignment.Center
+                                                      ) {
+                                                          AnimatedContent(
+                                                              targetState = preferences.pausePointEnabled,
+                                                              transitionSpec = {
+                                                                  (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                                          scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
+                                                                      .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                                              scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
+                                                              },
+                                                              label = "switch_icon_anim"
+                                                          ) { isChecked ->
+                                                              Icon(
+                                                                  imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
+                                                                  contentDescription = null,
+                                                                  modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
+                                                                  tint = iconColor
+                                                              )
+                                                          }
+                                                      }
+                                                  }
+                                              )
+                                          }
+                                      }
+                                  }
+                              }
+                              if (alarmSwitchInLayout) {
                                 Box(
                                     modifier = Modifier
                                         .padding(end = 16.dp)
@@ -1070,6 +1251,8 @@ fun MainScreen(
                                     targetRoute == Screen.EyeCare.route ||
                                     targetRoute == Screen.Lockdown.route ||
                                     targetRoute == Screen.Pomodoro.route ||
+                                    targetRoute == Screen.PausePoint.route ||
+                                    targetRoute == Screen.PausePointQr.route ||
                                     targetRoute == Screen.DatabaseDebug.route ||
                                     targetRoute == Screen.DataRepairment.route ||
                                     targetRoute == Screen.FontTest.route ||
@@ -1086,6 +1269,8 @@ fun MainScreen(
                                     initialRoute == Screen.EyeCare.route ||
                                     initialRoute == Screen.Lockdown.route ||
                                     initialRoute == Screen.Pomodoro.route ||
+                                    initialRoute == Screen.PausePoint.route ||
+                                    initialRoute == Screen.PausePointQr.route ||
                                     initialRoute == Screen.DatabaseDebug.route ||
                                     initialRoute == Screen.DataRepairment.route ||
                                     initialRoute == Screen.FontTest.route ||
@@ -1133,6 +1318,9 @@ fun MainScreen(
                                     targetRoute == Screen.GracePeriod.route ||
                                     targetRoute == Screen.EyeCare.route ||
                                     targetRoute == Screen.Lockdown.route ||
+                                    targetRoute == Screen.Pomodoro.route ||
+                                    targetRoute == Screen.PausePoint.route ||
+                                    targetRoute == Screen.PausePointQr.route ||
                                     targetRoute == Screen.DatabaseDebug.route ||
                                     targetRoute == Screen.DataRepairment.route ||
                                     targetRoute == Screen.FontTest.route ||
@@ -1149,6 +1337,9 @@ fun MainScreen(
                                     initialRoute == Screen.GracePeriod.route ||
                                     initialRoute == Screen.EyeCare.route ||
                                     initialRoute == Screen.Lockdown.route ||
+                                    initialRoute == Screen.Pomodoro.route ||
+                                    initialRoute == Screen.PausePoint.route ||
+                                    initialRoute == Screen.PausePointQr.route ||
                                     initialRoute == Screen.DatabaseDebug.route ||
                                     initialRoute == Screen.DataRepairment.route ||
                                     initialRoute == Screen.FontTest.route ||
@@ -1296,6 +1487,23 @@ fun MainScreen(
                             preferencesRepository = userPreferencesRepository
                         )
                     }
+                    composable(Screen.PausePoint.route) {
+                        PausePointScreen(
+                            preferences = preferences,
+                            innerPadding = innerPadding,
+                            preferencesRepository = userPreferencesRepository,
+                            onNavigateToQrSettings = {
+                                navController.navigate(Screen.PausePointQr.route)
+                            }
+                        )
+                    }
+                    composable(Screen.PausePointQr.route) {
+                        PausePointQrSettingsScreen(
+                            preferences = preferences,
+                            innerPadding = innerPadding,
+                            preferencesRepository = userPreferencesRepository
+                        )
+                    }
                     composable(Screen.UsageStats.route) {
                         UsageStatsScreen(
                             viewModel = homeViewModel,
@@ -1396,6 +1604,8 @@ fun MainScreen(
                             currentRoute != Screen.SystemUsageDebug.route &&
                             currentRoute != Screen.OverlayAppearance.route &&
                             currentRoute != Screen.Pomodoro.route &&
+                            currentRoute != Screen.PausePoint.route &&
+                            currentRoute != Screen.PausePointQr.route &&
                             currentRoute?.startsWith("settings_category") == false &&
                             currentRoute?.startsWith("app_detail") == false
 

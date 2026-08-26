@@ -11,9 +11,11 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
+import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import android.widget.Toast
@@ -151,7 +153,7 @@ class AppUsageMonitorService : Service() {
                     cancelScreenOffGoalAlarm()
                     Log.w("ZenithAUMS", "SCREEN ON: starting foreground")
                     try {
-                        startForeground(NOTIFICATION_ID, createNotification())
+                        startForegroundSafely()
                     } catch (e: Exception) {
                         Log.e("ZenithAUMS", "startForeground failed: ${e.message}")
                     }
@@ -458,7 +460,7 @@ class AppUsageMonitorService : Service() {
         launchCollectors()
         createMonitorNotificationChannel()
 
-        startForeground(NOTIFICATION_ID, createNotification())
+        startForegroundSafely()
         foregroundNotificationStarted = true
         createGoalNotificationChannel()
         createBedtimeNotificationChannel()
@@ -2459,6 +2461,28 @@ class AppUsageMonitorService : Service() {
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)
             .build()
+    }
+
+    private fun startForegroundSafely() {
+        val notification = createNotification()
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                }
+                startForeground(NOTIFICATION_ID, notification, type)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: Exception) {
+            Log.e("ZenithAUMS", "startForeground(camera) failed: ${e.message}")
+            try {
+                startForeground(NOTIFICATION_ID, notification)
+            } catch (e2: Exception) {
+                Log.e("ZenithAUMS", "startForeground fallback failed: ${e2.message}")
+            }
+        }
     }
 
     private fun createNotificationStatusText(): String {

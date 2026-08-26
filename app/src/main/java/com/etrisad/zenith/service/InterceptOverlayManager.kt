@@ -56,6 +56,7 @@ class InterceptOverlayManager(
     private var overlayUsageState: androidx.compose.runtime.MutableState<Pair<Long, Long>>? = null
     private val sharedPrefs = MutableStateFlow<com.etrisad.zenith.data.preferences.UserPreferences?>(null)
     private var recreateOverlay: (() -> Unit)? = null
+    private var overlayWindowParams: WindowManager.LayoutParams? = null
 
     init {
         managerScope.launch {
@@ -214,7 +215,8 @@ class InterceptOverlayManager(
                             onGoalDismiss = {
                                 onGoalDismiss()
                                 hideOverlay()
-                            }
+                            },
+                            onKeyboardFocusChange = { setOverlayFocusable(it) }
                         )
                     }
                 }
@@ -299,7 +301,8 @@ class InterceptOverlayManager(
                             onCloseApp = {
                                 onCloseApp()
                                 hideOverlay()
-                            }
+                            },
+                            onKeyboardFocusChange = { setOverlayFocusable(it) }
                         )
                     }
                 }
@@ -596,6 +599,7 @@ class InterceptOverlayManager(
                 })
                 windowManager.addView(composeView, params)
                 overlayView = composeView
+                overlayWindowParams = params
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -625,6 +629,26 @@ class InterceptOverlayManager(
                 overlayView = null
             }
         }
+    }
+
+    fun setOverlayFocusable(focusable: Boolean) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { setOverlayFocusable(focusable) }
+            return
+        }
+        val view = overlayView ?: return
+        val p = overlayWindowParams ?: return
+        try {
+            if (focusable) {
+                p.flags = p.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+                p.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+            } else {
+                p.flags = p.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                p.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_UNSPECIFIED
+            }
+            windowManager.updateViewLayout(view, p)
+            if (focusable) view.requestFocus()
+        } catch (_: Exception) {}
     }
 
     private fun isKeyboardApp(packageName: String): Boolean {
