@@ -63,10 +63,23 @@ fun QrScanner(
         if (permissionGranted) {
             val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor()
             val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+            val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
             var bound = false
+            var disposed = false
+            var retryAttempts = 0
+            var previewUseCase: Preview? = null
+            var analysisUseCase: ImageAnalysis? = null
 
-            fun tryBind() {
-                if (bound) return
+            var tryBind: () -> Unit = {}
+
+            fun scheduleRetry() {
+                if (disposed || retryAttempts >= 5) return
+                retryAttempts++
+                mainHandler.postDelayed({ tryBind() }, 400L)
+            }
+
+            tryBind = fun() {
+                if (bound || disposed) return
                 if (!lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return
                 if (!cameraProviderFuture.isDone) return
                 bound = true
@@ -97,32 +110,26 @@ fun QrScanner(
                             imageProxy.close()
                         }
                     }
-                    cameraProvider.unbindAll()
+                    previewUseCase = preview
+                    analysisUseCase = imageAnalysis
                     cameraProvider.bindToLifecycle(
                         lifecycleOwner,
                         CameraSelector.DEFAULT_BACK_CAMERA,
                         preview,
                         imageAnalysis
                     )
+                    retryAttempts = 0
                     bindError = null
                 } catch (e: Exception) {
                     bound = false
                     bindError = e.message ?: e.javaClass.simpleName
+                    scheduleRetry()
                 }
             }
 
             val observer = LifecycleEventObserver { _, event ->
                 when (event) {
                     Lifecycle.Event.ON_START, Lifecycle.Event.ON_RESUME -> tryBind()
-                    Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
-                        if (bound) {
-                            try {
-                                cameraProviderFuture.get().unbindAll()
-                            } catch (_: Exception) {
-                            }
-                            bound = false
-                        }
-                    }
                     else -> {}
                 }
             }
@@ -130,9 +137,14 @@ fun QrScanner(
             cameraProviderFuture.addListener({ tryBind() }, ContextCompat.getMainExecutor(context))
 
             onDispose {
+                disposed = true
+                mainHandler.removeCallbacksAndMessages(null)
                 lifecycleOwner.lifecycle.removeObserver(observer)
                 try {
-                    cameraProviderFuture.get().unbindAll()
+                    val cases = listOfNotNull(previewUseCase, analysisUseCase)
+                    if (cases.isNotEmpty()) {
+                        cameraProviderFuture.get().unbind(*cases.toTypedArray())
+                    }
                 } catch (_: Exception) {
                 }
                 analysisExecutor.shutdown()

@@ -161,7 +161,7 @@ private fun BreathingTask(
         onCompleted()
     }
 
-    val scale by remember { derivedStateOf { 0.7f + 0.3f * animatable.value } }
+    val scale by remember { derivedStateOf { animatable.value } }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -219,14 +219,59 @@ private fun WalkTask(
 
     val listener = remember {
         object : SensorEventListener {
+            private val gravity = FloatArray(3)
+            private val lastStepGravity = FloatArray(3)
+            private var gravityInitialized = false
+            private var hasStepReference = false
+            private var rotationBlockUntil = 0L
+
             override fun onSensorChanged(event: SensorEvent) {
-                val x = event.values[0].toDouble()
-                val y = event.values[1].toDouble()
-                val z = event.values[2].toDouble()
-                val magnitude = sqrt(x * x + y * y + z * z)
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
+
+                gravity[0] = gravity[0] * 0.85f + x * 0.15f
+                gravity[1] = gravity[1] * 0.85f + y * 0.15f
+                gravity[2] = gravity[2] * 0.85f + z * 0.15f
+
+                val gx = gravity[0]
+                val gy = gravity[1]
+                val gz = gravity[2]
+                val gMag = sqrt((gx * gx + gy * gy + gz * gz).toDouble())
+                if (!gravityInitialized) {
+                    if (gMag < 6.0) return
+                    gravityInitialized = true
+                }
+
                 val now = System.currentTimeMillis()
-                if (magnitude > 11.0 && now - lastStepTime.get() > 450) {
+
+                val lgx = lastStepGravity[0]
+                val lgy = lastStepGravity[1]
+                val lgz = lastStepGravity[2]
+                val lgMag = sqrt((lgx * lgx + lgy * lgy + lgz * lgz).toDouble())
+                if (hasStepReference && gMag > 1e-3 && lgMag > 1e-3) {
+                    val dot = ((gx * lgx + gy * lgy + gz * lgz) / (gMag * lgMag)).coerceIn(-1.0, 1.0)
+                    if (dot < 0.64) {
+                        lastStepGravity[0] = (gx / gMag).toFloat()
+                        lastStepGravity[1] = (gy / gMag).toFloat()
+                        lastStepGravity[2] = (gz / gMag).toFloat()
+                        rotationBlockUntil = now + 800
+                        return
+                    }
+                }
+
+                if (now < rotationBlockUntil) return
+
+                val linX = x - gx
+                val linY = y - gy
+                val linZ = z - gz
+                val linMag = sqrt((linX * linX + linY * linY + linZ * linZ).toDouble())
+                if (linMag > 2.0 && now - lastStepTime.get() > 350) {
                     lastStepTime.set(now)
+                    hasStepReference = true
+                    lastStepGravity[0] = (gx / gMag).toFloat()
+                    lastStepGravity[1] = (gy / gMag).toFloat()
+                    lastStepGravity[2] = (gz / gMag).toFloat()
                     stepsDone++
                     currentOnUserActivity()
                     if (stepsDone >= task.steps) currentOnCompleted()
@@ -555,6 +600,37 @@ private fun CountingTask(
 ) {
     var count by remember { mutableIntStateOf(0) }
     var showComplete by remember { mutableStateOf(false) }
+    var cooldownRemainingMs by remember { mutableLongStateOf(0L) }
+    var lastTapTime by remember { mutableLongStateOf(0L) }
+    var rapidTaps by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(cooldownRemainingMs) {
+        while (cooldownRemainingMs > 0L) {
+            delay(100)
+            cooldownRemainingMs = (cooldownRemainingMs - 100L).coerceAtLeast(0L)
+        }
+        rapidTaps = 0
+    }
+
+    fun registerTap() {
+        val now = System.currentTimeMillis()
+        if (now - lastTapTime < 180) {
+            rapidTaps++
+            if (rapidTaps >= 8) {
+                cooldownRemainingMs = 3000L
+                rapidTaps = 0
+            }
+        } else {
+            rapidTaps = 0
+        }
+        lastTapTime = now
+        count++
+        onUserActivity()
+        if (count >= task.targetNumber) {
+            showComplete = true
+            onCompleted()
+        }
+    }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -578,26 +654,41 @@ private fun CountingTask(
         )
 
         if (!showComplete) {
+            val cooling = cooldownRemainingMs > 0L
             Box(
                 modifier = Modifier
                     .size(80.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer)
-                    .clickable {
-                        count++
-                        onUserActivity()
-                        if (count >= task.targetNumber) {
-                            showComplete = true
-                            onCompleted()
-                        }
-                    },
+                    .background(
+                        if (cooling) MaterialTheme.colorScheme.surfaceContainerHigh
+                        else MaterialTheme.colorScheme.primaryContainer
+                    )
+                    .clickable(enabled = !cooling) { registerTap() },
                 contentAlignment = Alignment.Center
             ) {
+                if (cooling) {
+                    Text(
+                        text = "${(cooldownRemainingMs / 1000L) + 1}s",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        text = "Tap",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+
+            if (cooling) {
                 Text(
-                    text = "Tap",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    text = "Too fast — wait out the penalty",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center
                 )
             }
         }
@@ -871,7 +962,7 @@ private fun AnswerCard(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(horizontal = 6.dp),
             textStyle = MaterialTheme.typography.headlineSmall.copy(
                 fontWeight = FontWeight.Black,
@@ -900,7 +991,6 @@ private fun ChooseAppTask(
     val isPressed by interactionSource.collectIsPressedAsState()
     val holdProgress = remember { Animatable(0f) }
     val currentOnOpenApp by rememberUpdatedState(onOpenApp)
-    val currentPackage by rememberUpdatedState(task.suggestedPackage)
 
     LaunchedEffect(isPressed) {
         if (isPressed) {
@@ -911,7 +1001,7 @@ private fun ChooseAppTask(
                 if (p >= 1f) break
                 delay(16)
             }
-            currentOnOpenApp?.invoke(currentPackage)
+            onCompleted()
             holdProgress.snapTo(0f)
         } else {
             holdProgress.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
@@ -920,7 +1010,7 @@ private fun ChooseAppTask(
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         if (task.suggestedPackage.isNotEmpty()) {
             SubcomposeAsyncImage(
@@ -971,36 +1061,39 @@ private fun ChooseAppTask(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        ZenithButton(
-            onClick = {},
-            type = ZenithButtonType.Filled,
-            enabled = onOpenApp != null && task.suggestedPackage.isNotEmpty(),
-            backgroundProgressProvider = { holdProgress.value },
-            interactionSource = interactionSource,
-            fillMaxWidth = true,
-            size = ZenithButtonSize.Large,
-            content = {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            ZenithButton(
+                onClick = { currentOnOpenApp?.invoke(task.suggestedPackage) },
+                icon = Icons.AutoMirrored.Outlined.OpenInNew,
+                text = "Open ${task.suggestedAppName}",
+                type = ZenithButtonType.Filled,
+                size = ZenithButtonSize.ExtraLarge,
+                fillMaxWidth = true,
+                enabled = onOpenApp != null && task.suggestedPackage.isNotEmpty(),
+                shape = RoundedCornerShape(
+                    topStart = 32.dp, topEnd = 32.dp,
+                    bottomStart = 12.dp, bottomEnd = 12.dp
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                val seconds = ceil(5 * (1f - holdProgress.value)).toInt()
-                Text(
-                    text = if (isPressed) "Hold to open (${seconds}s)" else "Hold 5s to open",
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
-        )
+            )
 
-        ZenithButton(
-            onClick = onCompleted,
-            text = "I'll do it later",
-            type = ZenithButtonType.Tonal,
-            size = ZenithButtonSize.Large,
-            modifier = Modifier.fillMaxWidth()
-        )
+            ZenithButton(
+                onClick = {},
+                text = if (isPressed) {
+                    val seconds = ceil(5 * (1f - holdProgress.value)).toInt()
+                    "Hold ${seconds}s to dismiss"
+                } else {
+                    "I'll do it later (hold 5s)"
+                },
+                type = ZenithButtonType.Tonal,
+                size = ZenithButtonSize.ExtraLarge,
+                fillMaxWidth = true,
+                interactionSource = interactionSource,
+                backgroundProgressProvider = { holdProgress.value },
+                shape = RoundedCornerShape(
+                    topStart = 12.dp, topEnd = 12.dp,
+                    bottomStart = 32.dp, bottomEnd = 32.dp
+                )
+            )
+        }
     }
 }

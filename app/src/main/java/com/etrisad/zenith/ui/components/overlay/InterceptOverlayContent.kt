@@ -5,7 +5,9 @@ import android.content.res.Configuration
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -58,8 +60,12 @@ fun InterceptOverlayContent(
     val scope = rememberCoroutineScope()
 
     val userPrefsRepo = remember { UserPreferencesRepository(context) }
+    var prefsLoaded by remember { mutableStateOf(false) }
     val userPrefs by produceState(initialValue = UserPreferences()) {
-        userPrefsRepo.userPreferencesFlow.collect { value = it }
+        userPrefsRepo.userPreferencesFlow.collect {
+            value = it
+            prefsLoaded = true
+        }
     }
 
     if (shield?.type == FocusType.GOAL) {
@@ -96,7 +102,7 @@ fun InterceptOverlayContent(
         }
     }
 
-    val showPausePoint = pausePointEnabled && currentPauseTask != null && !pauseTaskCompleted
+    val showPausePoint = pausePointEnabled && !pauseTaskCompleted
 
     var showSheet by remember { mutableStateOf(false) }
     val backgroundAlpha by animateFloatAsState(
@@ -161,26 +167,38 @@ fun InterceptOverlayContent(
         dragHandleIsIncentiveLocked = isIncentiveActive && !incentiveTier.isUnlocked,
         dragHandleIncentiveTier = if (isIncentiveActive) incentiveTier else null,
         dragHandleBonusUsesLeft = bonusUsesLeft,
-        contentKey = if (showPausePoint) CONTENT_A else CONTENT_B,
+        contentKey = when {
+            !prefsLoaded -> null
+            showPausePoint -> CONTENT_A
+            else -> CONTENT_B
+        },
         onCloseApp = closeOverlay
     ) { key ->
         when (key) {
+            null -> {
+                Box(modifier = Modifier.fillMaxWidth().height(240.dp))
+            }
             CONTENT_A -> {
-                PausePointContent(
-                    task = currentPauseTask!!,
-                    onTaskCompleted = { pauseTaskCompleted = true },
-                    onOpenApp = { goalPkg ->
-                        try {
-                            val intent = context.packageManager.getLaunchIntentForPackage(goalPkg)
-                            if (intent != null) {
-                                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                            }
-                        } catch (_: Exception) {}
-                        closeOverlay()
-                    },
-                    onCloseApp = closeOverlay,
-                    onKeyboardFocusChange = onKeyboardFocusChange
-                )
+                val task = currentPauseTask
+                if (task != null) {
+                    PausePointContent(
+                        task = task,
+                        onTaskCompleted = { pauseTaskCompleted = true },
+                        onOpenApp = { goalPkg ->
+                            try {
+                                val intent = context.packageManager.getLaunchIntentForPackage(goalPkg)
+                                if (intent != null) {
+                                    context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                }
+                            } catch (_: Exception) {}
+                            closeOverlay()
+                        },
+                        onCloseApp = closeOverlay,
+                        onKeyboardFocusChange = onKeyboardFocusChange
+                    )
+                } else {
+                    Box(modifier = Modifier.fillMaxWidth().height(240.dp))
+                }
             }
             else -> {
                 ShieldOverlaySheetContent(
@@ -228,8 +246,12 @@ fun ScheduleOverlayContent(
     val scope = rememberCoroutineScope()
 
     val userPrefsRepo = remember { UserPreferencesRepository(context) }
+    var prefsLoaded by remember { mutableStateOf(false) }
     val userPrefs by produceState(initialValue = UserPreferences()) {
-        userPrefsRepo.userPreferencesFlow.collect { value = it }
+        userPrefsRepo.userPreferencesFlow.collect {
+            value = it
+            prefsLoaded = true
+        }
     }
 
     val pausePointEnabled = userPrefs.pausePointEnabled
@@ -251,7 +273,7 @@ fun ScheduleOverlayContent(
         }
     }
 
-    val showPausePoint = pausePointEnabled && currentPauseTask != null && !pauseTaskCompleted
+    val showPausePoint = pausePointEnabled && !pauseTaskCompleted
 
     var showSheet by remember { mutableStateOf(false) }
     val backgroundAlpha by animateFloatAsState(
@@ -282,26 +304,38 @@ fun ScheduleOverlayContent(
         showBedtimePill = true,
         userPreferences = userPrefs,
         dragHandleEmergencyCount = schedule.emergencyUseCount,
-        contentKey = if (showPausePoint) CONTENT_A else CONTENT_B,
+        contentKey = when {
+            !prefsLoaded -> null
+            showPausePoint -> CONTENT_A
+            else -> CONTENT_B
+        },
         onCloseApp = closeOverlay
     ) { key ->
         when (key) {
+            null -> {
+                Box(modifier = Modifier.fillMaxWidth().height(240.dp))
+            }
             CONTENT_A -> {
-                PausePointContent(
-                    task = currentPauseTask!!,
-                    onTaskCompleted = { pauseTaskCompleted = true },
-                    onOpenApp = { goalPkg ->
-                        try {
-                            val intent = context.packageManager.getLaunchIntentForPackage(goalPkg)
-                            if (intent != null) {
-                                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                            }
-                        } catch (_: Exception) {}
-                        closeOverlay()
-                    },
-                    onCloseApp = closeOverlay,
-                    onKeyboardFocusChange = onKeyboardFocusChange
-                )
+                val task = currentPauseTask
+                if (task != null) {
+                    PausePointContent(
+                        task = task,
+                        onTaskCompleted = { pauseTaskCompleted = true },
+                        onOpenApp = { goalPkg ->
+                            try {
+                                val intent = context.packageManager.getLaunchIntentForPackage(goalPkg)
+                                if (intent != null) {
+                                    context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                }
+                            } catch (_: Exception) {}
+                            closeOverlay()
+                        },
+                        onCloseApp = closeOverlay,
+                        onKeyboardFocusChange = onKeyboardFocusChange
+                    )
+                } else {
+                    Box(modifier = Modifier.fillMaxWidth().height(240.dp))
+                }
             }
             else -> {
                 ScheduleOverlaySheetContent(
@@ -366,6 +400,7 @@ private fun PausePointContent(
             if (p >= 1f) break
             delay(16)
         }
+        delay(300)
         currentOnCloseApp()
     }
 
@@ -378,6 +413,7 @@ private fun PausePointContent(
             .fillMaxWidth()
             .padding(bottom = 24.dp, start = 24.dp, end = 24.dp)
             .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
@@ -490,6 +526,7 @@ private fun PausePointLandscapeContent(
             if (p >= 1f) break
             delay(16)
         }
+        delay(300)
         currentOnCloseApp()
     }
 
