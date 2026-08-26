@@ -179,24 +179,39 @@ fun ZenithHeader(
                 modifier = Modifier.offset(x = titleXOffset)
             ) { state ->
                 if (state == "home_header") {
-                    var showAppName by remember { mutableStateOf(false) }
+                    val greeting = remember {
+                        listOf(
+                            "Welcome Back",
+                            "Stay Focused",
+                            "Keep Going",
+                            "Stay Strong",
+                            "You Got This"
+                        ).random()
+                    }
+                    var stage by remember { mutableStateOf(0) }
                     LaunchedEffect(Unit) {
-                        delay(2500)
-                        showAppName = true
+                        delay(1700)
+                        stage = 1
+                        delay(1700)
+                        stage = 2
                     }
 
                     AnimatedContent(
-                        targetState = showAppName,
+                        targetState = stage,
                         transitionSpec = {
                             (fadeIn() + slideInVertically { it / 2 })
                                 .togetherWith(fadeOut() + slideOutVertically { -it / 2 })
                         },
                         label = "HomeAppNameAnimation"
-                    ) { isAppName ->
+                    ) { currentStage ->
                         Text(
-                            text = if (isAppName) "Zenith" else "Welcome Back, $userName",
+                            text = when (currentStage) {
+                                0 -> greeting
+                                1 -> userName
+                                else -> "Zenith"
+                            },
                             style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = if (isAppName) FontWeight.ExtraBold else FontWeight.Bold,
+                            fontWeight = if (currentStage == 2) FontWeight.ExtraBold else FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
                             maxLines = 1

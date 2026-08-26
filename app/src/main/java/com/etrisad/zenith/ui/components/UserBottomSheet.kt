@@ -28,6 +28,8 @@ import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import kotlinx.coroutines.launch
 
+private const val MAX_USER_NAME_LENGTH = 20
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun UserBottomSheet(
@@ -40,7 +42,7 @@ fun UserBottomSheet(
     val preferences by repository.userPreferencesFlow.collectAsState(initial = UserPreferences())
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
-    var nameInput by remember { mutableStateOf(userName) }
+    var nameInput by remember { mutableStateOf(userName.take(MAX_USER_NAME_LENGTH)) }
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -83,7 +85,7 @@ fun UserBottomSheet(
 
                 NameEditCard(
                     name = nameInput,
-                    onNameChange = { nameInput = it },
+                    onNameChange = { nameInput = it.take(MAX_USER_NAME_LENGTH) },
                     expressiveColors = preferences.expressiveColors,
                     shape = RoundedCornerShape(
                         topStart = 8.dp,
