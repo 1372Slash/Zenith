@@ -183,6 +183,42 @@
                 android:resource="@xml/app_streak_widget_info" />
         </receiver>
 
+        <receiver
+            android:name=".ui.widget.TotalScreenTimeWidgetReceiver"
+            android:label="Total Screen Time"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/total_screen_time_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".ui.widget.RemainingTargetWidgetReceiver"
+            android:label="Remaining Target"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/remaining_target_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".ui.widget.PhoneFreeTimeWidgetReceiver"
+            android:label="Phone Free Time"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/phone_free_time_widget_info" />
+        </receiver>
+
         <meta-data
             android:name="preloaded_fonts"
             android:resource="@array/preloaded_fonts" />

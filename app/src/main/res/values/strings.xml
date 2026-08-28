@@ -3,4 +3,7 @@
     <string name="accessibility_service_description">Helps Zenith identify the currently active application for digital wellbeing features.</string>
     <string name="global_streak_widget_description">Track your total focused days across all apps.</string>
     <string name="app_streak_widget_description">Track your focus streak for a specific app.</string>
+    <string name="total_screen_time_widget_description">Shows total screen time today.</string>
+    <string name="remaining_target_widget_description">Shows remaining time before daily screen time target.</string>
+    <string name="phone_free_time_widget_description">Shows phone-free time today - how long you haven\'t used your phone, resets daily.</string>
 </resources>
