@@ -1050,9 +1050,9 @@ class OverlayActionHandler(
                 if (currentDayOfWeek !in ps.activeDays) continue
 
                 val isInInterval = if (ps.startMinutes <= ps.endMinutes) {
-                    currentTotalMinutes in ps.startMinutes..ps.endMinutes
+                    currentTotalMinutes in ps.startMinutes until ps.endMinutes
                 } else {
-                    currentTotalMinutes >= ps.startMinutes || currentTotalMinutes <= ps.endMinutes
+                    currentTotalMinutes >= ps.startMinutes || currentTotalMinutes < ps.endMinutes
                 }
 
                 if (isInInterval) {

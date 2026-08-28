@@ -2299,9 +2299,9 @@ class AppUsageMonitorService : Service() {
         val currentlyActiveIds = mutableSetOf<Long>()
         for (ps in SharedMonitoringState.parsedSchedulesCache) {
             val isInInterval = if (ps.startMinutes <= ps.endMinutes) {
-                currentTotalMinutes in ps.startMinutes..ps.endMinutes
+                currentTotalMinutes in ps.startMinutes until ps.endMinutes
             } else {
-                currentTotalMinutes >= ps.startMinutes || currentTotalMinutes <= ps.endMinutes
+                currentTotalMinutes >= ps.startMinutes || currentTotalMinutes < ps.endMinutes
             }
             if (isInInterval) {
                 currentlyActiveIds.add(ps.id)
