@@ -117,18 +117,23 @@ class RemainingTargetWidget : GlanceAppWidget() {
         val squareSize = minOf(size.width, size.height)
         val scale = squareSize.value / 100f
 
-        val (timeText, label) = when {
-            targetMinutes == 0 -> "No target" to "set in settings"
+        val timeText = when {
+            targetMinutes == 0 -> "--"
             isOver -> {
                 val h = overMillis / 3600000
                 val m = (overMillis % 3600000) / 60000
-                "${h}h ${m}m over" to "target exceeded"
+                if (h > 0) "${h}h ${m}m" else "${m}m"
             }
             else -> {
                 val h = remainingMillis / 3600000
                 val m = (remainingMillis % 3600000) / 60000
-                if (h > 0) "${h}h ${m}m left" to "remaining" else "${m}m left" to "remaining"
+                if (h > 0) "${h}h ${m}m" else "${m}m"
             }
+        }
+        val label = when {
+            targetMinutes == 0 -> "no target"
+            isOver -> "over"
+            else -> "left"
         }
 
         Box(modifier = GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -161,7 +166,7 @@ class RemainingTargetWidget : GlanceAppWidget() {
                     Text(
                         text = timeText,
                         style = TextStyle(
-                            fontSize = (13 * scale).sp,
+                            fontSize = (18 * scale).sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isOver) GlanceTheme.colors.error else GlanceTheme.colors.onSurface,
                             textAlign = TextAlign.Center
@@ -170,14 +175,13 @@ class RemainingTargetWidget : GlanceAppWidget() {
                     )
                     Text(
                         text = label,
-                        style = TextStyle(fontSize = (9 * scale).sp, color = GlanceTheme.colors.onSurfaceVariant, textAlign = TextAlign.Center)
-                    )
-                    if (targetMinutes > 0) {
-                        Text(
-                            text = "target ${targetMinutes / 60}h ${targetMinutes % 60}m",
-                            style = TextStyle(fontSize = (8 * scale).sp, color = GlanceTheme.colors.onSurfaceVariant)
+                        style = TextStyle(
+                            fontSize = (12 * scale).sp,
+                            fontWeight = FontWeight.Normal,
+                            color = GlanceTheme.colors.onSurfaceVariant,
+                            textAlign = TextAlign.Center
                         )
-                    }
+                    )
                 }
             }
         }

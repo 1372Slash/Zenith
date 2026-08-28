@@ -121,7 +121,7 @@ class PhoneFreeTimeWidget : GlanceAppWidget() {
         val scale = squareSize.value / 100f
 
         val timeText = if (idleHours > 0) "${idleHours}h ${idleMinutes}m" else "${idleMinutes}m"
-        val subText = "phone-free today"
+        val subText = "away"
 
         Box(modifier = GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Box(modifier = GlanceModifier.size(squareSize), contentAlignment = Alignment.Center) {
@@ -162,11 +162,12 @@ class PhoneFreeTimeWidget : GlanceAppWidget() {
                     )
                     Text(
                         text = subText,
-                        style = TextStyle(fontSize = (9 * scale).sp, color = GlanceTheme.colors.onSecondaryContainer, textAlign = TextAlign.Center)
-                    )
-                    Text(
-                        text = "resets at midnight",
-                        style = TextStyle(fontSize = (7 * scale).sp, color = GlanceTheme.colors.onSecondaryContainer)
+                        style = TextStyle(
+                            fontSize = (12 * scale).sp,
+                            fontWeight = FontWeight.Normal,
+                            color = GlanceTheme.colors.onSecondaryContainer,
+                            textAlign = TextAlign.Center
+                        )
                     )
                 }
             }
