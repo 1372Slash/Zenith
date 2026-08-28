@@ -21,6 +21,24 @@ class GracePeriodViewModel(
             initialValue = UserPreferences()
         )
 
+    private val _editError = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val editError: StateFlow<String?> = _editError
+
+    fun clearEditError() { _editError.value = null }
+
+    fun canEditGracePeriod(prefs: UserPreferences): Boolean {
+        val remaining = userPreferencesRepository.getGracePeriodCooldownRemaining(prefs)
+        return remaining <= 0L
+    }
+
+    fun getCooldownText(prefs: UserPreferences): String? {
+        val remaining = userPreferencesRepository.getGracePeriodCooldownRemaining(prefs)
+        if (remaining <= 0L) return null
+        val days = remaining / (24 * 60 * 60 * 1000L)
+        val hours = (remaining % (24 * 60 * 60 * 1000L)) / (60 * 60 * 1000L)
+        return if (days > 0) "${days}d ${hours}h remaining" else "${hours}h remaining"
+    }
+
     fun setGracePeriodEnabled(enabled: Boolean) {
         viewModelScope.launch {
             userPreferencesRepository.setGracePeriodEnabled(enabled)
@@ -29,19 +47,48 @@ class GracePeriodViewModel(
 
     fun setGracePeriodStartTime(time: String) {
         viewModelScope.launch {
-            userPreferencesRepository.setGracePeriodStartTime(time)
+            val prefs = userPreferences.value
+            val remaining = userPreferencesRepository.getGracePeriodCooldownRemaining(prefs)
+            if (remaining > 0L) {
+                _editError.value = "Grace period can only be edited once per week. ${getCooldownText(prefs)}"
+                return@launch
+            }
+            if (!userPreferencesRepository.isGracePeriodDurationValid(time, prefs.gracePeriodEndTime)) {
+                _editError.value = "Grace period cannot exceed ${UserPreferencesRepository.GRACE_PERIOD_MAX_DURATION_MINUTES / 60} hours"
+                return@launch
+            }
+            val ok = userPreferencesRepository.setGracePeriodStartTime(time)
+            if (!ok) _editError.value = "Failed to update grace period"
         }
     }
 
     fun setGracePeriodEndTime(time: String) {
         viewModelScope.launch {
-            userPreferencesRepository.setGracePeriodEndTime(time)
+            val prefs = userPreferences.value
+            val remaining = userPreferencesRepository.getGracePeriodCooldownRemaining(prefs)
+            if (remaining > 0L) {
+                _editError.value = "Grace period can only be edited once per week. ${getCooldownText(prefs)}"
+                return@launch
+            }
+            if (!userPreferencesRepository.isGracePeriodDurationValid(prefs.gracePeriodStartTime, time)) {
+                _editError.value = "Grace period cannot exceed ${UserPreferencesRepository.GRACE_PERIOD_MAX_DURATION_MINUTES / 60} hours"
+                return@launch
+            }
+            val ok = userPreferencesRepository.setGracePeriodEndTime(time)
+            if (!ok) _editError.value = "Failed to update grace period"
         }
     }
 
     fun setGracePeriodDays(days: Set<Int>) {
         viewModelScope.launch {
-            userPreferencesRepository.setGracePeriodDays(days)
+            val prefs = userPreferences.value
+            val remaining = userPreferencesRepository.getGracePeriodCooldownRemaining(prefs)
+            if (remaining > 0L) {
+                _editError.value = "Grace period can only be edited once per week. ${getCooldownText(prefs)}"
+                return@launch
+            }
+            val ok = userPreferencesRepository.setGracePeriodDays(days)
+            if (!ok) _editError.value = "Failed to update grace period"
         }
     }
 }

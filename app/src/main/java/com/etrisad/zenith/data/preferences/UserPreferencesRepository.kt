@@ -241,6 +241,7 @@ class UserPreferencesRepository(private val context: Context) {
         val GRACE_PERIOD_START_TIME = stringPreferencesKey("grace_period_start_time")
         val GRACE_PERIOD_END_TIME = stringPreferencesKey("grace_period_end_time")
         val GRACE_PERIOD_DAYS = stringPreferencesKey("grace_period_days")
+        val GRACE_PERIOD_LAST_EDIT_TIMESTAMP = longPreferencesKey("grace_period_last_edit_timestamp")
         val USER_NAME = stringPreferencesKey("user_name")
         val EARLY_KICK_ENABLED = booleanPreferencesKey("early_kick_enabled")
         val INTERCEPT_AUDIO_FOCUS_ENABLED = booleanPreferencesKey("intercept_audio_focus_enabled")
@@ -430,6 +431,7 @@ class UserPreferencesRepository(private val context: Context) {
             gracePeriodStartTime = settings[PreferencesKeys.GRACE_PERIOD_START_TIME] ?: "12:00",
             gracePeriodEndTime = settings[PreferencesKeys.GRACE_PERIOD_END_TIME] ?: "13:00",
             gracePeriodDays = settings[PreferencesKeys.GRACE_PERIOD_DAYS]?.split(",")?.filter { it.isNotEmpty() }?.map { it.toInt() }?.toSet() ?: setOf(1, 2, 3, 4, 5, 6, 7),
+            gracePeriodLastEditTimestamp = settings[PreferencesKeys.GRACE_PERIOD_LAST_EDIT_TIMESTAMP] ?: 0L,
             bedtimeDndEnabled = settings[PreferencesKeys.BEDTIME_DND_ENABLED] ?: false,
             bedtimeWindDownEnabled = settings[PreferencesKeys.BEDTIME_WIND_DOWN_ENABLED] ?: false,
             bedtimeNotificationEnabled = settings[PreferencesKeys.BEDTIME_NOTIFICATION_ENABLED] ?: true,
@@ -1088,20 +1090,71 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.BEDTIME_WHITELISTED_PACKAGES] = packages.joinToString(",") }
     }
 
+    companion object {
+        const val GRACE_PERIOD_MAX_DURATION_MINUTES = 120
+        const val GRACE_PERIOD_EDIT_COOLDOWN_MILLIS = 7 * 24 * 60 * 60 * 1000L
+    }
+
+    fun getGracePeriodDurationMinutes(start: String, end: String): Int {
+        return try {
+            val s = start.split(":").let { it[0].toInt() * 60 + it[1].toInt() }
+            val e = end.split(":").let { it[0].toInt() * 60 + it[1].toInt() }
+            if (e > s) e - s else (24 * 60 - s) + e
+        } catch (_: Exception) { 0 }
+    }
+
+    fun isGracePeriodDurationValid(start: String, end: String): Boolean {
+        val dur = getGracePeriodDurationMinutes(start, end)
+        return dur in 1..GRACE_PERIOD_MAX_DURATION_MINUTES
+    }
+
+    suspend fun isGracePeriodEditAllowed(): Boolean {
+        val prefs = userPreferencesFlow.first()
+        val last = prefs.gracePeriodLastEditTimestamp
+        if (last == 0L) return true
+        return System.currentTimeMillis() - last >= GRACE_PERIOD_EDIT_COOLDOWN_MILLIS
+    }
+
+    fun getGracePeriodCooldownRemaining(prefs: UserPreferences): Long {
+        val last = prefs.gracePeriodLastEditTimestamp
+        if (last == 0L) return 0L
+        val elapsed = System.currentTimeMillis() - last
+        return (GRACE_PERIOD_EDIT_COOLDOWN_MILLIS - elapsed).coerceAtLeast(0L)
+    }
+
     suspend fun setGracePeriodEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.GRACE_PERIOD_ENABLED] = enabled }
     }
 
-    suspend fun setGracePeriodStartTime(time: String) {
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.GRACE_PERIOD_START_TIME] = time }
+    suspend fun setGracePeriodStartTime(time: String): Boolean {
+        val prefs = userPreferencesFlow.first()
+        if (!isGracePeriodEditAllowed()) return false
+        if (!isGracePeriodDurationValid(time, prefs.gracePeriodEndTime)) return false
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.GRACE_PERIOD_START_TIME] = time
+            preferences[PreferencesKeys.GRACE_PERIOD_LAST_EDIT_TIMESTAMP] = System.currentTimeMillis()
+        }
+        return true
     }
 
-    suspend fun setGracePeriodEndTime(time: String) {
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.GRACE_PERIOD_END_TIME] = time }
+    suspend fun setGracePeriodEndTime(time: String): Boolean {
+        val prefs = userPreferencesFlow.first()
+        if (!isGracePeriodEditAllowed()) return false
+        if (!isGracePeriodDurationValid(prefs.gracePeriodStartTime, time)) return false
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.GRACE_PERIOD_END_TIME] = time
+            preferences[PreferencesKeys.GRACE_PERIOD_LAST_EDIT_TIMESTAMP] = System.currentTimeMillis()
+        }
+        return true
     }
 
-    suspend fun setGracePeriodDays(days: Set<Int>) {
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.GRACE_PERIOD_DAYS] = days.joinToString(",") }
+    suspend fun setGracePeriodDays(days: Set<Int>): Boolean {
+        if (!isGracePeriodEditAllowed()) return false
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.GRACE_PERIOD_DAYS] = days.joinToString(",")
+            preferences[PreferencesKeys.GRACE_PERIOD_LAST_EDIT_TIMESTAMP] = System.currentTimeMillis()
+        }
+        return true
     }
 
     private var lastSavedBedtimeStreak: Pair<Int, Int>? = null
@@ -1572,6 +1625,7 @@ data class UserPreferences(
     val gracePeriodStartTime: String = "12:00",
     val gracePeriodEndTime: String = "13:00",
     val gracePeriodDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7),
+    val gracePeriodLastEditTimestamp: Long = 0L,
     val userName: String = "User",
     val earlyKickEnabled: Boolean = false,
     val interceptAudioFocusEnabled: Boolean = true,

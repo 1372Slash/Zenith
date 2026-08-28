@@ -2268,12 +2268,12 @@ class AppUsageMonitorService : Service() {
         if (prefs.gracePeriodEnabled) {
             if (startMinutes <= endMinutes) {
                 if (currentDay in prefs.gracePeriodDays) {
-                    active = currentMinutes in startMinutes..endMinutes
+                    active = currentMinutes in startMinutes until endMinutes
                 }
             } else {
                 if (currentDay in prefs.gracePeriodDays && currentMinutes >= startMinutes) {
                     active = true
-                } else if (yesterdayDay in prefs.gracePeriodDays && currentMinutes <= endMinutes) {
+                } else if (yesterdayDay in prefs.gracePeriodDays && currentMinutes < endMinutes) {
                     active = true
                 }
             }

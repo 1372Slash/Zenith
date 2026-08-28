@@ -42,9 +42,17 @@ fun GracePeriodScreen(
     innerPadding: PaddingValues
 ) {
     val preferences by viewModel.userPreferences.collectAsState()
+    val editError by viewModel.editError.collectAsState()
     var showStartTimePicker by remember { mutableStateOf(false) }
     var showEndTimePicker by remember { mutableStateOf(false) }
     var showPauseSheet by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(editError) {
+        editError?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearEditError()
+        }
+    }
 
     var currentTime by remember { mutableStateOf(LocalTime.now()) }
     LaunchedEffect(Unit) {
@@ -120,6 +128,36 @@ fun GracePeriodScreen(
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
+                // Cooldown info
+                val cooldownText = viewModel.getCooldownText(preferences)
+                if (cooldownText != null) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Outlined.Schedule,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Editing locked: $cooldownText. Max duration is 2 hours.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
@@ -139,7 +177,7 @@ fun GracePeriodScreen(
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "Grace Period overrides all restrictions. Shields, schedules, and bedtime will not block any apps while active.",
+                            text = "Grace Period overrides all restrictions. Shields, schedules, and bedtime will not block any apps while active. Edits limited to once per week, max 2 hours.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -147,6 +185,10 @@ fun GracePeriodScreen(
                 }
             }
         }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp)
+        )
     }
 
     if (showPauseSheet) {
