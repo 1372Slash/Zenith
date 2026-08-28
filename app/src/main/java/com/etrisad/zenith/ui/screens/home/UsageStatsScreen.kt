@@ -1939,7 +1939,6 @@ fun LongTermStatsSection(
     val displayList = remember(longTermUsage, expanded) { if (expanded) longTermUsage else longTermUsage.take(5) }
 
     Column {
-        Spacer(modifier = Modifier.height(4.dp))
         GroupedCard(index = 2, total = 5, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -1972,7 +1971,7 @@ fun LongTermStatsSection(
                     },
                     isInsideContainer = true,
                     isScalingEnabled = false,
-                    showTextSelected = true
+                    showTextSelected = false
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 if (longTermUsage.isEmpty()) {
