@@ -140,8 +140,8 @@ class HomeViewModel(
         _selectedStatsRange.value = range
         _selectedPeriodOffset.value = 0
     }
-    fun nextPeriod() { _selectedPeriodOffset.value = _selectedPeriodOffset.value + 1 }
-    fun prevPeriod() { if (_selectedPeriodOffset.value > 0) _selectedPeriodOffset.value = _selectedPeriodOffset.value - 1 }
+    fun prevPeriod() { _selectedPeriodOffset.value = _selectedPeriodOffset.value + 1 }
+    fun nextPeriod() { if (_selectedPeriodOffset.value > 0) _selectedPeriodOffset.value = _selectedPeriodOffset.value - 1 }
 
     fun getPeriodLabel(range: StatsRange, offset: Int): String {
         val cal = java.util.Calendar.getInstance()

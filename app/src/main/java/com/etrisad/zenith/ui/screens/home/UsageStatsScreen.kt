@@ -1982,11 +1982,11 @@ fun LongTermStatsSection(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    IconButton(onClick = { viewModel.prevPeriod() }, enabled = offset > 0, modifier = Modifier.size(32.dp)) {
+                    IconButton(onClick = { viewModel.prevPeriod() }, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Outlined.ExpandMore, contentDescription = "Previous", modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = 90f })
                     }
                     Text(periodLabel, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-                    IconButton(onClick = { viewModel.nextPeriod() }, modifier = Modifier.size(32.dp)) {
+                    IconButton(onClick = { viewModel.nextPeriod() }, enabled = offset > 0, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Outlined.ExpandMore, contentDescription = "Next", modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = -90f })
                     }
                 }
