@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1933,10 +1934,12 @@ fun LongTermStatsSection(
     onAppClick: (String) -> Unit
 ) {
     val selectedRange by viewModel.selectedStatsRange.collectAsState()
-    val longTermUsage by viewModel.getLongTermAppUsage(selectedRange).collectAsState(initial = emptyList())
+    val offset by viewModel.selectedPeriodOffset.collectAsState()
+    val longTermUsage by viewModel.getLongTermAppUsage(selectedRange, offset).collectAsState(initial = emptyList())
     var expanded by rememberSaveable { mutableStateOf(false) }
     val totalPeriod = remember(longTermUsage) { longTermUsage.sumOf { it.totalTimeVisible } }
     val displayList = remember(longTermUsage, expanded) { if (expanded) longTermUsage else longTermUsage.take(5) }
+    val periodLabel = remember(selectedRange, offset) { viewModel.getPeriodLabel(selectedRange, offset) }
 
     Column {
         GroupedCard(index = 2, total = 5, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
@@ -1974,6 +1977,20 @@ fun LongTermStatsSection(
                     showTextSelected = false
                 )
                 Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(onClick = { viewModel.prevPeriod() }, enabled = offset > 0, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Outlined.ExpandMore, contentDescription = "Previous", modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = 90f })
+                    }
+                    Text(periodLabel, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                    IconButton(onClick = { viewModel.nextPeriod() }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Outlined.ExpandMore, contentDescription = "Next", modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = -90f })
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
                 if (longTermUsage.isEmpty()) {
                     Text("No data for this period", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
