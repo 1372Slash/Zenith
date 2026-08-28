@@ -1945,7 +1945,7 @@ fun LongTermStatsSection(
                     Icon(Icons.Outlined.TrackChanges, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Long-term Summary", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    Text(viewModel.formatDuration(totalPeriod), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text(viewModel.formatLongDuration(totalPeriod), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 ZenithToggleButtonGroup(
@@ -1997,7 +1997,7 @@ fun LongTermStatsSection(
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Text(app.appName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                            Text(viewModel.formatDuration(app.totalTimeVisible), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text(viewModel.formatLongDuration(app.totalTimeVisible), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         }
                     }
                     if (longTermUsage.size > 5) {

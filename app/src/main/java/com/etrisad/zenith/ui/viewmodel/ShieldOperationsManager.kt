@@ -118,4 +118,34 @@ class ShieldOperationsManager(
         val h = millis / 3600000L; val m = (millis / 60000L) % 60L; val s = (millis / 1000L) % 60L
         return when { h > 0 -> "${h}h ${m}m"; m > 0 -> "${m}m"; else -> "${s}s" }
     }
+
+    fun formatLongDuration(millis: Long): String {
+        if (millis <= 0) return "0m"
+        val mins = millis / 60000L
+        val hrs = mins / 60
+        val days = hrs / 24
+        return when {
+            days >= 365 -> {
+                val y = days / 365
+                val remDays = days % 365
+                val mo = remDays / 30
+                if (mo > 0) "${y}y ${mo}mo" else "${y}y"
+            }
+            days >= 30 -> {
+                val mo = days / 30
+                val remDays = days % 30
+                if (remDays > 0) "${mo}mo ${remDays}d" else "${mo}mo"
+            }
+            days >= 7 -> {
+                val w = days / 7
+                val remDays = days % 7
+                if (remDays > 0) "${w}w ${remDays}d" else "${w}w"
+            }
+            days >= 1 -> {
+                val remHrs = hrs % 24
+                if (remHrs > 0) "${days}d ${remHrs}h" else "${days}d"
+            }
+            else -> formatDuration(millis)
+        }
+    }
 }

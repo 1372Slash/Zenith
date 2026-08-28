@@ -1500,6 +1500,7 @@ class HomeViewModel(
     }
 
     fun formatDuration(millis: Long): String = shieldOperationsManager.formatDuration(millis)
+    fun formatLongDuration(millis: Long): String = shieldOperationsManager.formatLongDuration(millis)
 
     fun onVisibleWeekChanged(pageIndex: Int) {
         viewModelScope.launch {
