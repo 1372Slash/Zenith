@@ -107,6 +107,13 @@ class ShieldRepository(
         return dailyUsageDao.getRecentUsage(dateStr)
     }
 
+    fun getLongTermUsage(days: Int): Flow<List<DailyUsageEntity>> {
+        val cal = java.util.Calendar.getInstance()
+        cal.add(java.util.Calendar.DAY_OF_YEAR, -days)
+        val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
+        return dailyUsageDao.getRecentUsage(dateStr)
+    }
+
     fun getHourlyUsageForDate(date: String): Flow<List<HourlyUsageEntity>> {
         return hourlyUsageDao.getHourlyUsageForDate(date)
     }

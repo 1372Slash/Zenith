@@ -641,11 +641,15 @@ fun UsageStatsScreen(
                     avgTime = uiState.weeklyAvgTime,
                     topApps = uiState.weeklyTopApps,
                     formatDuration = viewModel::formatDuration,
-                    index = 2,
+                    index = 1,
                     total = 5
                 )
                 Spacer(modifier = Modifier.height(4.dp))
             }
+        }
+
+        item(key = "long_term_stats") {
+            LongTermStatsSection(viewModel = viewModel, onAppClick = onAppClick)
         }
 
         item(key = "insight_efficiency") {
@@ -1920,6 +1924,92 @@ fun WeeklyStatsDoubleCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun LongTermStatsSection(
+    viewModel: HomeViewModel,
+    onAppClick: (String) -> Unit
+) {
+    val selectedRange by viewModel.selectedStatsRange.collectAsState()
+    val longTermUsage by viewModel.getLongTermAppUsage(selectedRange).collectAsState(initial = emptyList())
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val totalPeriod = remember(longTermUsage) { longTermUsage.sumOf { it.totalTimeVisible } }
+    val displayList = remember(longTermUsage, expanded) { if (expanded) longTermUsage else longTermUsage.take(5) }
+
+    Column {
+        Spacer(modifier = Modifier.height(4.dp))
+        GroupedCard(index = 2, total = 5, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Outlined.TrackChanges, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Long-term Summary", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text(viewModel.formatDuration(totalPeriod), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                ZenithToggleButtonGroup(
+                    options = listOf(
+                        ZenithToggleOption(text = "Weekly"),
+                        ZenithToggleOption(text = "Monthly"),
+                        ZenithToggleOption(text = "Yearly")
+                    ),
+                    selectedIndices = setOf(
+                        when (selectedRange) {
+                            com.etrisad.zenith.ui.viewmodel.StatsRange.WEEKLY -> 0
+                            com.etrisad.zenith.ui.viewmodel.StatsRange.MONTHLY -> 1
+                            com.etrisad.zenith.ui.viewmodel.StatsRange.YEARLY -> 2
+                        }
+                    ),
+                    onToggle = { idx ->
+                        val r = when (idx) {
+                            0 -> com.etrisad.zenith.ui.viewmodel.StatsRange.WEEKLY
+                            1 -> com.etrisad.zenith.ui.viewmodel.StatsRange.MONTHLY
+                            else -> com.etrisad.zenith.ui.viewmodel.StatsRange.YEARLY
+                        }
+                        viewModel.selectStatsRange(r)
+                    },
+                    isInsideContainer = true,
+                    isScalingEnabled = false,
+                    showTextSelected = true
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                if (longTermUsage.isEmpty()) {
+                    Text("No data for this period", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    displayList.forEach { app ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable { onAppClick(app.packageName) }.padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val isWebsite = app.packageName.startsWith("zenith-web:")
+                            val shape = appIconShape(isWebsite)
+                            SubcomposeAsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current).data("app-icon://${app.packageName}").crossfade(500).build(),
+                                contentDescription = null,
+                                modifier = Modifier.size(32.dp).clip(shape),
+                                contentScale = ContentScale.Crop,
+                                error = {
+                                    Box(Modifier.size(32.dp).clip(shape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+                                        Icon(if (isWebsite) Icons.Outlined.Language else Icons.Outlined.Android, null, modifier = Modifier.size(20.dp))
+                                    }
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(app.appName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                            Text(viewModel.formatDuration(app.totalTimeVisible), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                    if (longTermUsage.size > 5) {
+                        TextButton(onClick = { expanded = !expanded }) {
+                            Text(if (expanded) "Show less" else "Show all ${longTermUsage.size}")
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
     }
 }
 

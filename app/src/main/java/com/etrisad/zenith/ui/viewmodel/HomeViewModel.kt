@@ -18,6 +18,7 @@ import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.data.local.database.DbLogBuffer
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.model.IncentiveTier
+import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.service.SharedMonitoringState
 import com.etrisad.zenith.service.UsageSyncManager
@@ -111,6 +112,12 @@ data class HomeUiState(
     val bonusUsesLeft: Int = 0
 )
 
+enum class StatsRange(val days: Int, val label: String) {
+    WEEKLY(7, "Weekly"),
+    MONTHLY(30, "Monthly"),
+    YEARLY(365, "Yearly")
+}
+
 @OptIn(kotlinx.coroutines.FlowPreview::class, ExperimentalCoroutinesApi::class)
 class HomeViewModel(
     context: Context,
@@ -122,6 +129,32 @@ class HomeViewModel(
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+    private val _selectedStatsRange = MutableStateFlow(StatsRange.WEEKLY)
+    val selectedStatsRange: StateFlow<StatsRange> = _selectedStatsRange.asStateFlow()
+
+    fun selectStatsRange(range: StatsRange) { _selectedStatsRange.value = range }
+
+    fun getLongTermAppUsage(range: StatsRange): Flow<List<AppUsageInfo>> {
+        return shieldRepository.getLongTermUsage(range.days).map { entities ->
+            val filtered = entities.filter { it.packageName !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL") }
+            val grouped = filtered.groupBy { it.packageName }.mapValues { (_, list) -> list.sumOf { it.usageTimeMillis } }
+            grouped.entries.sortedByDescending { it.value }.map { (pkg, total) ->
+                val label = appInfoCache[pkg] ?: try {
+                    val info = context.packageManager.getApplicationInfo(pkg, 0)
+                    val name = context.packageManager.getApplicationLabel(info).toString()
+                    appInfoCache[pkg] = name
+                    name
+                } catch (_: Exception) {
+                    if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(pkg)) {
+                        val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(pkg)
+                        com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
+                    } else pkg
+                }
+                AppUsageInfo(pkg, label, total)
+            }
+        }.flowOn(Dispatchers.Default)
+    }
 
     private val appInfoCache = java.util.concurrent.ConcurrentHashMap<String, String>()
     private var refreshJob: Job? = null
