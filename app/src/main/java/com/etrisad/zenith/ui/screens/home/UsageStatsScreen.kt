@@ -1991,14 +1991,29 @@ fun LongTermStatsSection(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                if (longTermUsage.isEmpty()) {
-                    Text("No data for this period", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    displayList.forEach { app ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().clickable { onAppClick(app.packageName) }.padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                AnimatedContent(
+                    targetState = displayList,
+                    transitionSpec = {
+                        (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) + expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
+                            .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) + shrinkVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
+                    },
+                    label = "longTermList"
+                ) { list ->
+                    Column(modifier = Modifier.animateContentSize()) {
+                        if (list.isEmpty()) {
+                            Text("No data for this period", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            list.forEachIndexed { index, app ->
+                                AnimatedVisibility(
+                                    visible = true,
+                                    enter = fadeIn(spring(stiffness = Spring.StiffnessLow)) + expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)),
+                                    exit = fadeOut(spring(stiffness = Spring.StiffnessLow)) + shrinkVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)),
+                                    modifier = Modifier.animateContentSize()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().clickable { onAppClick(app.packageName) }.padding(vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                             val isWebsite = app.packageName.startsWith("zenith-web:")
                             val shape = appIconShape(isWebsite)
                             SubcomposeAsyncImage(
@@ -2017,6 +2032,7 @@ fun LongTermStatsSection(
                             Text(viewModel.formatLongDuration(app.totalTimeVisible), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         }
                     }
+                    }
                     if (longTermUsage.size > 5) {
                         TextButton(onClick = { expanded = !expanded }) {
                             Text(if (expanded) "Show less" else "Show all ${longTermUsage.size}")
@@ -2024,6 +2040,8 @@ fun LongTermStatsSection(
                     }
                 }
             }
+            }
+        }
         }
         Spacer(modifier = Modifier.height(4.dp))
     }
