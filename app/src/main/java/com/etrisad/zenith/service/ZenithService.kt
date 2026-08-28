@@ -1370,12 +1370,12 @@ class ZenithService : AccessibilityService() {
         if (prefs.bedtimeEnabled) {
             if (startMinutes <= endMinutes) {
                 if (currentDay in prefs.bedtimeDays) {
-                    active = currentMinutes in startMinutes..endMinutes
+                    active = currentMinutes in startMinutes until endMinutes
                 }
             } else {
                 if (currentDay in prefs.bedtimeDays && currentMinutes >= startMinutes) {
                     active = true
-                } else if (yesterdayDay in prefs.bedtimeDays && currentMinutes <= endMinutes) {
+                } else if (yesterdayDay in prefs.bedtimeDays && currentMinutes < endMinutes) {
                     active = true
                 }
             }
