@@ -230,6 +230,46 @@ class HomeViewModel(
         }.flowOn(Dispatchers.Default)
     }
 
+    fun getLongTermDailyHistory(range: StatsRange, offset: Int): Flow<List<DailyUsage>> {
+        val (startDate, endDate) = getDateRangeForPeriod(range, offset)
+        return shieldRepository.getLongTermUsage(400).map { entities ->
+            val totals = entities.filter { it.date in startDate..endDate && it.packageName == "TOTAL" }.associate { it.date to it.usageTimeMillis }.toMutableMap()
+            if (totals.isEmpty()) {
+                // fallback sum per date
+                entities.filter { it.date in startDate..endDate && it.packageName !in setOf("SHIELD_TOTAL","GOAL_TOTAL","OTHER_TOTAL") }
+                    .groupBy { it.date }
+                    .forEach { (date, list) -> totals[date] = list.sumOf { it.usageTimeMillis } }
+            }
+            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            totals.entries.sortedBy { it.key }.map { (dateStr, total) ->
+                val millis = try { fmt.parse(dateStr)?.time ?: 0L } catch (_: Exception) { 0L }
+                DailyUsage(date = millis, totalTime = total, hasDatabaseRecord = true, hasSystemData = false, isLive = false)
+            }
+        }.flowOn(Dispatchers.Default)
+    }
+
+    fun getWeekdayBreakdown(range: StatsRange, offset: Int): Flow<List<Pair<String, Long>>> {
+        val (startDate, endDate) = getDateRangeForPeriod(range, offset)
+        return shieldRepository.getLongTermUsage(400).map { entities ->
+            val filtered = entities.filter { it.date in startDate..endDate && it.packageName !in setOf("TOTAL","SHIELD_TOTAL","GOAL_TOTAL","OTHER_TOTAL") }
+            val map = mutableMapOf<Int, Long>()
+            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            for (e in filtered) {
+                try {
+                    val d = fmt.parse(e.date) ?: continue
+                    val cal = java.util.Calendar.getInstance().apply { time = d }
+                    val dow = cal.get(java.util.Calendar.DAY_OF_WEEK)
+                    val key = if (dow == 1) 7 else dow - 1
+                    map[key] = (map[key] ?: 0L) + e.usageTimeMillis
+                } catch (_: Exception) {}
+            }
+            (1..7).map { day ->
+                val label = when(day) { 1->"Mon";2->"Tue";3->"Wed";4->"Thu";5->"Fri";6->"Sat"; else->"Sun" }
+                label to (map[day] ?: 0L)
+            }
+        }.flowOn(Dispatchers.Default)
+    }
+
     private val appInfoCache = java.util.concurrent.ConcurrentHashMap<String, String>()
     private var refreshJob: Job? = null
     private val refreshMutex = Mutex()
