@@ -1,5 +1,6 @@
 package com.etrisad.zenith.ui.widget
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -38,7 +39,6 @@ import androidx.glance.state.GlanceStateDefinition
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
-import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.toPath
@@ -55,6 +55,10 @@ class RemainingTargetWidget : GlanceAppWidget() {
 
     companion object {
         private val bitmapCache = mutableMapOf<String, Bitmap>()
+        fun clearCache() {
+            bitmapCache.values.forEach { if (!it.isRecycled) it.recycle() }
+            bitmapCache.clear()
+        }
     }
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
@@ -63,6 +67,10 @@ class RemainingTargetWidget : GlanceAppWidget() {
         val prefsRepo = app.userPreferencesRepository
 
         provideContent {
+            val uiMode = context.resources.configuration.uiMode
+            val sunnyBitmap = remember(uiMode) { createShapeBitmap(context, 80, MaterialShapes.VerySunny) }
+            val backgroundBitmap = remember(uiMode) { createShapeBitmap(context, 120, MaterialShapes.Gem) }
+
             val prefs by prefsRepo.userPreferencesFlow.collectAsState(initial = null)
             val targetMinutes = prefs?.screenTimeTargetMinutes ?: 0
             val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
@@ -79,10 +87,6 @@ class RemainingTargetWidget : GlanceAppWidget() {
             val isOver = targetMinutes > 0 && totalMillis > targetMinutes * 60_000L
             val overMillis = if (isOver) totalMillis - targetMinutes * 60_000L else 0L
 
-            val uiMode = context.resources.configuration.uiMode
-            val circleBitmap = remember(uiMode) { createShapeBitmap(context, 80, MaterialShapes.Circle) }
-            val pillBitmap = remember(uiMode) { createShapeBitmap(context, 120, MaterialShapes.Pill) }
-
             GlanceTheme {
                 val intent = Intent(context, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
                 val action = actionStartActivity(intent)
@@ -95,8 +99,8 @@ class RemainingTargetWidget : GlanceAppWidget() {
                         remainingMillis = remainingMillis,
                         overMillis = overMillis,
                         isOver = isOver,
-                        circleBitmap = circleBitmap,
-                        pillBitmap = pillBitmap
+                        sunnyBitmap = sunnyBitmap,
+                        backgroundBitmap = backgroundBitmap
                     )
                 }
             }
@@ -104,18 +108,23 @@ class RemainingTargetWidget : GlanceAppWidget() {
     }
 
     @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+    @SuppressLint("RestrictedApi")
     @Composable
     private fun RemainingTargetContent(
         targetMinutes: Int,
         remainingMillis: Long,
         overMillis: Long,
         isOver: Boolean,
-        circleBitmap: Bitmap,
-        pillBitmap: Bitmap
+        sunnyBitmap: Bitmap,
+        backgroundBitmap: Bitmap
     ) {
         val size = LocalSize.current
         val squareSize = minOf(size.width, size.height)
-        val scale = squareSize.value / 100f
+        val scaleFactor = squareSize.value / 100f
+
+        val contentPadding = (8 * scaleFactor).dp
+        val containerSize = (40 * scaleFactor).dp
+        val iconSize = (20 * scaleFactor).dp
 
         val timeText = when {
             targetMinutes == 0 -> "--"
@@ -130,68 +139,93 @@ class RemainingTargetWidget : GlanceAppWidget() {
                 if (h > 0) "${h}h ${m}m" else "${m}m"
             }
         }
-        val label = when {
-            targetMinutes == 0 -> "no target"
-            isOver -> "over"
-            else -> "left"
+        val badgeLabel = when {
+            targetMinutes == 0 -> "NO TARGET"
+            isOver -> "OVER"
+            else -> "LEFT"
+        }
+        val sunnyIcon = if (isOver) R.drawable.ic_warning else R.drawable.ic_flag
+        val sunnyTint = if (isOver) GlanceTheme.colors.error else GlanceTheme.colors.primary
+        val sunnyContentTint = if (isOver) GlanceTheme.colors.onError else GlanceTheme.colors.primaryContainer
+        // tertiary accent for label — over switches to error as accent variant
+        val labelColor = if (isOver) GlanceTheme.colors.error else GlanceTheme.colors.tertiary
+
+        val mainFontSize = when {
+            timeText == "--" -> (30 * scaleFactor).sp
+            timeText.length >= 7 -> (16 * scaleFactor).sp
+            timeText.length == 6 -> (18 * scaleFactor).sp
+            timeText.length == 5 -> (22 * scaleFactor).sp
+            timeText.length == 4 -> (26 * scaleFactor).sp
+            else -> (30 * scaleFactor).sp
         }
 
-        Box(modifier = GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Box(modifier = GlanceModifier.size(squareSize), contentAlignment = Alignment.Center) {
+        val labelFontSize = (10 * scaleFactor).sp
+
+        val backgroundColor = GlanceTheme.colors.widgetBackground
+
+        Box(
+            modifier = GlanceModifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = GlanceModifier.size(squareSize),
+                contentAlignment = Alignment.Center
+            ) {
                 Image(
-                    provider = ImageProvider(pillBitmap),
+                    provider = ImageProvider(backgroundBitmap),
                     contentDescription = null,
                     modifier = GlanceModifier.fillMaxSize(),
-                    colorFilter = ColorFilter.tint(GlanceTheme.colors.widgetBackground)
+                    colorFilter = ColorFilter.tint(backgroundColor)
                 )
-                Column(
-                    modifier = GlanceModifier.fillMaxSize().padding((10 * scale).dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalAlignment = Alignment.CenterVertically
+
+                Box(
+                    modifier = GlanceModifier.fillMaxSize().padding(contentPadding),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(contentAlignment = Alignment.Center, modifier = GlanceModifier.size((36 * scale).dp)) {
-                        Image(
-                            provider = ImageProvider(circleBitmap),
-                            contentDescription = null,
-                            modifier = GlanceModifier.size((36 * scale).dp),
-                            colorFilter = ColorFilter.tint(if (isOver) GlanceTheme.colors.error else GlanceTheme.colors.tertiary)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Image(
+                                provider = ImageProvider(sunnyBitmap),
+                                contentDescription = null,
+                                modifier = GlanceModifier.size(containerSize),
+                                colorFilter = ColorFilter.tint(sunnyTint)
+                            )
+                            Image(
+                                provider = ImageProvider(sunnyIcon),
+                                contentDescription = null,
+                                modifier = GlanceModifier.size(iconSize),
+                                colorFilter = ColorFilter.tint(sunnyContentTint)
+                            )
+                        }
+                        Text(
+                            text = timeText,
+                            style = TextStyle(
+                                fontSize = mainFontSize,
+                                fontWeight = FontWeight.Medium,
+                                color = sunnyTint
+                            )
                         )
-                        Image(
-                            provider = ImageProvider(if (isOver) R.drawable.ic_crown else R.drawable.ic_fire_department_outlined),
-                            contentDescription = null,
-                            modifier = GlanceModifier.size((16 * scale).dp),
-                            colorFilter = ColorFilter.tint(GlanceTheme.colors.onTertiary)
+                        Text(
+                            text = badgeLabel,
+                            style = TextStyle(
+                                fontSize = labelFontSize,
+                                fontWeight = FontWeight.Medium,
+                                color = labelColor
+                            )
                         )
                     }
-                    Text(
-                        text = timeText,
-                        style = TextStyle(
-                            fontSize = (18 * scale).sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isOver) GlanceTheme.colors.error else GlanceTheme.colors.onSurface,
-                            textAlign = TextAlign.Center
-                        ),
-                        modifier = GlanceModifier.padding(top = (4 * scale).dp)
-                    )
-                    Text(
-                        text = label,
-                        style = TextStyle(
-                            fontSize = (12 * scale).sp,
-                            fontWeight = FontWeight.Normal,
-                            color = GlanceTheme.colors.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                    )
                 }
             }
         }
     }
 
-    private fun createShapeBitmap(context: Context, sizeDp: Int, shape: RoundedPolygon): Bitmap {
+    private fun createShapeBitmap(context: Context, sizeDp: Int, shape: RoundedPolygon, alpha: Int = 255): Bitmap {
         val uiMode = context.resources.configuration.uiMode
         val key = "remaining_${sizeDp}_${shape.hashCode()}_$uiMode"
-        val cache = Companion.bitmapCache[key]
-        if (cache != null && !cache.isRecycled) return cache
+        bitmapCache[key]?.let { if (!it.isRecycled) return it }
         val density = context.resources.displayMetrics.density
         val sizePx = (sizeDp * density).toInt().coerceAtLeast(1)
         val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
@@ -199,9 +233,9 @@ class RemainingTargetWidget : GlanceAppWidget() {
         val path = shape.toPath()
         val matrix = Matrix().apply { setScale(sizePx.toFloat(), sizePx.toFloat()) }
         path.transform(matrix)
-        val paint = Paint().apply { color = Color.WHITE; isAntiAlias = true; style = Paint.Style.FILL }
+        val paint = Paint().apply { color = Color.WHITE; this.alpha = alpha; isAntiAlias = true; isFilterBitmap = true; style = Paint.Style.FILL }
         canvas.drawPath(path, paint)
-        Companion.bitmapCache[key] = bitmap
+        bitmapCache[key] = bitmap
         return bitmap
     }
 }

@@ -1,5 +1,6 @@
 package com.etrisad.zenith.ui.widget
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -38,7 +39,6 @@ import androidx.glance.state.GlanceStateDefinition
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
-import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.toPath
@@ -56,6 +56,10 @@ class PhoneFreeTimeWidget : GlanceAppWidget() {
 
     companion object {
         private val bitmapCache = mutableMapOf<String, Bitmap>()
+        fun clearCache() {
+            bitmapCache.values.forEach { if (!it.isRecycled) it.recycle() }
+            bitmapCache.clear()
+        }
     }
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
@@ -64,6 +68,10 @@ class PhoneFreeTimeWidget : GlanceAppWidget() {
         val prefsRepo = app.userPreferencesRepository
 
         provideContent {
+            val uiMode = context.resources.configuration.uiMode
+            val sunnyBitmap = remember(uiMode) { createShapeBitmap(context, 80, MaterialShapes.Flower) }
+            val backgroundBitmap = remember(uiMode) { createShapeBitmap(context, 120, MaterialShapes.Clover4Leaf) }
+
             val prefs by prefsRepo.userPreferencesFlow.collectAsState(initial = null)
             val dayStartHour = prefs?.dayStartHour ?: 0
             val dayStartMinute = prefs?.dayStartMinute ?: 0
@@ -81,26 +89,18 @@ class PhoneFreeTimeWidget : GlanceAppWidget() {
                 } catch (_: Exception) { 0L }
             }
             val idleMillis = (elapsedToday - totalMillis).coerceAtLeast(0L)
-            val idleHours = idleMillis / 3600000
-            val idleMinutes = (idleMillis % 3600000) / 60000
-
-            val uiMode = context.resources.configuration.uiMode
-            val sunnyBitmap = remember(uiMode) { createShapeBitmap(context, 80, MaterialShapes.Sunny) }
-            val cookieBitmap = remember(uiMode) { createShapeBitmap(context, 120, MaterialShapes.Cookie9Sided) }
 
             GlanceTheme {
                 val intent = Intent(context, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
                 val action = actionStartActivity(intent)
                 Box(
-                    modifier = GlanceModifier.fillMaxSize().cornerRadius(32.dp).clickable(action),
+                    modifier = GlanceModifier.fillMaxSize().cornerRadius(100.dp).clickable(action),
                     contentAlignment = Alignment.Center
                 ) {
                     PhoneFreeContent(
-                        idleHours = idleHours,
-                        idleMinutes = idleMinutes,
                         idleMillis = idleMillis,
                         sunnyBitmap = sunnyBitmap,
-                        cookieBitmap = cookieBitmap
+                        backgroundBitmap = backgroundBitmap
                     )
                 }
             }
@@ -108,77 +108,101 @@ class PhoneFreeTimeWidget : GlanceAppWidget() {
     }
 
     @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+    @SuppressLint("RestrictedApi")
     @Composable
     private fun PhoneFreeContent(
-        idleHours: Long,
-        idleMinutes: Long,
         idleMillis: Long,
         sunnyBitmap: Bitmap,
-        cookieBitmap: Bitmap
+        backgroundBitmap: Bitmap
     ) {
         val size = LocalSize.current
         val squareSize = minOf(size.width, size.height)
-        val scale = squareSize.value / 100f
+        val scaleFactor = squareSize.value / 100f
 
+        val contentPadding = (8 * scaleFactor).dp
+        val containerSize = (40 * scaleFactor).dp
+        val iconSize = (20 * scaleFactor).dp
+
+        val idleHours = idleMillis / 3600000
+        val idleMinutes = (idleMillis % 3600000) / 60000
         val timeText = if (idleHours > 0) "${idleHours}h ${idleMinutes}m" else "${idleMinutes}m"
-        val subText = "away"
 
-        Box(modifier = GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Box(modifier = GlanceModifier.size(squareSize), contentAlignment = Alignment.Center) {
+        val mainFontSize = when {
+            timeText.length >= 7 -> (16 * scaleFactor).sp
+            timeText.length == 6 -> (18 * scaleFactor).sp
+            timeText.length == 5 -> (22 * scaleFactor).sp
+            timeText.length == 4 -> (26 * scaleFactor).sp
+            else -> (30 * scaleFactor).sp
+        }
+
+        val labelFontSize = (10 * scaleFactor).sp
+
+        val backgroundColor = GlanceTheme.colors.widgetBackground
+
+        Box(
+            modifier = GlanceModifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = GlanceModifier.size(squareSize),
+                contentAlignment = Alignment.Center
+            ) {
                 Image(
-                    provider = ImageProvider(cookieBitmap),
+                    provider = ImageProvider(backgroundBitmap),
                     contentDescription = null,
                     modifier = GlanceModifier.fillMaxSize(),
-                    colorFilter = ColorFilter.tint(GlanceTheme.colors.secondaryContainer)
+                    colorFilter = ColorFilter.tint(backgroundColor)
                 )
-                Column(
-                    modifier = GlanceModifier.fillMaxSize().padding((12 * scale).dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalAlignment = Alignment.CenterVertically
+
+                Box(
+                    modifier = GlanceModifier.fillMaxSize().padding(contentPadding),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(contentAlignment = Alignment.Center, modifier = GlanceModifier.size((40 * scale).dp)) {
-                        Image(
-                            provider = ImageProvider(sunnyBitmap),
-                            contentDescription = null,
-                            modifier = GlanceModifier.size((40 * scale).dp),
-                            colorFilter = ColorFilter.tint(GlanceTheme.colors.secondary)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Image(
+                                provider = ImageProvider(sunnyBitmap),
+                                contentDescription = null,
+                                modifier = GlanceModifier.size(containerSize),
+                                colorFilter = ColorFilter.tint(GlanceTheme.colors.primary)
+                            )
+                            Image(
+                                provider = ImageProvider(R.drawable.ic_snooze),
+                                contentDescription = null,
+                                modifier = GlanceModifier.size(iconSize),
+                                colorFilter = ColorFilter.tint(GlanceTheme.colors.primaryContainer)
+                            )
+                        }
+                        Text(
+                            text = timeText,
+                            style = TextStyle(
+                                fontSize = mainFontSize,
+                                fontWeight = FontWeight.Medium,
+                                color = GlanceTheme.colors.primary
+                            )
                         )
-                        Image(
-                            provider = ImageProvider(R.drawable.widget_preview_sunny),
-                            contentDescription = null,
-                            modifier = GlanceModifier.size((20 * scale).dp),
-                            colorFilter = ColorFilter.tint(GlanceTheme.colors.onSecondary)
+                        // tertiary accent — secondary label, same as streak's tertiary badge
+                        Text(
+                            text = "AWAY",
+                            style = TextStyle(
+                                fontSize = labelFontSize,
+                                fontWeight = FontWeight.Medium,
+                                color = GlanceTheme.colors.tertiary
+                            )
                         )
                     }
-                    Text(
-                        text = timeText,
-                        style = TextStyle(
-                            fontSize = (18 * scale).sp,
-                            fontWeight = FontWeight.Bold,
-                            color = GlanceTheme.colors.onSecondaryContainer,
-                            textAlign = TextAlign.Center
-                        ),
-                        modifier = GlanceModifier.padding(top = (4 * scale).dp)
-                    )
-                    Text(
-                        text = subText,
-                        style = TextStyle(
-                            fontSize = (12 * scale).sp,
-                            fontWeight = FontWeight.Normal,
-                            color = GlanceTheme.colors.onSecondaryContainer,
-                            textAlign = TextAlign.Center
-                        )
-                    )
                 }
             }
         }
     }
 
-    private fun createShapeBitmap(context: Context, sizeDp: Int, shape: RoundedPolygon): Bitmap {
+    private fun createShapeBitmap(context: Context, sizeDp: Int, shape: RoundedPolygon, alpha: Int = 255): Bitmap {
         val uiMode = context.resources.configuration.uiMode
         val key = "free_${sizeDp}_${shape.hashCode()}_$uiMode"
-        val cache = Companion.bitmapCache[key]
-        if (cache != null && !cache.isRecycled) return cache
+        bitmapCache[key]?.let { if (!it.isRecycled) return it }
         val density = context.resources.displayMetrics.density
         val sizePx = (sizeDp * density).toInt().coerceAtLeast(1)
         val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
@@ -186,9 +210,9 @@ class PhoneFreeTimeWidget : GlanceAppWidget() {
         val path = shape.toPath()
         val matrix = Matrix().apply { setScale(sizePx.toFloat(), sizePx.toFloat()) }
         path.transform(matrix)
-        val paint = Paint().apply { color = Color.WHITE; isAntiAlias = true; style = Paint.Style.FILL }
+        val paint = Paint().apply { color = Color.WHITE; this.alpha = alpha; isAntiAlias = true; isFilterBitmap = true; style = Paint.Style.FILL }
         canvas.drawPath(path, paint)
-        Companion.bitmapCache[key] = bitmap
+        bitmapCache[key] = bitmap
         return bitmap
     }
 }

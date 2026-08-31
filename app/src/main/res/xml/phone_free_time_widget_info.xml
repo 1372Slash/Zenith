@@ -10,4 +10,4 @@
     android:widgetCategory="home_screen"
     android:widgetFeatures="reconfigurable"
     android:description="@string/phone_free_time_widget_description"
-    android:previewLayout="@layout/app_streak_widget_preview" />
+    android:previewLayout="@layout/widget_phone_free_preview" />
