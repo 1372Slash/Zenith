@@ -1491,7 +1491,6 @@ fun PerAppLongTermSection(
     val maxWeekday = remember(weekdayData) { weekdayData.maxOfOrNull { it.second } ?: 1L }
 
     Column {
-        Spacer(modifier = Modifier.height(4.dp))
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
