@@ -1996,50 +1996,81 @@ fun LongTermStatsSection(
                 val weekdayData by viewModel.getWeekdayBreakdown(selectedRange, offset).collectAsState(initial = emptyList())
                 val maxDaily = remember(dailyHistory) { dailyHistory.maxOfOrNull { it.totalTime } ?: 1L }
                 val maxWeekday = remember(weekdayData) { weekdayData.maxOfOrNull { it.second } ?: 1L }
-                // Heatmap style
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("Daily Heatmap", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
-                    if (dailyHistory.isEmpty()) {
-                        Text("No daily data", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    } else {
-                        // simple flow - weekly 7, monthly ~30, yearly 12 months aggregated as daily already
-                        androidx.compose.foundation.layout.FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            dailyHistory.take(60).forEach { day ->
-                                val intensity = (day.totalTime.toFloat() / maxDaily).coerceIn(0f, 1f)
-                                val alpha = when {
-                                    intensity == 0f -> 0.08f
-                                    intensity < 0.25f -> 0.25f
-                                    intensity < 0.5f -> 0.5f
-                                    intensity < 0.75f -> 0.75f
-                                    else -> 1f
+                // Heatmap style with animated fade + expand
+                AnimatedContent(
+                    targetState = dailyHistory,
+                    transitionSpec = {
+                        (fadeIn(spring(stiffness = Spring.StiffnessLow)) + expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
+                            .togetherWith(fadeOut(spring(stiffness = Spring.StiffnessLow)) + shrinkVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
+                    },
+                    label = "heatmap"
+                ) { history ->
+                    Column(modifier = Modifier.fillMaxWidth().animateContentSize()) {
+                        Text("Daily Heatmap", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
+                        if (history.isEmpty()) {
+                            Text("No daily data", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            androidx.compose.foundation.layout.FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                history.take(60).forEachIndexed { idx, day ->
+                                    val intensity = (day.totalTime.toFloat() / maxDaily).coerceIn(0f, 1f)
+                                    val alpha = when {
+                                        intensity == 0f -> 0.08f
+                                        intensity < 0.25f -> 0.25f
+                                        intensity < 0.5f -> 0.5f
+                                        intensity < 0.75f -> 0.75f
+                                        else -> 1f
+                                    }
+                                    AnimatedVisibility(
+                                        visible = true,
+                                        enter = fadeIn(spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy), initialAlpha = 0.3f) + scaleIn(initialScale = 0.6f, animationSpec = spring(stiffness = Spring.StiffnessLow)),
+                                        exit = fadeOut() + scaleOut(targetScale = 0.6f),
+                                        modifier = Modifier.animateContentSize()
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.size(14.dp).clip(RoundedCornerShape(3.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = alpha))
+                                        )
+                                    }
                                 }
-                                Box(
-                                    modifier = Modifier.size(14.dp).clip(RoundedCornerShape(3.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = alpha))
-                                )
                             }
                         }
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
-                // Weekday breakdown with stats bar
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("Weekday Breakdown", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
-                    weekdayData.forEach { (label, millis) ->
-                        val progress = (millis.toFloat() / maxWeekday).coerceIn(0f, 1f)
-                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(label, style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(36.dp), fontWeight = FontWeight.Medium)
-                            LinearProgressIndicator(
-                                progress = { progress },
-                                modifier = Modifier.weight(1f).height(8.dp).clip(RoundedCornerShape(4.dp)),
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                strokeCap = StrokeCap.Round
-                            )
-                            Text(viewModel.formatLongDuration(millis), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 8.dp).width(64.dp), textAlign = TextAlign.End)
+                // Weekday breakdown with stats bar animated
+                AnimatedContent(
+                    targetState = weekdayData,
+                    transitionSpec = {
+                        (fadeIn(spring(stiffness = Spring.StiffnessLow)) + expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
+                            .togetherWith(fadeOut(spring(stiffness = Spring.StiffnessLow)) + shrinkVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
+                    },
+                    label = "weekday"
+                ) { data ->
+                    Column(modifier = Modifier.fillMaxWidth().animateContentSize()) {
+                        Text("Weekday Breakdown", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
+                        data.forEachIndexed { idx, (label, millis) ->
+                            val progress = (millis.toFloat() / maxWeekday).coerceIn(0f, 1f)
+                            AnimatedVisibility(
+                                visible = true,
+                                enter = fadeIn(spring(stiffness = Spring.StiffnessLow), initialAlpha = 0.3f) + expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)),
+                                exit = fadeOut() + shrinkVertically(),
+                                modifier = Modifier.animateContentSize()
+                            ) {
+                                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(label, style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(36.dp), fontWeight = FontWeight.Medium)
+                                    LinearProgressIndicator(
+                                        progress = { progress },
+                                        modifier = Modifier.weight(1f).height(8.dp).clip(RoundedCornerShape(4.dp)),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        strokeCap = StrokeCap.Round
+                                    )
+                                    Text(viewModel.formatLongDuration(millis), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 8.dp).width(64.dp), textAlign = TextAlign.End)
+                                }
+                            }
                         }
                     }
                 }
