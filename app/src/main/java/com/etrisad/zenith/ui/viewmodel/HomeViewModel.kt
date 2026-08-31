@@ -143,6 +143,15 @@ class HomeViewModel(
     fun prevPeriod() { _selectedPeriodOffset.value = _selectedPeriodOffset.value + 1 }
     fun nextPeriod() { if (_selectedPeriodOffset.value > 0) _selectedPeriodOffset.value = _selectedPeriodOffset.value - 1 }
 
+    private val _perAppStatsRange = MutableStateFlow(StatsRange.WEEKLY)
+    val perAppStatsRange: StateFlow<StatsRange> = _perAppStatsRange.asStateFlow()
+    private val _perAppPeriodOffset = MutableStateFlow(0)
+    val perAppPeriodOffset: StateFlow<Int> = _perAppPeriodOffset.asStateFlow()
+    fun selectPerAppRange(range: StatsRange) { _perAppStatsRange.value = range; _perAppPeriodOffset.value = 0 }
+    fun nextPerAppPeriod() { _perAppPeriodOffset.value = _perAppPeriodOffset.value + 1 }
+    fun prevPerAppPeriod() { if (_perAppPeriodOffset.value > 0) _perAppPeriodOffset.value = _perAppPeriodOffset.value - 1 }
+    fun getPerAppPeriodLabel(range: StatsRange, offset: Int): String = getPeriodLabel(range, offset)
+
     fun getPeriodLabel(range: StatsRange, offset: Int): String {
         val cal = java.util.Calendar.getInstance()
         return when (range) {
@@ -267,6 +276,48 @@ class HomeViewModel(
                 val label = when(day) { 1->"Mon";2->"Tue";3->"Wed";4->"Thu";5->"Fri";6->"Sat"; else->"Sun" }
                 label to (map[day] ?: 0L)
             }
+        }.flowOn(Dispatchers.Default)
+    }
+
+    fun getPerAppDailyHistory(packageName: String, range: StatsRange, offset: Int): Flow<List<DailyUsage>> {
+        val (startDate, endDate) = getDateRangeForPeriod(range, offset)
+        return shieldRepository.getLongTermUsage(400).map { entities ->
+            val filtered = entities.filter { it.date in startDate..endDate && it.packageName == packageName }
+            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            filtered.groupBy { it.date }.entries.sortedBy { it.key }.map { (dateStr, list) ->
+                val total = list.sumOf { it.usageTimeMillis }
+                val millis = try { fmt.parse(dateStr)?.time ?: 0L } catch (_: Exception) { 0L }
+                DailyUsage(date = millis, totalTime = total, hasDatabaseRecord = true, hasSystemData = false, isLive = false)
+            }
+        }.flowOn(Dispatchers.Default)
+    }
+
+    fun getPerAppWeekdayBreakdown(packageName: String, range: StatsRange, offset: Int): Flow<List<Pair<String, Long>>> {
+        val (startDate, endDate) = getDateRangeForPeriod(range, offset)
+        return shieldRepository.getLongTermUsage(400).map { entities ->
+            val filtered = entities.filter { it.date in startDate..endDate && it.packageName == packageName }
+            val map = mutableMapOf<Int, Long>()
+            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            for (e in filtered) {
+                try {
+                    val d = fmt.parse(e.date) ?: continue
+                    val cal = java.util.Calendar.getInstance().apply { time = d }
+                    val dow = cal.get(java.util.Calendar.DAY_OF_WEEK)
+                    val key = if (dow == 1) 7 else dow - 1
+                    map[key] = (map[key] ?: 0L) + e.usageTimeMillis
+                } catch (_: Exception) {}
+            }
+            (1..7).map { day ->
+                val label = when(day) { 1->"Mon";2->"Tue";3->"Wed";4->"Thu";5->"Fri";6->"Sat"; else->"Sun" }
+                label to (map[day] ?: 0L)
+            }
+        }.flowOn(Dispatchers.Default)
+    }
+
+    fun getPerAppTotalForPeriod(packageName: String, range: StatsRange, offset: Int): Flow<Long> {
+        val (startDate, endDate) = getDateRangeForPeriod(range, offset)
+        return shieldRepository.getLongTermUsage(400).map { entities ->
+            entities.filter { it.date in startDate..endDate && it.packageName == packageName }.sumOf { it.usageTimeMillis }
         }.flowOn(Dispatchers.Default)
     }
 
