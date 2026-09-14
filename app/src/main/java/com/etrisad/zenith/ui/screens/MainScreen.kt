@@ -66,8 +66,8 @@ import com.etrisad.zenith.ui.screens.graceperiod.GracePeriodScreen
 import com.etrisad.zenith.ui.screens.pomodoro.PomodoroScreen
 import com.etrisad.zenith.ui.screens.settings.EyeCareScreen
 import com.etrisad.zenith.ui.screens.settings.LockdownSettings
-import com.etrisad.zenith.ui.screens.settings.PausePointScreen
-import com.etrisad.zenith.ui.screens.settings.PausePointQrSettingsScreen
+import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointScreen
+import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointQrSettingsScreen
 import com.etrisad.zenith.ui.screens.settings.SettingsScreen
 import com.etrisad.zenith.ui.viewmodel.FocusViewModel
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel

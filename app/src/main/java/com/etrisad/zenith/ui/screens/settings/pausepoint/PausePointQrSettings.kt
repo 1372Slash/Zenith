@@ -1,11 +1,11 @@
-package com.etrisad.zenith.ui.screens.settings
+package com.etrisad.zenith.ui.screens.settings.pausepoint
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.qr.QrScanner
+import com.etrisad.zenith.ui.screens.settings.PreferenceCategory
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -233,12 +234,20 @@ fun PausePointQrSettingsScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(codes, key = { it }) { code ->
+                itemsIndexed(codes, key = { _, it -> it }) { index, code ->
+                    val lastIndex = codes.lastIndex
+                    val shape = when {
+                        codes.size == 1 -> RoundedCornerShape(24.dp)
+                        index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                        index == lastIndex -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                        else -> RoundedCornerShape(8.dp)
+                    }
                     QrCodeRow(
                         code = code,
-                        onRemove = { removeCode(code) }
+                        onRemove = { removeCode(code) },
+                        shape = shape
                     )
                 }
             }
@@ -249,13 +258,14 @@ fun PausePointQrSettingsScreen(
 @Composable
 private fun QrCodeRow(
     code: String,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(24.dp)
 ) {
     val clipboard = LocalClipboardManager.current
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
