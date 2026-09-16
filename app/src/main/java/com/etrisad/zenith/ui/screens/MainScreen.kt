@@ -43,7 +43,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.etrisad.zenith.data.preferences.ThemeConfig
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.lifecycle.Lifecycle
@@ -167,14 +166,6 @@ fun MainScreen(
                 currentRoute?.startsWith("settings_category") == true ||
                 currentRoute?.startsWith("app_detail") == true
 
-    val isInfoNextToSwitch =
-        currentRoute == Screen.Bedtime.route ||
-                currentRoute == Screen.GracePeriod.route ||
-                currentRoute == Screen.EyeCare.route ||
-                currentRoute == Screen.Lockdown.route ||
-                currentRoute == Screen.PausePoint.route ||
-                currentRoute == Screen.Alarm.route
-
     val enterAlwaysScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     val pinnedScrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
@@ -201,151 +192,28 @@ fun MainScreen(
     val useNavigationRail = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
 
     val scope = rememberCoroutineScope()
-    var bedtimeSwitchVisible by remember { mutableStateOf(false) }
-    var bedtimeSwitchInLayout by remember { mutableStateOf(false) }
     var showPauseSheet by remember { mutableStateOf(false) }
-    var gracePeriodSwitchVisible by remember { mutableStateOf(false) }
-    var gracePeriodSwitchInLayout by remember { mutableStateOf(false) }
-    var eyeCareSwitchVisible by remember { mutableStateOf(false) }
-    var eyeCareSwitchInLayout by remember { mutableStateOf(false) }
-    var lockdownSwitchVisible by remember { mutableStateOf(false) }
-    var lockdownSwitchInLayout by remember { mutableStateOf(false) }
-    var pausePointSwitchVisible by remember { mutableStateOf(false) }
-    var pausePointSwitchInLayout by remember { mutableStateOf(false) }
-    var alarmSwitchVisible by remember { mutableStateOf(false) }
-    var alarmSwitchInLayout by remember { mutableStateOf(false) }
     val performanceBackInterceptor = remember { mutableStateOf<() -> Boolean>({ false }) }
 
     var showBatchDeleteSheet by remember { mutableStateOf(false) }
     var showBatchPauseSheet by remember { mutableStateOf(false) }
 
-    LaunchedEffect(currentRoute, preferences.bedtimeEnabled) {
-        val isBedtimeScreen = currentRoute == Screen.Bedtime.route
-        val shouldShow = isBedtimeScreen && preferences.bedtimeEnabled
-
-        if (shouldShow) {
-            if (!bedtimeSwitchInLayout) {
-                bedtimeSwitchInLayout = true
-                delay(1200)
-            }
-            bedtimeSwitchVisible = true
-        } else {
-            if (bedtimeSwitchVisible) {
-                bedtimeSwitchVisible = false
-                delay(800)
-            }
-            if (bedtimeSwitchInLayout) {
-                delay(1500)
-                bedtimeSwitchInLayout = false
-            }
-        }
-    }
-
-    LaunchedEffect(currentRoute, preferences.gracePeriodEnabled) {
-        val isGracePeriodScreen = currentRoute == Screen.GracePeriod.route
-        val shouldShow = isGracePeriodScreen && preferences.gracePeriodEnabled
-
-        if (shouldShow) {
-            if (!gracePeriodSwitchInLayout) {
-                gracePeriodSwitchInLayout = true
-                delay(1200)
-            }
-            gracePeriodSwitchVisible = true
-        } else {
-            if (gracePeriodSwitchVisible) {
-                gracePeriodSwitchVisible = false
-                delay(800)
-            }
-            if (gracePeriodSwitchInLayout) {
-                delay(1500)
-                gracePeriodSwitchInLayout = false
-            }
-        }
-    }
-
-    LaunchedEffect(currentRoute, preferences.lockdownEnabled) {
-        val isLockdownScreen = currentRoute == Screen.Lockdown.route
-        val shouldShow = isLockdownScreen && preferences.lockdownEnabled
-
-        if (shouldShow) {
-            if (!lockdownSwitchInLayout) {
-                lockdownSwitchInLayout = true
-                delay(1200)
-            }
-            lockdownSwitchVisible = true
-        } else {
-            if (lockdownSwitchVisible) {
-                lockdownSwitchVisible = false
-                delay(800)
-            }
-            if (lockdownSwitchInLayout) {
-                delay(1500)
-                lockdownSwitchInLayout = false
-            }
-        }
-    }
-
-    LaunchedEffect(currentRoute, preferences.pausePointEnabled) {
-        val isPausePointScreen = currentRoute == Screen.PausePoint.route
-        val shouldShow = isPausePointScreen && preferences.pausePointEnabled
-
-        if (shouldShow) {
-            if (!pausePointSwitchInLayout) {
-                pausePointSwitchInLayout = true
-                delay(1200)
-            }
-            pausePointSwitchVisible = true
-        } else {
-            if (pausePointSwitchVisible) {
-                pausePointSwitchVisible = false
-                delay(800)
-            }
-            if (pausePointSwitchInLayout) {
-                delay(1500)
-                pausePointSwitchInLayout = false
-            }
-        }
-    }
-
-    LaunchedEffect(currentRoute, preferences.eyeCareEnabled) {
-        val isEyeCareScreen = currentRoute == Screen.EyeCare.route
-        val shouldShow = isEyeCareScreen && preferences.eyeCareEnabled
-
-        if (shouldShow) {
-            if (!eyeCareSwitchInLayout) {
-                eyeCareSwitchInLayout = true
-                delay(1200)
-            }
-            eyeCareSwitchVisible = true
-        } else {
-            if (eyeCareSwitchVisible) {
-                eyeCareSwitchVisible = false
-                delay(800)
-            }
-            if (eyeCareSwitchInLayout) {
-                delay(1500)
-                eyeCareSwitchInLayout = false
-            }
-        }
-    }
-
-    LaunchedEffect(currentRoute) {
-        val isAlarmScreen = currentRoute == Screen.Alarm.route
-
-        if (isAlarmScreen) {
-            alarmSwitchInLayout = true
-            delay(1200)
-            alarmSwitchVisible = true
-        } else {
-            if (alarmSwitchVisible) {
-                alarmSwitchVisible = false
-                delay(800)
-            }
-            if (alarmSwitchInLayout) {
-                delay(1500)
-                alarmSwitchInLayout = false
-            }
-        }
+    // Single header switch slot: one fixed-size container shared by all
+    // switch screens. Keeping a single slot (instead of one Box per feature
+    // with delayed layout reservation) prevents the info button from jumping
+    // and avoids an empty gap while the switch fades in. Navigating between
+    // two switch screens keeps the slot visible and only cross-fades the inner
+    // content, so the info button does not move at all. Enter/exit animates
+    // width (expand/shrink) together with fade/scale/slide, so the info button
+    // glides smoothly instead of snapping.
+    val headerSwitchKey: String? = when {
+        currentRoute == Screen.Bedtime.route && preferences.bedtimeEnabled -> "bedtime"
+        currentRoute == Screen.GracePeriod.route && preferences.gracePeriodEnabled -> "grace"
+        currentRoute == Screen.EyeCare.route && preferences.eyeCareEnabled -> "eye"
+        currentRoute == Screen.Lockdown.route && preferences.lockdownEnabled -> "lockdown"
+        currentRoute == Screen.PausePoint.route && preferences.pausePointEnabled -> "pause"
+        currentRoute == Screen.Alarm.route -> "alarm"
+        else -> null
     }
 
     var showFeatureInfoSheet by remember { mutableStateOf(false) }
@@ -583,7 +451,6 @@ fun MainScreen(
                         navBackStackEntry?.arguments?.getString("category")
                     ) != null && !focusUiState.isSelectionMode,
                     onInfoClick = { showFeatureInfoSheet = true },
-                    infoFadeOnly = isInfoNextToSwitch,
                     infoNextToAction = !isDeepScreen || currentRoute?.startsWith("app_detail") == true,
                     navigationIcon = {
                         AnimatedContent(
@@ -707,7 +574,18 @@ fun MainScreen(
                                 }
                             }
 
-                            if (bedtimeSwitchInLayout) {
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = headerSwitchKey != null,
+                                enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                        scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)) +
+                                        slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                        expandHorizontally(expandFrom = Alignment.End, animationSpec = spring(stiffness = Spring.StiffnessLow)),
+                                exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                        scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                        slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                        shrinkHorizontally(shrinkTowards = Alignment.End, animationSpec = spring(stiffness = Spring.StiffnessLow)),
+                                label = "HeaderSwitchSlot"
+                            ) {
                                 Box(
                                     modifier = Modifier
                                         .padding(end = 16.dp)
@@ -715,406 +593,81 @@ fun MainScreen(
                                         .height(32.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    androidx.compose.animation.AnimatedVisibility(
-                                        visible = bedtimeSwitchVisible,
-                                        enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
-                                                slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
-                                        exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
-                                    ) {
-                                        Switch(
-                                            checked = preferences.bedtimeEnabled,
-                                            onCheckedChange = {
-                                                if (preferences.bedtimeEnabled) {
-                                                    showPauseSheet = true
-                                                } else {
-                                                    bedtimeViewModel.setBedtimeEnabled(true)
-                                                }
-                                            },
-                                            thumbContent = {
-                                                val thumbSize by animateDpAsState(
-                                                    targetValue = if (preferences.bedtimeEnabled) 28.dp else 24.dp,
-                                                    animationSpec = spring(
-                                                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                        stiffness = Spring.StiffnessMediumLow
-                                                    ),
-                                                    label = "thumb_size"
+                                    AnimatedContent(
+                                        targetState = headerSwitchKey,
+                                        transitionSpec = {
+                                            (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                                    scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)))
+                                                .togetherWith(
+                                                    fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                                            scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessLow))
                                                 )
-
-                                                val iconColor by animateColorAsState(
-                                                    targetValue = if (preferences.bedtimeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                                                    label = "switch_icon_color"
-                                                )
-
-                                                Box(
-                                                    modifier = Modifier.size(thumbSize),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    AnimatedContent(
-                                                        targetState = preferences.bedtimeEnabled,
-                                                        transitionSpec = {
-                                                            (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                                    scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
-                                                                .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                                        scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
-                                                        },
-                                                        label = "switch_icon_anim"
-                                                    ) { isChecked ->
-                                                        Icon(
-                                                            imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
-                                                            contentDescription = null,
-                                                            modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
-                                                            tint = iconColor
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                            if (gracePeriodSwitchInLayout) {
-                                Box(
-                                    modifier = Modifier
-                                        .padding(end = 16.dp)
-                                        .width(52.dp)
-                                        .height(32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    androidx.compose.animation.AnimatedVisibility(
-                                        visible = gracePeriodSwitchVisible,
-                                        enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
-                                                slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
-                                        exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
-                                    ) {
-                                        Switch(
-                                            checked = preferences.gracePeriodEnabled,
-                                            onCheckedChange = {
-                                                gracePeriodViewModel.setGracePeriodEnabled(!preferences.gracePeriodEnabled)
-                                            },
-                                            thumbContent = {
-                                                val thumbSize by animateDpAsState(
-                                                    targetValue = if (preferences.gracePeriodEnabled) 28.dp else 24.dp,
-                                                    animationSpec = spring(
-                                                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                        stiffness = Spring.StiffnessMediumLow
-                                                    ),
-                                                    label = "thumb_size"
-                                                )
-
-                                                val iconColor by animateColorAsState(
-                                                    targetValue = if (preferences.gracePeriodEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                                                    label = "switch_icon_color"
-                                                )
-
-                                                Box(
-                                                    modifier = Modifier.size(thumbSize),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    AnimatedContent(
-                                                        targetState = preferences.gracePeriodEnabled,
-                                                        transitionSpec = {
-                                                            (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                                    scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
-                                                                .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                                        scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
-                                                        },
-                                                        label = "switch_icon_anim"
-                                                    ) { isChecked ->
-                                                        Icon(
-                                                            imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
-                                                            contentDescription = null,
-                                                            modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
-                                                            tint = iconColor
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                            if (eyeCareSwitchInLayout) {
-                                Box(
-                                    modifier = Modifier
-                                        .padding(end = 16.dp)
-                                        .width(52.dp)
-                                        .height(32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    androidx.compose.animation.AnimatedVisibility(
-                                        visible = eyeCareSwitchVisible,
-                                        enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
-                                                slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
-                                        exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
-                                    ) {
-                                        Switch(
-                                            checked = preferences.eyeCareEnabled,
-                                            onCheckedChange = {
-                                                scope.launch {
-                                                    userPreferencesRepository.setEyeCareEnabled(!preferences.eyeCareEnabled)
-                                                }
-                                            },
-                                            thumbContent = {
-                                                val thumbSize by animateDpAsState(
-                                                    targetValue = if (preferences.eyeCareEnabled) 28.dp else 24.dp,
-                                                    animationSpec = spring(
-                                                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                        stiffness = Spring.StiffnessMediumLow
-                                                    ),
-                                                    label = "thumb_size"
-                                                )
-                                                val iconColor by animateColorAsState(
-                                                    targetValue = if (preferences.eyeCareEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                                                    label = "switch_icon_color"
-                                                )
-                                                Box(
-                                                    modifier = Modifier.size(thumbSize),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    AnimatedContent(
-                                                        targetState = preferences.eyeCareEnabled,
-                                                        transitionSpec = {
-                                                            (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                                    scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
-                                                                .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                                        scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
-                                                        },
-                                                        label = "switch_icon_anim"
-                                                    ) { isChecked ->
-                                                        Icon(
-                                                            imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
-                                                            contentDescription = null,
-                                                            modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
-                                                            tint = iconColor
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        )
-                                    }
-                                }
-                             }
-                             if (lockdownSwitchInLayout) {
-                                  Box(
-                                      modifier = Modifier
-                                          .padding(end = 16.dp)
-                                          .width(52.dp)
-                                          .height(32.dp),
-                                      contentAlignment = Alignment.Center
-                                  ) {
-                                      androidx.compose.animation.AnimatedVisibility(
-                                          visible = lockdownSwitchVisible,
-                                          enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                  scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
-                                                  slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
-                                          exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                  scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                  slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
-                                      ) {
-                                          Switch(
-                                              checked = preferences.lockdownEnabled,
-                                              onCheckedChange = {
-                                                  scope.launch {
-                                                      userPreferencesRepository.setLockdownEnabled(!preferences.lockdownEnabled)
-                                                  }
-                                              },
-                                              thumbContent = {
-                                                  val thumbSize by animateDpAsState(
-                                                      targetValue = if (preferences.lockdownEnabled) 28.dp else 24.dp,
-                                                      animationSpec = spring(
-                                                          dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                          stiffness = Spring.StiffnessMediumLow
-                                                      ),
-                                                      label = "thumb_size"
-                                                  )
-                                                  val iconColor by animateColorAsState(
-                                                      targetValue = if (preferences.lockdownEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                      animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                                                      label = "switch_icon_color"
-                                                  )
-                                                  Box(
-                                                      modifier = Modifier.size(thumbSize),
-                                                      contentAlignment = Alignment.Center
-                                                  ) {
-                                                      AnimatedContent(
-                                                          targetState = preferences.lockdownEnabled,
-                                                          transitionSpec = {
-                                                              (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                                      scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
-                                                                  .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                                          scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
-                                                          },
-                                                          label = "switch_icon_anim"
-                                                      ) { isChecked ->
-                                                          Icon(
-                                                              imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
-                                                              contentDescription = null,
-                                                              modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
-                                                              tint = iconColor
-                                                          )
-                                                      }
-                                                  }
-                                              }
-                                          )
-                                      }
-                                  }
-                              }
-                              if (pausePointSwitchInLayout) {
-                                  Box(
-                                      modifier = Modifier
-                                          .padding(end = 12.dp)
-                                          .height(48.dp)
-                                          .widthIn(min = 52.dp),
-                                      contentAlignment = Alignment.Center
-                                  ) {
-                                      androidx.compose.animation.AnimatedVisibility(
-                                          visible = pausePointSwitchVisible,
-                                          enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                  scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
-                                                  slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
-                                          exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                  scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                  slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
-                                      ) {
-                                           Row(
-                                               verticalAlignment = Alignment.CenterVertically,
-                                               modifier = Modifier.height(48.dp)
-                                           ) {
-                                               Switch(
-                                                   checked = preferences.pausePointEnabled,
-                                                  onCheckedChange = {
-                                                      scope.launch {
-                                                          userPreferencesRepository.setPausePointEnabled(!preferences.pausePointEnabled)
-                                                      }
-                                                  },
-                                                  thumbContent = {
-                                                      val thumbSize by animateDpAsState(
-                                                          targetValue = if (preferences.pausePointEnabled) 28.dp else 24.dp,
-                                                          animationSpec = spring(
-                                                              dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                              stiffness = Spring.StiffnessMediumLow
-                                                          ),
-                                                          label = "thumb_size"
-                                                      )
-                                                      val iconColor by animateColorAsState(
-                                                          targetValue = if (preferences.pausePointEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                          animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                                                          label = "switch_icon_color"
-                                                      )
-                                                      Box(
-                                                          modifier = Modifier.size(thumbSize),
-                                                          contentAlignment = Alignment.Center
-                                                      ) {
-                                                          AnimatedContent(
-                                                              targetState = preferences.pausePointEnabled,
-                                                              transitionSpec = {
-                                                                  (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                                          scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
-                                                                      .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                                              scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
-                                                              },
-                                                              label = "switch_icon_anim"
-                                                          ) { isChecked ->
-                                                              Icon(
-                                                                  imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
-                                                                  contentDescription = null,
-                                                                  modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
-                                                                  tint = iconColor
-                                                              )
-                                                          }
-                                                      }
-                                                  }
-                                              )
-                                          }
-                                      }
-                                  }
-                              }
-                              if (alarmSwitchInLayout) {
-                                Box(
-                                    modifier = Modifier
-                                        .padding(end = 16.dp)
-                                        .width(52.dp)
-                                        .height(32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    androidx.compose.animation.AnimatedVisibility(
-                                        visible = alarmSwitchVisible,
-                                        enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
-                                                slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
-                                        exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                scaleOut(targetScale = 0.7f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
-                                    ) {
-                                        Switch(
-                                            checked = preferences.alarmMasterEnabled,
-                                            onCheckedChange = {
-                                                scope.launch {
-                                                    val newEnabled = !preferences.alarmMasterEnabled
-                                                    userPreferencesRepository.setAlarmMasterEnabled(newEnabled)
-                                                    if (newEnabled) {
-                                                        if (!com.etrisad.zenith.receiver.AlarmBroadcastReceiver.hasExactAlarmPermission(context)) {
-                                                            com.etrisad.zenith.receiver.AlarmBroadcastReceiver.promptExactAlarmPermission(context)
-                                                        }
-                                                        com.etrisad.zenith.receiver.AlarmBroadcastReceiver.requestBatteryOptimizationExemption(context)
-                                                        val alarms = userPreferencesRepository.parseAlarms(preferences.alarmsJson)
-                                                        val enabledAlarms = alarms.filter { it.enabled }
-                                                        com.etrisad.zenith.receiver.AlarmBroadcastReceiver.rescheduleAllAlarms(context, enabledAlarms)
+                                        },
+                                        label = "HeaderSwitchContent"
+                                    ) { key ->
+                                        when (key) {
+                                            "bedtime" -> HeaderSwitch(
+                                                checked = preferences.bedtimeEnabled,
+                                                onCheckedChange = {
+                                                    if (preferences.bedtimeEnabled) {
+                                                        showPauseSheet = true
                                                     } else {
-                                                        com.etrisad.zenith.receiver.AlarmBroadcastReceiver.cancelAlarm(context)
+                                                        bedtimeViewModel.setBedtimeEnabled(true)
                                                     }
                                                 }
-                                            },
-                                            thumbContent = {
-                                                val thumbSize by animateDpAsState(
-                                                    targetValue = if (preferences.alarmMasterEnabled) 28.dp else 24.dp,
-                                                    animationSpec = spring(
-                                                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                        stiffness = Spring.StiffnessMediumLow
-                                                    ),
-                                                    label = "thumb_size"
-                                                )
-                                                val iconColor by animateColorAsState(
-                                                    targetValue = if (preferences.alarmMasterEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
-                                                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                                                    label = "switch_icon_color"
-                                                )
-                                                Box(
-                                                    modifier = Modifier.size(thumbSize),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    AnimatedContent(
-                                                        targetState = preferences.alarmMasterEnabled,
-                                                        transitionSpec = {
-                                                            (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                                    scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
-                                                                .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                                                        scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
-                                                        },
-                                                        label = "switch_icon_anim"
-                                                    ) { isChecked ->
-                                                        Icon(
-                                                            imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
-                                                            contentDescription = null,
-                                                            modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
-                                                            tint = iconColor
-                                                        )
+                                            )
+                                            "grace" -> HeaderSwitch(
+                                                checked = preferences.gracePeriodEnabled,
+                                                onCheckedChange = {
+                                                    gracePeriodViewModel.setGracePeriodEnabled(!preferences.gracePeriodEnabled)
+                                                }
+                                            )
+                                            "eye" -> HeaderSwitch(
+                                                checked = preferences.eyeCareEnabled,
+                                                onCheckedChange = {
+                                                    scope.launch {
+                                                        userPreferencesRepository.setEyeCareEnabled(!preferences.eyeCareEnabled)
                                                     }
                                                 }
-                                            }
-                                        )
+                                            )
+                                            "lockdown" -> HeaderSwitch(
+                                                checked = preferences.lockdownEnabled,
+                                                onCheckedChange = {
+                                                    scope.launch {
+                                                        userPreferencesRepository.setLockdownEnabled(!preferences.lockdownEnabled)
+                                                    }
+                                                }
+                                            )
+                                            "pause" -> HeaderSwitch(
+                                                checked = preferences.pausePointEnabled,
+                                                onCheckedChange = {
+                                                    scope.launch {
+                                                        userPreferencesRepository.setPausePointEnabled(!preferences.pausePointEnabled)
+                                                    }
+                                                }
+                                            )
+                                            "alarm" -> HeaderSwitch(
+                                                checked = preferences.alarmMasterEnabled,
+                                                onCheckedChange = {
+                                                    scope.launch {
+                                                        val newEnabled = !preferences.alarmMasterEnabled
+                                                        userPreferencesRepository.setAlarmMasterEnabled(newEnabled)
+                                                        if (newEnabled) {
+                                                            if (!com.etrisad.zenith.receiver.AlarmBroadcastReceiver.hasExactAlarmPermission(context)) {
+                                                                com.etrisad.zenith.receiver.AlarmBroadcastReceiver.promptExactAlarmPermission(context)
+                                                            }
+                                                            com.etrisad.zenith.receiver.AlarmBroadcastReceiver.requestBatteryOptimizationExemption(context)
+                                                            val alarms = userPreferencesRepository.parseAlarms(preferences.alarmsJson)
+                                                            val enabledAlarms = alarms.filter { it.enabled }
+                                                            com.etrisad.zenith.receiver.AlarmBroadcastReceiver.rescheduleAllAlarms(context, enabledAlarms)
+                                                        } else {
+                                                            com.etrisad.zenith.receiver.AlarmBroadcastReceiver.cancelAlarm(context)
+                                                        }
+                                                    }
+                                                }
+                                            )
+                                            else -> Box(modifier = Modifier.size(0.dp))
+                                        }
                                     }
                                 }
                             }
@@ -1738,4 +1291,54 @@ fun MainScreen(
             }
         }
     }
+}
+
+@Composable
+private fun HeaderSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Switch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        thumbContent = {
+            val thumbSize by animateDpAsState(
+                targetValue = if (checked) 28.dp else 24.dp,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                ),
+                label = "thumb_size"
+            )
+            val iconColor by animateColorAsState(
+                targetValue = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                label = "switch_icon_color"
+            )
+            Box(
+                modifier = Modifier.size(thumbSize),
+                contentAlignment = Alignment.Center
+            ) {
+                AnimatedContent(
+                    targetState = checked,
+                    transitionSpec = {
+                        (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
+                            .togetherWith(
+                                fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                        scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                            )
+                    },
+                    label = "switch_icon_anim"
+                ) { isChecked ->
+                    Icon(
+                        imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
+                        contentDescription = null,
+                        modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
+                        tint = iconColor
+                    )
+                }
+            }
+        }
+    )
 }
