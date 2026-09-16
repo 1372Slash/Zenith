@@ -114,6 +114,10 @@ class ShieldRepository(
         return dailyUsageDao.getRecentUsage(dateStr)
     }
 
+    fun getUsageBetween(startDate: String, endDate: String): Flow<List<DailyUsageEntity>> {
+        return dailyUsageDao.getUsageBetween(startDate, endDate)
+    }
+
     fun getHourlyUsageForDate(date: String): Flow<List<HourlyUsageEntity>> {
         return hourlyUsageDao.getHourlyUsageForDate(date)
     }
@@ -136,6 +140,10 @@ class ShieldRepository(
 
     fun getUsageByDateAndPackageFlow(date: String, packageName: String): Flow<DailyUsageEntity?> {
         return dailyUsageDao.getUsageByDateAndPackageFlow(date, packageName)
+    }
+
+    suspend fun getUsageByDateAndPackage(date: String, packageName: String): DailyUsageEntity? {
+        return dailyUsageDao.getUsageByDateAndPackage(date, packageName)
     }
 
     fun getDatesWithHourlyUsage(): Flow<List<String>> {

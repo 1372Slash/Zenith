@@ -79,6 +79,7 @@ import com.etrisad.zenith.ui.components.ZenithContainedLoadingIndicator
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.theme.ZenithTheme
 import com.etrisad.zenith.ui.viewmodel.AppUsageInfo
+import com.etrisad.zenith.ui.viewmodel.DailyUsage
 import com.etrisad.zenith.ui.viewmodel.HomeUiState
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
 import com.etrisad.zenith.ui.viewmodel.ShieldSortType
@@ -148,6 +149,7 @@ fun HomeScreen(
         onStatsClick = onSeeFullList,
         onDaySelected = onDaySelected,
         onRefresh = { viewModel.onRefresh() },
+        olderWeekLoader = viewModel::getGlobalWeekHistory,
         onDeleteShield = onDeleteShield,
         onDismissUninstalled = onDismissUninstalled
     )
@@ -171,6 +173,7 @@ fun HomeScreenContent(
     onStatsClick: () -> Unit,
     onDaySelected: (Long?) -> Unit,
     onRefresh: () -> Unit,
+    olderWeekLoader: (suspend (chunkOffset: Int) -> List<DailyUsage>)? = null,
     onDeleteShield: (ShieldEntity) -> Unit = {},
     onDismissUninstalled: (String) -> Unit = {}
 ) {
@@ -356,6 +359,8 @@ fun HomeScreenContent(
                     onDaySelected = { usage ->
                         onDaySelected(usage?.date)
                     },
+                    olderWeekLoader = olderWeekLoader,
+                    loaderKey = "global",
                     shape = RoundedCornerShape(8.dp)
                 )
                 Spacer(modifier = Modifier.height(4.dp))

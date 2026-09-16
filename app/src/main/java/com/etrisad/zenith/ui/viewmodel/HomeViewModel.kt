@@ -148,9 +148,22 @@ class HomeViewModel(
     private val _perAppPeriodOffset = MutableStateFlow(0)
     val perAppPeriodOffset: StateFlow<Int> = _perAppPeriodOffset.asStateFlow()
     fun selectPerAppRange(range: StatsRange) { _perAppStatsRange.value = range; _perAppPeriodOffset.value = 0 }
-    fun nextPerAppPeriod() { _perAppPeriodOffset.value = _perAppPeriodOffset.value + 1 }
-    fun prevPerAppPeriod() { if (_perAppPeriodOffset.value > 0) _perAppPeriodOffset.value = _perAppPeriodOffset.value - 1 }
+    fun prevPerAppPeriod() { _perAppPeriodOffset.value = _perAppPeriodOffset.value + 1 }
+    fun nextPerAppPeriod() { if (_perAppPeriodOffset.value > 0) _perAppPeriodOffset.value = _perAppPeriodOffset.value - 1 }
     fun getPerAppPeriodLabel(range: StatsRange, offset: Int): String = getPeriodLabel(range, offset)
+
+    /**
+     * Date-range label for a long-term period, e.g. "12 – 18 Agu 2026".
+     * Used as the paging indicator since unlimited paging makes dots meaningless.
+     */
+    fun getPeriodRangeLabel(range: StatsRange, offset: Int): String {
+        val (startStr, endStr) = getDateRangeForPeriod(range, offset)
+        val parser = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        val start = try { parser.parse(startStr)?.time ?: 0L } catch (_: Exception) { 0L }
+        val end = try { parser.parse(endStr)?.time ?: 0L } catch (_: Exception) { 0L }
+        if (start == 0L || end == 0L) return getPeriodLabel(range, offset)
+        return com.etrisad.zenith.util.DateTimeUtils.formatDateRange(start, end)
+    }
 
     fun getPeriodLabel(range: StatsRange, offset: Int): String {
         val cal = java.util.Calendar.getInstance()
@@ -219,7 +232,7 @@ class HomeViewModel(
 
     fun getLongTermAppUsage(range: StatsRange, offset: Int): Flow<List<AppUsageInfo>> {
         val (startDate, endDate) = getDateRangeForPeriod(range, offset)
-        return shieldRepository.getLongTermUsage(400).map { entities ->
+        return shieldRepository.getUsageBetween(startDate, endDate).map { entities ->
             val filtered = entities.filter { it.date in startDate..endDate && it.packageName !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL") }
             val grouped = filtered.groupBy { it.packageName }.mapValues { (_, list) -> list.sumOf { it.usageTimeMillis } }
             grouped.entries.sortedByDescending { it.value }.map { (pkg, total) ->
@@ -241,7 +254,7 @@ class HomeViewModel(
 
     fun getLongTermDailyHistory(range: StatsRange, offset: Int): Flow<List<DailyUsage>> {
         val (startDate, endDate) = getDateRangeForPeriod(range, offset)
-        return shieldRepository.getLongTermUsage(400).map { entities ->
+        return shieldRepository.getUsageBetween(startDate, endDate).map { entities ->
             val totals = entities.filter { it.date in startDate..endDate && it.packageName == "TOTAL" }.associate { it.date to it.usageTimeMillis }.toMutableMap()
             if (totals.isEmpty()) {
                 // fallback sum per date
@@ -259,7 +272,7 @@ class HomeViewModel(
 
     fun getWeekdayBreakdown(range: StatsRange, offset: Int): Flow<List<Pair<String, Long>>> {
         val (startDate, endDate) = getDateRangeForPeriod(range, offset)
-        return shieldRepository.getLongTermUsage(400).map { entities ->
+        return shieldRepository.getUsageBetween(startDate, endDate).map { entities ->
             val filtered = entities.filter { it.date in startDate..endDate && it.packageName !in setOf("TOTAL","SHIELD_TOTAL","GOAL_TOTAL","OTHER_TOTAL") }
             val map = mutableMapOf<Int, Long>()
             val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
@@ -281,7 +294,7 @@ class HomeViewModel(
 
     fun getPerAppDailyHistory(packageName: String, range: StatsRange, offset: Int): Flow<List<DailyUsage>> {
         val (startDate, endDate) = getDateRangeForPeriod(range, offset)
-        return shieldRepository.getLongTermUsage(400).map { entities ->
+        return shieldRepository.getUsageBetween(startDate, endDate).map { entities ->
             val filtered = entities.filter { it.date in startDate..endDate && it.packageName == packageName }
             val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
             filtered.groupBy { it.date }.entries.sortedBy { it.key }.map { (dateStr, list) ->
@@ -294,7 +307,7 @@ class HomeViewModel(
 
     fun getPerAppWeekdayBreakdown(packageName: String, range: StatsRange, offset: Int): Flow<List<Pair<String, Long>>> {
         val (startDate, endDate) = getDateRangeForPeriod(range, offset)
-        return shieldRepository.getLongTermUsage(400).map { entities ->
+        return shieldRepository.getUsageBetween(startDate, endDate).map { entities ->
             val filtered = entities.filter { it.date in startDate..endDate && it.packageName == packageName }
             val map = mutableMapOf<Int, Long>()
             val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
@@ -316,9 +329,98 @@ class HomeViewModel(
 
     fun getPerAppTotalForPeriod(packageName: String, range: StatsRange, offset: Int): Flow<Long> {
         val (startDate, endDate) = getDateRangeForPeriod(range, offset)
-        return shieldRepository.getLongTermUsage(400).map { entities ->
+        return shieldRepository.getUsageBetween(startDate, endDate).map { entities ->
             entities.filter { it.date in startDate..endDate && it.packageName == packageName }.sumOf { it.usageTimeMillis }
         }.flowOn(Dispatchers.Default)
+    }
+
+    private fun appDisplayName(pkg: String): String {
+        appInfoCache[pkg]?.let { return it }
+        return try {
+            val info = context.packageManager.getApplicationInfo(pkg, 0)
+            val name = context.packageManager.getApplicationLabel(info).toString()
+            appInfoCache[pkg] = name
+            name
+        } catch (_: Exception) {
+            if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(pkg)) {
+                val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(pkg)
+                com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
+            } else pkg
+        }
+    }
+
+    /**
+     * Loads one 7-day global history chunk beyond the live 21-day window.
+     * chunkOffset 3 = 21..27 days ago, 4 = 28..34, ... unbounded.
+     * Source of truth is unlimited daily_usage retention (DB rows only; live
+     * values and system fallback apply solely to the newest 21 days).
+     * Always returns exactly 7 entries, oldest first.
+     */
+    suspend fun getGlobalWeekHistory(chunkOffset: Int): List<DailyUsage> = withContext(Dispatchers.IO) {
+        val dateFormat = usageHistoryManager.getDateFormat()
+        val preferSystem = preferSystemUsageHistory
+        val fallback = usageHistoryManager.globalFallbackMap.value
+        (6 downTo 0).map { k ->
+            val daysAgo = chunkOffset * 7 + k
+            val dStart = usageHistoryManager.getMidnight(daysAgo)
+            val dStr = dateFormat.format(Date(dStart))
+            val entities = shieldRepository.getDailyUsagesForDateSync(dStr)
+            val total = entities.find { it.packageName == "TOTAL" }?.usageTimeMillis
+                ?: ((if (preferSystem) fallback[dStr]?.find { it.packageName == "TOTAL" }?.usageTimeMillis else null) ?: 0L)
+            DailyUsage(
+                date = dStart,
+                totalTime = total,
+                hasDatabaseRecord = entities.isNotEmpty(),
+                hasSystemData = fallback[dStr] != null && preferSystem,
+                isLive = false
+            )
+        }
+    }
+
+    /**
+     * Loads one 7-day per-app history chunk beyond the live 21-day window.
+     * Same chunking as [getGlobalWeekHistory]. Always returns exactly 7 entries.
+     */
+    suspend fun getPerAppWeekHistory(packageName: String, chunkOffset: Int): List<DailyUsage> = withContext(Dispatchers.IO) {
+        val dateFormat = usageHistoryManager.getDateFormat()
+        val isWebsite = com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(packageName)
+        val domain = if (isWebsite) com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(packageName) else null
+        (6 downTo 0).map { k ->
+            val daysAgo = chunkOffset * 7 + k
+            val dStart = usageHistoryManager.getMidnight(daysAgo)
+            val dStr = dateFormat.format(Date(dStart))
+            if (isWebsite) {
+                val row = shieldRepository.getWebsiteUsage(dStr, domain!!)
+                DailyUsage(dStart, row?.usageTimeMillis ?: 0L, row != null, false, false)
+            } else {
+                val row = shieldRepository.getUsageByDateAndPackage(dStr, packageName)
+                DailyUsage(dStart, row?.usageTimeMillis ?: 0L, row != null, false, false)
+            }
+        }
+    }
+
+    /**
+     * Loads one 7-day snapshot stamp chunk (top app per day) beyond the live
+     * 21-day window. Same chunking as [getGlobalWeekHistory].
+     */
+    suspend fun getSnapshotWeekStamps(chunkOffset: Int): List<AppUsageInfo> = withContext(Dispatchers.IO) {
+        val dateFormat = usageHistoryManager.getDateFormat()
+        val preferSystem = preferSystemUsageHistory
+        val fallback = usageHistoryManager.globalFallbackMap.value
+        (6 downTo 0).map { k ->
+            val daysAgo = chunkOffset * 7 + k
+            val dStart = usageHistoryManager.getMidnight(daysAgo)
+            val dStr = dateFormat.format(Date(dStart))
+            val entities = shieldRepository.getDailyUsagesForDateSync(dStr)
+            val top = entities.filter { it.packageName !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL") }
+                .maxByOrNull { it.usageTimeMillis }
+            val hasSys = fallback[dStr]?.isNotEmpty() == true && preferSystem
+            if (top != null) {
+                AppUsageInfo(top.packageName, appDisplayName(top.packageName), top.usageTimeMillis, hasDatabaseRecord = true, hasSystemData = hasSys, isLive = false)
+            } else {
+                AppUsageInfo("", "", 0L, hasDatabaseRecord = entities.isNotEmpty(), hasSystemData = hasSys, isLive = false)
+            }
+        }
     }
 
     private val appInfoCache = java.util.concurrent.ConcurrentHashMap<String, String>()
@@ -1667,25 +1769,56 @@ class HomeViewModel(
     fun formatDuration(millis: Long): String = shieldOperationsManager.formatDuration(millis)
     fun formatLongDuration(millis: Long): String = shieldOperationsManager.formatLongDuration(millis)
 
-    fun onVisibleWeekChanged(pageIndex: Int) {
+    /**
+     * chunkOffset 0 = newest 7-day chunk (contains today), increasing into the past.
+     * Offsets 0..2 are served from the live in-memory 21-day window; older offsets
+     * aggregate the weekly average and top apps from unlimited daily_usage retention.
+     */
+    fun onVisibleWeekChanged(chunkOffset: Int) {
         viewModelScope.launch {
-            val history = _uiState.value.dailyUsageHistory; if (history.isEmpty()) return@launch
-            val pages = history.chunked(7); if (pageIndex !in pages.indices) return@launch
-            val weekDays = pages[pageIndex]; val avg = if (weekDays.isNotEmpty()) weekDays.map { it.totalTime }.average().toLong() else 0L
-            val dateFormat = usageHistoryManager.getDateFormat(); val appUsageMap = mutableMapOf<String, Long>()
-            val preferSystem = userPreferencesRepository.userPreferencesFlow.first().preferSystemUsageHistory
-            weekDays.forEach { day ->
-                val dateStr = dateFormat.format(Date(day.date))
-                allHistory.filter { it.date == dateStr }.forEach { if (it.packageName !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL")) appUsageMap[it.packageName] = (appUsageMap[it.packageName] ?: 0L) + it.usageTimeMillis }
-                if (preferSystem) usageHistoryManager.globalFallbackMap.value[dateStr]?.forEach { if (it.packageName != "TOTAL") {
-                    appUsageMap[it.packageName] = it.usageTimeMillis
-                } }
+            val history = _uiState.value.dailyUsageHistory
+            if (chunkOffset <= 2) {
+                if (history.isEmpty()) return@launch
+                val pages = history.chunked(7)
+                val pageIndex = (pages.size - 1) - chunkOffset
+                if (pageIndex !in pages.indices) return@launch
+                val weekDays = pages[pageIndex]; val avg = if (weekDays.isNotEmpty()) weekDays.map { it.totalTime }.average().toLong() else 0L
+                val dateFormat = usageHistoryManager.getDateFormat(); val appUsageMap = mutableMapOf<String, Long>()
+                val preferSystem = userPreferencesRepository.userPreferencesFlow.first().preferSystemUsageHistory
+                weekDays.forEach { day ->
+                    val dateStr = dateFormat.format(Date(day.date))
+                    allHistory.filter { it.date == dateStr }.forEach { if (it.packageName !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL")) appUsageMap[it.packageName] = (appUsageMap[it.packageName] ?: 0L) + it.usageTimeMillis }
+                    if (preferSystem) usageHistoryManager.globalFallbackMap.value[dateStr]?.forEach { if (it.packageName != "TOTAL") {
+                        appUsageMap[it.packageName] = it.usageTimeMillis
+                    } }
+                }
+                val topApps = appUsageMap.entries.sortedByDescending { it.value }.take(3).map { (pkg, time) ->
+                    val cached = appInfoCache[pkg]
+                    AppUsageInfo(pkg, cached ?: pkg, time)
+                }
+                _uiState.update { it.copy(weeklyAvgTime = avg, weeklyTopApps = topApps) }
+            } else {
+                val dateFormat = usageHistoryManager.getDateFormat()
+                val appUsageMap = mutableMapOf<String, Long>()
+                var total = 0L
+                withContext(Dispatchers.IO) {
+                    for (k in 6 downTo 0) {
+                        val dStr = dateFormat.format(Date(usageHistoryManager.getMidnight(chunkOffset * 7 + k)))
+                        val entities = shieldRepository.getDailyUsagesForDateSync(dStr)
+                        total += entities.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
+                        entities.forEach {
+                            if (it.packageName !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL")) {
+                                appUsageMap[it.packageName] = (appUsageMap[it.packageName] ?: 0L) + it.usageTimeMillis
+                            }
+                        }
+                    }
+                }
+                val avg = total / 7
+                val topApps = appUsageMap.entries.sortedByDescending { it.value }.take(3).map { (pkg, time) ->
+                    AppUsageInfo(pkg, appInfoCache[pkg] ?: pkg, time)
+                }
+                _uiState.update { it.copy(weeklyAvgTime = avg, weeklyTopApps = topApps) }
             }
-            val topApps = appUsageMap.entries.sortedByDescending { it.value }.take(3).map { (pkg, time) ->
-                val cached = appInfoCache[pkg]
-                AppUsageInfo(pkg, cached ?: pkg, time)
-            }
-            _uiState.update { it.copy(weeklyAvgTime = avg, weeklyTopApps = topApps) }
         }
     }
 

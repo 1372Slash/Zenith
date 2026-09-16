@@ -245,7 +245,9 @@ fun AppDetailScreen(
                             showDatabaseIndicator = preferences.showDatabaseIndicator,
                             formatDuration = formatDuration,
                             onDaySelected = { },
-                            title = "History (21 Days)",
+                            olderWeekLoader = { chunkOffset -> viewModel.getPerAppWeekHistory(packageName, chunkOffset) },
+                            loaderKey = packageName,
+                            title = "History",
                             shape = RoundedCornerShape(8.dp)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
@@ -1486,7 +1488,7 @@ fun PerAppLongTermSection(
     val weekdayData by viewModel.getPerAppWeekdayBreakdown(packageName, selectedRange, offset).collectAsState(initial = emptyList())
     val totalForPeriod by viewModel.getPerAppTotalForPeriod(packageName, selectedRange, offset).collectAsState(initial = 0L)
     var expanded by remember { mutableStateOf(false) }
-    val periodLabel = remember(selectedRange, offset) { viewModel.getPerAppPeriodLabel(selectedRange, offset) }
+    val periodLabel = remember(selectedRange, offset) { viewModel.getPeriodRangeLabel(selectedRange, offset) }
     val maxDaily = remember(dailyHistory) { dailyHistory.maxOfOrNull { it.totalTime } ?: 1L }
     val maxWeekday = remember(weekdayData) { weekdayData.maxOfOrNull { it.second } ?: 1L }
 
@@ -1591,7 +1593,6 @@ fun PerAppLongTermSection(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("Relevant to ${packageName.takeLast(20)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
             }
         }
         Spacer(modifier = Modifier.height(4.dp))

@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Today
@@ -46,18 +47,25 @@ fun UsageHistoryCard(
     selectedDateMillis: Long? = null,
     formatDuration: (Long) -> String,
     onDaySelected: (DailyUsage?) -> Unit = {},
-    onPageSelected: (Int) -> Unit = {},
+    onChunkSelected: (Int) -> Unit = {},
+    olderWeekLoader: (suspend (chunkOffset: Int) -> List<DailyUsage>)? = null,
+    loaderKey: Any? = null,
     shape: Shape = RoundedCornerShape(24.dp),
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
-    title: String = "Last 21 Days"
+    title: String = "History"
 ) {
     var internalSelectedDate by rememberSaveable { mutableStateOf<Long?>(null) }
     val effectiveSelectedDate = selectedDateMillis ?: internalSelectedDate
-    
+
+    // Days loaded on demand while swiping left (older than [history]); used for
+    // the header duration lookup when an older day is selected.
+    var olderDays by remember(loaderKey) { mutableStateOf(emptyList<DailyUsage>()) }
+
     val dateFormat = remember { SimpleDateFormat("dd", Locale.getDefault()) }
-    
-    val selectedUsage = remember(history, effectiveSelectedDate) {
+
+    val selectedUsage = remember(history, olderDays, effectiveSelectedDate) {
         history.find { it.date == effectiveSelectedDate }
+            ?: olderDays.find { it.date == effectiveSelectedDate }
     }
 
     Card(
@@ -116,8 +124,138 @@ fun UsageHistoryCard(
                     }
                     onDaySelected(it)
                 },
-                onPageSelected = onPageSelected
+                onChunkSelected = onChunkSelected,
+                olderWeekLoader = olderWeekLoader,
+                loaderKey = loaderKey,
+                onOlderDaysChanged = { olderDays = it }
             )
+        }
+    }
+}
+
+/**
+ * Material 3 Expressive week stepper used as the paging indicator for
+ * unbounded history: a tonal connected pill holding previous/next steppers
+ * around the visible date range. Geometry is fixed — nothing shifts when a
+ * stepper hides at an edge or the loader takes the hidden slot.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun WeekStepperIndicator(
+    rangeLabel: String,
+    showPrevious: Boolean,
+    showNext: Boolean,
+    isLoading: Boolean,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Alpha follows visibility only — never the loader — so background loads
+    // can't make a visible chevron blink. `enabled` flips past ~transparent
+    // (hysteresis) so M3 disabled colors never snap mid-fade.
+    val prevAlpha by animateFloatAsState(
+        targetValue = if (showPrevious) 1f else 0f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "WeekPrevAlpha"
+    )
+    val nextAlpha by animateFloatAsState(
+        targetValue = if (showNext) 1f else 0f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "WeekNextAlpha"
+    )
+    Surface(
+        modifier = modifier,
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Slot shifted toward the pill so the glyph sits ~2dp from it
+            // while the control keeps its full size.
+            Box(
+                modifier = Modifier.size(28.dp).offset(x = 1.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isLoading && !showPrevious) {
+                    LoadingIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                } else {
+                    FilledTonalIconButton(
+                        onClick = { if (showPrevious) onPrevious() },
+                        enabled = showPrevious || prevAlpha > 0.02f,
+                        modifier = Modifier
+                            .size(28.dp)
+                            .graphicsLayer {
+                                alpha = prevAlpha
+                                val scale = 0.8f + 0.2f * prevAlpha
+                                scaleX = scale
+                                scaleY = scale
+                            }
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            contentDescription = "Previous week",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            ) {
+                AnimatedContent(
+                    targetState = rangeLabel,
+                    transitionSpec = {
+                        (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                slideInVertically { it / 2 })
+                            .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                    slideOutVertically { -it / 2 })
+                            .using(SizeTransform(clip = false))
+                    },
+                    // Center-anchored so width changes grow symmetrically and
+                    // both chevrons stay equidistant from the pill.
+                    contentAlignment = Alignment.Center,
+                    label = "WeekRangeLabel"
+                ) { label ->
+                    Text(
+                        text = label.ifEmpty { " " },
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier.size(28.dp).offset(x = (-1).dp),
+                contentAlignment = Alignment.Center
+            ) {
+                FilledTonalIconButton(
+                    onClick = { if (showNext) onNext() },
+                    enabled = showNext || nextAlpha > 0.02f,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .graphicsLayer {
+                            alpha = nextAlpha
+                            val scale = 0.8f + 0.2f * nextAlpha
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = "Next week",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -131,7 +269,10 @@ fun UsageGraph(
     showDatabaseIndicator: Boolean = false,
     selectedDateMillis: Long? = null,
     onDaySelected: (DailyUsage?) -> Unit,
-    onPageSelected: (Int) -> Unit
+    onChunkSelected: (Int) -> Unit,
+    olderWeekLoader: (suspend (chunkOffset: Int) -> List<DailyUsage>)? = null,
+    loaderKey: Any? = null,
+    onOlderDaysChanged: (List<DailyUsage>) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val sunnyShape = remember {
@@ -143,50 +284,138 @@ fun UsageGraph(
             addPath(path)
         }
     }
-    val pages = remember(history) { history.chunked(7) }
-    val pageCount = pages.size.coerceAtLeast(1)
-    
-    val pagerState = key(history.isNotEmpty()) {
+    // Newest 21 days, oldest first. chunkOffset 0 = newest 7-day chunk.
+    val basePages = remember(history) { history.chunked(7) }
+    val basePageCount = basePages.size.coerceAtLeast(1)
+
+    // Older 7-day chunks loaded on demand while swiping left, oldest first.
+    // Keyed by loaderKey (e.g. package name) so switching content resets them.
+    // Only chunks near the viewed page are kept (±3 pages) to stay light.
+    var olderChunks by remember(loaderKey) { mutableStateOf(listOf<List<DailyUsage>>()) }
+    var loadingOlder by remember(loaderKey) { mutableStateOf(false) }
+    var olderExhausted by remember(loaderKey) { mutableStateOf(false) }
+    var emptyStreak by remember(loaderKey) { mutableStateOf(0) }
+
+    val totalPages = olderChunks.size + basePageCount
+
+    val pagerState = key(history.isNotEmpty(), loaderKey) {
         rememberPagerState(
-            initialPage = (pageCount - 1).coerceAtLeast(0),
-            pageCount = { pageCount }
+            initialPage = (basePageCount - 1).coerceAtLeast(0),
+            pageCount = { olderChunks.size + basePageCount }
         )
     }
 
-    LaunchedEffect(pagerState.currentPage) {
-        onPageSelected(pagerState.currentPage)
+    fun chunkAt(page: Int): List<DailyUsage> =
+        if (page < olderChunks.size) olderChunks[page]
+        else basePages.getOrNull(page - olderChunks.size) ?: emptyList()
+
+    // Report the visible chunk and lazily load older weeks when the user
+    // settles near the left edge. Gated on !isScrollInProgress so each load
+    // is triggered by a fresh settle (bounded, no prefetch loops).
+    LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
+        if (pagerState.isScrollInProgress) return@LaunchedEffect
+        val current = pagerState.currentPage
+        onChunkSelected((totalPages - 1) - current)
+        if (olderWeekLoader != null && !loadingOlder && !olderExhausted &&
+            current <= 1 && totalPages > 1
+        ) {
+            loadingOlder = true
+            try {
+                val week = olderWeekLoader(totalPages).take(7)
+                if (week.size < 7 || week.all { it.totalTime == 0L }) {
+                    emptyStreak += 1
+                } else {
+                    emptyStreak = 0
+                }
+                if (emptyStreak >= 12) {
+                    // ~3 months of nothing: treat as the beginning of data.
+                    // Keep a 2-week empty buffer so the edge doesn't feel abrupt.
+                    olderExhausted = true
+                    val drop = (emptyStreak - 2).coerceAtLeast(0)
+                    if (drop > 0 && drop < olderChunks.size + 1) {
+                        olderChunks = olderChunks.drop(drop)
+                        emptyStreak = 2
+                        onOlderDaysChanged(olderChunks.flatten())
+                        pagerState.scrollToPage((current - drop).coerceAtLeast(0))
+                    }
+                } else if (week.size == 7) {
+                    olderChunks = listOf(week) + olderChunks
+                    onOlderDaysChanged(olderChunks.flatten())
+                    // Hold only if the user stayed put mid-load; otherwise
+                    // respect their navigation instead of yanking them.
+                    if (pagerState.currentPage == current) {
+                        pagerState.scrollToPage(current + 1)
+                    }
+                } else {
+                    olderExhausted = true
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            } finally {
+                loadingOlder = false
+            }
+        }
     }
 
-    var hasInitializedPager by remember(history.isNotEmpty()) { mutableStateOf(false) }
-    LaunchedEffect(history, selectedDateMillis, pagerState) {
-        if (history.isNotEmpty()) {
-            val targetIndex = if (selectedDateMillis != null) {
-                history.indexOfFirst { it.date == selectedDateMillis }
-            } else -1
-            
-            val targetPage = if (targetIndex != -1) {
-                targetIndex / 7
-            } else if (!hasInitializedPager) {
-                (history.size - 1).coerceAtLeast(0) / 7
-            } else {
-                -1
+    // Evict chunks strictly more than 3 pages behind the viewed one.
+    // Runs only when settled; prefetch (above) only fires at pages 0..1,
+    // so the two can never overlap and indices stay consistent.
+    LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress, totalPages) {
+        if (pagerState.isScrollInProgress || olderChunks.size <= 4) return@LaunchedEffect
+        val current = pagerState.currentPage
+        val curOffset = (totalPages - 1) - current
+        var drop = 0
+        while (drop < olderChunks.size && ((totalPages - 1) - drop) > curOffset + 3) drop++
+        if (drop > 0) {
+            olderChunks = olderChunks.drop(drop)
+            onOlderDaysChanged(olderChunks.flatten())
+            var streak = 0
+            for (chunk in olderChunks) {
+                if (chunk.all { it.totalTime == 0L }) streak++ else break
             }
-
-            if (targetPage != -1 && targetPage != pagerState.currentPage) {
-                if (!hasInitializedPager) {
-                    pagerState.scrollToPage(targetPage)
-                } else {
-                    pagerState.animateScrollToPage(
-                        page = targetPage,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessLow
-                        )
-                    )
-                }
-            }
-            hasInitializedPager = true
+            emptyStreak = streak
+            olderExhausted = streak >= 12
+            pagerState.scrollToPage((current - drop).coerceAtLeast(0))
         }
+    }
+
+    var hasInitializedPager by remember(history.isNotEmpty(), loaderKey) { mutableStateOf(false) }
+    var lastFollowDate by remember(loaderKey) { mutableStateOf<Long?>(null) }
+    // Follow programmatic date selection (tap on another card, initial date).
+    // Instant when only the chunk list shifted (prepend hold), animated for taps.
+    val selectionTargetPage = remember(selectedDateMillis, history, olderChunks) {
+        if (selectedDateMillis == null) -1
+        else {
+            val baseIdx = history.indexOfFirst { it.date == selectedDateMillis }
+            if (baseIdx != -1) olderChunks.size + baseIdx / 7
+            else {
+                val olderIdx = olderChunks.flatten().indexOfFirst { it.date == selectedDateMillis }
+                if (olderIdx != -1) olderIdx / 7 else -1
+            }
+        }
+    }
+    LaunchedEffect(selectionTargetPage, selectedDateMillis) {
+        if (!hasInitializedPager) {
+            if (history.isNotEmpty()) {
+                val initial = if (selectionTargetPage != -1) selectionTargetPage
+                else (history.size - 1).coerceAtLeast(0) / 7 + olderChunks.size
+                pagerState.scrollToPage(initial)
+                hasInitializedPager = true
+            }
+        } else if (selectedDateMillis != lastFollowDate &&
+            selectionTargetPage != -1 && selectionTargetPage != pagerState.currentPage
+        ) {
+            // Only a changed date (a tap) may move the pager. Prepends merely
+            // shift indices, so they must never yank the user back to today.
+            pagerState.animateScrollToPage(
+                page = selectionTargetPage,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessLow
+                )
+            )
+        }
+        lastFollowDate = selectedDateMillis
     }
 
     val dateFormat = remember { SimpleDateFormat("dd", Locale.getDefault()) }
@@ -212,7 +441,20 @@ fun UsageGraph(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize()
             ) { pageIndex ->
-                val pageData = if (pageIndex < pages.size) pages[pageIndex] else emptyList()
+                val pageData = chunkAt(pageIndex)
+                val isOlderChunk = pageIndex < olderChunks.size
+                // Older chunks enter individually so freshly loaded weeks grow
+                // instead of popping in at full height.
+                var chunkEntered by remember(pageData.firstOrNull()?.date, pageData.size) {
+                    mutableStateOf(!isOlderChunk)
+                }
+                LaunchedEffect(pageData.firstOrNull()?.date, pageData.size) {
+                    if (isOlderChunk && !chunkEntered) {
+                        kotlinx.coroutines.delay(60)
+                        chunkEntered = true
+                    }
+                }
+                val pageAnimate = animateTrigger && chunkEntered
 
                 val pageMax = remember(pageData, targetMillis) {
                     val raw = (pageData.maxOfOrNull { it.totalTime } ?: 0L)
@@ -312,7 +554,7 @@ fun UsageGraph(
                     ) {
                         pageData.forEach { usage ->
                             val isSelected = selectedDateMillis == usage.date
-                            val targetHeight = if (animateTrigger) (usage.totalTime.toFloat() / pageMax).coerceIn(0.01f, 1f) else 0.01f
+                            val targetHeight = if (pageAnimate) (usage.totalTime.toFloat() / pageMax).coerceIn(0.01f, 1f) else 0.01f
                             val animatedHeight by animateFloatAsState(
                                 targetValue = targetHeight,
                                 animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow)
@@ -414,11 +656,11 @@ fun UsageGraph(
                             }
 
                             val animatedIndicatorColor by animateColorAsState(
-                                targetValue = if (animateTrigger) indicatorColor else indicatorColor.copy(alpha = 0f),
+                                targetValue = if (pageAnimate) indicatorColor else indicatorColor.copy(alpha = 0f),
                                 animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessVeryLow)
                             )
                             val animatedWidth by animateDpAsState(
-                                targetValue = if (animateTrigger) 12.dp else 0.dp,
+                                targetValue = if (pageAnimate) 12.dp else 0.dp,
                                 animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow)
                             )
 
@@ -481,7 +723,7 @@ fun UsageGraph(
                     Button(
                         onClick = {
                             scope.launch {
-                                pagerState.animateScrollToPage(pageCount - 1)
+                                pagerState.animateScrollToPage(pagerState.pageCount - 1)
                             }
                         },
                         modifier = Modifier
@@ -518,24 +760,33 @@ fun UsageGraph(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
+        // Tonal connected stepper pill (M3 Expressive) instead of dots.
+        val visibleChunk = chunkAt(pagerState.currentPage)
+        val rangeLabel = remember(visibleChunk) {
+            if (visibleChunk.isEmpty()) ""
+            else com.etrisad.zenith.util.DateTimeUtils.formatDateRange(
+                visibleChunk.first().date,
+                visibleChunk.last().date
+            )
+        }
         Row(
-            Modifier
-                .height(20.dp)
-                .fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center
         ) {
-            repeat(pageCount) { iteration ->
-                val color = if (pagerState.currentPage == iteration) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                Box(
-                    modifier = Modifier
-                        .padding(2.dp)
-                        .clip(CircleShape)
-                        .background(color)
-                        .size(6.dp)
-                )
-            }
+            WeekStepperIndicator(
+                rangeLabel = rangeLabel,
+                showPrevious = pagerState.currentPage > 0,
+                showNext = pagerState.currentPage < pagerState.pageCount - 1,
+                isLoading = loadingOlder,
+                onPrevious = {
+                    scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                },
+                onNext = {
+                    scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                }
+            )
         }
     }
 }

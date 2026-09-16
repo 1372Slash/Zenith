@@ -32,10 +32,12 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.ui.viewmodel.AppUsageInfo
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.cos
@@ -109,15 +111,67 @@ fun SnapshotSection(
     formatDuration: (Long) -> String,
     showDatabaseIndicator: Boolean = false,
     startIndex: Int = 0,
-    totalCount: Int = 2
+    totalCount: Int = 2,
+    olderStampLoader: (suspend (chunkOffset: Int) -> List<AppUsageInfo>)? = null,
+    loaderKey: Any? = null
 ) {
-    val pages = remember(stamps) { stamps.chunked(7) }
-    val pageCount = pages.size.coerceAtLeast(1)
-    val pagerState = rememberPagerState(pageCount = { pageCount }, initialPage = (pageCount - 1).coerceAtLeast(0))
+    // Older 7-day stamp weeks loaded on demand while swiping left, oldest first.
+    // Unlike UsageGraph, everything stays in memory: streak shapes need one
+    // contiguous day sequence, and stamps are tiny. Queries still only happen
+    // for weeks near the viewed page.
+    var olderStampWeeks by remember(loaderKey) { mutableStateOf(listOf<List<AppUsageInfo>>()) }
+    var loadingOlder by remember(loaderKey) { mutableStateOf(false) }
+    var olderExhausted by remember(loaderKey) { mutableStateOf(false) }
+    var emptyStreak by remember(loaderKey) { mutableStateOf(0) }
 
-    LaunchedEffect(pageCount) {
-        if (pageCount > 0) {
+    val allStamps = remember(stamps, olderStampWeeks) { olderStampWeeks.flatten() + stamps }
+    val pages = remember(allStamps) { allStamps.chunked(7) }
+    val pageCount = pages.size.coerceAtLeast(1)
+    val pagerState = key(loaderKey) {
+        rememberPagerState(pageCount = { pageCount }, initialPage = (pageCount - 1).coerceAtLeast(0))
+    }
+
+    var pagerInitDone by remember(loaderKey) { mutableStateOf(false) }
+    LaunchedEffect(pageCount, stamps) {
+        if (!pagerInitDone && allStamps.isNotEmpty()) {
             pagerState.scrollToPage(pageCount - 1)
+            pagerInitDone = true
+        }
+    }
+
+    // Settle-gated prefetch: only a fresh settle at the left edge triggers one
+    // load, then the position is held so indices stay consistent (bounded).
+    LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
+        if (pagerState.isScrollInProgress) return@LaunchedEffect
+        val current = pagerState.currentPage
+        if (olderStampLoader != null && !loadingOlder && !olderExhausted &&
+            current <= 1 && pageCount > 1
+        ) {
+            loadingOlder = true
+            try {
+                val week = olderStampLoader(pageCount).take(7)
+                if (week.size < 7 || week.all { it.packageName.isEmpty() }) emptyStreak += 1
+                else emptyStreak = 0
+                if (emptyStreak >= 12) {
+                    olderExhausted = true
+                    val drop = (emptyStreak - 2).coerceAtLeast(0)
+                    if (drop > 0 && drop < olderStampWeeks.size + 1) {
+                        olderStampWeeks = olderStampWeeks.drop(drop)
+                        emptyStreak = 2
+                        pagerState.scrollToPage((current - drop).coerceAtLeast(0))
+                    }
+                } else if (week.size == 7) {
+                    olderStampWeeks = listOf(week) + olderStampWeeks
+                    // Hold only if the user stayed put mid-load.
+                    if (pagerState.currentPage == current) {
+                        pagerState.scrollToPage(current + 1)
+                    }
+                } else olderExhausted = true
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            } finally {
+                loadingOlder = false
+            }
         }
     }
 
@@ -132,18 +186,19 @@ fun SnapshotSection(
 
     Column {
         SnapshotCard(
-            stamps = stamps,
+            stamps = allStamps,
             selectedDateMillis = selectedDateMillis,
             getAppType = getAppType,
             onDaySelected = onDaySelected,
             formatDuration = formatDuration,
             showDatabaseIndicator = showDatabaseIndicator,
             pagerState = pagerState,
+            isLoadingOlder = loadingOlder,
             shape = getLocalGroupShape(startIndex)
         )
         Spacer(modifier = Modifier.height(4.dp))
         SnapshotInsightCard(
-            stamps = stamps,
+            stamps = allStamps,
             currentPage = pagerState.currentPage,
             getAppType = getAppType,
             shape = getLocalGroupShape(startIndex + 1)
@@ -271,6 +326,7 @@ fun SnapshotCard(
     pagerState: PagerState,
     isBackupPreview: Boolean = false,
     referenceDateMillis: Long? = null,
+    isLoadingOlder: Boolean = false,
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(24.dp),
     containerColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.surfaceContainerLow
 ) {
@@ -278,6 +334,7 @@ fun SnapshotCard(
     val pageCount = pages.size.coerceAtLeast(1)
     val referenceTime = referenceDateMillis ?: System.currentTimeMillis()
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
+    val scope = rememberCoroutineScope()
 
     val streaks = remember(stamps) {
         stamps.indices.map { i ->
@@ -595,21 +652,49 @@ fun SnapshotCard(
                 }
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            // Tonal connected stepper pill (M3 Expressive) instead of dots.
+            val snapPage = pagerState.currentPage
+            val snapData = pages.getOrNull(snapPage) ?: emptyList()
+            val firstIdx = snapPage * 7
+            val lastIdx = (snapPage * 7 + snapData.size - 1).coerceAtLeast(firstIdx)
+            val rangeLabel = remember(stamps.size, firstIdx, lastIdx, referenceTime) {
+                if (snapData.isEmpty()) "" else {
+                    val cal = Calendar.getInstance()
+                    fun millisFor(index: Int): Long {
+                        cal.timeInMillis = referenceTime
+                        val daysAgo = (stamps.size - 1) - index
+                        cal.add(Calendar.DAY_OF_YEAR, -daysAgo)
+                        cal.set(Calendar.HOUR_OF_DAY, 0)
+                        cal.set(Calendar.MINUTE, 0)
+                        cal.set(Calendar.SECOND, 0)
+                        cal.set(Calendar.MILLISECOND, 0)
+                        return cal.timeInMillis
+                    }
+                    com.etrisad.zenith.util.DateTimeUtils.formatDateRange(
+                        millisFor(firstIdx),
+                        millisFor(lastIdx)
+                    )
+                }
+            }
+            val snapLeftVisible = snapPage > 0
+            val snapRightVisible = snapPage < pagerState.pageCount - 1
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center
             ) {
-                repeat(pageCount) { iteration ->
-                    val color = if (pagerState.currentPage == iteration) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                    Box(
-                        modifier = Modifier
-                            .padding(2.dp)
-                            .clip(CircleShape)
-                            .background(color)
-                            .size(6.dp)
-                    )
-                }
+                WeekStepperIndicator(
+                    rangeLabel = rangeLabel,
+                    showPrevious = snapLeftVisible,
+                    showNext = snapRightVisible,
+                    isLoading = isLoadingOlder,
+                    onPrevious = {
+                        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                    },
+                    onNext = {
+                        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                    }
+                )
             }
         }
     }

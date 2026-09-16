@@ -596,7 +596,9 @@ fun UsageStatsScreen(
                     onDaySelected = { usage ->
                         viewModel.selectDate(usage?.date)
                     },
-                    onPageSelected = viewModel::onVisibleWeekChanged,
+                    onChunkSelected = viewModel::onVisibleWeekChanged,
+                    olderWeekLoader = viewModel::getGlobalWeekHistory,
+                    loaderKey = "global",
                     title = "Usage Trends",
                     showDatabaseIndicator = showDatabaseIndicator,
                     shape = getGroupShape(hourlyGroupTotal - 1, hourlyGroupTotal),
@@ -630,7 +632,9 @@ fun UsageStatsScreen(
                     formatDuration = viewModel::formatDuration,
                     showDatabaseIndicator = showDatabaseIndicator,
                     startIndex = 0,
-                    totalCount = 5
+                    totalCount = 5,
+                    olderStampLoader = viewModel::getSnapshotWeekStamps,
+                    loaderKey = "global"
                 )
                 Spacer(modifier = Modifier.height(4.dp))
             }
@@ -1939,7 +1943,7 @@ fun LongTermStatsSection(
     var expanded by rememberSaveable { mutableStateOf(false) }
     val totalPeriod = remember(longTermUsage) { longTermUsage.sumOf { it.totalTimeVisible } }
     val displayList = remember(longTermUsage, expanded) { if (expanded) longTermUsage else longTermUsage.take(5) }
-    val periodLabel = remember(selectedRange, offset) { viewModel.getPeriodLabel(selectedRange, offset) }
+    val periodLabel = remember(selectedRange, offset) { viewModel.getPeriodRangeLabel(selectedRange, offset) }
 
     Column {
         GroupedCard(index = 2, total = 5, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {

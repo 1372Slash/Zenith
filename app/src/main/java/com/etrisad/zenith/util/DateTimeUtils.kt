@@ -80,4 +80,31 @@ object DateTimeUtils {
         val dayStart = getDayStartTime(now, dayStartHour, dayStartMinute)
         return (now - dayStart).coerceAtLeast(0L)
     }
+
+    /**
+     * Formats a day range as a compact human label, e.g. "12 – 18 Agu 2026".
+     * Same month collapses the first day ("12 – 18 Agu 2026"), same year keeps
+     * one year suffix ("28 Jul – 3 Agu 2026"), different years show both.
+     */
+    fun formatDateRange(
+        startMillis: Long,
+        endMillis: Long,
+        locale: Locale = Locale.getDefault()
+    ): String {
+        val startCal = Calendar.getInstance().apply { timeInMillis = startMillis }
+        val endCal = Calendar.getInstance().apply { timeInMillis = endMillis }
+        val dayFmt = SimpleDateFormat("d", locale)
+        val dayMonthFmt = SimpleDateFormat("d MMM", locale)
+        val fullFmt = SimpleDateFormat("d MMM yyyy", locale)
+        val sameDay = startCal.get(Calendar.YEAR) == endCal.get(Calendar.YEAR) &&
+                startCal.get(Calendar.DAY_OF_YEAR) == endCal.get(Calendar.DAY_OF_YEAR)
+        if (sameDay) return fullFmt.format(Date(endMillis))
+        val sameMonth = startCal.get(Calendar.YEAR) == endCal.get(Calendar.YEAR) &&
+                startCal.get(Calendar.MONTH) == endCal.get(Calendar.MONTH)
+        return if (sameMonth) {
+            "${dayFmt.format(Date(startMillis))} – ${fullFmt.format(Date(endMillis))}"
+        } else {
+            "${dayMonthFmt.format(Date(startMillis))} – ${fullFmt.format(Date(endMillis))}"
+        }
+    }
 }

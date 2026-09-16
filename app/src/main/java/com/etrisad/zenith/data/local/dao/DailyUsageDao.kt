@@ -33,6 +33,9 @@ interface DailyUsageDao {
     @Query("SELECT * FROM daily_usage WHERE date >= :sinceDate ORDER BY date DESC, lastUpdated DESC")
     fun getRecentUsage(sinceDate: String): Flow<List<DailyUsageEntity>>
 
+    @Query("SELECT * FROM daily_usage WHERE date BETWEEN :startDate AND :endDate")
+    fun getUsageBetween(startDate: String, endDate: String): Flow<List<DailyUsageEntity>>
+
     @Query("SELECT * FROM daily_usage WHERE date = :date")
     suspend fun getUsagesForDate(date: String): List<DailyUsageEntity>
 
