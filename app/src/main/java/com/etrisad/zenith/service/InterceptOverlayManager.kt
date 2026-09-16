@@ -32,6 +32,7 @@ import com.etrisad.zenith.ui.components.overlay.EyeCareOverlayContent
 import com.etrisad.zenith.ui.components.overlay.InterceptOverlayContent
 import com.etrisad.zenith.ui.components.overlay.ScheduleOverlayContent
 import com.etrisad.zenith.ui.components.overlay.WindDownOverlayContent
+import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.ui.theme.GSFlexSettings
 import com.etrisad.zenith.ui.theme.ZenithTheme
@@ -116,6 +117,7 @@ class InterceptOverlayManager(
         totalUsageToday: Long,
         totalGlobalUsageToday: Long,
         delayDurationSeconds: Int = 0,
+        forcedTaskType: PausePointTaskType? = null,
         onAllowUse: (Int, Boolean) -> Unit,
         onCloseApp: () -> Unit,
         onGoalDismiss: () -> Unit
@@ -130,6 +132,7 @@ class InterceptOverlayManager(
         totalUsageToday: Long,
         totalGlobalUsageToday: Long,
         delayDurationSeconds: Int = 0,
+        forcedTaskType: PausePointTaskType? = null,
         onAllowUse: (Int, Boolean) -> Unit,
         onCloseApp: () -> Unit,
         onGoalDismiss: () -> Unit
@@ -139,14 +142,14 @@ class InterceptOverlayManager(
             
             if (Looper.myLooper() != Looper.getMainLooper()) {
                 mainHandler.post {
-                    showOverlay(packageName, appName, shield, totalUsageToday, totalGlobalUsageToday, delayDurationSeconds, onAllowUse, onCloseApp, onGoalDismiss)
+                    showOverlay(packageName, appName, shield, totalUsageToday, totalGlobalUsageToday, delayDurationSeconds, forcedTaskType, onAllowUse, onCloseApp, onGoalDismiss)
                 }
                 return
             }
 
             if (overlayView != null) {
                 OverlayLogBuffer.d("OverlayMgr", "updateOverlayContent: $packageName")
-                updateOverlayContent(packageName, appName, shield, totalUsageToday, totalGlobalUsageToday, delayDurationSeconds, onAllowUse, onCloseApp, onGoalDismiss)
+                updateOverlayContent(packageName, appName, shield, totalUsageToday, totalGlobalUsageToday, delayDurationSeconds, forcedTaskType, onAllowUse, onCloseApp, onGoalDismiss)
                 isShowing = true
                 currentPackage = packageName
                 return
@@ -159,7 +162,7 @@ class InterceptOverlayManager(
         OverlayLogBuffer.d("OverlayMgr", "showOverlay: $packageName (shield=$shield)")
 
         recreateOverlay = {
-            showOverlay(packageName, appName, shield, totalUsageToday, totalGlobalUsageToday, delayDurationSeconds, onAllowUse, onCloseApp, onGoalDismiss)
+            showOverlay(packageName, appName, shield, totalUsageToday, totalGlobalUsageToday, delayDurationSeconds, forcedTaskType, onAllowUse, onCloseApp, onGoalDismiss)
         }
 
         val usageState = androidx.compose.runtime.mutableStateOf(Pair(totalUsageToday, totalGlobalUsageToday))
@@ -216,7 +219,8 @@ class InterceptOverlayManager(
                                 onGoalDismiss()
                                 hideOverlay()
                             },
-                            onKeyboardFocusChange = { setOverlayFocusable(it) }
+                            onKeyboardFocusChange = { setOverlayFocusable(it) },
+                            forcedTaskType = forcedTaskType
                         )
                     }
                 }

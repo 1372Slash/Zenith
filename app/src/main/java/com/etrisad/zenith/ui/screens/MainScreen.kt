@@ -68,6 +68,8 @@ import com.etrisad.zenith.ui.screens.settings.EyeCareScreen
 import com.etrisad.zenith.ui.screens.settings.LockdownSettings
 import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointScreen
 import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointQrSettingsScreen
+import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointTypeSettingsScreen
+import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
 import com.etrisad.zenith.ui.screens.settings.SettingsScreen
 import com.etrisad.zenith.ui.viewmodel.FocusViewModel
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
@@ -155,6 +157,7 @@ fun MainScreen(
                 currentRoute == Screen.Pomodoro.route ||
                 currentRoute == Screen.PausePoint.route ||
                 currentRoute == Screen.PausePointQr.route ||
+                currentRoute?.startsWith("pause_point_type") == true ||
                 currentRoute == Screen.DatabaseDebug.route ||
                 currentRoute == Screen.DataRepairment.route ||
                 currentRoute == Screen.FontTest.route ||
@@ -507,6 +510,7 @@ fun MainScreen(
                     currentRoute != Screen.Pomodoro.route &&
                     currentRoute != Screen.PausePoint.route &&
                     currentRoute != Screen.PausePointQr.route &&
+                    currentRoute?.startsWith("pause_point_type") == false &&
                     currentRoute != Screen.DatabaseDebug.route &&
                     currentRoute != Screen.DataRepairment.route &&
                     currentRoute != Screen.FontTest.route &&
@@ -567,6 +571,8 @@ fun MainScreen(
                     isNavRailVisible = useNavigationRail && !isDeepScreen,
                     userName = preferences.userName,
                     categoryName = navBackStackEntry?.arguments?.getString("category"),
+                    pausePointTypeName = navBackStackEntry?.arguments?.getString("type")
+                        ?.let { runCatching { PausePointTaskType.valueOf(it).displayName }.getOrNull() },
                     onBack = {
                         val intercepted = currentRoute?.startsWith("settings_category") == true &&
                             performanceBackInterceptor.value()
@@ -1200,6 +1206,7 @@ fun MainScreen(
                                     targetRoute == Screen.Pomodoro.route ||
                                     targetRoute == Screen.PausePoint.route ||
                                     targetRoute == Screen.PausePointQr.route ||
+                                    targetRoute?.startsWith("pause_point_type") == true ||
                                     targetRoute == Screen.DatabaseDebug.route ||
                                     targetRoute == Screen.DataRepairment.route ||
                                     targetRoute == Screen.FontTest.route ||
@@ -1218,6 +1225,7 @@ fun MainScreen(
                                     initialRoute == Screen.Pomodoro.route ||
                                     initialRoute == Screen.PausePoint.route ||
                                     initialRoute == Screen.PausePointQr.route ||
+                                    initialRoute?.startsWith("pause_point_type") == true ||
                                     initialRoute == Screen.DatabaseDebug.route ||
                                     initialRoute == Screen.DataRepairment.route ||
                                     initialRoute == Screen.FontTest.route ||
@@ -1268,6 +1276,7 @@ fun MainScreen(
                                     targetRoute == Screen.Pomodoro.route ||
                                     targetRoute == Screen.PausePoint.route ||
                                     targetRoute == Screen.PausePointQr.route ||
+                                    targetRoute?.startsWith("pause_point_type") == true ||
                                     targetRoute == Screen.DatabaseDebug.route ||
                                     targetRoute == Screen.DataRepairment.route ||
                                     targetRoute == Screen.FontTest.route ||
@@ -1287,6 +1296,7 @@ fun MainScreen(
                                     initialRoute == Screen.Pomodoro.route ||
                                     initialRoute == Screen.PausePoint.route ||
                                     initialRoute == Screen.PausePointQr.route ||
+                                    initialRoute?.startsWith("pause_point_type") == true ||
                                     initialRoute == Screen.DatabaseDebug.route ||
                                     initialRoute == Screen.DataRepairment.route ||
                                     initialRoute == Screen.FontTest.route ||
@@ -1439,8 +1449,12 @@ fun MainScreen(
                             preferences = preferences,
                             innerPadding = innerPadding,
                             preferencesRepository = userPreferencesRepository,
-                            onNavigateToQrSettings = {
-                                navController.navigate(Screen.PausePointQr.route)
+                            onTaskTypeClick = { taskType ->
+                                if (taskType == PausePointTaskType.QR_SCAN) {
+                                    navController.navigate(Screen.PausePointQr.route)
+                                } else {
+                                    navController.navigate(Screen.PausePointTypeSettings.createRoute(taskType.name))
+                                }
                             }
                         )
                     }
@@ -1450,6 +1464,28 @@ fun MainScreen(
                             innerPadding = innerPadding,
                             preferencesRepository = userPreferencesRepository
                         )
+                    }
+                    composable(
+                        route = Screen.PausePointTypeSettings.route,
+                        arguments = listOf(androidx.navigation.navArgument("type") {
+                            type = androidx.navigation.NavType.StringType
+                        })
+                    ) { backStackEntry ->
+                        val typeName = backStackEntry.arguments?.getString("type") ?: ""
+                        val taskType = runCatching {
+                            PausePointTaskType.valueOf(typeName)
+                        }.getOrNull()
+                        if (taskType != null) {
+                            PausePointTypeSettingsScreen(
+                                taskType = taskType,
+                                preferences = preferences,
+                                innerPadding = innerPadding,
+                                preferencesRepository = userPreferencesRepository,
+                                onOpenQrSettings = {
+                                    navController.navigate(Screen.PausePointQr.route)
+                                }
+                            )
+                        }
                     }
                     composable(Screen.UsageStats.route) {
                         UsageStatsScreen(
@@ -1553,6 +1589,7 @@ fun MainScreen(
                             currentRoute != Screen.Pomodoro.route &&
                             currentRoute != Screen.PausePoint.route &&
                             currentRoute != Screen.PausePointQr.route &&
+                            currentRoute?.startsWith("pause_point_type") == false &&
                             currentRoute?.startsWith("settings_category") == false &&
                             currentRoute?.startsWith("app_detail") == false
 

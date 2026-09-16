@@ -35,6 +35,7 @@ fun ZenithHeader(
     isNavRailVisible: Boolean = false,
     userName: String = "User",
     categoryName: String? = null,
+    pausePointTypeName: String? = null,
     onBack: () -> Unit,
     navigationIcon: @Composable (() -> Unit)? = null,
     showInfoButton: Boolean = false,
@@ -60,6 +61,7 @@ fun ZenithHeader(
         currentRoute == Screen.Pomodoro.route ||
         currentRoute == Screen.PausePoint.route ||
         currentRoute == Screen.PausePointQr.route ||
+        currentRoute?.startsWith("pause_point_type") == true ||
         currentRoute?.startsWith("settings_category") == true ||
         currentRoute?.startsWith("app_detail") == true
 
@@ -155,6 +157,8 @@ fun ZenithHeader(
                 currentRoute == Screen.Pomodoro.route -> "Pomodoro"
                 currentRoute == Screen.PausePoint.route -> "Pause Point"
                 currentRoute == Screen.PausePointQr.route -> "QR Codes"
+                currentRoute?.startsWith("pause_point_type") == true ->
+                    pausePointTypeName?.ifEmpty { null } ?: "Pause Point"
                 currentRoute?.startsWith("settings_category") == true -> {
                     val raw = categoryName ?: ""
                     when (raw.lowercase()) {

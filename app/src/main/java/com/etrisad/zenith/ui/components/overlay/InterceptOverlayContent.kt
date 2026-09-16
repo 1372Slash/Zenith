@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,6 +27,7 @@ import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.pausepoint.PausePointEngine
 import com.etrisad.zenith.ui.components.pausepoint.PausePointTask
@@ -35,9 +38,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.random.Random
 
 private const val CONTENT_A = "pausePoint"
 private const val CONTENT_B = "actualContent"
+private const val CONTENT_C = "pausePointTestResult"
 
 @Composable
 fun InterceptOverlayContent(
@@ -50,7 +55,8 @@ fun InterceptOverlayContent(
     onAllowUse: (Int, Boolean) -> Unit,
     onCloseApp: () -> Unit,
     onGoalDismiss: () -> Unit = {},
-    onKeyboardFocusChange: (Boolean) -> Unit = {}
+    onKeyboardFocusChange: (Boolean) -> Unit = {},
+    forcedTaskType: PausePointTaskType? = null
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
@@ -83,22 +89,41 @@ fun InterceptOverlayContent(
         return
     }
 
-    val pausePointEnabled = userPrefs.pausePointEnabled
-    val enabledTypes = userPrefs.pausePointTaskTypes
-    var currentPauseTask by remember(packageName) { mutableStateOf<PausePointTask?>(null) }
+    val pausePointEnabled = forcedTaskType != null || userPrefs.pausePointEnabled
+    val enabledTypes = forcedTaskType?.let { setOf(it) } ?: userPrefs.pausePointTaskTypes
+    var currentPauseTask by remember(packageName, forcedTaskType) { mutableStateOf<PausePointTask?>(null) }
     var pauseTaskCompleted by remember { mutableStateOf(false) }
 
-    LaunchedEffect(pausePointEnabled, packageName) {
+    LaunchedEffect(pausePointEnabled, packageName, forcedTaskType, prefsLoaded) {
+        if (!prefsLoaded) return@LaunchedEffect
         if (pausePointEnabled && currentPauseTask == null) {
             val goals = withContext(Dispatchers.IO) {
                 shieldRepository.allShields.first().filter { it.type == FocusType.GOAL }
             }
-            currentPauseTask = PausePointEngine.generateTask(
-                enabledTypes = enabledTypes,
-                goalPackageNames = goals.map { it.packageName }.toSet(),
-                goalAppNames = goals.associate { it.packageName to it.appName },
-                qrCodes = userPrefs.pausePointQrCodes
-            )
+            currentPauseTask = when (forcedTaskType) {
+                PausePointTaskType.QR_SCAN -> PausePointTask.QrScan(
+                    code = "PAUSE-${Random.nextInt(100000, 999999)}",
+                    validCodes = userPrefs.pausePointQrCodes,
+                    acceptAny = true
+                )
+                PausePointTaskType.CHOOSE_APP ->
+                    if (goals.isEmpty()) {
+                        PausePointTask.ChooseApp(suggestedPackage = "", suggestedAppName = "a goal app")
+                    } else {
+                        val goal = goals.random()
+                        PausePointTask.ChooseApp(
+                            suggestedPackage = goal.packageName,
+                            suggestedAppName = goal.appName
+                        )
+                    }
+                else -> PausePointEngine.generateTask(
+                    enabledTypes = enabledTypes,
+                    goalPackageNames = goals.map { it.packageName }.toSet(),
+                    goalAppNames = goals.associate { it.packageName to it.appName },
+                    qrCodes = userPrefs.pausePointQrCodes,
+                    config = userPrefs.pausePointConfig
+                )
+            }
         }
     }
 
@@ -161,6 +186,7 @@ fun InterceptOverlayContent(
         isLandscape = isLandscape,
         showBedtimePill = true,
         userPreferences = userPrefs,
+        dismissOnOutsideTap = forcedTaskType != null,
         dragHandleCurrentUses = dragUses,
         dragHandleMaxUses = dragMaxUses,
         dragHandleEmergencyCount = dragEmergency,
@@ -170,6 +196,7 @@ fun InterceptOverlayContent(
         contentKey = when {
             !prefsLoaded -> null
             showPausePoint -> CONTENT_A
+            forcedTaskType != null -> CONTENT_C
             else -> CONTENT_B
         },
         onCloseApp = closeOverlay
@@ -198,6 +225,22 @@ fun InterceptOverlayContent(
                     )
                 } else {
                     Box(modifier = Modifier.fillMaxWidth().height(240.dp))
+                }
+            }
+            CONTENT_C -> {
+                val taskType = currentPauseTask?.type
+                if (taskType != null) {
+                    PausePointTestResultContent(
+                        taskType = taskType,
+                        isEnabled = taskType in userPrefs.pausePointTaskTypes,
+                        onEnable = {
+                            scope.launch {
+                                userPrefsRepo.setPausePointTaskTypes(userPrefs.pausePointTaskTypes + taskType)
+                                userPrefsRepo.setPausePointEnabled(true)
+                            }
+                            closeOverlay()
+                        }
+                    )
                 }
             }
             else -> {
@@ -259,7 +302,8 @@ fun ScheduleOverlayContent(
     var currentPauseTask by remember(packageName) { mutableStateOf<PausePointTask?>(null) }
     var pauseTaskCompleted by remember { mutableStateOf(false) }
 
-    LaunchedEffect(pausePointEnabled, packageName) {
+    LaunchedEffect(pausePointEnabled, packageName, prefsLoaded) {
+        if (!prefsLoaded) return@LaunchedEffect
         if (pausePointEnabled && currentPauseTask == null) {
             val goals = withContext(Dispatchers.IO) {
                 shieldRepository.allShields.first().filter { it.type == FocusType.GOAL }
@@ -268,7 +312,8 @@ fun ScheduleOverlayContent(
                 enabledTypes = enabledTypes,
                 goalPackageNames = goals.map { it.packageName }.toSet(),
                 goalAppNames = goals.associate { it.packageName to it.appName },
-                qrCodes = userPrefs.pausePointQrCodes
+                qrCodes = userPrefs.pausePointQrCodes,
+                config = userPrefs.pausePointConfig
             )
         }
     }
@@ -630,6 +675,102 @@ private fun PausePointLandscapeContent(
                     size = ZenithButtonSize.Large
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun PausePointTestResultContent(
+    taskType: PausePointTaskType,
+    isEnabled: Boolean,
+    onEnable: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 24.dp, start = 24.dp, end = 24.dp)
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(32.dp)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = taskType.icon,
+                    contentDescription = taskType.displayName,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "Pause Point",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text = "${taskType.displayName} Passed!",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                )
+
+                Text(
+                    text = "You successfully completed this pause point.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Enable this pause point?",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "It will appear before you open blocked apps during focus, giving you a moment to pause before continuing.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            ZenithButton(
+                onClick = onEnable,
+                modifier = Modifier.fillMaxWidth(),
+                text = if (isEnabled) "${taskType.displayName} Enabled" else "Enable ${taskType.displayName}",
+                icon = Icons.Filled.Check,
+                size = ZenithButtonSize.ExtraLarge,
+                enabled = !isEnabled
+            )
         }
     }
 }

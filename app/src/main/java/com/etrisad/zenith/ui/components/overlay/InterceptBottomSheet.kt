@@ -43,6 +43,7 @@ fun InterceptBottomSheet(
     dragHandleBonusUsesLeft: Int = 0,
     sheetContentAlpha: Float = 1f,
     contentKey: Any? = Unit,
+    dismissOnOutsideTap: Boolean = false,
     onCloseApp: () -> Unit = {},
     content: @Composable ColumnScope.(key: Any?) -> Unit
 ) {
@@ -95,6 +96,7 @@ fun InterceptBottomSheet(
     val scope = rememberCoroutineScope()
     val dragOffset = remember { Animatable(0f) }
     val closeThresholdPx = with(density) { 120.dp.toPx() }
+    val currentOnCloseApp by rememberUpdatedState(onCloseApp)
 
     MaterialTheme(colorScheme = paletteScheme) {
         Box(
@@ -108,7 +110,15 @@ fun InterceptBottomSheet(
                     .fillMaxSize()
                     .graphicsLayer { alpha = backgroundAlpha }
                     .background(Color.Black)
-                    .pointerInput(Unit) { detectTapGestures { } }
+                    .pointerInput(dismissOnOutsideTap) {
+                        detectTapGestures(
+                            onTap = {
+                                // Hanya overlay test (forcedTaskType) yang boleh close via outside tap.
+                                // Overlay produksi tetap menelan tap agar tidak tembus ke app di bawah.
+                                if (dismissOnOutsideTap) currentOnCloseApp()
+                            }
+                        )
+                    }
             )
 
             AnimatedVisibility(

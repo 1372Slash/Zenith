@@ -341,6 +341,7 @@ private fun QrScanTask(
     onUserActivity: () -> Unit
 ) {
     val hasValidCodes = task.validCodes.isNotEmpty()
+    val showScanner = hasValidCodes || task.acceptAny
     var showError by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val cameraGranted = androidx.core.content.ContextCompat.checkSelfPermission(
@@ -352,7 +353,7 @@ private fun QrScanTask(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        if (hasValidCodes) {
+        if (showScanner) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -365,7 +366,7 @@ private fun QrScanTask(
                     permissionMessage = "Camera permission is required to scan a saved QR code",
                     onQrDetected = { scanned ->
                         onUserActivity()
-                        if (scanned.trim() in task.validCodes) {
+                        if (task.acceptAny || scanned.trim() in task.validCodes) {
                             onTaskCompleted()
                         } else {
                             showError = true
@@ -406,9 +407,10 @@ private fun QrScanTask(
             )
         }
 
-        if (hasValidCodes) {
+        if (showScanner) {
             Text(
-                text = "Align a saved QR code within the frame",
+                text = if (task.acceptAny) "Align any QR code within the frame"
+                else "Align a saved QR code within the frame",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -526,25 +528,67 @@ private fun SwitchTask(
     onCompleted: () -> Unit
 ) {
     val leverCount = task.leverCount
-    val targetSequence = remember(leverCount) { List(leverCount) { Random.nextBoolean() } }
-    val currentStates = remember(leverCount) {
-        mutableStateListOf<Boolean>().apply {
-            repeat(leverCount) { add(Random.nextBoolean()) }
-            if (indices.all { this[it] == targetSequence[it] }) this[0] = !this[0]
+    val targetSequence = remember { mutableStateListOf<Boolean>() }
+    val currentStates = remember { mutableStateListOf<Boolean>() }
+    val timeoutSeconds = task.timeoutSeconds
+    var timeLeft by remember(timeoutSeconds) { mutableIntStateOf(timeoutSeconds ?: 0) }
+    var timedOut by remember { mutableStateOf(false) }
+
+    fun newPuzzle() {
+        targetSequence.clear()
+        currentStates.clear()
+        repeat(leverCount) {
+            targetSequence.add(Random.nextBoolean())
+            currentStates.add(Random.nextBoolean())
+        }
+        if (currentStates.indices.all { currentStates[it] == targetSequence[it] }) {
+            currentStates[0] = !currentStates[0]
         }
     }
+
+    LaunchedEffect(Unit) { newPuzzle() }
+
+    LaunchedEffect(timedOut) {
+        if (timedOut) {
+            timedOut = false
+            newPuzzle()
+            timeLeft = timeoutSeconds ?: 0
+        }
+    }
+
     val solved = remember {
-        derivedStateOf { currentStates.indices.all { currentStates[it] == targetSequence[it] } }
+        derivedStateOf { currentStates.isNotEmpty() && currentStates.indices.all { currentStates[it] == targetSequence[it] } }
     }
 
     LaunchedEffect(solved.value) {
         if (solved.value) onCompleted()
     }
 
+    if (timeoutSeconds != null) {
+        LaunchedEffect(timeLeft, solved.value, timedOut) {
+            if (solved.value || timedOut) return@LaunchedEffect
+            while (timeLeft > 0) {
+                delay(1000)
+                timeLeft--
+            }
+            timedOut = true
+        }
+    }
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        if (timeoutSeconds != null) {
+            Text(
+                text = if (timedOut) "Time's up — sequence resets, try again!" else "Time remaining: ${timeLeft}s",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Black,
+                color = if (timedOut || timeLeft <= 5) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.primary
+            )
+        }
+
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -575,7 +619,7 @@ private fun SwitchTask(
         ) {
             repeat(leverCount) { index ->
                 Lever(
-                    isOn = currentStates[index],
+                    isOn = currentStates.getOrElse(index) { false },
                     onToggle = { currentStates[index] = it }
                 )
             }

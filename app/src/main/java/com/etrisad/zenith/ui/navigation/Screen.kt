@@ -68,6 +68,11 @@ sealed class Screen(
 
     object PausePointQr :
         Screen("pause_point_qr", "QR Codes", Icons.Filled.Settings, Icons.Outlined.Settings)
+
+    object PausePointTypeSettings :
+        Screen("pause_point_type/{type}", "Pause Point", Icons.Filled.Settings, Icons.Outlined.Settings) {
+        fun createRoute(type: String) = "pause_point_type/$type"
+    }
 }
 
 val navItems = listOf(

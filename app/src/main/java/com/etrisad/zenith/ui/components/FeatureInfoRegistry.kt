@@ -18,6 +18,7 @@ object FeatureInfoRegistry {
         route == Screen.Pomodoro.route -> pomodoro
         route == Screen.PausePoint.route -> pausePoint
         route == Screen.PausePointQr.route -> pausePointQr
+        route?.startsWith("pause_point_type") == true -> pausePointType
         route == Screen.OverlayAppearance.route -> overlayAppearance
         route == Screen.GSFlexCustomizer.route -> gsFlexCustomizer
         route == Screen.DatabaseDebug.route -> databaseDebug
@@ -304,6 +305,26 @@ object FeatureInfoRegistry {
                 "Print codes and stick them far from your desk — fridge, another room — to add real friction.",
                 "Keep at least one spare code registered in case one gets lost.",
                 "Codes are stored locally; delete ones you no longer use."
+            )
+        )
+    )
+
+    private val pausePointType = FeatureInfo(
+        title = "Pause Point Task",
+        summary = "Tune exactly how each Pause Point task behaves so the difficulty matches your intent.",
+        sections = listOf(
+            FeatureInfoSections.whatItDoes(
+                "Sliders and switches let you set the size/duration of each task type independently.",
+                "Values you choose here are what the Pause Point overlay will actually use."
+            ),
+            FeatureInfoSections.whatYoullSee(
+                "A header card describing the task type.",
+                "Per-type controls — e.g. wait duration, breathing rounds, steps, grid size, math range, counting target, or the typing-text pool."
+            ),
+            FeatureInfoSections.tips(
+                "Changes save instantly and apply to the next generated pause task.",
+                "QR Scan links to the Saved QR Codes screen; Choose App uses your goal apps automatically.",
+                "Defaults match the original values, so untouched tasks behave exactly as before."
             )
         )
     )

@@ -18,7 +18,10 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.model.AlarmItem
+import com.etrisad.zenith.ui.components.pausepoint.PausePointConfig
+import com.etrisad.zenith.ui.components.pausepoint.PausePointDefaults
 import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
+import com.etrisad.zenith.ui.components.pausepoint.PausePointVariant
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
@@ -354,6 +357,14 @@ class UserPreferencesRepository(private val context: Context) {
         val PAUSE_POINT_ENABLED = booleanPreferencesKey("pause_point_enabled")
         val PAUSE_POINT_TASK_TYPES = stringPreferencesKey("pause_point_task_types")
         val PAUSE_POINT_QR_CODES = stringPreferencesKey("pause_point_qr_codes")
+        val PAUSE_POINT_WAITING_VARIANTS = stringPreferencesKey("pause_point_waiting_variants")
+        val PAUSE_POINT_BREATHING_VARIANTS = stringPreferencesKey("pause_point_breathing_variants")
+        val PAUSE_POINT_WALK_VARIANTS = stringPreferencesKey("pause_point_walk_variants")
+        val PAUSE_POINT_NUMBER_SLIDE_VARIANTS = stringPreferencesKey("pause_point_number_slide_variants")
+        val PAUSE_POINT_SWITCH_VARIANTS = stringPreferencesKey("pause_point_switch_variants")
+        val PAUSE_POINT_MATH_VARIANTS = stringPreferencesKey("pause_point_math_variants")
+        val PAUSE_POINT_COUNTING_VARIANTS = stringPreferencesKey("pause_point_counting_variants")
+        val PAUSE_POINT_TYPING_VARIANTS = stringPreferencesKey("pause_point_typing_variants")
     }
 
     private object RuntimeKeys {
@@ -581,7 +592,15 @@ class UserPreferencesRepository(private val context: Context) {
                 ?.filter { it.isNotEmpty() }
                 ?.mapNotNull { runCatching { PausePointTaskType.valueOf(it) }.getOrNull() }
                 ?.toSet() ?: emptySet(),
-            pausePointQrCodes = parseStringList(settings[PreferencesKeys.PAUSE_POINT_QR_CODES])
+            pausePointQrCodes = parseStringList(settings[PreferencesKeys.PAUSE_POINT_QR_CODES]),
+            pausePointWaitingVariants = parseVariantList(settings[PreferencesKeys.PAUSE_POINT_WAITING_VARIANTS]).distinct(),
+            pausePointBreathingVariants = parseVariantList(settings[PreferencesKeys.PAUSE_POINT_BREATHING_VARIANTS]).distinct(),
+            pausePointWalkVariants = parseVariantList(settings[PreferencesKeys.PAUSE_POINT_WALK_VARIANTS]).distinct(),
+            pausePointNumberSlideVariants = parseVariantList(settings[PreferencesKeys.PAUSE_POINT_NUMBER_SLIDE_VARIANTS]).distinct(),
+            pausePointSwitchVariants = parseVariantList(settings[PreferencesKeys.PAUSE_POINT_SWITCH_VARIANTS]).distinct(),
+            pausePointMathVariants = parseVariantList(settings[PreferencesKeys.PAUSE_POINT_MATH_VARIANTS]).distinct(),
+            pausePointCountingVariants = parseVariantList(settings[PreferencesKeys.PAUSE_POINT_COUNTING_VARIANTS]).distinct(),
+            pausePointTypingVariants = parseVariantList(settings[PreferencesKeys.PAUSE_POINT_TYPING_VARIANTS]).distinct()
         )
     }.distinctUntilChanged()
 
@@ -611,6 +630,37 @@ class UserPreferencesRepository(private val context: Context) {
             adapter.fromJson(json) ?: emptyList()
         } catch (_: Exception) {
             emptyList()
+        }
+    }
+
+    fun serializeStringList(values: List<String>): String {
+        return try {
+            val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, String::class.java)
+            val adapter: com.squareup.moshi.JsonAdapter<List<String>> = moshi.adapter(type)
+            adapter.toJson(values)
+        } catch (_: Exception) {
+            "[]"
+        }
+    }
+
+    private fun parseVariantList(json: String?): List<PausePointVariant> {
+        if (json.isNullOrBlank()) return emptyList()
+        return try {
+            val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, PausePointVariant::class.java)
+            val adapter: com.squareup.moshi.JsonAdapter<List<PausePointVariant>> = moshi.adapter(type)
+            adapter.fromJson(json) ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun serializePausePointVariants(variants: List<PausePointVariant>): String {
+        return try {
+            val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, PausePointVariant::class.java)
+            val adapter: com.squareup.moshi.JsonAdapter<List<PausePointVariant>> = moshi.adapter(type)
+            adapter.toJson(variants)
+        } catch (_: Exception) {
+            "[]"
         }
     }
 
@@ -1418,14 +1468,24 @@ class UserPreferencesRepository(private val context: Context) {
     }
 
     suspend fun setPausePointQrCodes(codes: List<String>) {
-        val json = try {
-            val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, String::class.java)
-            val adapter: com.squareup.moshi.JsonAdapter<List<String>> = moshi.adapter(type)
-            adapter.toJson(codes)
-        } catch (_: Exception) {
-            "[]"
-        }
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.PAUSE_POINT_QR_CODES] = json }
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.PAUSE_POINT_QR_CODES] = serializeStringList(codes) }
+    }
+
+    suspend fun setPausePointVariants(type: PausePointTaskType, variants: List<PausePointVariant>) {
+        context.dataStore.edit { preferences -> preferences[keyForPausePointVariants(type)] = serializePausePointVariants(variants) }
+    }
+
+    private fun keyForPausePointVariants(type: PausePointTaskType): Preferences.Key<String> = when (type) {
+        PausePointTaskType.WAITING -> PreferencesKeys.PAUSE_POINT_WAITING_VARIANTS
+        PausePointTaskType.BREATHING -> PreferencesKeys.PAUSE_POINT_BREATHING_VARIANTS
+        PausePointTaskType.WALK -> PreferencesKeys.PAUSE_POINT_WALK_VARIANTS
+        PausePointTaskType.NUMBER_SLIDE -> PreferencesKeys.PAUSE_POINT_NUMBER_SLIDE_VARIANTS
+        PausePointTaskType.SWITCH -> PreferencesKeys.PAUSE_POINT_SWITCH_VARIANTS
+        PausePointTaskType.MATH -> PreferencesKeys.PAUSE_POINT_MATH_VARIANTS
+        PausePointTaskType.COUNTING -> PreferencesKeys.PAUSE_POINT_COUNTING_VARIANTS
+        PausePointTaskType.TYPING -> PreferencesKeys.PAUSE_POINT_TYPING_VARIANTS
+        PausePointTaskType.QR_SCAN, PausePointTaskType.CHOOSE_APP ->
+            throw IllegalArgumentException("No sub-task variants for $type")
     }
 
     suspend fun setPomodoroAllowedPackages(packages: Set<String>) {
@@ -1695,6 +1755,14 @@ data class UserPreferences(
     val pausePointEnabled: Boolean = false,
     val pausePointTaskTypes: Set<PausePointTaskType> = emptySet(),
     val pausePointQrCodes: List<String> = emptyList(),
+    val pausePointWaitingVariants: List<PausePointVariant> = PausePointDefaults.waitingVariants,
+    val pausePointBreathingVariants: List<PausePointVariant> = PausePointDefaults.breathingVariants,
+    val pausePointWalkVariants: List<PausePointVariant> = PausePointDefaults.walkVariants,
+    val pausePointNumberSlideVariants: List<PausePointVariant> = PausePointDefaults.numberSlideVariants,
+    val pausePointSwitchVariants: List<PausePointVariant> = PausePointDefaults.switchVariants,
+    val pausePointMathVariants: List<PausePointVariant> = PausePointDefaults.mathVariants,
+    val pausePointCountingVariants: List<PausePointVariant> = PausePointDefaults.countingVariants,
+    val pausePointTypingVariants: List<PausePointVariant> = PausePointDefaults.typingVariants,
     val incentiveLockEnabled: Boolean = false,
     val incentiveLockDisableRequestTimestamp: Long = 0L,
     val incentiveLockGoalsMetToday: Boolean = false,
@@ -1724,6 +1792,18 @@ data class UserPreferences(
     val alarmsJson: String = "[]",
     val excludedFromTrackingOverridesJson: String = "{}",
 ) {
+    val pausePointConfig: PausePointConfig
+        get() = PausePointConfig(
+            waitingVariants = pausePointWaitingVariants,
+            breathingVariants = pausePointBreathingVariants,
+            walkVariants = pausePointWalkVariants,
+            numberSlideVariants = pausePointNumberSlideVariants,
+            switchVariants = pausePointSwitchVariants,
+            mathVariants = pausePointMathVariants,
+            countingVariants = pausePointCountingVariants,
+            typingVariants = pausePointTypingVariants
+        )
+
     fun isInLockdown(): Boolean {
         if (!lockdownEnabled) return false
         val cal = Calendar.getInstance()

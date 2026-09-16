@@ -54,7 +54,8 @@ sealed class PausePointTask {
 
     data class QrScan(
         val code: String = "PAUSE-${Random.nextInt(100000, 999999)}",
-        val validCodes: List<String> = emptyList()
+        val validCodes: List<String> = emptyList(),
+        val acceptAny: Boolean = false
     ) : PausePointTask() {
         override val type get() = PausePointTaskType.QR_SCAN
         override val instruction get() =
@@ -70,7 +71,8 @@ sealed class PausePointTask {
     }
 
     data class Switch(
-        val leverCount: Int = 4
+        val leverCount: Int = 4,
+        val timeoutSeconds: Int? = null
     ) : PausePointTask() {
         override val type get() = PausePointTaskType.SWITCH
         override val instruction get() = "Match the switch sequence to continue"
@@ -92,7 +94,7 @@ sealed class PausePointTask {
     }
 
     data class Typing(
-        val sentence: String = SENTENCES.random()
+        val sentence: String = sentencePool.random()
     ) : PausePointTask() {
         override val type get() = PausePointTaskType.TYPING
         override val instruction get() = "Type the following sentence correctly"
@@ -107,7 +109,7 @@ sealed class PausePointTask {
     }
 
     companion object {
-        private val SENTENCES = listOf(
+        val sentencePool = listOf(
             "Stay focused and mindful.",
             "Small steps lead to big changes.",
             "Every moment is a fresh beginning.",
@@ -120,13 +122,79 @@ sealed class PausePointTask {
     }
 }
 
+data class PausePointVariant(
+    val label: String = "",
+    val text: String = "",
+    val seconds: Int = 0,
+    val rounds: Int = 0,
+    val steps: Int = 0,
+    val size: Int = 0,
+    val levers: Int = 0,
+    val maxOperand: Int = 0,
+    val target: Int = 0
+)
+
+data class PausePointConfig(
+    val waitingVariants: List<PausePointVariant> = PausePointDefaults.waitingVariants,
+    val breathingVariants: List<PausePointVariant> = PausePointDefaults.breathingVariants,
+    val walkVariants: List<PausePointVariant> = PausePointDefaults.walkVariants,
+    val numberSlideVariants: List<PausePointVariant> = PausePointDefaults.numberSlideVariants,
+    val switchVariants: List<PausePointVariant> = PausePointDefaults.switchVariants,
+    val mathVariants: List<PausePointVariant> = PausePointDefaults.mathVariants,
+    val countingVariants: List<PausePointVariant> = PausePointDefaults.countingVariants,
+    val typingVariants: List<PausePointVariant> = PausePointDefaults.typingVariants
+) {
+    fun variantsFor(type: PausePointTaskType): List<PausePointVariant> = when (type) {
+        PausePointTaskType.WAITING -> waitingVariants
+        PausePointTaskType.BREATHING -> breathingVariants
+        PausePointTaskType.WALK -> walkVariants
+        PausePointTaskType.NUMBER_SLIDE -> numberSlideVariants
+        PausePointTaskType.SWITCH -> switchVariants
+        PausePointTaskType.MATH -> mathVariants
+        PausePointTaskType.COUNTING -> countingVariants
+        PausePointTaskType.TYPING -> typingVariants
+        PausePointTaskType.QR_SCAN -> emptyList()
+        PausePointTaskType.CHOOSE_APP -> emptyList()
+    }
+}
+
+object PausePointDefaults {
+    val waitingVariants = listOf(PausePointVariant(seconds = 15))
+    val breathingVariants = listOf(PausePointVariant(rounds = 3))
+    val walkVariants = listOf(PausePointVariant(steps = 10))
+    val numberSlideVariants = listOf(PausePointVariant(size = 3))
+    val switchVariants = listOf(PausePointVariant(levers = 4))
+    val mathVariants = listOf(PausePointVariant(maxOperand = 20))
+    val countingVariants = listOf(PausePointVariant(target = 15))
+    val typingVariants = PausePointTask.sentencePool.map { PausePointVariant(text = it) }
+
+    fun variantsFor(type: PausePointTaskType): List<PausePointVariant> = when (type) {
+        PausePointTaskType.WAITING -> waitingVariants
+        PausePointTaskType.BREATHING -> breathingVariants
+        PausePointTaskType.WALK -> walkVariants
+        PausePointTaskType.NUMBER_SLIDE -> numberSlideVariants
+        PausePointTaskType.SWITCH -> switchVariants
+        PausePointTaskType.MATH -> mathVariants
+        PausePointTaskType.COUNTING -> countingVariants
+        PausePointTaskType.TYPING -> typingVariants
+        PausePointTaskType.QR_SCAN -> emptyList()
+        PausePointTaskType.CHOOSE_APP -> emptyList()
+    }
+}
+
 object PausePointEngine {
+
+    private fun pickVariant(variants: List<PausePointVariant>, fallback: List<PausePointVariant>): PausePointVariant {
+        val pool = variants.ifEmpty { fallback }
+        return if (pool.isNotEmpty()) pool.random() else PausePointVariant()
+    }
 
     fun generateTask(
         enabledTypes: Set<PausePointTaskType> = PausePointTaskType.entries.toSet(),
         goalPackageNames: Set<String> = emptySet(),
         goalAppNames: Map<String, String> = emptyMap(),
-        qrCodes: List<String> = emptyList()
+        qrCodes: List<String> = emptyList(),
+        config: PausePointConfig = PausePointConfig()
     ): PausePointTask {
         val filteredTypes = enabledTypes
             .filter { it != PausePointTaskType.QR_SCAN || qrCodes.isNotEmpty() }
@@ -137,42 +205,44 @@ object PausePointEngine {
 
         return when (selectedType) {
             PausePointTaskType.WAITING -> PausePointTask.Waiting(
-                durationSeconds = listOf(10, 15, 20, 30).random()
+                durationSeconds = pickVariant(config.waitingVariants, PausePointDefaults.waitingVariants).seconds.coerceAtLeast(1)
             )
             PausePointTaskType.BREATHING -> PausePointTask.Breathing(
-                rounds = listOf(3, 5).random()
+                rounds = pickVariant(config.breathingVariants, PausePointDefaults.breathingVariants).rounds.coerceAtLeast(1)
             )
             PausePointTaskType.WALK -> PausePointTask.Walk(
-                steps = listOf(5, 10, 15, 20).random()
+                steps = pickVariant(config.walkVariants, PausePointDefaults.walkVariants).steps.coerceAtLeast(1)
             )
             PausePointTaskType.QR_SCAN -> PausePointTask.QrScan(
                 code = if (qrCodes.isNotEmpty()) qrCodes.random() else "PAUSE-${Random.nextInt(100000, 999999)}",
                 validCodes = qrCodes
             )
             PausePointTaskType.NUMBER_SLIDE -> PausePointTask.NumberSlide(
-                size = 3
+                size = pickVariant(config.numberSlideVariants, PausePointDefaults.numberSlideVariants).size.coerceAtLeast(3)
             )
-            PausePointTaskType.SWITCH -> PausePointTask.Switch(
-                leverCount = listOf(3, 4).random()
-            )
+            PausePointTaskType.SWITCH -> {
+                val v = pickVariant(config.switchVariants, PausePointDefaults.switchVariants)
+                PausePointTask.Switch(
+                    leverCount = v.levers.coerceAtLeast(2),
+                    timeoutSeconds = v.seconds.takeIf { it > 0 }
+                )
+            }
             PausePointTaskType.MATH -> PausePointTask.Math(
-                maxOperand = listOf(10, 20).random()
+                maxOperand = pickVariant(config.mathVariants, PausePointDefaults.mathVariants).maxOperand.coerceAtLeast(1)
             )
             PausePointTaskType.COUNTING -> {
-                val labels = listOf("push-ups", "jumping jacks", "squats", "sit-ups", "arm stretches")
-                val useLabel = Random.nextBoolean()
-                if (useLabel) {
-                    PausePointTask.Counting(
-                        targetNumber = listOf(5, 10, 15).random(),
-                        label = labels.random()
-                    )
-                } else {
-                    PausePointTask.Counting(
-                        targetNumber = Random.nextInt(10, 31)
-                    )
-                }
+                val v = pickVariant(config.countingVariants, PausePointDefaults.countingVariants)
+                PausePointTask.Counting(
+                    targetNumber = v.target.coerceAtLeast(1),
+                    label = v.label
+                )
             }
-            PausePointTaskType.TYPING -> PausePointTask.Typing()
+            PausePointTaskType.TYPING -> {
+                val text = pickVariant(config.typingVariants, PausePointDefaults.typingVariants).text
+                PausePointTask.Typing(
+                    sentence = text.ifBlank { PausePointTask.sentencePool.random() }
+                )
+            }
             PausePointTaskType.CHOOSE_APP -> {
                 if (goalPackageNames.isNotEmpty()) {
                     val randomGoal = goalPackageNames.random()
