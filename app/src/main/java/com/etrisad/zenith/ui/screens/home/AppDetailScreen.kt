@@ -1,5 +1,6 @@
 package com.etrisad.zenith.ui.screens.home
 
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
@@ -20,6 +21,9 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -71,6 +75,13 @@ fun AppDetailScreen(
     val preferences by userPreferencesRepository.userPreferencesFlow.collectAsState(
         initial = com.etrisad.zenith.data.preferences.UserPreferences()
     )
+    val isInLockdown = preferences.isInLockdown()
+    val detailContext = LocalContext.current
+    val detailHaptic = LocalHapticFeedback.current
+    fun blockedByLockdown() {
+        detailHaptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        Toast.makeText(detailContext, "Locked during lockdown hours", Toast.LENGTH_SHORT).show()
+    }
     val nowMillis by produceState(initialValue = System.currentTimeMillis()) {
         while (true) {
             delay(60000)
@@ -333,14 +344,14 @@ fun AppDetailScreen(
                                         if (isPaused) {
                                             ResumeCard(
                                                 pauseEndTimestamp = shield.pauseEndTimestamp,
-                                                onResume = { viewModel.resumeShield() },
+                                                onResume = { if (!isInLockdown) viewModel.resumeShield() else blockedByLockdown() },
                                                 formatDuration = formatDuration,
                                                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp),
                                                 nowMillis = nowMillis
                                             )
                                         } else {
                                             PauseShieldCard(
-                                                onPauseClick = { showPauseSheet = true },
+                                                onPauseClick = { if (!isInLockdown) showPauseSheet = true else blockedByLockdown() },
                                                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
                                             )
                                         }
@@ -350,7 +361,7 @@ fun AppDetailScreen(
 
                                     DeleteShieldCard(
                                         onDelete = {
-                                            showDeleteSheet = true
+                                            if (!isInLockdown) showDeleteSheet = true else blockedByLockdown()
                                         },
                                         shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                                     )

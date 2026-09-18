@@ -1,5 +1,6 @@
 package com.etrisad.zenith.ui.screens
 
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.Spring
@@ -549,14 +550,18 @@ fun MainScreen(
                                         }
                                     }
                                     "app_detail" -> {
+                                        val detailLocked = preferences.isInLockdown()
                                         IconButton(
-                                            onClick = { homeViewModel.openSettingsSheet() },
+                                            onClick = {
+                                                if (!detailLocked) homeViewModel.openSettingsSheet()
+                                                else Toast.makeText(context, "Locked during lockdown hours", Toast.LENGTH_SHORT).show()
+                                            },
                                             modifier = Modifier.padding(end = 12.dp).clip(CircleShape)
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Outlined.Edit,
                                                 contentDescription = "Edit App Settings",
-                                                tint = MaterialTheme.colorScheme.primary
+                                                tint = if (detailLocked) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary
                                             )
                                         }
                                     }
@@ -633,8 +638,14 @@ fun MainScreen(
                                             "lockdown" -> HeaderSwitch(
                                                 checked = preferences.lockdownEnabled,
                                                 onCheckedChange = {
-                                                    scope.launch {
-                                                        userPreferencesRepository.setLockdownEnabled(!preferences.lockdownEnabled)
+                                                    if (preferences.lockdownEnabled) {
+                                                        // Disabling must pass the puzzle gate in Lockdown
+                                                        // settings - a direct toggle would bypass it.
+                                                        navController.navigate(Screen.Lockdown.route)
+                                                    } else {
+                                                        scope.launch {
+                                                            userPreferencesRepository.setLockdownEnabled(true)
+                                                        }
                                                     }
                                                 }
                                             )
@@ -1003,11 +1014,9 @@ fun MainScreen(
                             innerPadding = innerPadding,
                             preferencesRepository = userPreferencesRepository,
                             onTaskTypeClick = { taskType ->
-                                if (taskType == PausePointTaskType.QR_SCAN) {
-                                    navController.navigate(Screen.PausePointQr.route)
-                                } else {
-                                    navController.navigate(Screen.PausePointTypeSettings.createRoute(taskType.name))
-                                }
+                                // Every type (including QR_SCAN and CHOOSE_APP) has its own
+                                // settings screen; routing uniformly keeps them reachable.
+                                navController.navigate(Screen.PausePointTypeSettings.createRoute(taskType.name))
                             }
                         )
                     }
@@ -1038,6 +1047,10 @@ fun MainScreen(
                                     navController.navigate(Screen.PausePointQr.route)
                                 }
                             )
+                        } else {
+                            // Unknown type argument (e.g. stale deep link): go back
+                            // instead of leaving a blank screen under the header.
+                            LaunchedEffect(Unit) { navController.popBackStack() }
                         }
                     }
                     composable(Screen.UsageStats.route) {
