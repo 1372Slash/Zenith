@@ -1511,6 +1511,7 @@ fun PerAppLongTermSection(
             LongTermSection(
                 title = "Heatmap for this app",
                 accentColor = MaterialTheme.colorScheme.tertiary,
+                highlightColor = MaterialTheme.colorScheme.primary,
                 selectedRange = selectedRange,
                 onRangeSelected = viewModel::selectPerAppRange,
                 rangeLabel = periodLabel,

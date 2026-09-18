@@ -56,6 +56,7 @@ import com.etrisad.zenith.ui.viewmodel.StatsRange
 fun LongTermSection(
     title: String,
     accentColor: Color,
+    highlightColor: Color,
     selectedRange: StatsRange,
     onRangeSelected: (StatsRange) -> Unit,
     rangeLabel: String,
@@ -80,13 +81,31 @@ fun LongTermSection(
     var selectedWeek by remember(periodDays) { mutableStateOf<List<Long>?>(null) }
     var weekApps by remember(periodDays) { mutableStateOf(emptyList<AppUsageInfo>()) }
     var loadingWeek by remember(periodDays) { mutableStateOf(false) }
-                    var dayListExpanded by remember(selectedWeek) { mutableStateOf(false) }
+    var dayListExpanded by remember(selectedWeek) { mutableStateOf(false) }
+    // Snapshots of the open week/day: AnimatedVisibility content recomposes with the
+    // latest state even while the out-animation plays, so without these the detail
+    // would read nulls and the close would fade emptiness (abrupt close).
+    var lastOpenWeek by remember(periodDays) { mutableStateOf<List<Long>?>(null) }
+    var lastOpenDay by remember(periodDays) { mutableStateOf<Long?>(null) }
+    LaunchedEffect(selectedWeek, selectedDay) {
+        if (selectedWeek != null) {
+            lastOpenWeek = selectedWeek
+            lastOpenDay = selectedDay
+        }
+    }
     LaunchedEffect(selectedWeek) {
         val week = selectedWeek
         val loader = dayAppLoader
-        if (week == null || loader == null) {
+        if (loader == null) {
             weekApps = emptyList()
             loadingWeek = false
+        } else if (week == null) {
+            // Closing: freeze the last loaded apps instead of wiping them. Clearing
+            // here would change the inner crossfade key on the exact frame the
+            // out-animation starts, so the list would vanish before the collapse
+            // finishes. No stale data leaks: opening a week always sets loadingWeek
+            // optimistically and the loader branch below overwrites weekApps, and
+            // period changes reset this state via remember(periodDays).
         } else {
             loadingWeek = true
             try {
@@ -331,8 +350,14 @@ fun LongTermSection(
                                                 val isDaySelected = selectedDay == millis
                                                 // Instant dim on purpose: selection feedback must be
                                                 // immediate, and a grid-wide spring storm drops frames.
-                                                // Only the tapped cell pops (2 cells max animate).
+                                                // Only the tapped cell pops (2 cells max animate) - same
+                                                // budget applies to the highlight color morph below.
                                                 val dimFactor = if (selectedWeek != null && selectedWeek?.contains(millis) != true) 0.35f else 1f
+                                                val highlightBase by animateColorAsState(
+                                                    targetValue = if (isDaySelected) highlightColor else accentColor,
+                                                    animationSpec = spring(stiffness = Spring.StiffnessLow),
+                                                    label = "HeatmapHighlight"
+                                                )
                                                 val selectedPop by animateFloatAsState(
                                                     targetValue = if (isDaySelected) 1.12f else 1f,
                                                     animationSpec = spring(
@@ -348,7 +373,7 @@ fun LongTermSection(
                                                             scaleY = selectedPop
                                                         }
                                                         .clip(RoundedCornerShape(calRadius))
-                                                        .background(accentColor.copy(alpha = (alpha * dimFactor).coerceIn(0f, 1f)))
+                                                        .background(highlightBase.copy(alpha = (alpha * dimFactor).coerceIn(0f, 1f)))
                                                         .border(
                                                             width = if (isDaySelected) 2.dp else 0.dp,
                                                             color = if (isDaySelected) Color.White else Color.Transparent,
@@ -472,11 +497,14 @@ fun LongTermSection(
                     }
                     AnimatedVisibility(
                         visible = selectedWeek != null,
-                        enter = EnterTransition.None,
-                        exit = ExitTransition.None,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically(),
                         label = "HeatmapDayDetail"
                     ) {
-                        val week = selectedWeek?.takeIf { it.isNotEmpty() }
+                        // Fall back to the snapshots while closing: otherwise the detail
+                        // below would read nulls and the out-animation would fade emptiness.
+                        val week = (selectedWeek ?: lastOpenWeek)?.takeIf { it.isNotEmpty() }
+                        val openDay = selectedDay ?: lastOpenDay
                         if (week != null) {
                             Column {
                                 Spacer(modifier = Modifier.height(12.dp))
@@ -485,51 +513,63 @@ fun LongTermSection(
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
-                                if (dayAppLoader != null) {
-                                    Text(
-                                        "Apps - " + com.etrisad.zenith.util.DateTimeUtils.formatDateRange(week.first(), week.last()),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                } else {
-                                    val dayMillis = selectedDay
-                                    if (dayMillis != null) {
+                                // Identity-only key: week window + (per-app only) day + list
+                                // data state. Same-week day taps on the global version keep
+                                // the key identical, so the unchanged list never replays.
+                                // Fade-only on purpose: the outer visibility already drives
+                                // resizing, and a second size/slide animation nested inside
+                                // fights it (abrupt jumps).
+                                val detailKey = Triple(
+                                    week,
+                                    if (dayAppLoader == null) openDay else null,
+                                    DayListState(loadingWeek, weekApps)
+                                )
+                                AnimatedContent(
+                                    targetState = detailKey,
+                                    transitionSpec = {
+                                        fadeIn() togetherWith fadeOut() using SizeTransform(
+                                            clip = false,
+                                            sizeAnimationSpec = { _, _ -> snap() }
+                                        )
+                                    },
+                                    label = "DayAppsContent"
+                                ) { (animWeek, animDay, animList) ->
+                                    Column {
+                                    if (dayAppLoader != null) {
                                         Text(
-                                            dayDateFmt.format(java.util.Date(dayMillis)),
-                                            style = MaterialTheme.typography.titleMedium,
+                                            "Apps - " + com.etrisad.zenith.util.DateTimeUtils.formatDateRange(animWeek.first(), animWeek.last()),
+                                            style = MaterialTheme.typography.labelMedium,
                                             fontWeight = FontWeight.Bold
                                         )
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.Bottom
-                                        ) {
+                                    } else {
+                                        val dayMillis = animDay
+                                        if (dayMillis != null) {
                                             Text(
-                                                formatDuration(dayMap[dayMillis]?.totalTime ?: 0L),
-                                                style = MaterialTheme.typography.headlineSmall,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                color = accentColor
+                                                dayDateFmt.format(java.util.Date(dayMillis)),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold
                                             )
-                                            Text(
-                                                "- ${formatDuration(weekStatTotals.sum())} this week",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(start = 8.dp, bottom = 2.dp)
-                                            )
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.Bottom
+                                            ) {
+                                                Text(
+                                                    formatDuration(dayMap[dayMillis]?.totalTime ?: 0L),
+                                                    style = MaterialTheme.typography.headlineSmall,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = accentColor
+                                                )
+                                                Text(
+                                                    "- ${formatDuration(animWeek.sumOf { dayMap[it]?.totalTime ?: 0L })} this week",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.padding(start = 8.dp, bottom = 2.dp)
+                                                )
+                                            }
                                         }
                                     }
-                                    }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                    // No transition by design: content swaps instantly and
-                                    // the card height follows directly (motion rework deferred).
-                                    val dayListKey = Pair(loadingWeek, weekApps)
-                                    AnimatedContent(
-                                        targetState = dayListKey,
-                                        transitionSpec = {
-                                            EnterTransition.None togetherWith ExitTransition.None
-                                        },
-                                        label = "DayAppsContent"
-                                    ) {
-                                    if (dayAppLoader != null && loadingWeek) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    if (dayAppLoader != null && animList.loading) {
                                         Box(
                                             modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
                                             contentAlignment = Alignment.Center
@@ -539,16 +579,16 @@ fun LongTermSection(
                                                 color = accentColor
                                             )
                                         }
-                                    } else if (dayAppLoader != null && weekApps.isEmpty()) {
+                                    } else if (dayAppLoader != null && animList.apps.isEmpty()) {
                                         Text(
                                             "No app data for this week",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
-                                } else {
-                                    val topApps = remember(weekApps) { weekApps.take(3) }
-                                    val restApps = remember(weekApps) { weekApps.drop(3) }
-                                    val restTotal = remember(restApps) { restApps.sumOf { it.totalTimeVisible } }
+                                } else if (dayAppLoader != null) {
+                                    val topApps = animList.apps.take(3)
+                                    val restApps = animList.apps.drop(3)
+                                    val restTotal = restApps.sumOf { it.totalTimeVisible }
                                     // Grouped positions mirror the Other-Apps pattern in Usage Stats:
                                     // the header card continues the first/mid/last sequence.
                                     val groupTotal = if (restApps.isEmpty()) topApps.size
@@ -625,8 +665,8 @@ fun LongTermSection(
                                             }
                                             AnimatedVisibility(
                                                 visible = dayListExpanded,
-                                                enter = EnterTransition.None,
-                                                exit = ExitTransition.None,
+                                                enter = fadeIn() + expandVertically(),
+                                                exit = fadeOut() + shrinkVertically(),
                                                 label = "DayRestApps"
                                             ) {
                                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -646,6 +686,7 @@ fun LongTermSection(
                                     }
                                 }
                                     }
+                                    }
                                 }
                             }
                         }
@@ -659,6 +700,12 @@ fun LongTermSection(
 private val CalWeekdayLetters = listOf("M", "T", "W", "T", "F", "S", "S")
 
 private data class CalWeek(val days: List<Long?>, val monthLabel: String?)
+
+/** Data snapshot driving the detail crossfade: loading flag + week app list. */
+private data class DayListState(
+    val loading: Boolean,
+    val apps: List<AppUsageInfo>
+)
 
 /** Monday-first week columns for the calendar heatmap, padded with nulls. */
 private fun buildCalWeeks(days: List<Long>, monthPattern: String = "MMM yyyy"): List<CalWeek> {
@@ -692,11 +739,49 @@ private fun buildCalWeeks(days: List<Long>, monthPattern: String = "MMM yyyy"): 
  * collapsing the day list morphs each card instead of snapping it.
  * Same per-corner animateDpAsState precedent as ActiveItemCard/AlarmScreen.
  */
-private fun longTermAppRowShape(index: Int, total: Int): RoundedCornerShape = when {
-    total == 1 -> RoundedCornerShape(24.dp)
-    index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-    index == total - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-    else -> RoundedCornerShape(8.dp)
+@Composable
+private fun longTermAppRowShape(index: Int, total: Int): RoundedCornerShape {
+    val isSingle = total == 1
+    val isFirst = index == 0
+    val isLast = index == total - 1
+    val topStart by animateDpAsState(
+        targetValue = if (isSingle || isFirst) 24.dp else 8.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "longTermTopStart"
+    )
+    val topEnd by animateDpAsState(
+        targetValue = if (isSingle || isFirst) 24.dp else 8.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "longTermTopEnd"
+    )
+    val bottomStart by animateDpAsState(
+        targetValue = if (isSingle || isLast) 24.dp else 8.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "longTermBottomStart"
+    )
+    val bottomEnd by animateDpAsState(
+        targetValue = if (isSingle || isLast) 24.dp else 8.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "longTermBottomEnd"
+    )
+    return RoundedCornerShape(
+        topStart = topStart,
+        topEnd = topEnd,
+        bottomStart = bottomStart,
+        bottomEnd = bottomEnd
+    )
 }
 
 
@@ -825,13 +910,22 @@ private fun StatTile(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer
             )
-            Text(
-                value,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                maxLines = 1
-            )
+            AnimatedContent(
+                targetState = value,
+                transitionSpec = {
+                    (slideInVertically { it / 2 } + fadeIn(spring(stiffness = Spring.StiffnessLow)))
+                        .togetherWith(slideOutVertically { -it / 2 } + fadeOut(spring(stiffness = Spring.StiffnessLow)))
+                },
+                label = "StatTileValue"
+            ) { animatedValue ->
+                Text(
+                    animatedValue,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    maxLines = 1
+                )
+            }
         }
     }
 

@@ -1973,6 +1973,7 @@ fun LongTermStatsSection(
             LongTermSection(
                 title = "Heatmap",
                 accentColor = MaterialTheme.colorScheme.primary,
+                highlightColor = MaterialTheme.colorScheme.tertiary,
                 selectedRange = selectedRange,
                 onRangeSelected = viewModel::selectStatsRange,
                 rangeLabel = periodLabel,
