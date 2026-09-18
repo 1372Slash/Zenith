@@ -1,6 +1,7 @@
 package com.etrisad.zenith.ui.screens.settings.pausepoint
 
 import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.etrisad.zenith.BuildConfig
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.service.InterceptOverlayManager
@@ -70,6 +72,8 @@ fun PausePointTypeSettingsScreen(
                 onCloseApp = {},
                 onGoalDismiss = {}
             )
+        } else {
+            Toast.makeText(context, "Allow display over other apps to test", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -85,8 +89,10 @@ fun PausePointTypeSettingsScreen(
     ) {
         item {
             PausePointTypeHeader(taskType, variantCount = variants.size)
-            Spacer(modifier = Modifier.height(16.dp))
-            PausePointTestButton(onClick = launchTest)
+            if (BuildConfig.DEBUG) {
+                Spacer(modifier = Modifier.height(16.dp))
+                PausePointTestButton(onClick = launchTest)
+            }
             Spacer(modifier = Modifier.height(24.dp))
         }
 

@@ -31,15 +31,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.etrisad.zenith.BuildConfig
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.service.InterceptOverlayManager
 import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
 import com.etrisad.zenith.ui.components.qr.QrScanner
 import com.etrisad.zenith.ui.screens.settings.PreferenceCategory
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import com.google.accompanist.permissions.shouldShowRationale
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -52,8 +57,25 @@ fun PausePointQrSettingsScreen(
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val cameraPermissionState = rememberPermissionState(android.Manifest.permission.CAMERA)
-    var codes by remember { mutableStateOf(preferences.pausePointQrCodes) }
+    // Keyed on prefs so external changes (or returning from system Settings) resync.
+    var codes by remember(preferences.pausePointQrCodes) { mutableStateOf(preferences.pausePointQrCodes) }
     var justAdded by remember { mutableStateOf<String?>(null) }
+    var cameraAsked by remember { mutableStateOf(false) }
+    // Permanently denied = asked before + system will no longer show the dialog.
+    val cameraPermanentlyDenied = !cameraPermissionState.status.isGranted &&
+        !cameraPermissionState.status.shouldShowRationale && cameraAsked
+    val onCameraButtonClick: () -> Unit = {
+        if (cameraPermanentlyDenied) {
+            val intent = Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", context.packageName, null)
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        } else {
+            cameraAsked = true
+            cameraPermissionState.launchPermissionRequest()
+        }
+    }
 
     val addCode: (String) -> Unit = { raw ->
         val trimmed = raw.trim()
@@ -84,6 +106,8 @@ fun PausePointQrSettingsScreen(
                 onCloseApp = {},
                 onGoalDismiss = {}
             )
+        } else {
+            Toast.makeText(context, "Allow display over other apps to test", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -99,8 +123,10 @@ fun PausePointQrSettingsScreen(
     ) {
         item {
             QrTypeHeader(codeCount = codes.size)
-            Spacer(modifier = Modifier.height(16.dp))
-            PausePointTestButton(onClick = launchTest)
+            if (BuildConfig.DEBUG) {
+                Spacer(modifier = Modifier.height(16.dp))
+                PausePointTestButton(onClick = launchTest)
+            }
             Spacer(modifier = Modifier.height(24.dp))
         }
 
@@ -140,13 +166,16 @@ fun PausePointQrSettingsScreen(
                                 textAlign = TextAlign.Center
                             )
                             Text(
-                                text = "Grant camera access to scan QR codes.",
+                                text = if (cameraPermanentlyDenied)
+                                    "Camera access was denied. Enable it in system Settings to scan QR codes."
+                                else
+                                    "Grant camera access to scan QR codes.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
                             )
-                            Button(onClick = { cameraPermissionState.launchPermissionRequest() }) {
-                                Text("Grant Permission")
+                            Button(onClick = onCameraButtonClick) {
+                                Text(if (cameraPermanentlyDenied) "Open Settings" else "Grant Permission")
                             }
                         }
                     }

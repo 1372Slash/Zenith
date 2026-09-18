@@ -163,7 +163,7 @@ class PomodoroViewModel(
         viewModelScope.launch {
             val now = System.currentTimeMillis()
             val state = _uiState.value
-            if (!state.isSessionActive) return@launch
+            if (!state.isSessionActive || !state.pauseable) return@launch
             SharedMonitoringState.isPomodoroPaused = true
             SharedMonitoringState.pomodoroPauseTimestamp = now
             SharedMonitoringState.isPomodoroBlockingActive = false
@@ -283,31 +283,31 @@ class PomodoroViewModel(
 
     fun setSessionDurationMinutes(minutes: Int) {
         viewModelScope.launch {
-            userPreferencesRepository.setPomodoroSessionDurationMinutes(minutes)
+            userPreferencesRepository.setPomodoroSessionDurationMinutes(minutes.coerceIn(1, 180))
         }
     }
 
     fun setBreakDurationMinutes(minutes: Int) {
         viewModelScope.launch {
-            userPreferencesRepository.setPomodoroBreakDurationMinutes(minutes)
+            userPreferencesRepository.setPomodoroBreakDurationMinutes(minutes.coerceIn(1, 60))
         }
     }
 
     fun setLongBreakDurationMinutes(minutes: Int) {
         viewModelScope.launch {
-            userPreferencesRepository.setPomodoroLongBreakDurationMinutes(minutes)
+            userPreferencesRepository.setPomodoroLongBreakDurationMinutes(minutes.coerceIn(1, 90))
         }
     }
 
     fun setSessionCount(count: Int) {
         viewModelScope.launch {
-            userPreferencesRepository.setPomodoroSessionCount(count)
+            userPreferencesRepository.setPomodoroSessionCount(count.coerceIn(1, 12))
         }
     }
 
     fun setSessionsBeforeLongBreak(count: Int) {
         viewModelScope.launch {
-            userPreferencesRepository.setPomodoroSessionsBeforeLongBreak(count)
+            userPreferencesRepository.setPomodoroSessionsBeforeLongBreak(count.coerceIn(1, 12))
         }
     }
 

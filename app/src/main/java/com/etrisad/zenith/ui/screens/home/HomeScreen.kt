@@ -1,6 +1,5 @@
 package com.etrisad.zenith.ui.screens.home
 
-import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
@@ -1391,7 +1390,6 @@ fun QuickActionCard(
     onClick: (() -> Unit)? = null,
     content: @Composable (() -> Unit)? = null
 ) {
-    val context = LocalContext.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     val densityScale = 1f / density.density.pow(0.2f)
@@ -1420,11 +1418,7 @@ fun QuickActionCard(
                     indication = ripple(),
                     onClick = {
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        if (onClick != null) {
-                            onClick()
-                        } else {
-                            Toast.makeText(context, "Coming Soon", Toast.LENGTH_SHORT).show()
-                        }
+                        onClick?.invoke()
                     }
                 ),
             shape = CircleShape,

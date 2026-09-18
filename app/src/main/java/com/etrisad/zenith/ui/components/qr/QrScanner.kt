@@ -162,7 +162,7 @@ fun QrScanner(
             )
             if (bindError != null) {
                 Text(
-                    text = "Camera error: $bindError",
+                    text = "Camera unavailable right now, please try again",
                     color = MaterialTheme.colorScheme.error,
                     style = androidx.compose.ui.text.TextStyle(color = MaterialTheme.colorScheme.error)
                 )

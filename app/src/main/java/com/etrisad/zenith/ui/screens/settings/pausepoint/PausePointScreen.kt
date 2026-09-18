@@ -29,7 +29,6 @@ import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
 import com.etrisad.zenith.ui.screens.settings.PreferenceCategory
-import com.etrisad.zenith.ui.screens.settings.SettingsToggle
 import kotlinx.coroutines.launch
 
 @Composable
@@ -69,27 +68,16 @@ fun PausePointScreen(
                 coroutineScope.launch { preferencesRepository.setPausePointTaskTypes(updated) }
             }
 
-            if (taskType == PausePointTaskType.CHOOSE_APP) {
-                SettingsToggle(
-                    title = taskType.displayName,
-                    description = taskType.description,
-                    checked = checked,
-                    onCheckedChange = onCheckedChange,
-                    icon = taskType.icon,
-                    shape = shape
-                )
-            } else {
-                SettingsToggleWithNavigation(
-                    title = taskType.displayName,
-                    description = taskType.description,
-                    summary = pausePointSummary(taskType, preferences),
-                    checked = checked,
-                    onCheckedChange = onCheckedChange,
-                    icon = taskType.icon,
-                    shape = shape,
-                    onClick = { onTaskTypeClick(taskType) }
-                )
-            }
+            SettingsToggleWithNavigation(
+                title = taskType.displayName,
+                description = taskType.description,
+                summary = pausePointSummary(taskType, preferences),
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                icon = taskType.icon,
+                shape = shape,
+                onClick = { onTaskTypeClick(taskType) }
+            )
             if (index != PausePointTaskType.entries.lastIndex) {
                 Spacer(modifier = Modifier.height(4.dp))
             }

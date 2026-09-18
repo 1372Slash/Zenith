@@ -921,9 +921,14 @@ class OverlayActionHandler(
         scope.launch(Dispatchers.Main) {
             val shield = SharedMonitoringState.allShieldsCache[packageName]
             val now = System.currentTimeMillis()
+            // Volatile is lost on process death: fall back to the persisted value.
+            val cooldownUntil = SharedMonitoringState.pomodoroNextBreakAllowedTimestamp
+                .takeIf { it > 0L }
+                ?: SharedMonitoringState.currentPreferences?.pomodoroNextBreakAllowedTimestamp
+                ?: 0L
             val inCooldown = shield == null && !isBlocked &&
-                SharedMonitoringState.pomodoroNextBreakAllowedTimestamp > 0L &&
-                now < SharedMonitoringState.pomodoroNextBreakAllowedTimestamp
+                cooldownUntil > 0L &&
+                now < cooldownUntil
 
             val afterType = when {
                 isBlocked || inCooldown -> PomodoroAfterType.BLOCKED
@@ -943,8 +948,10 @@ class OverlayActionHandler(
                     val breakEnd = System.currentTimeMillis() + (breakDuration * 60 * 1000L)
                     scope.launch {
                         preferencesRepository.setPomodoroBreakEndTimestamp(breakEnd)
+                        val cooldownUntil = breakEnd + (SharedMonitoringState.POMODORO_BREAK_COOLDOWN_MINUTES * 60 * 1000L)
+                        preferencesRepository.setPomodoroNextBreakAllowedTimestamp(cooldownUntil)
                         SharedMonitoringState.isPomodoroBreakActive = true
-                        SharedMonitoringState.pomodoroNextBreakAllowedTimestamp = breakEnd + (SharedMonitoringState.POMODORO_BREAK_COOLDOWN_MINUTES * 60 * 1000L)
+                        SharedMonitoringState.pomodoroNextBreakAllowedTimestamp = cooldownUntil
                     }
                 }
             }
@@ -1056,10 +1063,13 @@ class OverlayActionHandler(
                 }
 
                 if (isInInterval) {
+                    val originalSchedule = SharedMonitoringState.activeSchedules.find { it.id == ps.id } ?: return false
+                    // Goal-linked schedules only fire while the linked goal is still
+                    // incomplete; once complete the schedule is bypassed (allowed).
+                    if (!shouldFireSchedule(originalSchedule)) continue
                     when (ps.mode) {
                         ScheduleMode.BLOCK -> {
                             if (packageName in ps.packageNames) {
-                                val originalSchedule = SharedMonitoringState.activeSchedules.find { it.id == ps.id } ?: return false
                                 val totalGlobalUsageToday = getTotalGlobalUsageToday()
                                 showScheduleOverlay(packageName, originalSchedule, totalGlobalUsageToday, updateShieldCache, recheckSchedules)
                                 return true
@@ -1067,7 +1077,6 @@ class OverlayActionHandler(
                         }
                         ScheduleMode.ALLOW -> {
                             if (packageName !in ps.packageNames) {
-                                val originalSchedule = SharedMonitoringState.activeSchedules.find { it.id == ps.id } ?: return false
                                 val totalGlobalUsageToday = getTotalGlobalUsageToday()
                                 showScheduleOverlay(packageName, originalSchedule, totalGlobalUsageToday, updateShieldCache, recheckSchedules)
                                 return true
@@ -1078,5 +1087,22 @@ class OverlayActionHandler(
             }
         }
         return false
+    }
+
+    /**
+     * Goal-pursuit gate for schedules. Mirrors the overlay's Goal-Locked display
+     * (ScheduleOverlay shows locked while progress < 1): a linked schedule fires
+     * (stays blocked) only while its goal is incomplete. Missing goal, zero target,
+     * or completed goal all bypass the schedule. Uses the synchronous monitor
+     * caches so this stays callable from the non-suspend check path.
+     */
+    private fun shouldFireSchedule(schedule: ScheduleEntity): Boolean {
+        val goalPkg = schedule.linkedGoalPackageName ?: return true
+        val goal = SharedMonitoringState.allShieldsCache[goalPkg]
+            ?.takeIf { it.type == FocusType.GOAL } ?: return true
+        val target = goal.timeLimitMinutes * 60000L
+        if (target <= 0L) return true
+        val usage = SharedMonitoringState.dailyUsageCache[goalPkg] ?: 0L
+        return usage < target
     }
 }

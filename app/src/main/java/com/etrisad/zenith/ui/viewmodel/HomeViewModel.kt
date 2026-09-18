@@ -113,7 +113,6 @@ data class HomeUiState(
 )
 
 enum class StatsRange(val days: Int, val label: String) {
-    WEEKLY(7, "Weekly"),
     MONTHLY(30, "Monthly"),
     YEARLY(365, "Yearly")
 }
@@ -168,16 +167,6 @@ class HomeViewModel(
     fun getPeriodLabel(range: StatsRange, offset: Int): String {
         val cal = java.util.Calendar.getInstance()
         return when (range) {
-            StatsRange.WEEKLY -> {
-                cal.firstDayOfWeek = java.util.Calendar.MONDAY
-                cal.set(java.util.Calendar.DAY_OF_WEEK, java.util.Calendar.MONDAY)
-                cal.add(java.util.Calendar.WEEK_OF_YEAR, -offset)
-                val start = cal.time
-                cal.add(java.util.Calendar.DAY_OF_YEAR, 6)
-                val end = cal.time
-                val fmt = java.text.SimpleDateFormat("d MMM", java.util.Locale.getDefault())
-                if (offset == 0) "This week" else "${fmt.format(start)} - ${fmt.format(end)}"
-            }
             StatsRange.MONTHLY -> {
                 cal.set(java.util.Calendar.DAY_OF_MONTH, 1)
                 cal.add(java.util.Calendar.MONTH, -offset)
@@ -197,15 +186,6 @@ class HomeViewModel(
         val cal = java.util.Calendar.getInstance()
         val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
         return when (range) {
-            StatsRange.WEEKLY -> {
-                cal.firstDayOfWeek = java.util.Calendar.MONDAY
-                cal.set(java.util.Calendar.DAY_OF_WEEK, java.util.Calendar.MONDAY)
-                cal.add(java.util.Calendar.WEEK_OF_YEAR, -offset)
-                val start = fmt.format(cal.time)
-                cal.add(java.util.Calendar.DAY_OF_YEAR, 6)
-                val end = fmt.format(cal.time)
-                start to end
-            }
             StatsRange.MONTHLY -> {
                 cal.set(java.util.Calendar.DAY_OF_MONTH, 1)
                 cal.add(java.util.Calendar.MONTH, -offset)

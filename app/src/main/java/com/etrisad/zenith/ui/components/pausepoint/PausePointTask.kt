@@ -194,10 +194,13 @@ object PausePointEngine {
         goalPackageNames: Set<String> = emptySet(),
         goalAppNames: Map<String, String> = emptyMap(),
         qrCodes: List<String> = emptyList(),
-        config: PausePointConfig = PausePointConfig()
+        config: PausePointConfig = PausePointConfig(),
+        cameraGranted: Boolean = true
     ): PausePointTask {
+        // QR tasks are only completable with camera access: without it the user
+        // would be stuck with Close as the only way out.
         val filteredTypes = enabledTypes
-            .filter { it != PausePointTaskType.QR_SCAN || qrCodes.isNotEmpty() }
+            .filter { it != PausePointTaskType.QR_SCAN || (qrCodes.isNotEmpty() && cameraGranted) }
             .toList()
         if (filteredTypes.isEmpty()) return PausePointTask.Waiting()
 

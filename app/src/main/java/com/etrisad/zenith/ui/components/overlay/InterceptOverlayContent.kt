@@ -1,6 +1,8 @@
 package com.etrisad.zenith.ui.components.overlay
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -18,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -43,6 +46,10 @@ import kotlin.random.Random
 private const val CONTENT_A = "pausePoint"
 private const val CONTENT_B = "actualContent"
 private const val CONTENT_C = "pausePointTestResult"
+
+/** One-shot camera check for task generation: overlays cannot request permissions. */
+private fun android.content.Context.isCameraGranted(): Boolean =
+    ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
 @Composable
 fun InterceptOverlayContent(
@@ -121,7 +128,8 @@ fun InterceptOverlayContent(
                     goalPackageNames = goals.map { it.packageName }.toSet(),
                     goalAppNames = goals.associate { it.packageName to it.appName },
                     qrCodes = userPrefs.pausePointQrCodes,
-                    config = userPrefs.pausePointConfig
+                    config = userPrefs.pausePointConfig,
+                    cameraGranted = context.isCameraGranted()
                 )
             }
         }
@@ -313,7 +321,8 @@ fun ScheduleOverlayContent(
                 goalPackageNames = goals.map { it.packageName }.toSet(),
                 goalAppNames = goals.associate { it.packageName to it.appName },
                 qrCodes = userPrefs.pausePointQrCodes,
-                config = userPrefs.pausePointConfig
+                config = userPrefs.pausePointConfig,
+                cameraGranted = context.isCameraGranted()
             )
         }
     }

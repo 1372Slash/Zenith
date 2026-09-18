@@ -2,6 +2,9 @@ package com.etrisad.zenith.ui.screens.pomodoro
 
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -38,6 +41,8 @@ import com.etrisad.zenith.ui.components.focus.CardGroup
 import com.etrisad.zenith.ui.components.focus.MultiAppIconGroup
 import com.etrisad.zenith.ui.components.focus.PreferenceCategory
 import com.etrisad.zenith.ui.components.ZenithToggleButtonGroup
+import com.etrisad.zenith.util.isAccessibilityServiceEnabled
+import com.etrisad.zenith.util.isNotificationListenerEnabled
 import com.etrisad.zenith.ui.components.ZenithToggleOption
 import com.etrisad.zenith.ui.components.focus.MultiAppPickerBottomSheet
 import com.etrisad.zenith.ui.components.focus.SettingsToggle
@@ -64,6 +69,38 @@ fun PomodoroScreen(
     var showPresetSaveSheet by remember { mutableStateOf(false) }
     var showPresetApplySheet by remember { mutableStateOf(false) }
     var presetNameInput by remember { mutableStateOf("") }
+    var pendingDeletePreset by remember { mutableStateOf<String?>(null) }
+
+    val pomoContext = LocalContext.current
+    // Blocking needs overlay + detection + notification access. Without them a
+    // session would start but silently fail to block, so gate Start here with
+    // the same Toast + system-settings pattern used elsewhere in the app.
+    fun startWithPreflight() {
+        when {
+            !Settings.canDrawOverlays(pomoContext) -> {
+                Toast.makeText(pomoContext, "Display over other apps is required for blocking", Toast.LENGTH_LONG).show()
+                pomoContext.startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.fromParts("package", pomoContext.packageName, null)
+                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
+            !isAccessibilityServiceEnabled(pomoContext) -> {
+                Toast.makeText(pomoContext, "Accessibility service is required to detect apps", Toast.LENGTH_LONG).show()
+                pomoContext.startActivity(
+                    Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
+            !isNotificationListenerEnabled(pomoContext) -> {
+                Toast.makeText(pomoContext, "Notification access is required to block notifications", Toast.LENGTH_LONG).show()
+                pomoContext.startActivity(
+                    Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
+            else -> viewModel.startSession()
+        }
+    }
 
     val containerColor by animateColorAsState(
         targetValue = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -130,7 +167,7 @@ fun PomodoroScreen(
                         onMaxSelectionChange = { viewModel.setMaxSelection(it) },
                         onSavePreset = { presetNameInput = ""; showPresetSaveSheet = true },
                         onApplyPreset = { showPresetApplySheet = true },
-                        onDeletePreset = { viewModel.deletePreset(it) },
+                        onDeletePreset = { pendingDeletePreset = it },
                         onApplyPresetPackages = { viewModel.applyPreset(it) },
                         containerColor = containerColor,
                         viewModel = viewModel
@@ -156,7 +193,7 @@ fun PomodoroScreen(
         ) {
             if (!uiState.isSessionActive) {
                 ZenithButton(
-                    onClick = { viewModel.startSession() },
+                    onClick = { startWithPreflight() },
                     text = "Start Focus",
                     icon = Icons.Outlined.PlayArrow,
                     size = ZenithButtonSize.ExtraLarge,
@@ -164,19 +201,21 @@ fun PomodoroScreen(
                 )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ZenithButton(
-                        onClick = {
-                            if (uiState.isPaused) viewModel.resumeSession()
-                            else viewModel.pauseSession()
-                        },
-                        text = if (uiState.isPaused) "Resume Session" else "Pause Session",
-                        icon = if (uiState.isPaused) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
-                        type = if (uiState.isPaused) ZenithButtonType.Filled else ZenithButtonType.Outlined,
-                        containerColor = if (uiState.isPaused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = if (uiState.isPaused) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onTertiaryContainer,
-                        size = ZenithButtonSize.Large,
-                        fillMaxWidth = true
-                    )
+                    if (uiState.pauseable) {
+                        ZenithButton(
+                            onClick = {
+                                if (uiState.isPaused) viewModel.resumeSession()
+                                else viewModel.pauseSession()
+                            },
+                            text = if (uiState.isPaused) "Resume Session" else "Pause Session",
+                            icon = if (uiState.isPaused) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
+                            type = if (uiState.isPaused) ZenithButtonType.Filled else ZenithButtonType.Outlined,
+                            containerColor = if (uiState.isPaused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = if (uiState.isPaused) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onTertiaryContainer,
+                            size = ZenithButtonSize.Large,
+                            fillMaxWidth = true
+                        )
+                    }
 
                     if (uiState.isBreakActive) {
                         ZenithButton(
@@ -267,6 +306,18 @@ fun PomodoroScreen(
             },
             leverCount = 10,
             puzzleTimeoutSeconds = 10,
+            showTimeSelection = false
+        )
+    }
+
+    if (pendingDeletePreset != null) {
+        ConfirmBottomSheet(
+            onDismiss = { pendingDeletePreset = null },
+            onConfirm = {
+                pendingDeletePreset?.let { viewModel.deletePreset(it) }
+                pendingDeletePreset = null
+            },
+            leverCount = 3,
             showTimeSelection = false
         )
     }
