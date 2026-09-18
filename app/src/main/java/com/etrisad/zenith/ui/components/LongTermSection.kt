@@ -474,17 +474,6 @@ fun LongTermSection(
                             }
                         }
                     }
-                    val patternNote = remember(dayMap, periodDays) { weekendPatternOf(dayMap, periodDays) }
-                    if (patternNote != null) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            patternNote,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
                     if (dataNote != null) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
@@ -961,30 +950,4 @@ private fun formatShortDuration(millis: Long): String = when {
 }
 
 
-private fun weekendPatternOf(dayMap: Map<Long, com.etrisad.zenith.ui.viewmodel.DailyUsage>, periodDays: List<Long>): String? {
-    if (periodDays.size < 14) return null
-    val cal = java.util.Calendar.getInstance()
-    var weekendSum = 0L
-    var weekendN = 0
-    var weekdaySum = 0L
-    var weekdayN = 0
-    for (d in periodDays) {
-        cal.timeInMillis = d
-        val weekend = cal.get(java.util.Calendar.DAY_OF_WEEK).let { it == java.util.Calendar.SATURDAY || it == java.util.Calendar.SUNDAY }
-        val v = dayMap[d]?.totalTime ?: 0L
-        if (weekend) { weekendSum += v; weekendN++ } else { weekdaySum += v; weekdayN++ }
-    }
-    if (weekendN == 0 || weekdayN == 0) return null
-    val we = weekendSum.toDouble() / weekendN
-    val wd = weekdaySum.toDouble() / weekdayN
-    if (we == 0.0 && wd == 0.0) return null
-    if (wd == 0.0) return "Only used on weekends"
-    if (we == 0.0) return "Only used on weekdays"
-    fun ratio(r: Double): String = String.format(java.util.Locale.ENGLISH, "%.1f", r)
-    return when {
-        we > wd * 1.3 -> "Weekends ${ratio(we / wd)}x higher"
-        wd > we * 1.3 -> "Weekdays ${ratio(wd / we)}x higher"
-        else -> null
-    }
-}
 
