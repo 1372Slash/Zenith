@@ -117,7 +117,8 @@ fun PausePointTypeSettingsScreen(
                 } else {
                     itemsIndexed(
                         items = variants,
-                        key = { _, variant -> variant.composesKey() }
+                        key = { _, variant -> variant.
+                        composesKey() }
                     ) { index, variant ->
                         PausePointVariantCard(
                             index = index,
