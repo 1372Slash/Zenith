@@ -136,7 +136,7 @@ fun UsageHistoryCard(
 /**
  * Material 3 Expressive week stepper used as the paging indicator for
  * unbounded history: a tonal connected pill holding previous/next steppers
- * around the visible date range. Geometry is fixed — nothing shifts when a
+ * around the visible date range. Geometry is fixed - nothing shifts when a
  * stepper hides at an edge or the loader takes the hidden slot.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -150,7 +150,7 @@ fun WeekStepperIndicator(
     onNext: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Alpha follows visibility only — never the loader — so background loads
+    // Alpha follows visibility only - never the loader - so background loads
     // can't make a visible chevron blink. `enabled` flips past ~transparent
     // (hysteresis) so M3 disabled colors never snap mid-fade.
     val prevAlpha by animateFloatAsState(

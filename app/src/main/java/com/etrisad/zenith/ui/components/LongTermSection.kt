@@ -112,8 +112,8 @@ fun LongTermSection(
     }
     val periodStatTotals = remember(dayMap, periodDays) { periodDays.map { dayMap[it]?.totalTime ?: 0L } }
     val weekStatTotals = remember(selectedWeek, dayMap) { selectedWeek?.map { dayMap[it]?.totalTime ?: 0L } ?: emptyList() }
-    val eeFmt = remember { java.text.SimpleDateFormat("EEE", java.util.Locale.getDefault()) }
-    val dayDateFmt = remember { java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.getDefault()) }
+    val eeFmt = remember { java.text.SimpleDateFormat("EEE", java.util.Locale.ENGLISH) }
+    val dayDateFmt = remember { java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.ENGLISH) }
 
     val selectedWeekValue = selectedWeek
     // Header total follows the week selection; otherwise the period total.
@@ -194,7 +194,7 @@ fun LongTermSection(
                     caption = "Best day",
                     value = if (bestVal > 0L && bestMillis != null) {
                         "${eeFmt.format(java.util.Date(bestMillis))} ${formatShortDuration(bestVal)}"
-                    } else "â€“",
+                    } else "-",
                     index = 1,
                     total = 4,
                     modifier = Modifier.weight(1f),
@@ -214,7 +214,7 @@ fun LongTermSection(
                 )
                 StatTile(
                     caption = "Active",
-                    value = if (totals.isEmpty()) "â€“" else "${totals.count { it > 0L }}/${totals.size}",
+                    value = if (totals.isEmpty()) "-" else "${totals.count { it > 0L }}/${totals.size}",
                     index = 2,
                     total = 4,
                     modifier = Modifier.weight(1f)
@@ -223,8 +223,8 @@ fun LongTermSection(
                     caption = "vs last",
                     value = deltaPct?.let {
                         val r = Math.round(it * 100)
-                        if (r > 0) "+$r%" else if (r < 0) "âˆ’$r%" else "0%"
-                    } ?: "â€“",
+                        if (r > 0) "+$r%" else if (r < 0) "-$r%" else "0%"
+                    } ?: "-",
                     index = 3,
                     total = 4,
                     modifier = Modifier.weight(1f)
@@ -363,7 +363,7 @@ fun LongTermSection(
                                                                 // Same-week taps only move the ring: the week's
                                                                 // list is already showing, so skip the reload
                                                                 // (the loader effect only restarts on week
-                                                                // change â€” reloading here would spin forever).
+                                                                // change - reloading here would spin forever).
                                                                 val newWeek = weekByDay[millis]
                                                                 if (newWeek != selectedWeek) {
                                                                     selectedWeek = newWeek
@@ -487,7 +487,7 @@ fun LongTermSection(
                                 Spacer(modifier = Modifier.height(12.dp))
                                 if (dayAppLoader != null) {
                                     Text(
-                                        "Apps Â· " + com.etrisad.zenith.util.DateTimeUtils.formatDateRange(week.first(), week.last()),
+                                        "Apps - " + com.etrisad.zenith.util.DateTimeUtils.formatDateRange(week.first(), week.last()),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -510,7 +510,7 @@ fun LongTermSection(
                                                 color = accentColor
                                             )
                                             Text(
-                                                "Â· ${formatDuration(weekStatTotals.sum())} minggu ini",
+                                                "- ${formatDuration(weekStatTotals.sum())} this week",
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 modifier = Modifier.padding(start = 8.dp, bottom = 2.dp)
@@ -663,7 +663,7 @@ private data class CalWeek(val days: List<Long?>, val monthLabel: String?)
 /** Monday-first week columns for the calendar heatmap, padded with nulls. */
 private fun buildCalWeeks(days: List<Long>, monthPattern: String = "MMM yyyy"): List<CalWeek> {
     if (days.isEmpty()) return emptyList()
-    val monthFmt = java.text.SimpleDateFormat(monthPattern, java.util.Locale.getDefault())
+    val monthFmt = java.text.SimpleDateFormat(monthPattern, java.util.Locale.ENGLISH)
     val cal = java.util.Calendar.getInstance()
     fun mondayBasedDow(millis: Long): Int {
         cal.timeInMillis = millis
@@ -861,7 +861,7 @@ private fun formatShortDuration(millis: Long): String = when {
     millis <= 0L -> "0"
     millis >= 3600000L -> {
         val hours = millis.toFloat() / 3600000f
-        if (hours % 1f == 0f) "${hours.toInt()}h" else String.format(java.util.Locale.getDefault(), "%.1fh", hours)
+        if (hours % 1f == 0f) "${hours.toInt()}h" else String.format(java.util.Locale.ENGLISH, "%.1fh", hours)
     }
     else -> "${millis / 60000L}m"
 }
@@ -884,10 +884,12 @@ private fun weekendPatternOf(dayMap: Map<Long, com.etrisad.zenith.ui.viewmodel.D
     val we = weekendSum.toDouble() / weekendN
     val wd = weekdaySum.toDouble() / weekdayN
     if (we == 0.0 && wd == 0.0) return null
-    fun ratio(r: Double): String = String.format(java.util.Locale.getDefault(), "%.1f", r)
+    if (wd == 0.0) return "Only used on weekends"
+    if (we == 0.0) return "Only used on weekdays"
+    fun ratio(r: Double): String = String.format(java.util.Locale.ENGLISH, "%.1f", r)
     return when {
-        we > wd * 1.3 -> "Akhir pekan ${ratio(we / wd)}Ã— lebih tinggi"
-        wd > we * 1.3 -> "Hari kerja ${ratio(wd / we)}Ã— lebih tinggi"
+        we > wd * 1.3 -> "Weekends ${ratio(we / wd)}x higher"
+        wd > we * 1.3 -> "Weekdays ${ratio(wd / we)}x higher"
         else -> null
     }
 }

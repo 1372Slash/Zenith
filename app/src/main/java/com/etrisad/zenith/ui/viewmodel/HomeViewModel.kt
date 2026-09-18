@@ -279,11 +279,11 @@ class HomeViewModel(
     fun dataStartNoteFor(periodDays: List<Long>): String? {
         val earliest = earliestDataDate.value ?: return null
         if (periodDays.isEmpty()) return null
-        val keyFmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        val keyFmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ENGLISH)
         if (keyFmt.format(java.util.Date(periodDays.first())) < earliest) {
             val parsed = try { keyFmt.parse(earliest) } catch (_: Exception) { null } ?: return null
-            val pretty = java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.getDefault())
-            return "Data tersedia sejak ${pretty.format(parsed)}"
+            val pretty = java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.ENGLISH)
+            return "Data available since ${pretty.format(parsed)}"
         }
         return null
     }
