@@ -118,6 +118,10 @@ class ShieldRepository(
         return dailyUsageDao.getUsageBetween(startDate, endDate)
     }
 
+    suspend fun getEarliestDataDate(): String? {
+        return dailyUsageDao.getEarliestDate()
+    }
+
     fun getHourlyUsageForDate(date: String): Flow<List<HourlyUsageEntity>> {
         return hourlyUsageDao.getHourlyUsageForDate(date)
     }

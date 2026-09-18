@@ -130,7 +130,7 @@ class HomeViewModel(
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    private val _selectedStatsRange = MutableStateFlow(StatsRange.WEEKLY)
+    private val _selectedStatsRange = MutableStateFlow(StatsRange.MONTHLY)
     val selectedStatsRange: StateFlow<StatsRange> = _selectedStatsRange.asStateFlow()
 
     private val _selectedPeriodOffset = MutableStateFlow(0)
@@ -143,7 +143,7 @@ class HomeViewModel(
     fun prevPeriod() { _selectedPeriodOffset.value = _selectedPeriodOffset.value + 1 }
     fun nextPeriod() { if (_selectedPeriodOffset.value > 0) _selectedPeriodOffset.value = _selectedPeriodOffset.value - 1 }
 
-    private val _perAppStatsRange = MutableStateFlow(StatsRange.WEEKLY)
+    private val _perAppStatsRange = MutableStateFlow(StatsRange.MONTHLY)
     val perAppStatsRange: StateFlow<StatsRange> = _perAppStatsRange.asStateFlow()
     private val _perAppPeriodOffset = MutableStateFlow(0)
     val perAppPeriodOffset: StateFlow<Int> = _perAppPeriodOffset.asStateFlow()
@@ -226,8 +226,66 @@ class HomeViewModel(
         }
     }
 
+    /**
+     * Every calendar day (00:00 millis) covered by a long-term period, oldest
+     * first, with no upper bound — backs the calendar heatmap grid.
+     */
+    fun getPeriodDayMillis(range: StatsRange, offset: Int): List<Long> {
+        val (startStr, endStr) = getDateRangeForPeriod(range, offset)
+        val parser = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        val startDate = try { parser.parse(startStr) } catch (_: Exception) { null } ?: return emptyList()
+        val endDate = try { parser.parse(endStr) } catch (_: Exception) { null } ?: return emptyList()
+        if (endDate.before(startDate)) return emptyList()
+        val cal = java.util.Calendar.getInstance().apply {
+            time = startDate
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val endCal = java.util.Calendar.getInstance().apply {
+            time = endDate
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        return buildList {
+            while (!cal.time.after(endCal.time)) {
+                add(cal.timeInMillis)
+                cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+            }
+        }
+    }
+
     fun getLongTermAppUsage(range: StatsRange): Flow<List<AppUsageInfo>> {
         return getLongTermAppUsage(range, 0)
+    }
+
+    /** Period total reusing the long-term aggregation (for prev-period delta). */
+    fun getLongTermTotal(range: StatsRange, offset: Int): Flow<Long> {
+        return getLongTermAppUsage(range, offset).map { list -> list.sumOf { it.totalTimeVisible } }
+    }
+
+    /** Earliest stored daily_usage date (yyyy-MM-dd), for the data-span note. */
+    val earliestDataDate: StateFlow<String?> = flow {
+        emit(shieldRepository.getEarliestDataDate())
+    }.flowOn(Dispatchers.IO).stateIn(viewModelScope, SharingStarted.Lazily, null)
+
+    /**
+     * Explains sparse history: when the viewed period starts before any stored
+     * data, tell the user since when data actually exists.
+     */
+    fun dataStartNoteFor(periodDays: List<Long>): String? {
+        val earliest = earliestDataDate.value ?: return null
+        if (periodDays.isEmpty()) return null
+        val keyFmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        if (keyFmt.format(java.util.Date(periodDays.first())) < earliest) {
+            val parsed = try { keyFmt.parse(earliest) } catch (_: Exception) { null } ?: return null
+            val pretty = java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.getDefault())
+            return "Data tersedia sejak ${pretty.format(parsed)}"
+        }
+        return null
     }
 
     fun getLongTermAppUsage(range: StatsRange, offset: Int): Flow<List<AppUsageInfo>> {
@@ -270,28 +328,6 @@ class HomeViewModel(
         }.flowOn(Dispatchers.Default)
     }
 
-    fun getWeekdayBreakdown(range: StatsRange, offset: Int): Flow<List<Pair<String, Long>>> {
-        val (startDate, endDate) = getDateRangeForPeriod(range, offset)
-        return shieldRepository.getUsageBetween(startDate, endDate).map { entities ->
-            val filtered = entities.filter { it.date in startDate..endDate && it.packageName !in setOf("TOTAL","SHIELD_TOTAL","GOAL_TOTAL","OTHER_TOTAL") }
-            val map = mutableMapOf<Int, Long>()
-            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-            for (e in filtered) {
-                try {
-                    val d = fmt.parse(e.date) ?: continue
-                    val cal = java.util.Calendar.getInstance().apply { time = d }
-                    val dow = cal.get(java.util.Calendar.DAY_OF_WEEK)
-                    val key = if (dow == 1) 7 else dow - 1
-                    map[key] = (map[key] ?: 0L) + e.usageTimeMillis
-                } catch (_: Exception) {}
-            }
-            (1..7).map { day ->
-                val label = when(day) { 1->"Mon";2->"Tue";3->"Wed";4->"Thu";5->"Fri";6->"Sat"; else->"Sun" }
-                label to (map[day] ?: 0L)
-            }
-        }.flowOn(Dispatchers.Default)
-    }
-
     fun getPerAppDailyHistory(packageName: String, range: StatsRange, offset: Int): Flow<List<DailyUsage>> {
         val (startDate, endDate) = getDateRangeForPeriod(range, offset)
         return shieldRepository.getUsageBetween(startDate, endDate).map { entities ->
@@ -301,28 +337,6 @@ class HomeViewModel(
                 val total = list.sumOf { it.usageTimeMillis }
                 val millis = try { fmt.parse(dateStr)?.time ?: 0L } catch (_: Exception) { 0L }
                 DailyUsage(date = millis, totalTime = total, hasDatabaseRecord = true, hasSystemData = false, isLive = false)
-            }
-        }.flowOn(Dispatchers.Default)
-    }
-
-    fun getPerAppWeekdayBreakdown(packageName: String, range: StatsRange, offset: Int): Flow<List<Pair<String, Long>>> {
-        val (startDate, endDate) = getDateRangeForPeriod(range, offset)
-        return shieldRepository.getUsageBetween(startDate, endDate).map { entities ->
-            val filtered = entities.filter { it.date in startDate..endDate && it.packageName == packageName }
-            val map = mutableMapOf<Int, Long>()
-            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-            for (e in filtered) {
-                try {
-                    val d = fmt.parse(e.date) ?: continue
-                    val cal = java.util.Calendar.getInstance().apply { time = d }
-                    val dow = cal.get(java.util.Calendar.DAY_OF_WEEK)
-                    val key = if (dow == 1) 7 else dow - 1
-                    map[key] = (map[key] ?: 0L) + e.usageTimeMillis
-                } catch (_: Exception) {}
-            }
-            (1..7).map { day ->
-                val label = when(day) { 1->"Mon";2->"Tue";3->"Wed";4->"Thu";5->"Fri";6->"Sat"; else->"Sun" }
-                label to (map[day] ?: 0L)
             }
         }.flowOn(Dispatchers.Default)
     }
@@ -1774,6 +1788,25 @@ class HomeViewModel(
      * Offsets 0..2 are served from the live in-memory 21-day window; older offsets
      * aggregate the weekly average and top apps from unlimited daily_usage retention.
      */
+    /**
+     * Per-app breakdown of a single day for the heatmap detail panel.
+     * Source of truth is unlimited daily_usage retention, plus website rows.
+     */
+    suspend fun getDayAppBreakdown(dateMillis: Long): List<AppUsageInfo> = withContext(Dispatchers.IO) {
+        val dateStr = usageHistoryManager.getDateFormat().format(Date(dateMillis))
+        val apps = shieldRepository.getDailyUsagesForDateSync(dateStr)
+            .filter { it.packageName !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL") }
+            .map { AppUsageInfo(it.packageName, appDisplayName(it.packageName), it.usageTimeMillis) }
+        val websites = try {
+            shieldRepository.getWebsiteUsageListForDate(dateStr).map {
+                val pkg = com.etrisad.zenith.data.website.WebsiteRepository.createPackageName(it.domain)
+                val label = com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(it.domain, "https://${it.domain}")
+                AppUsageInfo(pkg, label, it.usageTimeMillis)
+            }
+        } catch (_: Exception) { emptyList() }
+        (apps + websites).sortedByDescending { it.totalTimeVisible }
+    }
+
     fun onVisibleWeekChanged(chunkOffset: Int) {
         viewModelScope.launch {
             val history = _uiState.value.dailyUsageHistory

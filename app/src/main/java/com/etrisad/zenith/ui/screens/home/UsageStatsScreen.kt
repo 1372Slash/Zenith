@@ -53,6 +53,7 @@ import coil.request.ImageRequest
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.ui.components.SnapshotSection
 import com.etrisad.zenith.ui.components.UsageHistoryCard
+import com.etrisad.zenith.ui.components.LongTermSection
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithContainedLoadingIndicator
 import com.etrisad.zenith.ui.components.ZenithToggleButtonGroup
@@ -654,7 +655,16 @@ fun UsageStatsScreen(
         }
 
         item(key = "long_term_stats") {
-            LongTermStatsSection(viewModel = viewModel, onAppClick = onAppClick)
+            LongTermStatsSection(
+                viewModel = viewModel,
+                onAppClick = onAppClick,
+                getAppType = { pkg ->
+                    when {
+                        pkg.startsWith("zenith-web:") -> "WEBSITE"
+                        else -> appTypes[pkg]
+                    }
+                }
+            )
         }
 
         item(key = "insight_efficiency") {
@@ -1935,206 +1945,55 @@ fun WeeklyStatsDoubleCard(
 @Composable
 fun LongTermStatsSection(
     viewModel: HomeViewModel,
-    onAppClick: (String) -> Unit
+    onAppClick: (String) -> Unit,
+    getAppType: (String) -> String? = { null }
 ) {
     val selectedRange by viewModel.selectedStatsRange.collectAsState()
     val offset by viewModel.selectedPeriodOffset.collectAsState()
-    val longTermUsage by viewModel.getLongTermAppUsage(selectedRange, offset).collectAsState(initial = emptyList())
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    val longTermUsageFlow = remember(selectedRange, offset) {
+        viewModel.getLongTermAppUsage(selectedRange, offset)
+    }
+    val longTermUsage by longTermUsageFlow.collectAsState(initial = emptyList())
     val totalPeriod = remember(longTermUsage) { longTermUsage.sumOf { it.totalTimeVisible } }
-    val displayList = remember(longTermUsage, expanded) { if (expanded) longTermUsage else longTermUsage.take(5) }
+    val prevTotalFlow = remember(selectedRange, offset) {
+        viewModel.getLongTermTotal(selectedRange, offset + 1)
+    }
+    val prevTotal by prevTotalFlow.collectAsState(initial = 0L)
     val periodLabel = remember(selectedRange, offset) { viewModel.getPeriodRangeLabel(selectedRange, offset) }
+    val periodDays = remember(selectedRange, offset) { viewModel.getPeriodDayMillis(selectedRange, offset) }
+    val earliestTick by viewModel.earliestDataDate.collectAsState()
+    val dataNote = remember(earliestTick, periodDays) { viewModel.dataStartNoteFor(periodDays) }
+    val longTermHistoryFlow = remember(selectedRange, offset) {
+        viewModel.getLongTermDailyHistory(selectedRange, offset)
+    }
+    val dailyHistory by longTermHistoryFlow.collectAsState(initial = emptyList())
 
     Column {
         GroupedCard(index = 2, total = 5, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Outlined.TrackChanges, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Long-term Summary", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    Text(viewModel.formatLongDuration(totalPeriod), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                ZenithToggleButtonGroup(
-                    options = listOf(
-                        ZenithToggleOption(text = "Weekly"),
-                        ZenithToggleOption(text = "Monthly"),
-                        ZenithToggleOption(text = "Yearly")
-                    ),
-                    selectedIndices = setOf(
-                        when (selectedRange) {
-                            com.etrisad.zenith.ui.viewmodel.StatsRange.WEEKLY -> 0
-                            com.etrisad.zenith.ui.viewmodel.StatsRange.MONTHLY -> 1
-                            com.etrisad.zenith.ui.viewmodel.StatsRange.YEARLY -> 2
-                        }
-                    ),
-                    onToggle = { idx ->
-                        val r = when (idx) {
-                            0 -> com.etrisad.zenith.ui.viewmodel.StatsRange.WEEKLY
-                            1 -> com.etrisad.zenith.ui.viewmodel.StatsRange.MONTHLY
-                            else -> com.etrisad.zenith.ui.viewmodel.StatsRange.YEARLY
-                        }
-                        viewModel.selectStatsRange(r)
-                    },
-                    isInsideContainer = true,
-                    isScalingEnabled = false,
-                    showTextSelected = false
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    IconButton(onClick = { viewModel.prevPeriod() }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Outlined.ExpandMore, contentDescription = "Previous", modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = 90f })
-                    }
-                    Text(periodLabel, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-                    IconButton(onClick = { viewModel.nextPeriod() }, enabled = offset > 0, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Outlined.ExpandMore, contentDescription = "Next", modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = -90f })
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                // Heatmap for period
-                val dailyHistory by viewModel.getLongTermDailyHistory(selectedRange, offset).collectAsState(initial = emptyList())
-                val weekdayData by viewModel.getWeekdayBreakdown(selectedRange, offset).collectAsState(initial = emptyList())
-                val maxDaily = remember(dailyHistory) { dailyHistory.maxOfOrNull { it.totalTime } ?: 1L }
-                val maxWeekday = remember(weekdayData) { weekdayData.maxOfOrNull { it.second } ?: 1L }
-                // Heatmap style with animated fade + expand
-                AnimatedContent(
-                    targetState = dailyHistory,
-                    transitionSpec = {
-                        (fadeIn(spring(stiffness = Spring.StiffnessLow)) + expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
-                            .togetherWith(fadeOut(spring(stiffness = Spring.StiffnessLow)) + shrinkVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
-                    },
-                    label = "heatmap"
-                ) { history ->
-                    Column(modifier = Modifier.fillMaxWidth().animateContentSize()) {
-                        Text("Daily Heatmap", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
-                        if (history.isEmpty()) {
-                            Text("No daily data", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } else {
-                            androidx.compose.foundation.layout.FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                history.take(60).forEachIndexed { idx, day ->
-                                    val intensity = (day.totalTime.toFloat() / maxDaily).coerceIn(0f, 1f)
-                                    val alpha = when {
-                                        intensity == 0f -> 0.08f
-                                        intensity < 0.25f -> 0.25f
-                                        intensity < 0.5f -> 0.5f
-                                        intensity < 0.75f -> 0.75f
-                                        else -> 1f
-                                    }
-                                    AnimatedVisibility(
-                                        visible = true,
-                                        enter = fadeIn(spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy), initialAlpha = 0.3f) + scaleIn(initialScale = 0.6f, animationSpec = spring(stiffness = Spring.StiffnessLow)),
-                                        exit = fadeOut() + scaleOut(targetScale = 0.6f),
-                                        modifier = Modifier.animateContentSize()
-                                    ) {
-                                        Box(
-                                            modifier = Modifier.size(14.dp).clip(RoundedCornerShape(3.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = alpha))
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                // Weekday breakdown with stats bar animated
-                AnimatedContent(
-                    targetState = weekdayData,
-                    transitionSpec = {
-                        (fadeIn(spring(stiffness = Spring.StiffnessLow)) + expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
-                            .togetherWith(fadeOut(spring(stiffness = Spring.StiffnessLow)) + shrinkVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
-                    },
-                    label = "weekday"
-                ) { data ->
-                    Column(modifier = Modifier.fillMaxWidth().animateContentSize()) {
-                        Text("Weekday Breakdown", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
-                        data.forEachIndexed { idx, (label, millis) ->
-                            val progress = (millis.toFloat() / maxWeekday).coerceIn(0f, 1f)
-                            AnimatedVisibility(
-                                visible = true,
-                                enter = fadeIn(spring(stiffness = Spring.StiffnessLow), initialAlpha = 0.3f) + expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)),
-                                exit = fadeOut() + shrinkVertically(),
-                                modifier = Modifier.animateContentSize()
-                            ) {
-                                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(label, style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(36.dp), fontWeight = FontWeight.Medium)
-                                    LinearProgressIndicator(
-                                        progress = { progress },
-                                        modifier = Modifier.weight(1f).height(8.dp).clip(RoundedCornerShape(4.dp)),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        strokeCap = StrokeCap.Round
-                                    )
-                                    Text(viewModel.formatLongDuration(millis), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 8.dp).width(64.dp), textAlign = TextAlign.End)
-                                }
-                            }
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                AnimatedContent(
-                    targetState = displayList,
-                    transitionSpec = {
-                        (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) + expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
-                            .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) + shrinkVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
-                    },
-                    label = "longTermList"
-                ) { list ->
-                    Column(modifier = Modifier.animateContentSize()) {
-                        if (list.isEmpty()) {
-                            Text("No data for this period", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } else {
-                            list.forEachIndexed { index, app ->
-                                AnimatedVisibility(
-                                    visible = true,
-                                    enter = fadeIn(spring(stiffness = Spring.StiffnessLow)) + expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)),
-                                    exit = fadeOut(spring(stiffness = Spring.StiffnessLow)) + shrinkVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)),
-                                    modifier = Modifier.animateContentSize()
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().clickable { onAppClick(app.packageName) }.padding(vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                            val isWebsite = app.packageName.startsWith("zenith-web:")
-                            val shape = appIconShape(isWebsite)
-                            SubcomposeAsyncImage(
-                                model = ImageRequest.Builder(LocalContext.current).data("app-icon://${app.packageName}").crossfade(500).build(),
-                                contentDescription = null,
-                                modifier = Modifier.size(32.dp).clip(shape),
-                                contentScale = ContentScale.Crop,
-                                error = {
-                                    Box(Modifier.size(32.dp).clip(shape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-                                        Icon(if (isWebsite) Icons.Outlined.Language else Icons.Outlined.Android, null, modifier = Modifier.size(20.dp))
-                                    }
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(app.appName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                            Text(viewModel.formatLongDuration(app.totalTimeVisible), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                    }
-                    if (longTermUsage.size > 5) {
-                        TextButton(onClick = { expanded = !expanded }) {
-                            Text(if (expanded) "Show less" else "Show all ${longTermUsage.size}")
-                        }
-                    }
-                }
-            }
-            }
-        }
+            LongTermSection(
+                title = "Heatmap",
+                accentColor = MaterialTheme.colorScheme.primary,
+                selectedRange = selectedRange,
+                onRangeSelected = viewModel::selectStatsRange,
+                rangeLabel = periodLabel,
+                canGoNewer = offset > 0,
+                onPreviousPeriod = { viewModel.prevPeriod() },
+                onNextPeriod = { viewModel.nextPeriod() },
+                totalMillis = totalPeriod,
+                prevTotal = prevTotal,
+                dailyHistory = dailyHistory,
+                heatmapEmptyText = "No daily data",
+                formatDuration = viewModel::formatLongDuration,
+                periodDays = periodDays,
+                dayAppLoader = viewModel::getDayAppBreakdown,
+                onAppClick = onAppClick,
+                getAppType = getAppType,
+                dataNote = dataNote
+            )
         }
         Spacer(modifier = Modifier.height(4.dp))
     }
 }
-
 @Composable
 fun UsageItem(
     app: AppUsageInfo,

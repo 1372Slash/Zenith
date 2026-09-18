@@ -45,6 +45,9 @@ interface DailyUsageDao {
     @Query("SELECT COALESCE(SUM(usageTimeMillis), 0) FROM daily_usage WHERE packageName = :packageName AND date >= :sinceDate")
     suspend fun getTotalUsageSince(packageName: String, sinceDate: String): Long
 
+    @Query("SELECT MIN(date) FROM daily_usage")
+    suspend fun getEarliestDate(): String?
+
     @Query("DELETE FROM daily_usage WHERE date < :thresholdDate")
     suspend fun deleteOldUsage(thresholdDate: String)
 

@@ -48,6 +48,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.components.UsageHistoryCard
+import com.etrisad.zenith.ui.components.LongTermSection
 import com.etrisad.zenith.ui.components.ZenithContainedLoadingIndicator
 import com.etrisad.zenith.ui.components.focus.GoalSettingsBottomSheet
 import com.etrisad.zenith.ui.components.focus.ShieldSettingsBottomSheet
@@ -1484,13 +1485,22 @@ fun PerAppLongTermSection(
 ) {
     val selectedRange by viewModel.perAppStatsRange.collectAsState()
     val offset by viewModel.perAppPeriodOffset.collectAsState()
-    val dailyHistory by viewModel.getPerAppDailyHistory(packageName, selectedRange, offset).collectAsState(initial = emptyList())
-    val weekdayData by viewModel.getPerAppWeekdayBreakdown(packageName, selectedRange, offset).collectAsState(initial = emptyList())
-    val totalForPeriod by viewModel.getPerAppTotalForPeriod(packageName, selectedRange, offset).collectAsState(initial = 0L)
-    var expanded by remember { mutableStateOf(false) }
+    val perAppHistoryFlow = remember(packageName, selectedRange, offset) {
+        viewModel.getPerAppDailyHistory(packageName, selectedRange, offset)
+    }
+    val dailyHistory by perAppHistoryFlow.collectAsState(initial = emptyList())
+    val perAppTotalFlow = remember(packageName, selectedRange, offset) {
+        viewModel.getPerAppTotalForPeriod(packageName, selectedRange, offset)
+    }
+    val totalForPeriod by perAppTotalFlow.collectAsState(initial = 0L)
+    val prevPerAppFlow = remember(packageName, selectedRange, offset) {
+        viewModel.getPerAppTotalForPeriod(packageName, selectedRange, offset + 1)
+    }
+    val prevPerApp by prevPerAppFlow.collectAsState(initial = 0L)
     val periodLabel = remember(selectedRange, offset) { viewModel.getPeriodRangeLabel(selectedRange, offset) }
-    val maxDaily = remember(dailyHistory) { dailyHistory.maxOfOrNull { it.totalTime } ?: 1L }
-    val maxWeekday = remember(weekdayData) { weekdayData.maxOfOrNull { it.second } ?: 1L }
+    val periodDays = remember(selectedRange, offset) { viewModel.getPeriodDayMillis(selectedRange, offset) }
+    val earliestTick by viewModel.earliestDataDate.collectAsState()
+    val dataNote = remember(earliestTick, periodDays) { viewModel.dataStartNoteFor(periodDays) }
 
     Column {
         Card(
@@ -1498,102 +1508,23 @@ fun PerAppLongTermSection(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Outlined.TrackChanges, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Long-term for this app", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    Text(viewModel.formatLongDuration(totalForPeriod), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                com.etrisad.zenith.ui.components.ZenithToggleButtonGroup(
-                    options = listOf(
-                        com.etrisad.zenith.ui.components.ZenithToggleOption(text = "Weekly"),
-                        com.etrisad.zenith.ui.components.ZenithToggleOption(text = "Monthly"),
-                        com.etrisad.zenith.ui.components.ZenithToggleOption(text = "Yearly")
-                    ),
-                    selectedIndices = setOf(
-                        when (selectedRange) {
-                            com.etrisad.zenith.ui.viewmodel.StatsRange.WEEKLY -> 0
-                            com.etrisad.zenith.ui.viewmodel.StatsRange.MONTHLY -> 1
-                            else -> 2
-                        }
-                    ),
-                    onToggle = { idx ->
-                        val r = when (idx) {
-                            0 -> com.etrisad.zenith.ui.viewmodel.StatsRange.WEEKLY
-                            1 -> com.etrisad.zenith.ui.viewmodel.StatsRange.MONTHLY
-                            else -> com.etrisad.zenith.ui.viewmodel.StatsRange.YEARLY
-                        }
-                        viewModel.selectPerAppRange(r)
-                    },
-                    isInsideContainer = true,
-                    isScalingEnabled = false,
-                    showTextSelected = false
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    IconButton(onClick = { viewModel.prevPerAppPeriod() }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Outlined.ExpandMore, null, modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = 90f })
-                    }
-                    Text(periodLabel, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-                    IconButton(onClick = { viewModel.nextPerAppPeriod() }, enabled = offset > 0, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Outlined.ExpandMore, null, modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = -90f })
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                AnimatedContent(
-                    targetState = dailyHistory,
-                    transitionSpec = {
-                        (fadeIn(spring(stiffness = Spring.StiffnessLow)) + expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
-                            .togetherWith(fadeOut(spring(stiffness = Spring.StiffnessLow)) + shrinkVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
-                    },
-                    label = "perAppHeatmap"
-                ) { history ->
-                    Column(modifier = Modifier.fillMaxWidth().animateContentSize()) {
-                        Text("Daily Heatmap - This App", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
-                        if (history.isEmpty()) {
-                            Text("No daily data for this app in this period", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } else {
-                            androidx.compose.foundation.layout.FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                history.take(60).forEach { day ->
-                                    val intensity = (day.totalTime.toFloat() / maxDaily).coerceIn(0f, 1f)
-                                    val alpha = when {
-                                        intensity == 0f -> 0.08f
-                                        intensity < 0.25f -> 0.25f
-                                        intensity < 0.5f -> 0.5f
-                                        intensity < 0.75f -> 0.75f
-                                        else -> 1f
-                                    }
-                                    Box(modifier = Modifier.size(14.dp).clip(RoundedCornerShape(3.dp)).background(MaterialTheme.colorScheme.tertiary.copy(alpha = alpha)))
-                                }
-                            }
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                AnimatedContent(
-                    targetState = weekdayData,
-                    transitionSpec = {
-                        (fadeIn(spring(stiffness = Spring.StiffnessLow)) + expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
-                            .togetherWith(fadeOut(spring(stiffness = Spring.StiffnessLow)) + shrinkVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
-                    },
-                    label = "perAppWeekday"
-                ) { data ->
-                    Column(modifier = Modifier.fillMaxWidth().animateContentSize()) {
-                        Text("Weekday Breakdown - This App", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
-                        data.forEach { (label, millis) ->
-                            val progress = (millis.toFloat() / maxWeekday).coerceIn(0f, 1f)
-                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(label, style = MaterialTheme.typography.labelSmall, modifier = Modifier.width(36.dp), fontWeight = FontWeight.Medium)
-                                LinearProgressIndicator(progress = { progress }, modifier = Modifier.weight(1f).height(8.dp).clip(RoundedCornerShape(4.dp)), color = MaterialTheme.colorScheme.tertiary, trackColor = MaterialTheme.colorScheme.surfaceVariant, strokeCap = StrokeCap.Round)
-                                Text(viewModel.formatLongDuration(millis), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 8.dp).width(64.dp), textAlign = TextAlign.End)
-                            }
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
+            LongTermSection(
+                title = "Heatmap for this app",
+                accentColor = MaterialTheme.colorScheme.tertiary,
+                selectedRange = selectedRange,
+                onRangeSelected = viewModel::selectPerAppRange,
+                rangeLabel = periodLabel,
+                canGoNewer = offset > 0,
+                onPreviousPeriod = { viewModel.prevPerAppPeriod() },
+                onNextPeriod = { viewModel.nextPerAppPeriod() },
+                totalMillis = totalForPeriod,
+                prevTotal = prevPerApp,
+                dailyHistory = dailyHistory,
+                heatmapEmptyText = "No daily data for this app in this period",
+                formatDuration = viewModel::formatLongDuration,
+                periodDays = periodDays,
+                dataNote = dataNote
+            )
         }
         Spacer(modifier = Modifier.height(4.dp))
     }
