@@ -13,6 +13,9 @@ import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.widget.AppStreakWidget
 import com.etrisad.zenith.ui.widget.GlobalStreakWidget
+import com.etrisad.zenith.ui.widget.TotalScreenTimeWidget
+import com.etrisad.zenith.ui.widget.RemainingTargetWidget
+import com.etrisad.zenith.ui.widget.PhoneFreeTimeWidget
 import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -93,6 +96,9 @@ class ZenithApplication : Application(), ImageLoaderFactory {
                 kotlinx.coroutines.delay(1000)
                 AppStreakWidget().updateAll(this@ZenithApplication)
                 GlobalStreakWidget().updateAll(this@ZenithApplication)
+                TotalScreenTimeWidget().updateAll(this@ZenithApplication)
+                RemainingTargetWidget().updateAll(this@ZenithApplication)
+                PhoneFreeTimeWidget().updateAll(this@ZenithApplication)
             } catch (_: Exception) {}
         }
     }
@@ -137,6 +143,9 @@ class ZenithApplication : Application(), ImageLoaderFactory {
                     kotlinx.coroutines.delay(300)
                     AppStreakWidget().updateAll(this@ZenithApplication)
                     GlobalStreakWidget().updateAll(this@ZenithApplication)
+                    TotalScreenTimeWidget().updateAll(this@ZenithApplication)
+                    RemainingTargetWidget().updateAll(this@ZenithApplication)
+                    PhoneFreeTimeWidget().updateAll(this@ZenithApplication)
                 } catch (_: Exception) {
                 }
             }

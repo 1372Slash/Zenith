@@ -39,10 +39,6 @@ class GlobalStreakWidget : GlanceAppWidget() {
 
     companion object {
         private val bitmapCache = mutableMapOf<String, Bitmap>()
-        fun clearCache() {
-            bitmapCache.values.forEach { it.recycle() }
-            bitmapCache.clear()
-        }
     }
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {

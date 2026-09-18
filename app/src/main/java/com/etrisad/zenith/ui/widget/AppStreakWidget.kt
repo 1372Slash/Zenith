@@ -42,7 +42,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.Preferences
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.background
@@ -61,15 +60,8 @@ class AppStreakWidget : GlanceAppWidget() {
 
     companion object {
         val SELECTED_PACKAGE_KEY = stringPreferencesKey("selected_package")
-        val EXTRA_WIDGET_ID_KEY = ActionParameters.Key<Int>(AppWidgetManager.EXTRA_APPWIDGET_ID)
-        val PACKAGE_NAME_KEY = ActionParameters.Key<String>("package_name")
-        
+
         private val bitmapCache = mutableMapOf<String, Bitmap>()
-        
-        fun clearCache() {
-            bitmapCache.values.forEach { it.recycle() }
-            bitmapCache.clear()
-        }
     }
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {

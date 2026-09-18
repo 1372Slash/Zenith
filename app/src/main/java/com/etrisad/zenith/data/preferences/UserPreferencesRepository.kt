@@ -335,7 +335,7 @@ class UserPreferencesRepository(private val context: Context) {
         val ALARM_AUTO_REPEAT_ENABLED = booleanPreferencesKey("alarm_auto_repeat_enabled")
         val ALARM_MASTER_ENABLED = booleanPreferencesKey("alarm_master_enabled")
         val ALARMS_JSON = stringPreferencesKey("alarms_json")
-        val EXCLUDED_FROM_TRACKING_OVERRIDES_JSON = stringPreferencesKey("excluded_from_tracking_overrides_json")
+
 
         val LOCKDOWN_ENABLED = booleanPreferencesKey("lockdown_enabled")
         val LOCKDOWN_START_TIME = stringPreferencesKey("lockdown_start_time")
@@ -394,6 +394,7 @@ class UserPreferencesRepository(private val context: Context) {
         val DISMISSED_UNINSTALLED_APPS = stringPreferencesKey("dismissed_uninstalled_apps")
         val POMODORO_SESSION_END_TIMESTAMP = longPreferencesKey("pomodoro_session_end_timestamp")
         val POMODORO_BREAK_END_TIMESTAMP = longPreferencesKey("pomodoro_break_end_timestamp")
+        val POMODORO_NEXT_BREAK_ALLOWED_TIMESTAMP = longPreferencesKey("pomodoro_next_break_allowed_timestamp")
         val POMODORO_CURRENT_SESSION_NUMBER = intPreferencesKey("pomodoro_current_session_number")
     }
 
@@ -559,7 +560,6 @@ class UserPreferencesRepository(private val context: Context) {
             alarmAutoRepeatEnabled = settings[PreferencesKeys.ALARM_AUTO_REPEAT_ENABLED] ?: true,
             alarmMasterEnabled = settings[PreferencesKeys.ALARM_MASTER_ENABLED] ?: false,
             alarmsJson = settings[PreferencesKeys.ALARMS_JSON] ?: "[]",
-            excludedFromTrackingOverridesJson = settings[PreferencesKeys.EXCLUDED_FROM_TRACKING_OVERRIDES_JSON] ?: "{}",
             streakRecoveryPerformed = runtime[RuntimeKeys.STREAK_RECOVERY_PERFORMED] ?: false,
             lockdownEnabled = settings[PreferencesKeys.LOCKDOWN_ENABLED] ?: false,
             lockdownStartTime = settings[PreferencesKeys.LOCKDOWN_START_TIME] ?: "22:00",
@@ -586,6 +586,7 @@ class UserPreferencesRepository(private val context: Context) {
             pomodoroPresets = settings[PreferencesKeys.POMODORO_PRESETS] ?: "{}",
             pomodoroSessionEndTimestamp = runtime[RuntimeKeys.POMODORO_SESSION_END_TIMESTAMP] ?: 0L,
             pomodoroBreakEndTimestamp = runtime[RuntimeKeys.POMODORO_BREAK_END_TIMESTAMP] ?: 0L,
+            pomodoroNextBreakAllowedTimestamp = runtime[RuntimeKeys.POMODORO_NEXT_BREAK_ALLOWED_TIMESTAMP] ?: 0L,
             pausePointEnabled = settings[PreferencesKeys.PAUSE_POINT_ENABLED] ?: false,
             pausePointTaskTypes = settings[PreferencesKeys.PAUSE_POINT_TASK_TYPES]
                 ?.split(",")
@@ -751,20 +752,6 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setExcludedFromTrackingPackages(packages: Set<String>) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.EXCLUDED_FROM_TRACKING_PACKAGES] = packages.joinToString(",") }
-    }
-
-    suspend fun setExcludedFromTrackingOverrides(overrides: Map<String, Set<String>>) {
-        val json = moshi.adapter(Map::class.java).toJson(overrides)
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.EXCLUDED_FROM_TRACKING_OVERRIDES_JSON] = json }
-    }
-
-    suspend fun getExcludedFromTrackingOverrides(): Map<String, Set<String>> {
-        val json = context.dataStore.data.first()[PreferencesKeys.EXCLUDED_FROM_TRACKING_OVERRIDES_JSON] ?: "{}"
-        return try {
-            @Suppress("UNCHECKED_CAST")
-            (moshi.adapter(Map::class.java).fromJson(json) as? Map<String, List<String>>)
-                ?.mapValues { (_, v) -> v.toSet() } ?: emptyMap()
-        } catch (_: Exception) { emptyMap() }
     }
 
     suspend fun setIncentiveLockEnabled(enabled: Boolean) {
@@ -1512,6 +1499,10 @@ class UserPreferencesRepository(private val context: Context) {
         context.runtimeDataStore.edit { preferences -> preferences[RuntimeKeys.POMODORO_BREAK_END_TIMESTAMP] = timestamp }
     }
 
+    suspend fun setPomodoroNextBreakAllowedTimestamp(timestamp: Long) {
+        context.runtimeDataStore.edit { preferences -> preferences[RuntimeKeys.POMODORO_NEXT_BREAK_ALLOWED_TIMESTAMP] = timestamp }
+    }
+
     suspend fun setPomodoroMaxAllowedApps(max: Int) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.POMODORO_MAX_ALLOWED_APPS] = max }
     }
@@ -1752,6 +1743,7 @@ data class UserPreferences(
     val pomodoroPresets: String = "{}",
     val pomodoroSessionEndTimestamp: Long = 0L,
     val pomodoroBreakEndTimestamp: Long = 0L,
+    val pomodoroNextBreakAllowedTimestamp: Long = 0L,
     val pausePointEnabled: Boolean = false,
     val pausePointTaskTypes: Set<PausePointTaskType> = emptySet(),
     val pausePointQrCodes: List<String> = emptyList(),
@@ -1790,7 +1782,7 @@ data class UserPreferences(
     val alarmAutoRepeatEnabled: Boolean = true,
     val alarmMasterEnabled: Boolean = false,
     val alarmsJson: String = "[]",
-    val excludedFromTrackingOverridesJson: String = "{}",
+
 ) {
     val pausePointConfig: PausePointConfig
         get() = PausePointConfig(

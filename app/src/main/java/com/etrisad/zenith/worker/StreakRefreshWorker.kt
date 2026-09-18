@@ -1,8 +1,14 @@
 package com.etrisad.zenith.worker
 
 import android.content.Context
+import androidx.glance.appwidget.updateAll
 import androidx.work.*
 import com.etrisad.zenith.ZenithApplication
+import com.etrisad.zenith.ui.widget.AppStreakWidget
+import com.etrisad.zenith.ui.widget.GlobalStreakWidget
+import com.etrisad.zenith.ui.widget.PhoneFreeTimeWidget
+import com.etrisad.zenith.ui.widget.RemainingTargetWidget
+import com.etrisad.zenith.ui.widget.TotalScreenTimeWidget
 import java.util.concurrent.TimeUnit
 
 class StreakRefreshWorker(
@@ -16,6 +22,11 @@ class StreakRefreshWorker(
             app.userPreferencesRepository.refreshGlobalStreak(app.shieldRepository)
             app.userPreferencesRepository.refreshAppStreaks(app.shieldRepository)
             app.userPreferencesRepository.refreshWebStreaks(app.shieldRepository)
+            GlobalStreakWidget().updateAll(applicationContext)
+            AppStreakWidget().updateAll(applicationContext)
+            TotalScreenTimeWidget().updateAll(applicationContext)
+            RemainingTargetWidget().updateAll(applicationContext)
+            PhoneFreeTimeWidget().updateAll(applicationContext)
             Result.success()
         } catch (e: Exception) {
             Result.retry()

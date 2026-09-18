@@ -6,8 +6,9 @@
     android:minResizeWidth="110dp"
     android:minResizeHeight="110dp"
     android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
     android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen"
-    android:widgetFeatures="reconfigurable"
     android:description="@string/phone_free_time_widget_description"
     android:previewLayout="@layout/widget_phone_free_preview" />

@@ -10,6 +10,9 @@ import com.etrisad.zenith.util.SharedPrefsHelper
 import androidx.glance.appwidget.updateAll
 import com.etrisad.zenith.ui.widget.GlobalStreakWidget
 import com.etrisad.zenith.ui.widget.AppStreakWidget
+import com.etrisad.zenith.ui.widget.TotalScreenTimeWidget
+import com.etrisad.zenith.ui.widget.RemainingTargetWidget
+import com.etrisad.zenith.ui.widget.PhoneFreeTimeWidget
 import kotlinx.coroutines.flow.first
 
 class MidnightResetWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -30,6 +33,9 @@ class MidnightResetWorker(context: Context, params: WorkerParameters) : Coroutin
         
         GlobalStreakWidget().updateAll(applicationContext)
         AppStreakWidget().updateAll(applicationContext)
+        TotalScreenTimeWidget().updateAll(applicationContext)
+        RemainingTargetWidget().updateAll(applicationContext)
+        PhoneFreeTimeWidget().updateAll(applicationContext)
         
         return Result.success()
     }

@@ -11,8 +11,6 @@ import android.graphics.Paint
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,9 +43,10 @@ import androidx.graphics.shapes.toPath
 import com.etrisad.zenith.MainActivity
 import com.etrisad.zenith.R
 import com.etrisad.zenith.ZenithApplication
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.etrisad.zenith.util.DateTimeUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 
 class RemainingTargetWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Exact
@@ -55,10 +54,6 @@ class RemainingTargetWidget : GlanceAppWidget() {
 
     companion object {
         private val bitmapCache = mutableMapOf<String, Bitmap>()
-        fun clearCache() {
-            bitmapCache.values.forEach { if (!it.isRecycled) it.recycle() }
-            bitmapCache.clear()
-        }
     }
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
@@ -66,23 +61,22 @@ class RemainingTargetWidget : GlanceAppWidget() {
         val repo = app.shieldRepository
         val prefsRepo = app.userPreferencesRepository
 
+        val prefs = prefsRepo.userPreferencesFlow.first()
+        val targetMinutes = prefs.screenTimeTargetMinutes
+        val todayStr = DateTimeUtils.getDayStartDateString(
+            System.currentTimeMillis(), prefs.dayStartHour, prefs.dayStartMinute
+        )
+        val totalMillis = try {
+            val daily = withContext(Dispatchers.IO) { repo.getDailyUsagesForDateSync(todayStr) }
+            daily.find { it.packageName == "TOTAL" }?.usageTimeMillis
+                ?: daily.filter { it.packageName !in setOf("SHIELD_TOTAL","GOAL_TOTAL","OTHER_TOTAL") }.sumOf { it.usageTimeMillis }
+        } catch (_: Exception) { 0L }
+
         provideContent {
             val uiMode = context.resources.configuration.uiMode
             val sunnyBitmap = remember(uiMode) { createShapeBitmap(context, 80, MaterialShapes.VerySunny) }
             val backgroundBitmap = remember(uiMode) { createShapeBitmap(context, 120, MaterialShapes.Gem) }
 
-            val prefs by prefsRepo.userPreferencesFlow.collectAsState(initial = null)
-            val targetMinutes = prefs?.screenTimeTargetMinutes ?: 0
-            val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-            val totalMillis = remember(todayStr) {
-                try {
-                    kotlinx.coroutines.runBlocking {
-                        val daily = repo.getDailyUsagesForDateSync(todayStr)
-                        daily.find { it.packageName == "TOTAL" }?.usageTimeMillis
-                            ?: daily.filter { it.packageName !in setOf("SHIELD_TOTAL","GOAL_TOTAL","OTHER_TOTAL") }.sumOf { it.usageTimeMillis }
-                    }
-                } catch (_: Exception) { 0L }
-            }
             val remainingMillis = if (targetMinutes > 0) (targetMinutes * 60_000L - totalMillis).coerceAtLeast(0L) else -1L
             val isOver = targetMinutes > 0 && totalMillis > targetMinutes * 60_000L
             val overMillis = if (isOver) totalMillis - targetMinutes * 60_000L else 0L
