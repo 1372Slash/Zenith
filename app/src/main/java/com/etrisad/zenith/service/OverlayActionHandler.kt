@@ -64,6 +64,7 @@ class OverlayActionHandler(
         websiteDismissHandlers.values.forEach { mainHandler.removeCallbacks(it) }
         websiteDismissHandlers.clear()
         pausedWebsiteSessions.clear()
+        pausedBrowserSessions.clear()
     }
 
     private var keyboardPackages = emptySet<String>()

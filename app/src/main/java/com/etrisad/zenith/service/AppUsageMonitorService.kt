@@ -1023,14 +1023,23 @@ class AppUsageMonitorService : Service() {
 
         eyeCareJob = serviceScope.launch {
             while (true) {
-                delay(1000)
-                if (!isScreenOn) continue
-                val prefs = SharedMonitoringState.currentPreferences ?: continue
-                if (!prefs.eyeCareEnabled) {
-                    eyeCareCumulativeSeconds = 0
+                if (!isScreenOn) {
+                    // Screen off: nothing to accumulate, sleep long instead of 1s spins.
+                    delay(30000)
                     continue
                 }
-                if (eyeCareOnBreak) continue
+                val prefs = SharedMonitoringState.currentPreferences ?: run { delay(5000); continue }
+                if (!prefs.eyeCareEnabled) {
+                    eyeCareCumulativeSeconds = 0
+                    // Feature off: re-check on a slow cadence instead of every second.
+                    delay(30000)
+                    continue
+                }
+                if (eyeCareOnBreak) {
+                    delay(5000)
+                    continue
+                }
+                delay(1000)
 
                 eyeCareCumulativeSeconds++
                 val workSeconds = prefs.eyeCareWorkMinutes * 60

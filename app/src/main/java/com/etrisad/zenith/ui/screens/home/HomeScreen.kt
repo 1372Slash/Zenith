@@ -185,7 +185,14 @@ fun HomeScreenContent(
 
     val bedtimeStatus = rememberBedtimeStatus(preferences)
     var activeTab by remember { mutableStateOf(AppTypeTab.APPS) }
-    val nowMillis by produceState(initialValue = System.currentTimeMillis()) { }
+    // Minute ticker (same pattern as AppDetailScreen): pause/reset countdowns below
+    // read nowMillis, so a frozen value would leave them stale.
+    val nowMillis by produceState(initialValue = System.currentTimeMillis()) {
+        while (true) {
+            delay(60000)
+            value = System.currentTimeMillis()
+        }
+    }
     val isAccessibilityEnabled = isAccessibilityServiceEnabled(LocalContext.current)
 
     PullToRefreshBox(

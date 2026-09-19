@@ -295,7 +295,10 @@ class AlarmOverlayActivity : ComponentActivity() {
         } else {
             playbackService?.stopPlayback()
         }
-        wakeLock?.release()
+        // Guarded: release() on a non-held lock throws RuntimeException.
+        if (wakeLock?.isHeld == true) {
+            wakeLock?.release()
+        }
         wakeLock = null
         finishAndRemoveTask()
     }
@@ -312,7 +315,9 @@ class AlarmOverlayActivity : ComponentActivity() {
         }
         super.onDestroy()
 
-        wakeLock?.release()
+        if (wakeLock?.isHeld == true) {
+            wakeLock?.release()
+        }
         wakeLock = null
     }
 

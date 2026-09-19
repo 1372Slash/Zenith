@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -107,8 +108,11 @@ class PomodoroViewModel(
         startTimer()
     }
 
+    private var timerJob: Job? = null
+
     private fun startTimer() {
-        viewModelScope.launch {
+        if (timerJob?.isActive == true) return
+        timerJob = viewModelScope.launch {
             while (true) {
                 kotlinx.coroutines.delay(1000)
                 val now = System.currentTimeMillis()
@@ -134,6 +138,16 @@ class PomodoroViewModel(
                     SharedMonitoringState.isPomodoroActive = isActive
                     SharedMonitoringState.isPomodoroBlockingActive = newBlockingActive
                     SharedMonitoringState.isPomodoroBreakActive = isBreak
+                }
+                // Park the 1s ticker when fully idle instead of spinning forever;
+                // restarted by startSession() or on init with a live session.
+                val fresh = _uiState.value
+                val idleNow = System.currentTimeMillis()
+                if (!fresh.isSessionActive && !fresh.isBreakActive &&
+                    fresh.sessionEndTimestamp <= idleNow && fresh.breakEndTimestamp <= idleNow
+                ) {
+                    timerJob = null
+                    return@launch
                 }
             }
         }
@@ -242,6 +256,7 @@ class PomodoroViewModel(
             SharedMonitoringState.pomodoroPauseTimestamp = 0L
             SharedMonitoringState.pomodoroAllowedPackages = prefs.pomodoroAllowedPackages
             SharedMonitoringState.pomodoroBlockAllowedApps = prefs.pomodoroBlockAllowedApps
+            startTimer()
         }
     }
 

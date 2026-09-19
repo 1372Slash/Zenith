@@ -416,6 +416,7 @@ class ZenithService : AccessibilityService() {
             val now = System.currentTimeMillis()
             val lastNotified = lastBankingNotificationTime[packageName] ?: 0L
             if (now - lastNotified > 15000) {
+                if (lastBankingNotificationTime.size > 500) lastBankingNotificationTime.clear()
                 lastBankingNotificationTime[packageName] = now
                 showFinancialAppInUseNotification(packageName)
             }
@@ -451,6 +452,7 @@ class ZenithService : AccessibilityService() {
         val now = System.currentTimeMillis()
         val lastPkgTime = lastA11yPackageTime[packageName] ?: 0L
         if (now - lastPkgTime < 150) return
+        if (lastA11yPackageTime.size > 500) lastA11yPackageTime.clear()
         lastA11yPackageTime[packageName] = now
 
         Log.d("Zenith_A11Y", "handleWindowStateChanged: pkg=$packageName domain=${WebsiteStateHolder.currentWebsiteDomain.value}")

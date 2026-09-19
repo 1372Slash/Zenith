@@ -109,6 +109,10 @@ class AlarmWatchdogWorker(
         fun enqueue(context: Context) {
             val request = PeriodicWorkRequestBuilder<AlarmWatchdogWorker>(
                 15, TimeUnit.MINUTES
+            ).setConstraints(
+                androidx.work.Constraints.Builder()
+                    .setRequiresBatteryNotLow(true)
+                    .build()
             ).build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(

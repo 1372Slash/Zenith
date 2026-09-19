@@ -35,17 +35,19 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             }
             ACTION_RE_TRIGGER -> {
                 val alarmTime = intent.getStringExtra(AlarmOverlayActivity.EXTRA_ALARM_TIME) ?: "07:00"
-                Log.d("AlarmReceiver", "onReceive: ACTION_RE_TRIGGER alarmTime=$alarmTime")
-                scheduleReTrigger(context, alarmTime)
+                val attempt = intent.getIntExtra(EXTRA_RETRIGGER_COUNT, 0)
+                Log.d("AlarmReceiver", "onReceive: ACTION_RE_TRIGGER alarmTime=$alarmTime attempt=$attempt")
+                scheduleReTrigger(context, alarmTime, attempt)
                 showAlarm(context, alarmTime, intent)
             }
             ACTION_CHECK_USAGE -> {
                 val alarmTime = intent.getStringExtra(AlarmOverlayActivity.EXTRA_ALARM_TIME) ?: "07:00"
                 val isOnce = intent.getBooleanExtra(EXTRA_IS_ONCE, false)
+                val attempt = intent.getIntExtra(EXTRA_RETRIGGER_COUNT, 0)
                 val recentUsage = hasRecentUsage(context)
                 Log.d("AlarmReceiver", "ACTION_CHECK_USAGE: alarmTime=$alarmTime, recentUsage=$recentUsage, isOnce=$isOnce")
                 if (!recentUsage) {
-                    scheduleReTrigger(context, alarmTime)
+                    scheduleReTrigger(context, alarmTime, attempt)
                 } else {
                     Log.d("AlarmReceiver", "ACTION_CHECK_USAGE: user awake, auto-repeat completed")
                     sendAutoRepeatCompleteNotification(context, alarmTime)
@@ -378,11 +380,12 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             }
         }
 
-        fun scheduleUsageCheck(context: Context, alarmTime: String, isOnce: Boolean = false) {
+        fun scheduleUsageCheck(context: Context, alarmTime: String, isOnce: Boolean = false, retriggerAttempt: Int = 0) {
             val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
                 action = ACTION_CHECK_USAGE
                 putExtra(AlarmOverlayActivity.EXTRA_ALARM_TIME, alarmTime)
                 putExtra(EXTRA_IS_ONCE, isOnce)
+                putExtra(EXTRA_RETRIGGER_COUNT, retriggerAttempt)
             }
 
             val requestCode = requestCodeFor(REQUEST_CODE_CHECK_BASE, alarmTime)
@@ -429,10 +432,18 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             pendingIntent.cancel()
         }
 
-        private fun scheduleReTrigger(context: Context, alarmTime: String) {
+        const val EXTRA_RETRIGGER_COUNT = "retrigger_count"
+        private const val MAX_RE_TRIGGER_ATTEMPTS = 12 // 12 x 5min = 1h, then the chain stops
+
+        private fun scheduleReTrigger(context: Context, alarmTime: String, attempt: Int = 0) {
+            if (attempt >= MAX_RE_TRIGGER_ATTEMPTS) {
+                Log.d("AlarmReceiver", "scheduleReTrigger: max attempts reached for $alarmTime, stopping chain")
+                return
+            }
             val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
                 action = ACTION_RE_TRIGGER
                 putExtra(AlarmOverlayActivity.EXTRA_ALARM_TIME, alarmTime)
+                putExtra(EXTRA_RETRIGGER_COUNT, attempt + 1)
             }
 
             val requestCode = requestCodeFor(REQUEST_CODE_RE_TRIGGER_BASE, alarmTime)
