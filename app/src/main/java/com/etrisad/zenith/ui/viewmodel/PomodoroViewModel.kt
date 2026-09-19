@@ -111,8 +111,6 @@ class PomodoroViewModel(
     }
 
     private var timerJob: Job? = null
-    // Set when the session is ended/skipped by hand so the zeroing below is not
-    // mistaken for a genuinely completed focus session.
     private var suppressFocusRecord = false
 
     private fun startTimer() {
@@ -137,8 +135,6 @@ class PomodoroViewModel(
                         isPaused = isPaused
                     )
                 }
-                // A focus session genuinely ran its course (not paused, not ended
-                // or skipped by hand): record it once for session history.
                 if (!isPaused && prevFocusRemaining > 0L && newFocusRemaining == 0L &&
                     state.sessionEndTimestamp > 0L
                 ) {
@@ -255,7 +251,6 @@ class PomodoroViewModel(
     fun getPresets(): Map<String, List<String>> = parsePresets(_uiState.value.presetsJson)
 
     fun startSession() {
-        // Fresh accounting for the new run: stale suppress flags must not leak in.
         suppressFocusRecord = false
         viewModelScope.launch {
             val prefs = userPreferencesRepository.userPreferencesFlow.first()
@@ -299,8 +294,6 @@ class PomodoroViewModel(
             userPreferencesRepository.setPomodoroBreakEndTimestamp(now)
         }
     }
-
-    /** Persist one completed focus session for the session-history stats. */
     private fun recordFocusCompletion(sessionNumber: Int) {
         viewModelScope.launch {
             try {

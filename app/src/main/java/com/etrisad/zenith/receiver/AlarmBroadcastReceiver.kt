@@ -317,8 +317,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 alarmManager.cancel(pendingIntent)
                 pendingIntent.cancel()
                 if (alarmId > 0L) {
-                    // New-scheme id-scoped intent (plus the legacy time-scoped one above,
-                    // which covers intents scheduled before the id scheme existed).
                     val idIntent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
                         action = ACTION_FIRE_ALARM
                     }
@@ -425,7 +423,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         }
 
         const val EXTRA_RETRIGGER_COUNT = "retrigger_count"
-        private const val MAX_RE_TRIGGER_ATTEMPTS = 12 // 12 x 5min = 1h, then the chain stops
+        private const val MAX_RE_TRIGGER_ATTEMPTS = 12
 
         private fun scheduleReTrigger(context: Context, alarmTime: String, attempt: Int = 0) {
             if (attempt >= MAX_RE_TRIGGER_ATTEMPTS) {
@@ -561,8 +559,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         }
 
         fun rescheduleAllAlarms(context: Context, enabledAlarms: List<AlarmItem>) {
-            // Legacy time-scoped intents first (pre-id-scheme leftovers), then the
-            // id-scoped ones, so changed times never leak a stale PendingIntent.
             cancelAlarm(context)
             for (alarm in enabledAlarms) {
                 cancelAlarm(context, alarm.timeString, alarm.id)

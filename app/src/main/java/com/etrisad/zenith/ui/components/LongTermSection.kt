@@ -64,8 +64,6 @@ fun LongTermSection(
     onAppClick: (String) -> Unit = {},
     getAppType: (String) -> String? = { null },
     dataNote: String? = null,
-    // Optional extra line under the single-day header (loader == null branch),
-    // e.g. a session count for history sections that track more than durations.
     detailExtraLine: (@Composable (dayMillis: Long) -> Unit)? = null
 ) {
     val safeMaxDaily = remember(dailyHistory) { (dailyHistory.maxOfOrNull { it.totalTime } ?: 1L).coerceAtLeast(1L) }
@@ -76,9 +74,6 @@ fun LongTermSection(
     var weekApps by remember(periodDays) { mutableStateOf(emptyList<AppUsageInfo>()) }
     var loadingWeek by remember(periodDays) { mutableStateOf(false) }
     var dayListExpanded by remember(selectedWeek) { mutableStateOf(false) }
-    // Snapshots of the open week/day: AnimatedVisibility content recomposes with the
-    // latest state even while the out-animation plays, so without these the detail
-    // would read nulls and the close would fade emptiness (abrupt close).
     var lastOpenWeek by remember(periodDays) { mutableStateOf<List<Long>?>(null) }
     var lastOpenDay by remember(periodDays) { mutableStateOf<Long?>(null) }
     LaunchedEffect(selectedWeek, selectedDay) {
@@ -94,12 +89,6 @@ fun LongTermSection(
             weekApps = emptyList()
             loadingWeek = false
         } else if (week == null) {
-            // Closing: freeze the last loaded apps instead of wiping them. Clearing
-            // here would change the inner crossfade key on the exact frame the
-            // out-animation starts, so the list would vanish before the collapse
-            // finishes. No stale data leaks: opening a week always sets loadingWeek
-            // optimistically and the loader branch below overwrites weekApps, and
-            // period changes reset this state via remember(periodDays).
         } else {
             loadingWeek = true
             try {
@@ -129,7 +118,6 @@ fun LongTermSection(
     val dayDateFmt = remember { java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.ENGLISH) }
 
     val selectedWeekValue = selectedWeek
-    // Header total follows the week selection; otherwise the period total.
     val headerTotal = if (selectedWeekValue != null) {
         formatDuration(selectedWeekValue.sumOf { dayMap[it]?.totalTime ?: 0L })
     } else {
@@ -248,10 +236,6 @@ fun LongTermSection(
         AnimatedContent(
             targetState = dailyHistory,
             transitionSpec = {
-                // Fade + subtle scale on purpose: expand/shrink here re-measures
-                // the whole (up to 365-cell) grid every frame and drops frames on
-                // Monthly <-> Yearly swaps. Scale runs on the GPU layer instead,
-                // and the detail AnimatedVisibility below still drives resizing.
                 (fadeIn() + scaleIn(initialScale = 0.97f)) togetherWith
                     (fadeOut() + scaleOut(targetScale = 0.97f)) using SizeTransform(
                         clip = false,
@@ -264,8 +248,6 @@ fun LongTermSection(
                 if (history.isEmpty() || periodDays.isEmpty()) {
                     Text(heatmapEmptyText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
-                    // Calendar grid: weekday gutter + month headers + week columns,
-                    // Monday-first like the weekly period convention.
                     val calCell = when (selectedRange) {
                         StatsRange.YEARLY -> 16.dp
                         else -> 30.dp
@@ -273,9 +255,6 @@ fun LongTermSection(
                     val calGap = if (selectedRange == StatsRange.YEARLY) 3.dp else 4.dp
                     val calRadius = if (selectedRange == StatsRange.YEARLY) 4.dp else 5.dp
                     val calScroll = rememberScrollState()
-                    // Hidden until positioned: otherwise yearly flashes January
-                    // for a frame before jumping to December (effect races a
-                    // heavy 365-cell first composition).
                     var calReady by remember(selectedRange, periodDays) { mutableStateOf(false) }
                     LaunchedEffect(selectedRange, periodDays) {
                         if (selectedRange == StatsRange.YEARLY) calScroll.scrollTo(Int.MAX_VALUE)
@@ -346,10 +325,6 @@ fun LongTermSection(
                                                     else -> 1f
                                                 }
                                                 val isDaySelected = selectedDay == millis
-                                                // Instant dim on purpose: selection feedback must be
-                                                // immediate, and a grid-wide spring storm drops frames.
-                                                // Only the tapped cell pops (2 cells max animate) - same
-                                                // budget applies to the highlight color morph below.
                                                 val dimFactor = if (selectedWeek != null && selectedWeek?.contains(millis) != true) 0.35f else 1f
                                                 val highlightBase by animateColorAsState(
                                                     targetValue = if (isDaySelected) highlightColor else accentColor,
@@ -383,15 +358,9 @@ fun LongTermSection(
                                                                 selectedWeek = null
                                                             } else {
                                                                 selectedDay = millis
-                                                                // Same-week taps only move the ring: the week's
-                                                                // list is already showing, so skip the reload
-                                                                // (the loader effect only restarts on week
-                                                                // change - reloading here would spin forever).
                                                                 val newWeek = weekByDay[millis]
                                                                 if (newWeek != selectedWeek) {
                                                                     selectedWeek = newWeek
-                                                                    // Optimistic: show the spinner immediately so the
-                                                                    // panel never flashes stale rows first.
                                                                     loadingWeek = true
                                                                 }
                                                             }
@@ -516,8 +485,6 @@ fun LongTermSection(
                         exit = fadeOut() + shrinkVertically(),
                         label = "HeatmapDayDetail"
                     ) {
-                        // Fall back to the snapshots while closing: otherwise the detail
-                        // below would read nulls and the out-animation would fade emptiness.
                         val week = (selectedWeek ?: lastOpenWeek)?.takeIf { it.isNotEmpty() }
                         val openDay = selectedDay ?: lastOpenDay
                         if (week != null) {
@@ -528,12 +495,6 @@ fun LongTermSection(
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
-                                // Identity-only key: week window + (per-app only) day + list
-                                // data state. Same-week day taps on the global version keep
-                                // the key identical, so the unchanged list never replays.
-                                // Fade-only on purpose: the outer visibility already drives
-                                // resizing, and a second size/slide animation nested inside
-                                // fights it (abrupt jumps).
                                 val detailKey = Triple(
                                     week,
                                     if (dayAppLoader == null) openDay else null,
@@ -605,8 +566,6 @@ fun LongTermSection(
                                     val topApps = animList.apps.take(3)
                                     val restApps = animList.apps.drop(3)
                                     val restTotal = restApps.sumOf { it.totalTimeVisible }
-                                    // Grouped positions mirror the Other-Apps pattern in Usage Stats:
-                                    // the header card continues the first/mid/last sequence.
                                     val groupTotal = if (restApps.isEmpty()) topApps.size
                                     else 3 + 1 + (if (dayListExpanded) restApps.size else 0)
                                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -716,8 +675,6 @@ fun LongTermSection(
 private val CalWeekdayLetters = listOf("M", "T", "W", "T", "F", "S", "S")
 
 private data class CalWeek(val days: List<Long?>, val monthLabel: String?)
-
-/** Data snapshot driving the detail crossfade: loading flag + week app list. */
 private data class DayListState(
     val loading: Boolean,
     val apps: List<AppUsageInfo>

@@ -123,8 +123,6 @@ fun PomodoroScreen(
         ) {
             item(key = "status") {
                 val isLongBreak = uiState.isBreakActive && uiState.currentSessionNumber % uiState.sessionsBeforeLongBreak == 0
-                // Hero behavior: compact at the top while idle, glides toward the
-                // center and grows (always 1:1) once the session starts.
                 val heroSize by animateDpAsState(
                     targetValue = if (uiState.isSessionActive) 320.dp else 240.dp,
                     animationSpec = spring(
@@ -140,8 +138,6 @@ fun PomodoroScreen(
                 ) {
                     Spacer(modifier = Modifier.height(48.dp))
                 }
-                // Idle <-> active morph: the circle glides to the center stage on
-                // start and settles back on stop instead of snapping.
                 AnimatedContent(
                     targetState = uiState.isSessionActive,
                     transitionSpec = {
@@ -957,11 +953,7 @@ fun PomodoroStatusProgress(
     circleSize: androidx.compose.ui.unit.Dp = 240.dp
 ) {
     val remaining = if (isBreakActive) remainingBreakMillis else remainingSessionMillis
-    // NOTE: totals must be the configured durations, never the live remaining
-    // values (remaining/remaining is always 1 and the ring would never move).
     val total = if (isBreakActive) totalBreakMillis else totalSessionMillis
-
-    // Direction: fills up during focus, drains during rest. Idle shows empty.
     val progressValue = when {
         isPreview -> 0f
         total <= 0L -> 0f
@@ -1000,9 +992,6 @@ fun PomodoroStatusProgress(
     val accentColor = if (isBreakActive) MaterialTheme.colorScheme.tertiary
     else if (isPaused) MaterialTheme.colorScheme.secondary
     else MaterialTheme.colorScheme.primary
-
-    // Square by construction: fixed equal sides, no fillMaxWidth (that combo
-    // stretches to screen width and turns the ring oval).
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -1019,8 +1008,6 @@ fun PomodoroStatusProgress(
             amplitude = { waveAmplitude },
             wavelength = 48.dp
         )
-
-        // Center content morphs on break / pause / preview switches.
         AnimatedContent(
             targetState = Triple(isBreakActive, isPaused, isPreview),
             transitionSpec = {

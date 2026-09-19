@@ -64,6 +64,7 @@ fun DeveloperSettings(
     onTestUsageGlimpse: () -> Unit,
     onTestGoalCallerDelayed: () -> Unit,
     onTestAlarmOverlay: () -> Unit,
+    onTestAchievementBanner: () -> Unit = {},
     onShowDbLogViewer: () -> Unit = {},
     onShowOverlayLogViewer: () -> Unit = {}
 ) {
@@ -252,6 +253,15 @@ fun DeveloperSettings(
                 summary = "Show the 5-minute usage glimpse HUD immediately",
                 onClick = onTestUsageGlimpse,
                 icon = Icons.Outlined.Visibility,
+                shape = RoundedCornerShape(8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+            SettingsActionItem(
+                title = "Test Achievement Banner",
+                summary = "Queue a fake unlock and open Profile to see the in-app notification",
+                onClick = onTestAchievementBanner,
+                icon = Icons.Outlined.EmojiEvents,
                 shape = RoundedCornerShape(8.dp)
             )
 

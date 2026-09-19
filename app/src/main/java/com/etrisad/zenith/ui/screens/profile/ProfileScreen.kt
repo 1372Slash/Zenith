@@ -9,14 +9,15 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,11 +41,14 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Android
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Share
@@ -54,6 +58,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -80,8 +85,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -100,6 +107,7 @@ import com.etrisad.zenith.ui.components.StreakCard
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithButtonType
+import com.etrisad.zenith.ui.components.focus.PreferenceCategory
 import com.etrisad.zenith.ui.components.focus.SettingsToggle
 import com.etrisad.zenith.ui.components.focus.appIconShape
 import com.etrisad.zenith.ui.screens.home.GroupedCard
@@ -112,6 +120,14 @@ import java.io.File
 private const val MAX_PROFILE_NAME_LENGTH = 20
 private const val MAX_PROFILE_BIO_LENGTH = 120
 
+private val StatsGroupTopShape = RoundedCornerShape(
+    topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp
+)
+private val StatsGroupMiddleShape = RoundedCornerShape(8.dp)
+private val StatsGroupBottomShape = RoundedCornerShape(
+    topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp
+)
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ProfileScreen(
@@ -119,7 +135,8 @@ fun ProfileScreen(
     homeViewModel: HomeViewModel,
     preferencesRepository: UserPreferencesRepository,
     innerPadding: PaddingValues,
-    onAppClick: (String) -> Unit
+    onAppClick: (String) -> Unit,
+    onSeeAllAchievements: () -> Unit = {}
 ) {
     val state by profileViewModel.uiState.collectAsState()
     val preferences by preferencesRepository.userPreferencesFlow.collectAsState(
@@ -132,22 +149,9 @@ fun ProfileScreen(
     var showBioDialog by remember { mutableStateOf(false) }
     var isSharing by remember { mutableStateOf(false) }
     var isEditing by rememberSaveable { mutableStateOf(false) }
-    var selectedAch by remember { mutableStateOf<AchievementState?>(null) }
-
-    // Recompute on every entry so freshly met tiers raise a notification.
+    var selectedAchId by remember { mutableStateOf<String?>(null) }
+    var showXpSheet by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { profileViewModel.refresh() }
-
-    val pending by profileViewModel.pendingUnlocks.collectAsState()
-    val currentUnlock = pending.firstOrNull()
-    val currentUnlockState = remember(currentUnlock, state.achievements) {
-        currentUnlock?.let { u -> state.achievements.find { it.def.id == u.defId } }
-    }
-    LaunchedEffect(currentUnlock) {
-        if (currentUnlock != null) {
-            delay(4500)
-            profileViewModel.consumeUnlock(currentUnlock.defId, currentUnlock.tierValue)
-        }
-    }
 
     val avatarPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
@@ -180,6 +184,9 @@ fun ProfileScreen(
     val accumulation = remember(state.achievements) {
         state.achievements.filter { it.def.category == AchievementCategory.ACCUMULATION }
     }
+    val symbolCounts = remember(state.achievements) {
+        countTierSymbols(state.achievements)
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
@@ -200,144 +207,123 @@ fun ProfileScreen(
                 bannerUri = preferences.userBannerUri,
                 level = state.level,
                 isEditing = isEditing,
+                showBannerOnHome = preferences.profileBannerOnHome,
+                onShowBannerOnHomeChange = {
+                    scope.launch { preferencesRepository.setProfileBannerOnHome(it) }
+                },
                 onEditName = { showNameDialog = true },
                 onEditBio = { showBioDialog = true },
                 onAvatarClick = { avatarPicker.launch("image/*") },
                 onBannerClick = { bannerPicker.launch("image/*") }
             )
         }
-
-        item(key = "banner_setting") {
-            val bannerShape = RoundedCornerShape(24.dp)
-            Card(
-                shape = bannerShape,
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                SettingsToggle(
-                    title = "Show banner on Home",
-                    description = "Use your profile banner in the Daily Screen Time card",
-                    checked = preferences.profileBannerOnHome,
-                    onCheckedChange = {
-                        scope.launch { preferencesRepository.setProfileBannerOnHome(it) }
-                    },
-                    icon = Icons.Outlined.Image,
-                    shape = bannerShape
-                )
-            }
-        }
-
-        item(key = "top_apps") {
-            LifetimeTopAppsCard(
-                topApps = state.topApps,
-                lifetimeTotal = state.lifetimeTotal,
-                lifetimeAppCount = state.lifetimeAppCount,
-                isLoading = state.isLoading,
-                formatDuration = homeViewModel::formatLongDuration,
-                onAppClick = onAppClick
-            )
-        }
-
-        item(key = "heatmap") {
-            ProfileHeatmapCard(
-                homeViewModel = homeViewModel,
-                onAppClick = onAppClick
-            )
-        }
-
-        item(key = "streak") {
-            StreakCard(
-                currentStreak = state.streakCurrent,
-                bestStreak = state.streakBest,
-                expressiveColors = preferences.expressiveColors,
-                shape = RoundedCornerShape(24.dp)
-            )
-        }
-
         item(key = "xp") {
             val unlockedBadges = remember(state.achievements) {
                 state.achievements.count { it.earnedTier != null }
             }
-            XpCard(
-                level = state.level,
-                levelProgress = state.levelProgress,
-                xpTotal = state.xpTotal,
-                xpToday = state.xpToday,
-                totalSavedMillis = state.totalSavedMillis,
-                unlockedBadges = unlockedBadges,
-                totalBadges = state.achievements.size,
-                formatDuration = homeViewModel::formatLongDuration
-            )
-        }
-
-        item(key = "achievements_title") {
-            Text(
-                text = "Achievements",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-            )
-        }
-
-        item(key = "ach_explorer_label") {
-            Text(
-                text = "Explorer - try Zenith features",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-        }
-        item(key = "ach_explorer_row") {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(24.dp))
-            ) {
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    itemsIndexed(explorer, key = { _, s -> "ach-${s.def.id}" }) { index, ach ->
-                        AchievementSquareCard(
-                            achievement = ach,
-                            index = index,
-                            total = explorer.size,
-                            onClick = { selectedAch = ach }
-                        )
-                    }
-                }
+            Column {
+                PreferenceCategory(title = "Progress")
+                XpCard(
+                    level = state.level,
+                    levelProgress = state.levelProgress,
+                    xpTotal = state.xpTotal,
+                    unlockedBadges = unlockedBadges,
+                    totalBadges = state.achievements.size,
+                    onClick = { showXpSheet = true }
+                )
             }
         }
 
-        item(key = "ach_acc_label") {
-            Text(
-                text = "Accumulation - grow over time",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.tertiary,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
+        item(key = "stats_group") {
+            Column {
+                PreferenceCategory(title = "Statistics")
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    LifetimeTopAppsCard(
+                        topApps = state.topApps,
+                        lifetimeTotal = state.lifetimeTotal,
+                        lifetimeAppCount = state.lifetimeAppCount,
+                        isLoading = state.isLoading,
+                        formatDuration = homeViewModel::formatLongDuration,
+                        onAppClick = onAppClick,
+                        shape = StatsGroupTopShape
+                    )
+                    ProfileHeatmapCard(
+                        homeViewModel = homeViewModel,
+                        onAppClick = onAppClick,
+                        shape = StatsGroupMiddleShape
+                    )
+                    StreakCard(
+                        currentStreak = state.streakCurrent,
+                        bestStreak = state.streakBest,
+                        expressiveColors = preferences.expressiveColors,
+                        shape = StatsGroupBottomShape
+                    )
+                }
+            }
         }
-        item(key = "ach_acc_row") {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(24.dp))
-            ) {
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+        item(key = "achievements_section") {
+            Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
                 ) {
-                    itemsIndexed(accumulation, key = { _, s -> "ach-${s.def.id}" }) { index, ach ->
-                        AchievementSquareCard(
-                            achievement = ach,
-                            index = index,
-                            total = accumulation.size,
-                            onClick = { selectedAch = ach }
+                    Text(
+                        text = "Achievements",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = onSeeAllAchievements,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ChevronRight,
+                            contentDescription = "See all achievements",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
                         )
+                    }
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TierCountStrip(counts = symbolCounts)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(24.dp))
+                    ) {
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            itemsIndexed(explorer, key = { _, s -> "ach-${s.def.id}" }) { index, ach ->
+                                AchievementSquareCard(
+                                    achievement = ach,
+                                    index = index,
+                                    total = explorer.size,
+                                    onClick = { selectedAchId = ach.def.id }
+                                )
+                            }
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(24.dp))
+                    ) {
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            itemsIndexed(accumulation, key = { _, s -> "ach-${s.def.id}" }) { index, ach ->
+                                AchievementSquareCard(
+                                    achievement = ach,
+                                    index = index,
+                                    total = accumulation.size,
+                                    onClick = { selectedAchId = ach.def.id }
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -394,53 +380,6 @@ fun ProfileScreen(
         )
     }
 
-    AnimatedVisibility(
-        visible = currentUnlock != null,
-        modifier = Modifier
-            .align(Alignment.TopCenter)
-            .padding(
-                top = innerPadding.calculateTopPadding() + 8.dp,
-                start = 16.dp,
-                end = 16.dp
-            ),
-        enter = slideInVertically(
-            initialOffsetY = { -it },
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessLow
-            )
-        ) + fadeIn(
-            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-        ) + scaleIn(
-            initialScale = 0.92f,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessMediumLow
-            )
-        ),
-        exit = slideOutVertically(
-            targetOffsetY = { -it },
-            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-        ) + fadeOut(
-            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-        )
-    ) {
-        val unlock = currentUnlock
-        if (unlock != null) {
-            AchievementUnlockBanner(
-                unlock = unlock,
-                state = currentUnlockState,
-                onOpen = {
-                    currentUnlockState?.let { selectedAch = it }
-                    profileViewModel.consumeUnlock(unlock.defId, unlock.tierValue)
-                },
-                onDismiss = {
-                    profileViewModel.consumeUnlock(unlock.defId, unlock.tierValue)
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-    }
     }
 
     if (showNameDialog) {
@@ -502,16 +441,29 @@ fun ProfileScreen(
         )
     }
 
-    selectedAch?.let { ach ->
-        AchievementDetailSheet(
-            achievement = ach,
-            onDismiss = { selectedAch = null }
+    selectedAchId?.let { id ->
+        state.achievements.find { it.def.id == id }?.let { ach ->
+            AchievementDetailSheet(
+                achievement = ach,
+                onDismiss = { selectedAchId = null }
+            )
+        }
+    }
+
+    if (showXpSheet) {
+        XpDetailSheet(
+            level = state.level,
+            xpTotal = state.xpTotal,
+            xpHistory = state.xpHistory,
+            totalSavedMillis = state.totalSavedMillis,
+            formatDuration = homeViewModel::formatLongDuration,
+            onDismiss = { showXpSheet = false }
         )
     }
 }
 
 @Composable
-private fun AchievementUnlockBanner(
+fun AchievementUnlockBanner(
     unlock: PendingUnlock,
     state: AchievementState?,
     onOpen: () -> Unit,
@@ -524,7 +476,7 @@ private fun AchievementUnlockBanner(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = modifier
     ) {
         Row(
@@ -554,7 +506,8 @@ private fun AchievementUnlockBanner(
                     color = MaterialTheme.colorScheme.primary
                 )
                 Text(
-                    text = state?.def?.title ?: "New badge",
+                    text = state?.def?.let { tierDisplayName(it, unlock.tierLevel) }
+                        ?: "New badge",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Black,
                     maxLines = 1,
@@ -564,7 +517,8 @@ private fun AchievementUnlockBanner(
                 TierSymbolsRow(
                     level = unlock.tierLevel,
                     iconSize = 12.dp,
-                    tint = MaterialTheme.colorScheme.tertiary
+                    tint = MaterialTheme.colorScheme.tertiary,
+                    popLast = true
                 )
             }
             IconButton(
@@ -590,27 +544,43 @@ private fun EditRevealButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     buttonModifier: Modifier = Modifier,
+    containerColor: Color,
     content: @Composable () -> Unit
 ) {
-    AnimatedVisibility(
-        visible = visible,
-        modifier = modifier,
-        enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-            scaleIn(
-                initialScale = 0.6f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            ),
-        exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-            scaleOut(
-                targetScale = 0.6f,
-                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-            )
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "EditAlpha"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (visible) 1f else 0.6f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "EditScale"
+    )
+    Box(
+        modifier = modifier.graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+            this.alpha = alpha
+        },
+        contentAlignment = Alignment.Center
     ) {
-        IconButton(onClick = onClick, modifier = buttonModifier) {
-            content()
+        Surface(
+            onClick = onClick,
+            enabled = visible,
+            shape = CircleShape,
+            color = containerColor,
+            modifier = buttonModifier
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                content()
+            }
         }
     }
 }
@@ -623,6 +593,8 @@ private fun ProfileIdentityCard(
     bannerUri: String,
     level: Int,
     isEditing: Boolean,
+    showBannerOnHome: Boolean,
+    onShowBannerOnHomeChange: (Boolean) -> Unit,
     onEditName: () -> Unit,
     onEditBio: () -> Unit,
     onAvatarClick: () -> Unit,
@@ -635,8 +607,6 @@ private fun ProfileIdentityCard(
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.fillMaxWidth()) {
-                // Banner: default mirrors the Home Daily Screen Time card tint,
-                // customizable later from the user gallery.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -657,10 +627,8 @@ private fun ProfileIdentityCard(
                         visible = isEditing,
                         onClick = onBannerClick,
                         modifier = Modifier.align(Alignment.TopEnd),
-                        buttonModifier = Modifier
-                            .padding(8.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
+                        buttonModifier = Modifier.padding(8.dp).size(44.dp),
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Image,
@@ -682,7 +650,8 @@ private fun ProfileIdentityCard(
                         EditRevealButton(
                             visible = isEditing,
                             onClick = onEditName,
-                            buttonModifier = Modifier.size(36.dp)
+                            buttonModifier = Modifier.size(36.dp),
+                            containerColor = Color.Transparent
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.Edit,
@@ -718,7 +687,8 @@ private fun ProfileIdentityCard(
                         EditRevealButton(
                             visible = isEditing,
                             onClick = onEditBio,
-                            buttonModifier = Modifier.size(36.dp)
+                            buttonModifier = Modifier.size(36.dp),
+                            containerColor = Color.Transparent
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.Edit,
@@ -728,11 +698,37 @@ private fun ProfileIdentityCard(
                             )
                         }
                     }
+                    AnimatedVisibility(
+                        visible = isEditing,
+                        enter = expandVertically(
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                        ) + fadeIn(
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                        ),
+                        exit = shrinkVertically(
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                        ) + fadeOut(
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                        )
+                    ) {
+                        Column {
+                            HorizontalDivider(
+                                thickness = 0.5.dp,
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                            )
+                            SettingsToggle(
+                                title = "Show banner on Home",
+                                description = "Use your profile banner in the Daily Screen Time card",
+                                checked = showBannerOnHome,
+                                onCheckedChange = onShowBannerOnHomeChange,
+                                icon = Icons.Outlined.Image,
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(16.dp))
                 }
             }
-            // Avatar: default tertiary tint with a user glyph,
-            // customizable later from the user gallery.
             Box(
                 modifier = Modifier
                     .padding(start = 20.dp, top = 106.dp)
@@ -762,10 +758,8 @@ private fun ProfileIdentityCard(
                 visible = isEditing,
                 onClick = onAvatarClick,
                 modifier = Modifier.padding(start = 88.dp, top = 158.dp),
-                buttonModifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary)
+                buttonModifier = Modifier.size(32.dp),
+                containerColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Edit,
@@ -785,10 +779,11 @@ private fun LifetimeTopAppsCard(
     lifetimeAppCount: Int,
     isLoading: Boolean,
     formatDuration: (Long) -> String,
-    onAppClick: (String) -> Unit
+    onAppClick: (String) -> Unit,
+    shape: Shape = RoundedCornerShape(24.dp)
 ) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = shape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -838,7 +833,6 @@ private fun LifetimePodium(
     formatDuration: (Long) -> String,
     onAppClick: (String) -> Unit
 ) {
-    // Visual order: 2nd left, 1st center tallest, 3rd right.
     val slots = remember(topApps) {
         when {
             topApps.size >= 3 -> listOf(
@@ -965,7 +959,8 @@ private fun PodiumColumn(
 @Composable
 private fun ProfileHeatmapCard(
     homeViewModel: HomeViewModel,
-    onAppClick: (String) -> Unit
+    onAppClick: (String) -> Unit,
+    shape: Shape = RoundedCornerShape(24.dp)
 ) {
     val selectedRange by homeViewModel.selectedStatsRange.collectAsState()
     val offset by homeViewModel.selectedPeriodOffset.collectAsState()
@@ -991,7 +986,7 @@ private fun ProfileHeatmapCard(
     }.collectAsState(initial = emptyList())
 
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = shape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -1024,14 +1019,13 @@ private fun XpCard(
     level: Int,
     levelProgress: Float,
     xpTotal: Long,
-    xpToday: Int,
-    totalSavedMillis: Long,
     unlockedBadges: Int,
     totalBadges: Int,
-    formatDuration: (Long) -> String
+    onClick: () -> Unit
 ) {
     val xpToNext = PROFILE_XP_PER_LEVEL - (xpTotal % PROFILE_XP_PER_LEVEL)
     Card(
+        onClick = onClick,
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         modifier = Modifier.fillMaxWidth()
@@ -1072,28 +1066,14 @@ private fun XpCard(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                        shape = CircleShape
-                    ) {
-                        Text(
-                            text = "+$xpToday XP today",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                        )
-                    }
                 }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = "XP details",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp)
+                )
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Shields earn for staying under the limit (less usage = more XP). " +
-                    "Goals earn for reaching or passing the target.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
             Spacer(modifier = Modifier.height(12.dp))
             LinearWavyProgressIndicator(
                 progress = { levelProgress },
@@ -1105,20 +1085,135 @@ private fun XpCard(
                     cap = StrokeCap.Round
                 )
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "$xpToNext XP to Level ${level + 1} - tap for details",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun XpDetailSheet(
+    level: Int,
+    xpTotal: Long,
+    xpHistory: List<XpDay>,
+    totalSavedMillis: Long,
+    formatDuration: (Long) -> String,
+    onDismiss: () -> Unit
+) {
+    var showRules by remember { mutableStateOf(false) }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 32.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "$level",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Level $level",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        text = "$xpTotal XP total - saved ${formatDuration(totalSavedMillis)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = { showRules = !showRules }) {
+                    Icon(
+                        imageVector = Icons.Outlined.Info,
+                        contentDescription = "How XP works",
+                        tint = if (showRules) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            AnimatedVisibility(
+                visible = showRules,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Shields earn XP for staying under the limit " +
+                            "(less usage = more XP, over the limit = 0). Goals earn " +
+                            "XP for reaching the target, plus a bonus for going over. " +
+                            "XP is awarded once per day.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+            Text(
+                text = "Daily XP",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            if (xpHistory.isEmpty()) {
                 Text(
-                    text = "$xpToNext XP to Level ${level + 1}",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = "Saved: ${formatDuration(totalSavedMillis)}",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
+                    text = "No XP recorded yet - check back tomorrow",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    xpHistory.forEach { day ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = prettyProfileDate(day.date),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = "saved ${formatDuration(day.savedMillis)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(end = 12.dp)
+                            )
+                            Text(
+                                text = "+${day.xp} XP",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -1133,7 +1228,6 @@ private fun AchievementSquareCard(
     onClick: () -> Unit
 ) {
     val earned = achievement.earnedTier != null
-    // Achieved cards stay fully rounded even in the middle of the group.
     val shape = when {
         earned || total == 1 -> RoundedCornerShape(24.dp)
         index == 0 -> RoundedCornerShape(
@@ -1184,10 +1278,21 @@ private fun AchievementSquareCard(
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
+            if (earned && achievement.next != null) {
+                Text(
+                    text = tierDisplayName(achievement.def, achievement.earnedLevel),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             if (earned) {
                 Box(
                     modifier = Modifier.height(20.dp),
@@ -1230,7 +1335,7 @@ private fun AchievementSquareCard(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun AchievementDetailSheet(
+fun AchievementDetailSheet(
     achievement: AchievementState,
     onDismiss: () -> Unit
 ) {
@@ -1263,8 +1368,18 @@ private fun AchievementDetailSheet(
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
+                    if (achievement.earnedLevel > 0) {
+                        Text(
+                            text = achievement.def.title,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     Text(
-                        text = achievement.def.title,
+                        text = tierDisplayName(achievement.def, achievement.earnedLevel),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Black
                     )
@@ -1319,6 +1434,7 @@ private fun AchievementDetailSheet(
                     label = "Before",
                     threshold = thresholds.getOrNull(level - 2),
                     tierLevel = level - 1,
+                    tierName = achievement.def.tierNames.getOrNull(level - 2),
                     date = thresholds.getOrNull(level - 2)?.let {
                         achievement.unlockedDates[it.tier.value]
                     },
@@ -1331,6 +1447,7 @@ private fun AchievementDetailSheet(
                     label = "Current",
                     threshold = thresholds.getOrNull(level - 1),
                     tierLevel = level,
+                    tierName = achievement.def.tierNames.getOrNull(level - 1),
                     date = thresholds.getOrNull(level - 1)?.let {
                         achievement.unlockedDates[it.tier.value]
                     },
@@ -1343,6 +1460,7 @@ private fun AchievementDetailSheet(
                     label = "Next",
                     threshold = thresholds.getOrNull(level),
                     tierLevel = level + 1,
+                    tierName = achievement.def.tierNames.getOrNull(level),
                     date = null,
                     highlighted = false,
                     index = 2,
@@ -1399,11 +1517,12 @@ private fun AchievementDetailSheet(
 }
 
 @Composable
-private fun TierSymbolsRow(
+fun TierSymbolsRow(
     level: Int,
     iconSize: androidx.compose.ui.unit.Dp,
     tint: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    popLast: Boolean = false
 ) {
     val icons = remember(level) { tierIconsForLevel(level) }
     Row(
@@ -1411,13 +1530,173 @@ private fun TierSymbolsRow(
         horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        icons.forEach { icon ->
+        icons.forEachIndexed { index, icon ->
+            val isPopping = popLast && index == icons.lastIndex
+            var shown by remember(level, index) { mutableStateOf(!isPopping) }
+            LaunchedEffect(level, index) { shown = true }
+            val scale by animateFloatAsState(
+                targetValue = if (shown) 1f else 0.2f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                ),
+                label = "TierPop"
+            )
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = tint,
-                modifier = Modifier.size(iconSize)
+                modifier = Modifier.size(iconSize).graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
             )
+        }
+    }
+}
+
+@Composable
+fun TierCountStrip(
+    counts: Map<ProfileTier, Int>,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp, horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ProfileTier.entries.forEach { tier ->
+                val count = counts[tier] ?: 0
+                val active = count > 0
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (active) MaterialTheme.colorScheme.tertiaryContainer
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = tier.icon,
+                            contentDescription = tier.title,
+                            tint = if (active) MaterialTheme.colorScheme.onTertiaryContainer
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = tier.title,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (active) MaterialTheme.colorScheme.onSurfaceVariant
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        maxLines = 1
+                    )
+                    Text(
+                        text = "$count",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Black,
+                        color = if (active) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun AchievementProgressBanner(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    beforeLabel: String,
+    afterLabel: String,
+    beforeFraction: Float,
+    afterFraction: Float,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var started by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(900)
+        started = true
+    }
+    val fraction by animateFloatAsState(
+        targetValue = if (started) afterFraction else beforeFraction,
+        animationSpec = tween(
+            durationMillis = 1200,
+            easing = EaseOutCubic
+        ),
+        label = "ProgressBannerBar"
+    )
+    Card(
+        onClick = onOpen,
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.tertiaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                LinearWavyProgressIndicator(
+                    progress = { fraction },
+                    modifier = Modifier.fillMaxWidth().height(6.dp),
+                    color = MaterialTheme.colorScheme.tertiary,
+                    trackColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f),
+                    stroke = Stroke(
+                        width = with(LocalDensity.current) { 3.dp.toPx() },
+                        cap = StrokeCap.Round
+                    )
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "$beforeLabel → $afterLabel",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
         }
     }
 }
@@ -1427,6 +1706,7 @@ private fun TierMiniCard(
     label: String,
     threshold: TierThreshold?,
     tierLevel: Int,
+    tierName: String?,
     date: String?,
     highlighted: Boolean,
     index: Int,
@@ -1488,6 +1768,16 @@ private fun TierMiniCard(
                     tint = if (date != null) MaterialTheme.colorScheme.tertiary
                     else MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (tierName != null) {
+                    Text(
+                        text = tierName,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Text(
                     text = threshold.requireLabel,
                     style = MaterialTheme.typography.labelSmall,
@@ -1524,11 +1814,6 @@ private fun formatShareDuration(millis: Long): String {
     val h = mins / 60
     return if (h > 0) "${h}h ${mins % 60}m" else "${mins}m"
 }
-
-/**
- * Offline share: renders a profile summary card to a PNG in cache and
- * shares it with a plain ACTION_SEND intent. No network involved.
- */
 private fun renderAndShareProfile(
     context: android.content.Context,
     userName: String,
@@ -1601,7 +1886,7 @@ private fun renderAndShareProfile(
         y += 70f
         achievements.filter { it.earnedTier != null }.take(6).forEach { ach ->
             canvas.drawText(
-                "${ach.def.title} [${toCustomRoman(ach.earnedLevel)}]",
+                tierDisplayName(ach.def, ach.earnedLevel).take(40),
                 64f, y, body
             )
             y += rowH.toFloat()

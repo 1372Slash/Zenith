@@ -29,19 +29,14 @@ import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.ui.graphics.vector.ImageVector
 
 const val PROFILE_XP_PER_LEVEL = 500
-
-/**
- * Custom roman-like tiers. I = star, V = moon, X = sun, L = comet launch,
- * C = crown, D = diamond, M = trophy. Values follow roman denominations.
- */
-enum class ProfileTier(val value: Int, val icon: ImageVector) {
-    I(1, Icons.Outlined.Star),
-    V(5, Icons.Outlined.DarkMode),
-    X(10, Icons.Outlined.LightMode),
-    L(50, Icons.Outlined.RocketLaunch),
-    C(100, Icons.Outlined.WorkspacePremium),
-    D(500, Icons.Outlined.Diamond),
-    M(1000, Icons.Outlined.EmojiEvents);
+enum class ProfileTier(val value: Int, val icon: ImageVector, val title: String) {
+    I(1, Icons.Outlined.Star, "Star"),
+    V(5, Icons.Outlined.DarkMode, "Moon"),
+    X(10, Icons.Outlined.LightMode, "Sun"),
+    L(50, Icons.Outlined.RocketLaunch, "Comet"),
+    C(100, Icons.Outlined.WorkspacePremium, "Crown"),
+    D(500, Icons.Outlined.Diamond, "Diamond"),
+    M(1000, Icons.Outlined.EmojiEvents, "Trophy");
 
     companion object {
         fun highestAtOrBelow(value: Long): ProfileTier? =
@@ -121,7 +116,9 @@ data class AchievementDef(
     val desc: String,
     val icon: ImageVector,
     val category: AchievementCategory,
-    val thresholds: List<TierThreshold>
+    val thresholds: List<TierThreshold>,
+    /** Unique name per tier level, index 0 = tier 1. Falls back to [title]. */
+    val tierNames: List<String> = emptyList()
 )
 
 data class AchievementState(
@@ -169,6 +166,44 @@ private fun hoursLabel(millis: Long): String {
     return if (h < 1) "${millis / 60_000L}m" else "${h}h"
 }
 
+/** Compact duration for big lifetime numbers, e.g. 101572988ms -> "28.21h". */
+fun formatCompactDuration(millis: Long): String {
+    if (millis <= 0L) return "0m"
+    val hours = millis / 3_600_000.0
+    if (hours < 1) return "${millis / 60_000L}m"
+    val text = "%.2f".format(hours).trimEnd('0').trimEnd('.')
+    return "${text}h"
+}
+
+private val MILLIS_ACHIEVEMENTS = setOf("focus_hours", "time_saver", "loyal_tracker")
+
+fun formatProgressNumber(defId: String, value: Long): String =
+    if (defId in MILLIS_ACHIEVEMENTS) formatCompactDuration(value) else value.toString()
+
+/**
+ * Unique name per tier level, e.g. "Streak in a Cup", "Streak Keeper".
+ * Falls back to the base title when no custom name exists.
+ */
+fun tierDisplayName(def: AchievementDef, level: Int): String {
+    if (level <= 0) return def.title
+    return def.tierNames.getOrNull(level - 1) ?: def.title
+}
+
+/** Counts owned symbols per tier across achievements. */
+fun countTierSymbols(achievements: List<AchievementState>): Map<ProfileTier, Int> {
+    val counts = ProfileTier.entries.associateWith { 0 }.toMutableMap()
+    achievements.forEach { state ->
+        var rest = state.earnedLevel
+        for (tier in ProfileTier.entries.sortedByDescending { it.value }) {
+            while (rest >= tier.value) {
+                counts[tier] = (counts[tier] ?: 0) + 1
+                rest -= tier.value
+            }
+        }
+    }
+    return counts
+}
+
 fun buildAchievementDefs(): List<AchievementDef> = listOf(
     AchievementDef(
         id = "pomo_first", title = "Focus Starter",
@@ -182,6 +217,10 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
             TierThreshold(ProfileTier.C, 250, "250 sessions"),
             TierThreshold(ProfileTier.D, 500, "500 sessions"),
             TierThreshold(ProfileTier.M, 1000, "1000 sessions")
+        ),
+        tierNames = listOf(
+            "First Spark", "Focus Starter", "Rhythm Finder", "Habit Former",
+            "Session Machine", "Century Club", "Focus Sage"
         )
     ),
     AchievementDef(
@@ -196,6 +235,10 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
             TierThreshold(ProfileTier.C, 360_000_000L, "100h"),
             TierThreshold(ProfileTier.D, 900_000_000L, "250h"),
             TierThreshold(ProfileTier.M, 1_800_000_000L, "500h")
+        ),
+        tierNames = listOf(
+            "First Hour", "Deep Focus", "Flow Finder", "Flow Keeper",
+            "Marathon Mind", "Centurion", "Enlightened"
         )
     ),
     AchievementDef(
@@ -210,6 +253,10 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
             TierThreshold(ProfileTier.C, 100, "100 days"),
             TierThreshold(ProfileTier.D, 200, "200 days"),
             TierThreshold(ProfileTier.M, 365, "365 days")
+        ),
+        tierNames = listOf(
+            "Streak in a Cup", "Streak in a Bag", "Streak Keeper", "Streak Warden",
+            "Streak Guardian", "Streak Legend", "Streak Eternal"
         )
     ),
     AchievementDef(
@@ -224,6 +271,10 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
             TierThreshold(ProfileTier.C, 360_000_000L, "100h saved"),
             TierThreshold(ProfileTier.D, 900_000_000L, "250h saved"),
             TierThreshold(ProfileTier.M, 1_800_000_000L, "500h saved")
+        ),
+        tierNames = listOf(
+            "Penny Saved", "Time Saver", "Hour Hoarder", "Time Vault",
+            "Time Banker", "Time Tycoon", "Time Lord"
         )
     ),
     AchievementDef(
@@ -238,6 +289,10 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
             TierThreshold(ProfileTier.C, 100, "100 days"),
             TierThreshold(ProfileTier.D, 200, "200 days"),
             TierThreshold(ProfileTier.M, 365, "365 days")
+        ),
+        tierNames = listOf(
+            "App Sprout", "App Streaker", "App Regular", "App Devotee",
+            "App Champion", "App Legend", "App Immortal"
         )
     ),
     AchievementDef(
@@ -342,6 +397,10 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
             TierThreshold(ProfileTier.C, 1_800_000_000L, "500h"),
             TierThreshold(ProfileTier.D, 3_600_000_000L, "1000h"),
             TierThreshold(ProfileTier.M, 7_200_000_000L, "2000h")
+        ),
+        tierNames = listOf(
+            "Newcomer", "Loyal Tracker", "Loyal Regular", "Loyal Veteran",
+            "Loyal Pillar", "Loyal Legend", "Zenith Soul"
         )
     ),
     AchievementDef(
@@ -356,6 +415,10 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
             TierThreshold(ProfileTier.C, 100, "100 nights"),
             TierThreshold(ProfileTier.D, 200, "200 nights"),
             TierThreshold(ProfileTier.M, 365, "365 nights")
+        ),
+        tierNames = listOf(
+            "Night Owl", "Night Guardian", "Night Watch", "Night Warden",
+            "Night Sentinel", "Dream Keeper", "Sandman"
         )
     ),
     AchievementDef(
@@ -370,6 +433,10 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
             TierThreshold(ProfileTier.C, 15, "15 apps"),
             TierThreshold(ProfileTier.D, 20, "20 apps"),
             TierThreshold(ProfileTier.M, 30, "30 apps")
+        ),
+        tierNames = listOf(
+            "First Brick", "Fortress Builder", "Wall Raiser", "Gatekeeper",
+            "Bastion", "Citadel", "Eternal Fortress"
         )
     )
 )
@@ -425,8 +492,8 @@ fun buildAchievementStates(stats: ProfileAchievementStats): List<AchievementStat
 
 fun achievementProgressLabel(state: AchievementState): String {
     val next = state.next ?: return "Max tier ${state.earnedTier?.name ?: ""}"
-    return if (state.def.id == "focus_hours" || state.def.id == "time_saver") {
-        "${hoursLabel(state.current)} / ${next.requireLabel}"
+    return if (state.def.id in MILLIS_ACHIEVEMENTS) {
+        "${formatCompactDuration(state.current)} / ${next.requireLabel}"
     } else {
         "${state.current} / ${next.requireLabel}"
     }

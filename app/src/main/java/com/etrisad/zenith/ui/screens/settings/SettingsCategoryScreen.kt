@@ -43,6 +43,7 @@ fun SettingsCategoryScreen(
     onOpenPermissions: () -> Unit,
     onTriggerOnboardingStats: () -> Unit,
     onTriggerOnboardingUpdate: () -> Unit,
+    onTestAchievementBanner: () -> Unit = {},
     performanceBackInterceptor: MutableState<() -> Boolean> = remember { mutableStateOf({ false }) }
 ) {
     val preferences by preferencesRepository.userPreferencesFlow.collectAsState(initial = UserPreferences())
@@ -296,6 +297,7 @@ fun SettingsCategoryScreen(
                         onNavigateToDatabaseDebug = { navController.navigate(Screen.DatabaseDebug.route) },
                         onNavigateToDataRepairment = { navController.navigate(Screen.DataRepairment.route) },
                         onTestGoalOverlay = { showGoalTestSheet = true },
+                        onTestAchievementBanner = onTestAchievementBanner,
                         onTestUpdateSheet = {
                             coroutineScope.launch {
                                 val release = updateManager.fetchLatestRelease()

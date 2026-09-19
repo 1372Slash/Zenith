@@ -601,8 +601,6 @@ fun UsageDashboard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.matchParentSize()
                 )
-                // Theme-aware scrim keeps the banner visible while
-                // preserving text readability in both themes.
                 Box(
                     modifier = Modifier.matchParentSize()
                         .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f))
@@ -1298,7 +1296,6 @@ fun rememberPomodoroStatus(prefs: UserPreferences): PomodoroStatus {
     val sessionEnd = prefs.pomodoroSessionEndTimestamp
     val breakEnd = prefs.pomodoroBreakEndTimestamp
     val active = prefs.pomodoroEnabled && sessionEnd > now
-    // Tick every second, but only while a session is actually running.
     LaunchedEffect(active) {
         if (!active) return@LaunchedEffect
         while (true) {
@@ -1311,7 +1308,6 @@ fun rememberPomodoroStatus(prefs: UserPreferences): PomodoroStatus {
     val total = if (onBreak) prefs.pomodoroBreakDurationMinutes * 60_000L
         else prefs.pomodoroSessionDurationMinutes * 60_000L
     val remaining = ((if (onBreak) breakEnd else sessionEnd) - now).coerceAtLeast(0L)
-    // Fills up during focus, drains during rest.
     val progress = if (total <= 0L) 0f
     else if (onBreak) (remaining.toFloat() / total).coerceIn(0f, 1f)
     else (1f - remaining.toFloat() / total).coerceIn(0f, 1f)

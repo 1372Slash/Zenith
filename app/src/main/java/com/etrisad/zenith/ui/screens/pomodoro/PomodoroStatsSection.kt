@@ -26,11 +26,6 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-
-/**
- * Session-history stats reusing the long-term summary: monthly/yearly toggle,
- * calendar heatmap of focus time, week detail, and per-day session counts.
- */
 @Composable
 fun PomodoroStatsSection(viewModel: PomodoroViewModel) {
     val selectedRange by viewModel.pomodoroStatsRange.collectAsState()

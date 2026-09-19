@@ -18,6 +18,7 @@ object FeatureInfoRegistry {
         route == Screen.Pomodoro.route -> pomodoro
         route == Screen.PausePoint.route -> pausePoint
         route == Screen.Profile.route -> profile
+        route == Screen.Achievements.route -> achievements
         route == Screen.PausePointQr.route -> pausePointQr
         route?.startsWith("pause_point_type") == true -> pausePointType
         route == Screen.OverlayAppearance.route -> overlayAppearance
@@ -306,6 +307,24 @@ object FeatureInfoRegistry {
             FeatureInfoSections.tips(
                 "XP is awarded once per day: shields pay for unused headroom, goals pay for reaching or passing the target.",
                 "Achievement tiers use custom roman numerals — collect higher tiers by growing streaks and saved time."
+            )
+        )
+    )
+
+    private val achievements = FeatureInfo(
+        title = "Achievements",
+        summary = "Every badge in one place: explorer badges for trying features and tiered accumulation badges with unlock history.",
+        sections = listOf(
+            FeatureInfoSections.whatItDoes(
+                "Lists all achievements grouped by Explorer and Accumulation with live progress.",
+                "Tapping a badge opens its detail: tier ladder (before, current, next) and unlock dates."
+            ),
+            FeatureInfoSections.whatYoullSee(
+                "Grouped rows with progress bars and numeric targets.",
+                "Custom roman tier icons from star up to trophy."
+            ),
+            FeatureInfoSections.tips(
+                "New unlocks also pop up as a springy banner on the Profile screen."
             )
         )
     )

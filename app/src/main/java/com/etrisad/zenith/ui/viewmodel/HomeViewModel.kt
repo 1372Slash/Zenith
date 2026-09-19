@@ -200,11 +200,6 @@ class HomeViewModel(
             }
         }
     }
-
-    /**
-     * Every calendar day (00:00 millis) covered by a long-term period, oldest
-     * first, with no upper bound — backs the calendar heatmap grid.
-     */
     fun getPeriodDayMillis(range: StatsRange, offset: Int): List<Long> {
         val (startStr, endStr) = getDateRangeForPeriod(range, offset)
         val parser = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())

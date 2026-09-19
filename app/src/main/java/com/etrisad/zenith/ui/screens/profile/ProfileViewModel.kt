@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -28,7 +30,37 @@ data class PendingUnlock(
     val defId: String,
     val tierLevel: Int,
     val tierValue: Int,
-    val date: String
+    val date: String,
+    val prevLevel: Int = 0
+)
+
+sealed interface ProfileBannerEvent {
+    val key: String
+
+    data class Unlock(
+        val defId: String,
+        val tierLevel: Int,
+        val tierValue: Int,
+        val prevLevel: Int,
+        val date: String
+    ) : ProfileBannerEvent {
+        override val key = "u:$defId:$tierValue"
+    }
+
+    data class Progress(
+        val defId: String,
+        val before: Long,
+        val after: Long,
+        val date: String
+    ) : ProfileBannerEvent {
+        override val key = "p:$defId:$date:$after"
+    }
+}
+
+data class XpDay(
+    val date: String,
+    val xp: Int,
+    val savedMillis: Long
 )
 
 data class ProfileUiState(
@@ -46,6 +78,7 @@ data class ProfileUiState(
     val pomodoroSessions: Int = 0,
     val pomodoroFocusMillis: Long = 0L,
     val achievements: List<AchievementState> = emptyList(),
+    val xpHistory: List<XpDay> = emptyList(),
     val lastSyncDate: String = ""
 )
 
@@ -62,13 +95,38 @@ class ProfileViewModel(
 
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
+    private val refreshMutex = Mutex()
 
     private val _pendingUnlocks = MutableStateFlow<List<PendingUnlock>>(emptyList())
     val pendingUnlocks: StateFlow<List<PendingUnlock>> = _pendingUnlocks.asStateFlow()
 
+    private val _pendingBanners = MutableStateFlow<List<ProfileBannerEvent>>(emptyList())
+    val pendingBanners: StateFlow<List<ProfileBannerEvent>> = _pendingBanners.asStateFlow()
+
     fun consumeUnlock(defId: String, tierValue: Int) {
         _pendingUnlocks.update { list ->
             list.filterNot { it.defId == defId && it.tierValue == tierValue }
+        }
+    }
+
+    fun consumeBanner(key: String) {
+        _pendingBanners.update { list -> list.filterNot { it.key == key } }
+    }
+    fun testUnlockBanner() {
+        val today = dateStr(System.currentTimeMillis())
+        _pendingUnlocks.update {
+            it + PendingUnlock(defId = "streak_keeper", tierLevel = 1, tierValue = 1, date = today)
+        }
+        _pendingBanners.update {
+            it + ProfileBannerEvent.Unlock(
+                defId = "streak_keeper", tierLevel = 1, tierValue = 1,
+                prevLevel = 0, date = today
+            ) + ProfileBannerEvent.Progress(
+                defId = "loyal_tracker",
+                before = 32_400_000L,
+                after = 36_000_000L,
+                date = today
+            )
         }
     }
 
@@ -78,7 +136,8 @@ class ProfileViewModel(
 
     fun refresh() {
         viewModelScope.launch(Dispatchers.IO) {
-            _uiState.update { it.copy(isLoading = true) }
+            refreshMutex.withLock {
+                _uiState.update { it.copy(isLoading = true) }
             try {
                 val lifetime = syncLifetime()
                 val prefs = userPreferencesRepository.userPreferencesFlow.first()
@@ -120,7 +179,9 @@ class ProfileViewModel(
                     shieldCount = shields.size
                 )
                 val baseAchievements = buildAchievementStates(stats)
-                val achievements = recordUnlockDates(baseAchievements, todayStr)
+                val (achievements, newlyTieredIds) = recordUnlockDates(baseAchievements, todayStr)
+                detectProgressEvents(achievements, newlyTieredIds, todayStr)
+                val xpHistory = decodeXpHistory(freshPrefs.userXpHistory)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -137,11 +198,13 @@ class ProfileViewModel(
                         pomodoroSessions = pomoSessions,
                         pomodoroFocusMillis = pomoFocus,
                         achievements = achievements,
+                        xpHistory = xpHistory,
                         lastSyncDate = prefs.lifetimeLastSyncDate
                     )
                 }
             } catch (_: Exception) {
                 _uiState.update { it.copy(isLoading = false) }
+            }
             }
         }
     }
@@ -243,7 +306,7 @@ class ProfileViewModel(
     private suspend fun recordUnlockDates(
         states: List<AchievementState>,
         todayStr: String
-    ): List<AchievementState> {
+    ): Pair<List<AchievementState>, Set<String>> {
         return try {
             val rawBefore = userPreferencesRepository.userPreferencesFlow.first().achievementHistory
             // First run seeds the baseline silently so existing progress
@@ -253,6 +316,8 @@ class ProfileViewModel(
                 .mapValues { it.value.toMutableMap() }.toMutableMap()
             var changed = false
             val freshUnlocks = mutableListOf<PendingUnlock>()
+            val freshBannerUnlocks = mutableListOf<ProfileBannerEvent.Unlock>()
+            val newlyTieredIds = mutableSetOf<String>()
             val enriched = states.map { state ->
                 val dates = stored.getOrPut(state.def.id) { mutableMapOf() }
                 state.def.thresholds.forEach { threshold ->
@@ -260,13 +325,25 @@ class ProfileViewModel(
                         dates[threshold.tier.value] = todayStr
                         changed = true
                         if (!isBaseline) {
+                            val tierLevel = state.def.thresholds.indexOfFirst {
+                                it.tier.value == threshold.tier.value
+                            } + 1
+                            newlyTieredIds.add(state.def.id)
                             freshUnlocks.add(
                                 PendingUnlock(
                                     defId = state.def.id,
-                                    tierLevel = state.def.thresholds.indexOfFirst {
-                                        it.tier.value == threshold.tier.value
-                                    } + 1,
+                                    tierLevel = tierLevel,
                                     tierValue = threshold.tier.value,
+                                    date = todayStr,
+                                    prevLevel = tierLevel - 1
+                                )
+                            )
+                            freshBannerUnlocks.add(
+                                ProfileBannerEvent.Unlock(
+                                    defId = state.def.id,
+                                    tierLevel = tierLevel,
+                                    tierValue = threshold.tier.value,
+                                    prevLevel = tierLevel - 1,
                                     date = todayStr
                                 )
                             )
@@ -281,9 +358,63 @@ class ProfileViewModel(
             if (freshUnlocks.isNotEmpty()) {
                 _pendingUnlocks.update { it + freshUnlocks }
             }
-            enriched
+            if (freshBannerUnlocks.isNotEmpty()) {
+                _pendingBanners.update { it + freshBannerUnlocks }
+            }
+            enriched to newlyTieredIds
         } catch (_: Exception) {
-            states
+            states to emptySet()
+        }
+    }
+
+    /**
+     * Quick progress banners for accumulation achievements: every value
+     * increase emits one unless a tier-up banner already covers it.
+     * Maxed achievements stay silent.
+     */
+    private suspend fun detectProgressEvents(
+        states: List<AchievementState>,
+        newlyTieredIds: Set<String>,
+        todayStr: String
+    ) {
+        try {
+            val lastVals = decodeLastValues(
+                userPreferencesRepository.userPreferencesFlow.first().achievementLastValues
+            ).toMutableMap()
+            var changed = false
+            val events = mutableListOf<ProfileBannerEvent.Progress>()
+            states.forEach { state ->
+                if (state.def.category != AchievementCategory.ACCUMULATION) return@forEach
+                if (state.next == null) {
+                    if (lastVals[state.def.id] != state.current) {
+                        lastVals[state.def.id] = state.current
+                        changed = true
+                    }
+                    return@forEach
+                }
+                val last = lastVals[state.def.id]
+                if (last == null || last != state.current) {
+                    lastVals[state.def.id] = state.current
+                    changed = true
+                }
+                if (last != null && state.current > last && state.def.id !in newlyTieredIds) {
+                    events.add(
+                        ProfileBannerEvent.Progress(
+                            defId = state.def.id,
+                            before = last,
+                            after = state.current,
+                            date = todayStr
+                        )
+                    )
+                }
+            }
+            if (changed) {
+                userPreferencesRepository.setAchievementLastValues(encodeLastValues(lastVals))
+            }
+            if (events.isNotEmpty()) {
+                _pendingBanners.update { it + events }
+            }
+        } catch (_: Exception) {
         }
     }
 
@@ -323,5 +454,33 @@ class ProfileViewModel(
             map.entries.sortedBy { it.key }.flatMap { (id, dates) ->
                 dates.entries.sortedBy { it.key }.map { "$id\t${it.key}\t${it.value}" }
             }.joinToString("\n")
+
+        fun decodeXpHistory(raw: String): List<XpDay> {
+            if (raw.isBlank()) return emptyList()
+            return raw.lines().mapNotNull { line ->
+                val parts = line.split('\t')
+                if (parts.size != 3) return@mapNotNull null
+                val xp = parts[1].toIntOrNull() ?: return@mapNotNull null
+                val saved = parts[2].toLongOrNull() ?: return@mapNotNull null
+                if (parts[0].isEmpty()) return@mapNotNull null
+                XpDay(parts[0], xp, saved)
+            }
+        }
+
+        fun decodeLastValues(raw: String): Map<String, Long> {
+            if (raw.isBlank()) return emptyMap()
+            return buildMap {
+                raw.lines().forEach { line ->
+                    val parts = line.split('\t')
+                    if (parts.size != 2) return@forEach
+                    val value = parts[1].toLongOrNull() ?: return@forEach
+                    if (parts[0].isNotEmpty()) put(parts[0], value)
+                }
+            }
+        }
+
+        fun encodeLastValues(map: Map<String, Long>): String =
+            map.entries.sortedBy { it.key }
+                .joinToString("\n") { "${it.key}\t${it.value}" }
     }
 }

@@ -140,9 +140,6 @@ fun WeekStepperIndicator(
     onNext: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Alpha follows visibility only - never the loader - so background loads
-    // can't make a visible chevron blink. `enabled` flips past ~transparent
-    // (hysteresis) so M3 disabled colors never snap mid-fade.
     val prevAlpha by animateFloatAsState(
         targetValue = if (showPrevious) 1f else 0f,
         animationSpec = spring(stiffness = Spring.StiffnessLow),
@@ -162,8 +159,6 @@ fun WeekStepperIndicator(
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Slot shifted toward the pill so the glyph sits ~2dp from it
-            // while the control keeps its full size.
             Box(
                 modifier = Modifier.size(28.dp).offset(x = 1.dp),
                 contentAlignment = Alignment.Center
@@ -208,8 +203,6 @@ fun WeekStepperIndicator(
                                     slideOutVertically { -it / 2 })
                             .using(SizeTransform(clip = false))
                     },
-                    // Center-anchored so width changes grow symmetrically and
-                    // both chevrons stay equidistant from the pill.
                     contentAlignment = Alignment.Center,
                     label = "WeekRangeLabel"
                 ) { label ->
@@ -274,13 +267,8 @@ fun UsageGraph(
             addPath(path)
         }
     }
-    // Newest 21 days, oldest first. chunkOffset 0 = newest 7-day chunk.
     val basePages = remember(history) { history.chunked(7) }
     val basePageCount = basePages.size.coerceAtLeast(1)
-
-    // Older 7-day chunks loaded on demand while swiping left, oldest first.
-    // Keyed by loaderKey (e.g. package name) so switching content resets them.
-    // Only chunks near the viewed page are kept (±3 pages) to stay light.
     var olderChunks by remember(loaderKey) { mutableStateOf(listOf<List<DailyUsage>>()) }
     var loadingOlder by remember(loaderKey) { mutableStateOf(false) }
     var olderExhausted by remember(loaderKey) { mutableStateOf(false) }
@@ -298,10 +286,6 @@ fun UsageGraph(
     fun chunkAt(page: Int): List<DailyUsage> =
         if (page < olderChunks.size) olderChunks[page]
         else basePages.getOrNull(page - olderChunks.size) ?: emptyList()
-
-    // Report the visible chunk and lazily load older weeks when the user
-    // settles near the left edge. Gated on !isScrollInProgress so each load
-    // is triggered by a fresh settle (bounded, no prefetch loops).
     LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
         if (pagerState.isScrollInProgress) return@LaunchedEffect
         val current = pagerState.currentPage
@@ -318,8 +302,6 @@ fun UsageGraph(
                     emptyStreak = 0
                 }
                 if (emptyStreak >= 12) {
-                    // ~3 months of nothing: treat as the beginning of data.
-                    // Keep a 2-week empty buffer so the edge doesn't feel abrupt.
                     olderExhausted = true
                     val drop = (emptyStreak - 2).coerceAtLeast(0)
                     if (drop > 0 && drop < olderChunks.size + 1) {
@@ -331,8 +313,6 @@ fun UsageGraph(
                 } else if (week.size == 7) {
                     olderChunks = listOf(week) + olderChunks
                     onOlderDaysChanged(olderChunks.flatten())
-                    // Hold only if the user stayed put mid-load; otherwise
-                    // respect their navigation instead of yanking them.
                     if (pagerState.currentPage == current) {
                         pagerState.scrollToPage(current + 1)
                     }
@@ -346,10 +326,6 @@ fun UsageGraph(
             }
         }
     }
-
-    // Evict chunks strictly more than 3 pages behind the viewed one.
-    // Runs only when settled; prefetch (above) only fires at pages 0..1,
-    // so the two can never overlap and indices stay consistent.
     LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress, totalPages) {
         if (pagerState.isScrollInProgress || olderChunks.size <= 4) return@LaunchedEffect
         val current = pagerState.currentPage
@@ -371,8 +347,6 @@ fun UsageGraph(
 
     var hasInitializedPager by remember(history.isNotEmpty(), loaderKey) { mutableStateOf(false) }
     var lastFollowDate by remember(loaderKey) { mutableStateOf<Long?>(null) }
-    // Follow programmatic date selection (tap on another card, initial date).
-    // Instant when only the chunk list shifted (prepend hold), animated for taps.
     val selectionTargetPage = remember(selectedDateMillis, history, olderChunks) {
         if (selectedDateMillis == null) -1
         else {
@@ -395,8 +369,6 @@ fun UsageGraph(
         } else if (selectedDateMillis != lastFollowDate &&
             selectionTargetPage != -1 && selectionTargetPage != pagerState.currentPage
         ) {
-            // Only a changed date (a tap) may move the pager. Prepends merely
-            // shift indices, so they must never yank the user back to today.
             pagerState.animateScrollToPage(
                 page = selectionTargetPage,
                 animationSpec = spring(
@@ -433,8 +405,6 @@ fun UsageGraph(
             ) { pageIndex ->
                 val pageData = chunkAt(pageIndex)
                 val isOlderChunk = pageIndex < olderChunks.size
-                // Older chunks enter individually so freshly loaded weeks grow
-                // instead of popping in at full height.
                 var chunkEntered by remember(pageData.firstOrNull()?.date, pageData.size) {
                     mutableStateOf(!isOlderChunk)
                 }
@@ -751,8 +721,6 @@ fun UsageGraph(
         }
 
         Spacer(modifier = Modifier.height(4.dp))
-
-        // Tonal connected stepper pill (M3 Expressive) instead of dots.
         val visibleChunk = chunkAt(pagerState.currentPage)
         val rangeLabel = remember(visibleChunk) {
             if (visibleChunk.isEmpty()) ""

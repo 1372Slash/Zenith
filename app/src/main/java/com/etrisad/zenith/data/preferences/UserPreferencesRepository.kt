@@ -253,6 +253,8 @@ class UserPreferencesRepository(private val context: Context) {
         val LIFETIME_SNAPSHOT = stringPreferencesKey("lifetime_snapshot")
         val LIFETIME_LAST_SYNC_DATE = stringPreferencesKey("lifetime_last_sync_date")
         val ACHIEVEMENT_HISTORY = stringPreferencesKey("achievement_history")
+        val USER_XP_HISTORY = stringPreferencesKey("user_xp_history")
+        val ACHIEVEMENT_LAST_VALUES = stringPreferencesKey("achievement_last_values")
         val EARLY_KICK_ENABLED = booleanPreferencesKey("early_kick_enabled")
         val INTERCEPT_AUDIO_FOCUS_ENABLED = booleanPreferencesKey("intercept_audio_focus_enabled")
         val SHOW_DATABASE_INDICATOR = booleanPreferencesKey("show_database_indicator")
@@ -469,9 +471,11 @@ class UserPreferencesRepository(private val context: Context) {
             lifetimeSnapshot = settings[PreferencesKeys.LIFETIME_SNAPSHOT] ?: "",
             lifetimeLastSyncDate = settings[PreferencesKeys.LIFETIME_LAST_SYNC_DATE] ?: "",
             achievementHistory = settings[PreferencesKeys.ACHIEVEMENT_HISTORY] ?: "",
+            achievementLastValues = settings[PreferencesKeys.ACHIEVEMENT_LAST_VALUES] ?: "",
             userXpTotal = runtime[RuntimeKeys.USER_XP_TOTAL] ?: 0L,
             userXpLastAwardDate = runtime[RuntimeKeys.USER_XP_LAST_AWARD_DATE] ?: "",
             userTotalSavedMillis = runtime[RuntimeKeys.USER_TOTAL_SAVED_MILLIS] ?: 0L,
+            userXpHistory = settings[PreferencesKeys.USER_XP_HISTORY] ?: "",
             earlyKickEnabled = settings[PreferencesKeys.EARLY_KICK_ENABLED] ?: false,
             interceptAudioFocusEnabled = settings[PreferencesKeys.INTERCEPT_AUDIO_FOCUS_ENABLED] ?: true,
             showDatabaseIndicator = settings[PreferencesKeys.SHOW_DATABASE_INDICATOR] ?: false,
@@ -741,12 +745,23 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.ACHIEVEMENT_HISTORY] = history }
     }
 
+    suspend fun setAchievementLastValues(values: String) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.ACHIEVEMENT_LAST_VALUES] = values }
+    }
+
     suspend fun awardDailyXp(todayDate: String, xp: Int, savedMillis: Long) {
         context.runtimeDataStore.edit { preferences ->
             preferences[RuntimeKeys.USER_XP_TOTAL] = (preferences[RuntimeKeys.USER_XP_TOTAL] ?: 0L) + xp
             preferences[RuntimeKeys.USER_XP_LAST_AWARD_DATE] = todayDate
             preferences[RuntimeKeys.USER_TOTAL_SAVED_MILLIS] =
                 (preferences[RuntimeKeys.USER_TOTAL_SAVED_MILLIS] ?: 0L) + savedMillis
+        }
+        context.dataStore.edit { preferences ->
+            val raw = preferences[PreferencesKeys.USER_XP_HISTORY] ?: ""
+            val lines = raw.lines().filter { it.isNotBlank() }.toMutableList()
+            lines.removeAll { it.substringBefore('\t') == todayDate }
+            lines.add(0, "$todayDate\t$xp\t$savedMillis")
+            preferences[PreferencesKeys.USER_XP_HISTORY] = lines.take(30).joinToString("\n")
         }
     }
 
@@ -1741,9 +1756,11 @@ data class UserPreferences(
     val lifetimeSnapshot: String = "",
     val lifetimeLastSyncDate: String = "",
     val achievementHistory: String = "",
+    val achievementLastValues: String = "",
     val userXpTotal: Long = 0L,
     val userXpLastAwardDate: String = "",
     val userTotalSavedMillis: Long = 0L,
+    val userXpHistory: String = "",
     val earlyKickEnabled: Boolean = false,
     val interceptAudioFocusEnabled: Boolean = true,
     val showDatabaseIndicator: Boolean = false,

@@ -24,6 +24,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
@@ -44,6 +45,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.etrisad.zenith.data.preferences.ThemeConfig
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.lifecycle.Lifecycle
@@ -63,9 +65,16 @@ import com.etrisad.zenith.ui.screens.alarm.AlarmScreen
 import com.etrisad.zenith.ui.screens.bedtime.BedtimeScreen
 import com.etrisad.zenith.ui.screens.graceperiod.GracePeriodScreen
 import com.etrisad.zenith.ui.screens.pomodoro.PomodoroScreen
+import com.etrisad.zenith.ui.screens.profile.AchievementProgressBanner
+import com.etrisad.zenith.ui.screens.profile.AchievementUnlockBanner
+import com.etrisad.zenith.ui.screens.profile.AchievementsScreen
+import com.etrisad.zenith.ui.screens.profile.PendingUnlock
+import com.etrisad.zenith.ui.screens.profile.ProfileBannerEvent
 import com.etrisad.zenith.ui.screens.profile.ProfileScreen
 import com.etrisad.zenith.ui.screens.profile.ProfileViewModel
 import com.etrisad.zenith.ui.screens.profile.ProfileViewModelFactory
+import com.etrisad.zenith.ui.screens.profile.formatProgressNumber
+import com.etrisad.zenith.ui.screens.profile.tierDisplayName
 import com.etrisad.zenith.ui.screens.settings.EyeCareScreen
 import com.etrisad.zenith.ui.screens.settings.LockdownSettings
 import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointScreen
@@ -161,6 +170,7 @@ fun MainScreen(
                 currentRoute == Screen.Lockdown.route ||
                 currentRoute == Screen.Pomodoro.route ||
                 currentRoute == Screen.Profile.route ||
+                currentRoute == Screen.Achievements.route ||
                 currentRoute == Screen.PausePoint.route ||
                 currentRoute == Screen.PausePointQr.route ||
                 currentRoute?.startsWith("pause_point_type") == true ||
@@ -374,6 +384,7 @@ fun MainScreen(
                     currentRoute != Screen.Lockdown.route &&
                     currentRoute != Screen.Pomodoro.route &&
                     currentRoute != Screen.Profile.route &&
+                    currentRoute != Screen.Achievements.route &&
                     currentRoute != Screen.PausePoint.route &&
                     currentRoute != Screen.PausePointQr.route &&
                     currentRoute?.startsWith("pause_point_type") == false &&
@@ -758,6 +769,7 @@ fun MainScreen(
                                     targetRoute == Screen.Lockdown.route ||
                                     targetRoute == Screen.Pomodoro.route ||
                                     targetRoute == Screen.Profile.route ||
+                                    targetRoute == Screen.Achievements.route ||
                                     targetRoute == Screen.PausePoint.route ||
                                     targetRoute == Screen.PausePointQr.route ||
                                     targetRoute?.startsWith("pause_point_type") == true ||
@@ -778,6 +790,7 @@ fun MainScreen(
                                     initialRoute == Screen.Lockdown.route ||
                                     initialRoute == Screen.Pomodoro.route ||
                                     initialRoute == Screen.Profile.route ||
+                                    initialRoute == Screen.Achievements.route ||
                                     initialRoute == Screen.PausePoint.route ||
                                     initialRoute == Screen.PausePointQr.route ||
                                     initialRoute?.startsWith("pause_point_type") == true ||
@@ -830,6 +843,7 @@ fun MainScreen(
                                     targetRoute == Screen.Lockdown.route ||
                                     targetRoute == Screen.Pomodoro.route ||
                                     targetRoute == Screen.Profile.route ||
+                                    targetRoute == Screen.Achievements.route ||
                                     targetRoute == Screen.PausePoint.route ||
                                     targetRoute == Screen.PausePointQr.route ||
                                     targetRoute?.startsWith("pause_point_type") == true ||
@@ -851,6 +865,7 @@ fun MainScreen(
                                     initialRoute == Screen.Lockdown.route ||
                                     initialRoute == Screen.Pomodoro.route ||
                                     initialRoute == Screen.Profile.route ||
+                                    initialRoute == Screen.Achievements.route ||
                                     initialRoute == Screen.PausePoint.route ||
                                     initialRoute == Screen.PausePointQr.route ||
                                     initialRoute?.startsWith("pause_point_type") == true ||
@@ -1009,7 +1024,16 @@ fun MainScreen(
                             innerPadding = innerPadding,
                             onAppClick = { packageName ->
                                 navController.navigate(Screen.AppDetail.createRoute(packageName))
+                            },
+                            onSeeAllAchievements = {
+                                navController.navigate(Screen.Achievements.route)
                             }
+                        )
+                    }
+                    composable(Screen.Achievements.route) {
+                        AchievementsScreen(
+                            profileViewModel = profileViewModel,
+                            innerPadding = innerPadding
                         )
                     }
                     composable(Screen.PausePoint.route) {
@@ -1133,6 +1157,10 @@ fun MainScreen(
                             onOpenPermissions = { showPermissionSheet = true },
                             onTriggerOnboardingStats = { showOnboardingStatsSheet = true },
                             onTriggerOnboardingUpdate = { showOnboardingUpdateSheet = true },
+                            onTestAchievementBanner = {
+                                profileViewModel.testUnlockBanner()
+                                navController.navigate(Screen.Profile.route)
+                            },
                             performanceBackInterceptor = performanceBackInterceptor
                         )
                     }
@@ -1154,6 +1182,7 @@ fun MainScreen(
                             currentRoute != Screen.OverlayAppearance.route &&
                             currentRoute != Screen.Pomodoro.route &&
                             currentRoute != Screen.Profile.route &&
+                            currentRoute != Screen.Achievements.route &&
                             currentRoute != Screen.PausePoint.route &&
                             currentRoute != Screen.PausePointQr.route &&
                             currentRoute?.startsWith("pause_point_type") == false &&
@@ -1301,6 +1330,127 @@ fun MainScreen(
                             }
                         }
                     }
+                }
+
+                GlobalAchievementBanners(
+                    profileViewModel = profileViewModel,
+                    navController = navController,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GlobalAchievementBanners(
+    profileViewModel: ProfileViewModel,
+    navController: androidx.navigation.NavController,
+    modifier: Modifier = Modifier
+) {
+    val pendingBanners by profileViewModel.pendingBanners.collectAsState()
+    val profileUiState by profileViewModel.uiState.collectAsState()
+    val currentBanner = pendingBanners.firstOrNull()
+    LaunchedEffect(currentBanner) {
+        if (currentBanner != null) {
+            delay(if (currentBanner is ProfileBannerEvent.Progress) 3200L else 4500L)
+            profileViewModel.consumeBanner(currentBanner.key)
+        }
+    }
+    AnimatedContent(
+        targetState = currentBanner,
+        modifier = modifier
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .padding(top = 72.dp, start = 16.dp, end = 16.dp),
+        transitionSpec = {
+            val slideBouncy = spring<IntOffset>(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessLow
+            )
+            val fade = spring<Float>(stiffness = Spring.StiffnessMediumLow)
+            if (targetState != null) {
+                (slideInVertically(
+                    initialOffsetY = { -it },
+                    animationSpec = slideBouncy
+                ) + fadeIn(animationSpec = fade) + scaleIn(
+                    initialScale = 0.92f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                )).togetherWith(
+                    slideOutVertically(
+                        targetOffsetY = { -it },
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                    ) + fadeOut(animationSpec = fade)
+                )
+            } else {
+                (fadeIn(animationSpec = fade) + scaleIn(initialScale = 0.92f)).togetherWith(
+                    slideOutVertically(
+                        targetOffsetY = { -it },
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                    ) + fadeOut(animationSpec = fade)
+                )
+            }.apply { targetContentZIndex = if (targetState != null) 1f else 0f }
+        },
+        label = "AchievementBannerSwap"
+    ) { banner ->
+        if (banner == null) {
+            Box(Modifier.fillMaxWidth())
+        } else {
+            val defId = when (banner) {
+                is ProfileBannerEvent.Unlock -> banner.defId
+                is ProfileBannerEvent.Progress -> banner.defId
+            }
+            val bannerState = remember(banner, profileUiState.achievements) {
+                profileUiState.achievements.find { it.def.id == defId }
+            }
+            when (banner) {
+                is ProfileBannerEvent.Unlock -> {
+                    AchievementUnlockBanner(
+                        unlock = PendingUnlock(
+                            banner.defId, banner.tierLevel, banner.tierValue,
+                            banner.date, banner.prevLevel
+                        ),
+                        state = bannerState,
+                        onOpen = {
+                            profileViewModel.consumeBanner(banner.key)
+                            navController.navigate(Screen.Achievements.route)
+                        },
+                        onDismiss = { profileViewModel.consumeBanner(banner.key) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                is ProfileBannerEvent.Progress -> {
+                    val thresholds = bannerState?.def?.thresholds
+                    val afterLevel = thresholds?.count {
+                        banner.after >= it.required
+                    } ?: 0
+                    val progressTitle = bannerState?.def?.let {
+                        tierDisplayName(it, afterLevel)
+                    } ?: "Progress"
+                    val nextReq = thresholds?.firstOrNull {
+                        banner.after < it.required
+                    }?.required
+                    val beforeFraction = if (nextReq != null && nextReq > 0) {
+                        (banner.before.toFloat() / nextReq).coerceIn(0f, 1f)
+                    } else 1f
+                    val afterFraction = if (nextReq != null && nextReq > 0) {
+                        (banner.after.toFloat() / nextReq).coerceIn(0f, 1f)
+                    } else 1f
+                    AchievementProgressBanner(
+                        title = progressTitle,
+                        icon = bannerState?.def?.icon ?: Icons.Outlined.EmojiEvents,
+                        beforeLabel = formatProgressNumber(banner.defId, banner.before),
+                        afterLabel = formatProgressNumber(banner.defId, banner.after),
+                        beforeFraction = beforeFraction,
+                        afterFraction = afterFraction,
+                        onOpen = {
+                            profileViewModel.consumeBanner(banner.key)
+                            navController.navigate(Screen.Achievements.route)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }
