@@ -103,6 +103,7 @@ fun AlarmScreen(
     var isSelectionMode by remember { mutableStateOf(false) }
     var selectedAlarmIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
+    var pendingSwipeDelete by remember { mutableStateOf<AlarmItem?>(null) }
     
     val today = remember { java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK) }
 
@@ -298,12 +299,7 @@ fun AlarmScreen(
                                 editingAlarm = alarm
                             },
                             onDelete = {
-                                scope.launch {
-                                    preferencesRepository.deleteAlarm(alarm.id)
-                                    scope.launch(Dispatchers.IO) {
-                                        rescheduleAlarms(context, preferencesRepository, prefs.alarmMasterEnabled)
-                                    }
-                                }
+                                pendingSwipeDelete = alarm
                             },
                             shape = animatedShape,
                             enabled = !isSelectionMode
@@ -556,6 +552,26 @@ fun AlarmScreen(
                 onConfirm = {
                     deleteSelected()
                     showDeleteConfirmation = false
+                },
+                leverCount = 3,
+                showTimeSelection = false
+            )
+        }
+
+        if (pendingSwipeDelete != null) {
+            ConfirmBottomSheet(
+                onDismiss = { pendingSwipeDelete = null },
+                onConfirm = {
+                    val target = pendingSwipeDelete
+                    pendingSwipeDelete = null
+                    if (target != null) {
+                        scope.launch {
+                            preferencesRepository.deleteAlarm(target.id)
+                            scope.launch(Dispatchers.IO) {
+                                rescheduleAlarms(context, preferencesRepository, prefs.alarmMasterEnabled)
+                            }
+                        }
+                    }
                 },
                 leverCount = 3,
                 showTimeSelection = false
@@ -924,17 +940,19 @@ private suspend fun rescheduleAlarms(
     val t0 = System.currentTimeMillis()
 
     val tCancel = System.currentTimeMillis()
+    val tRead = System.currentTimeMillis()
+    val alarms = preferencesRepository.getAlarmsSnapshot()
+    android.util.Log.d("AlarmPerf", "rescheduleAlarms: getAlarmsSnapshot took ${System.currentTimeMillis() - tRead}ms")
     AlarmBroadcastReceiver.cancelAlarm(context)
+    for (alarm in alarms) {
+        AlarmBroadcastReceiver.cancelAlarm(context, alarm.timeString, alarm.id)
+    }
     android.util.Log.d("AlarmPerf", "rescheduleAlarms: cancelAlarm took ${System.currentTimeMillis() - tCancel}ms")
 
     if (masterEnabled) {
-        val tRead = System.currentTimeMillis()
-        val alarms = preferencesRepository.getAlarmsSnapshot()
-        android.util.Log.d("AlarmPerf", "rescheduleAlarms: getAlarmsSnapshot took ${System.currentTimeMillis() - tRead}ms")
-
         val enabledAlarms = alarms.filter { it.enabled }
         for (alarm in enabledAlarms) {
-            AlarmBroadcastReceiver.scheduleAlarm(context, alarm.timeString, alarm.days)
+            AlarmBroadcastReceiver.scheduleAlarm(context, alarm.timeString, alarm.days, alarm.id)
         }
     }
 

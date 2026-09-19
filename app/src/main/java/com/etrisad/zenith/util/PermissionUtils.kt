@@ -13,6 +13,11 @@ import android.content.pm.PackageManager
 import android.os.PowerManager
 import androidx.core.content.ContextCompat
 
+fun hasNotificationPolicyAccess(context: Context): Boolean {
+    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+    return nm.isNotificationPolicyAccessGranted
+}
+
 fun hasAllPermissions(context: Context): Boolean {
     val hasUsageStats = hasUsageStatsPermission(context)
     val hasOverlay = Settings.canDrawOverlays(context)

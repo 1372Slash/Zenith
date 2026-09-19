@@ -229,6 +229,22 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             return base + hour * 100 + minute
         }
 
+        const val EXTRA_ALARM_ID = "alarm_id"
+
+        /**
+         * Per-alarm request code: time-only codes collide when two alarms share
+         * HH:mm (same PendingIntent = one overwrites the other). Mixing in the
+         * alarm id keeps them distinct; ids are timestamp-based so the modulo
+         * keeps the value inside Int range. Cross-base numeric overlap is harmless
+         * because each base uses a different intent action.
+         */
+        private fun requestCodeForId(base: Int, alarmTime: String, alarmId: Long): Int {
+            val parts = alarmTime.split(":")
+            val hour = parts.getOrNull(0)?.toIntOrNull() ?: 0
+            val minute = parts.getOrNull(1)?.toIntOrNull() ?: 0
+            return base + hour * 100 + minute + ((alarmId % 200000L) * 2400L).toInt()
+        }
+
         fun hasExactAlarmPermission(context: Context): Boolean {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -266,13 +282,15 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             }
         }
 
-        fun scheduleAlarm(context: Context, alarmTime: String, days: Set<Int> = emptySet()) {
+        fun scheduleAlarm(context: Context, alarmTime: String, days: Set<Int> = emptySet(), alarmId: Long = 0L) {
             val (hour, minute) = alarmTime.split(":").map { it.toInt() }
-            val requestCode = REQUEST_CODE_ALARM_BASE + hour * 100 + minute
+            val requestCode = if (alarmId > 0L) requestCodeForId(REQUEST_CODE_ALARM_BASE, alarmTime, alarmId)
+            else REQUEST_CODE_ALARM_BASE + hour * 100 + minute
 
             val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
                 action = ACTION_FIRE_ALARM
                 putExtra(AlarmOverlayActivity.EXTRA_ALARM_TIME, alarmTime)
+                if (alarmId > 0L) putExtra(EXTRA_ALARM_ID, alarmId)
             }
 
             val pendingIntent = PendingIntent.getBroadcast(
@@ -290,7 +308,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             cancelAlarm(context, null)
         }
 
-        fun cancelAlarm(context: Context, alarmTime: String?) {
+        fun cancelAlarm(context: Context, alarmTime: String?, alarmId: Long = 0L) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             if (alarmTime != null) {
                 val (hour, minute) = alarmTime.split(":").map { it.toInt() }
@@ -304,6 +322,19 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 )
                 alarmManager.cancel(pendingIntent)
                 pendingIntent.cancel()
+                if (alarmId > 0L) {
+                    // New-scheme id-scoped intent (plus the legacy time-scoped one above,
+                    // which covers intents scheduled before the id scheme existed).
+                    val idIntent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
+                        action = ACTION_FIRE_ALARM
+                    }
+                    val idPendingIntent = PendingIntent.getBroadcast(
+                        context, requestCodeForId(REQUEST_CODE_ALARM_BASE, alarmTime, alarmId), idIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    alarmManager.cancel(idPendingIntent)
+                    idPendingIntent.cancel()
+                }
                 cancelReTrigger(context, alarmTime)
                 cancelUsageCheck(context, alarmTime)
             } else {
@@ -447,14 +478,16 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         private fun disableAlarm(context: Context, alarmTime: String) {
             try {
                 val app = context.applicationContext as ZenithApplication
+                var alarmId = 0L
                 runBlocking {
                     val repo = app.userPreferencesRepository
                     val prefs = repo.userPreferencesFlow.first()
                     val alarms = repo.parseAlarms(prefs.alarmsJson)
                     val alarm = alarms.find { it.timeString == alarmTime } ?: return@runBlocking
+                    alarmId = alarm.id
                     repo.updateAlarm(alarm.copy(enabled = false))
                 }
-                cancelAlarm(context, alarmTime)
+                cancelAlarm(context, alarmTime, alarmId)
                 Log.d("AlarmReceiver", "disableAlarm: $alarmTime disabled")
             } catch (e: Exception) {
                 Log.w("AlarmReceiver", "disableAlarm failed: ${e.message}")
@@ -525,9 +558,12 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         }
 
         fun rescheduleAllAlarms(context: Context, enabledAlarms: List<AlarmItem>) {
+            // Legacy time-scoped intents first (pre-id-scheme leftovers), then the
+            // id-scoped ones, so changed times never leak a stale PendingIntent.
             cancelAlarm(context)
             for (alarm in enabledAlarms) {
-                scheduleAlarm(context, alarm.timeString, alarm.days)
+                cancelAlarm(context, alarm.timeString, alarm.id)
+                scheduleAlarm(context, alarm.timeString, alarm.days, alarm.id)
             }
         }
 

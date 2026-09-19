@@ -34,9 +34,13 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
+import android.content.Intent
+import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import com.etrisad.zenith.util.hasNotificationPolicyAccess
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,7 +73,8 @@ fun BedtimeScreen(
 ) {
     val preferences by viewModel.userPreferences.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
-    
+    val bedtimeContext = LocalContext.current
+
     val bedtimeTargetMillis = remember(uiState.bedtimeDurationTotalMillis) { (uiState.bedtimeDurationTotalMillis * 0.1f).toLong() }
 
     var showAppPicker by remember { mutableStateOf(false) }
@@ -588,7 +593,17 @@ fun BedtimeScreen(
                         title = "Do Not Disturb",
                         subtitle = "Silence notifications during bedtime",
                         enabled = preferences.bedtimeDndEnabled,
-                        onToggle = { viewModel.setBedtimeDndEnabled(it) },
+                        onToggle = {
+                            if (it && !hasNotificationPolicyAccess(bedtimeContext)) {
+                                Toast.makeText(bedtimeContext, "Allow Do Not Disturb access in settings", Toast.LENGTH_LONG).show()
+                                bedtimeContext.startActivity(
+                                    Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                )
+                            } else {
+                                viewModel.setBedtimeDndEnabled(it)
+                            }
+                        },
                         containerColor = containerColor,
                         shape = RoundedCornerShape(8.dp)
                     )

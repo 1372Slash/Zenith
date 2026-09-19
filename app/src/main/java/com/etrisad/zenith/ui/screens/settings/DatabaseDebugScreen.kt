@@ -32,9 +32,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
+import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.components.UsageHistoryList
 import com.etrisad.zenith.ui.components.ZenithContainedLoadingIndicator
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
+import kotlinx.coroutines.delay
 import com.etrisad.zenith.ui.viewmodel.UsageRecord
 import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
 import java.util.Locale
@@ -50,6 +52,15 @@ fun DatabaseDebugScreen(
     val todayHourlyRaw by viewModel.todayHourlyUsage.collectAsState(initial = emptyList())
     val uiState by viewModel.uiState.collectAsState()
     var showManagementSheet by remember { mutableStateOf(false) }
+    var pendingResetAll by remember { mutableStateOf(false) }
+    var pendingDeleteCarryover by remember { mutableStateOf<HourlyUsageEntity?>(null) }
+    // The history flow starts as emptyList, so an empty DB and a slow load look
+    // identical: stop showing the spinner after a grace period instead of forever.
+    var historyLoadTimedOut by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(10000)
+        historyLoadTimedOut = true
+    }
 
     val appInfoMap = remember(uiState.allAppsUsage) {
         uiState.allAppsUsage.associateBy { it.packageName }
@@ -63,7 +74,7 @@ fun DatabaseDebugScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (historyData.isEmpty()) {
+        if (historyData.isEmpty() && !historyLoadTimedOut) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -81,6 +92,31 @@ fun DatabaseDebugScreen(
                     Text(
                         "Analysing database history...",
                         style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else if (historyData.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(24.dp)
+                ) {
+                    Text(
+                        "No history data in the database.",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Usage syncs here once tracking runs.",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -170,7 +206,7 @@ fun DatabaseDebugScreen(
                                         displayName = appInfo?.appName ?: entity.packageName,
                                         duration = viewModel.formatDuration(entity.usageTimeMillis),
                                         onDelete = {
-                                            viewModel.deleteHourlyUsageAtHour(entity.hour, entity.packageName)
+                                            pendingDeleteCarryover = entity
                                         }
                                     )
                                 }
@@ -182,8 +218,7 @@ fun DatabaseDebugScreen(
 
                     Button(
                         onClick = {
-                            viewModel.resetCarryover()
-                            showManagementSheet = false
+                            pendingResetAll = true
                         },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(
@@ -198,6 +233,32 @@ fun DatabaseDebugScreen(
                     }
                 }
             }
+        }
+
+        if (pendingResetAll) {
+            ConfirmBottomSheet(
+                onDismiss = { pendingResetAll = false },
+                onConfirm = {
+                    viewModel.resetCarryover()
+                    pendingResetAll = false
+                    showManagementSheet = false
+                },
+                leverCount = 3,
+                showTimeSelection = false
+            )
+        }
+
+        val carryoverTarget = pendingDeleteCarryover
+        if (carryoverTarget != null) {
+            ConfirmBottomSheet(
+                onDismiss = { pendingDeleteCarryover = null },
+                onConfirm = {
+                    viewModel.deleteHourlyUsageAtHour(carryoverTarget.hour, carryoverTarget.packageName)
+                    pendingDeleteCarryover = null
+                },
+                leverCount = 3,
+                showTimeSelection = false
+            )
         }
     }
 }

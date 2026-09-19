@@ -205,8 +205,10 @@ fun MultiAppPickerBottomSheet(
                 }
             }
 
+            val hasSelection = uiState.selectedAppsForSchedule.isNotEmpty()
             FloatingActionButton(
                 onClick = {
+                    if (!hasSelection) return@FloatingActionButton
                     scope.launch {
                         sheetState.hide()
                         onConfirm()
@@ -216,9 +218,15 @@ fun MultiAppPickerBottomSheet(
                     .align(Alignment.BottomEnd)
                     .windowInsetsPadding(WindowInsets.navigationBars)
                     .padding(24.dp),
-                containerColor = MaterialTheme.colorScheme.primary
+                containerColor = if (hasSelection) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.surfaceVariant
             ) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = "Next")
+                Icon(
+                    Icons.AutoMirrored.Outlined.ArrowForward,
+                    contentDescription = "Next",
+                    tint = if (hasSelection) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

@@ -499,7 +499,8 @@ fun ScheduleSettingsBottomSheet(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    text = if (editingSchedule != null) "Update Schedule" else "Save Schedule"
+                    text = if (editingSchedule != null) "Update Schedule" else "Save Schedule",
+                    enabled = uiState.selectedAppsForSchedule.isNotEmpty()
                 )
             }
         }

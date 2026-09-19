@@ -21,6 +21,10 @@ class BootCompletedReceiver : BroadcastReceiver() {
             try {
                 val app = context.applicationContext as ZenithApplication
                 val prefs = app.userPreferencesRepository.userPreferencesFlow.first()
+                if (!prefs.alarmMasterEnabled) {
+                    Log.d("BootReceiver", "Master switch OFF - skipping alarm reschedule after boot/update")
+                    return@launch
+                }
                 val enabledAlarms = app.userPreferencesRepository
                     .parseAlarms(prefs.alarmsJson)
                     .filter { it.enabled }
