@@ -173,6 +173,8 @@ fun PomodoroScreen(
                     PomodoroStatusProgress(
                         remainingSessionMillis = if (uiState.isSessionActive) uiState.remainingSessionMillis else uiState.sessionDurationMinutes * 60000L,
                         remainingBreakMillis = if (uiState.isSessionActive) uiState.remainingBreakMillis else uiState.breakDurationMinutes * 60000L,
+                        totalSessionMillis = uiState.sessionDurationMinutes * 60000L,
+                        totalBreakMillis = (if (isLongBreak) uiState.longBreakDurationMinutes else uiState.breakDurationMinutes) * 60000L,
                         isBreakActive = uiState.isBreakActive,
                         isPaused = uiState.isPaused,
                         currentSession = uiState.currentSessionNumber,
@@ -944,6 +946,8 @@ fun AppSelectionCard(
 fun PomodoroStatusProgress(
     remainingSessionMillis: Long,
     remainingBreakMillis: Long,
+    totalSessionMillis: Long,
+    totalBreakMillis: Long,
     isBreakActive: Boolean,
     isPaused: Boolean,
     currentSession: Int,
@@ -953,12 +957,10 @@ fun PomodoroStatusProgress(
     circleSize: androidx.compose.ui.unit.Dp = 240.dp
 ) {
     val remaining = if (isBreakActive) remainingBreakMillis else remainingSessionMillis
-    val total = if (isBreakActive) {
-        if (isPreview) remainingBreakMillis else remainingBreakMillis.coerceAtLeast(1L) 
-    } else {
-        if (isPreview) remainingSessionMillis else remainingSessionMillis.coerceAtLeast(1L)
-    }
-    
+    // NOTE: totals must be the configured durations, never the live remaining
+    // values (remaining/remaining is always 1 and the ring would never move).
+    val total = if (isBreakActive) totalBreakMillis else totalSessionMillis
+
     // Direction: fills up during focus, drains during rest. Idle shows empty.
     val progressValue = when {
         isPreview -> 0f
