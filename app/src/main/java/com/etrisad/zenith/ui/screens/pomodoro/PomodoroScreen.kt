@@ -122,6 +122,23 @@ fun PomodoroScreen(
         ) {
             item(key = "status") {
                 val isLongBreak = uiState.isBreakActive && uiState.currentSessionNumber % uiState.sessionsBeforeLongBreak == 0
+                // Hero behavior: compact at the top while idle, glides toward the
+                // center and grows (always 1:1) once the session starts.
+                val heroSize by animateDpAsState(
+                    targetValue = if (uiState.isSessionActive) 320.dp else 240.dp,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessLow
+                    ),
+                    label = "PomodoroHeroSize"
+                )
+                AnimatedVisibility(
+                    visible = uiState.isSessionActive,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Spacer(modifier = Modifier.height(48.dp))
+                }
                 // Idle <-> active morph: the circle glides to the center stage on
                 // start and settles back on stop instead of snapping.
                 AnimatedContent(
@@ -161,7 +178,8 @@ fun PomodoroScreen(
                         currentSession = uiState.currentSessionNumber,
                         totalSessions = uiState.sessionCount,
                         isPreview = !uiState.isSessionActive,
-                        isLongBreak = isLongBreak
+                        isLongBreak = isLongBreak,
+                        circleSize = heroSize
                     )
                 }
             }
@@ -921,7 +939,8 @@ fun PomodoroStatusProgress(
     currentSession: Int,
     totalSessions: Int,
     isPreview: Boolean = false,
-    isLongBreak: Boolean = false
+    isLongBreak: Boolean = false,
+    circleSize: androidx.compose.ui.unit.Dp = 240.dp
 ) {
     val remaining = if (isBreakActive) remainingBreakMillis else remainingSessionMillis
     val total = if (isBreakActive) {
@@ -964,11 +983,12 @@ fun PomodoroStatusProgress(
     else if (isPaused) MaterialTheme.colorScheme.secondary
     else MaterialTheme.colorScheme.primary
 
+    // Square by construction: fixed equal sides, no fillMaxWidth (that combo
+    // stretches to screen width and turns the ring oval).
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .fillMaxWidth()
-            .size(300.dp)
+            .size(circleSize)
             .padding(20.dp)
     ) {
         CircularWavyProgressIndicator(
