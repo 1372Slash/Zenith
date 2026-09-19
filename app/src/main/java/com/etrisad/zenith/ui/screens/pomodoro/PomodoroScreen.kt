@@ -188,14 +188,6 @@ fun PomodoroScreen(
             }
 
             if (!uiState.isSessionActive) {
-                item(key = "stats") {
-                    Column {
-                        PreferenceCategory(title = "Statistics")
-                        Spacer(modifier = Modifier.height(8.dp))
-                        PomodoroStatsSection(viewModel = viewModel)
-                    }
-                }
-
                 item(key = "settings") {
                     TimeSettingsCard(
                         sessionDuration = uiState.sessionDurationMinutes,
@@ -210,6 +202,13 @@ fun PomodoroScreen(
                         onSessionsBeforeLongBreakChange = { viewModel.setSessionsBeforeLongBreak(it) },
                         containerColor = containerColor
                     )
+                }
+
+                item(key = "stats") {
+                    Column {
+                        PreferenceCategory(title = "Statistics")
+                        PomodoroStatsSection(viewModel = viewModel)
+                    }
                 }
             }
 

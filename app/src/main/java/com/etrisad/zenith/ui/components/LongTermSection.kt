@@ -471,6 +471,7 @@ fun LongTermSection(
                                 }
                             }
                         }
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -497,7 +498,6 @@ fun LongTermSection(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        }
                         }
                     }
                     if (dataNote != null) {
