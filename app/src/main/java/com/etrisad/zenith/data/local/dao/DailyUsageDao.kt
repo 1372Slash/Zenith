@@ -39,6 +39,9 @@ interface DailyUsageDao {
     @Query("SELECT * FROM daily_usage WHERE date = :date")
     suspend fun getUsagesForDate(date: String): List<DailyUsageEntity>
 
+    @Query("SELECT * FROM daily_usage WHERE date > :sinceDate")
+    suspend fun getUsagesSince(sinceDate: String): List<DailyUsageEntity>
+
     @Query("SELECT * FROM daily_usage WHERE date = :date")
     fun getUsagesForDateFlow(date: String): Flow<List<DailyUsageEntity>>
 

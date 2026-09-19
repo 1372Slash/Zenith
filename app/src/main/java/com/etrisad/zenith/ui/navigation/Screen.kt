@@ -7,12 +7,14 @@ import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.FreeBreakfast
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.FreeBreakfast
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.RemoveRedEye
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Settings
@@ -73,6 +75,9 @@ sealed class Screen(
         Screen("pause_point_type/{type}", "Pause Point", Icons.Filled.Settings, Icons.Outlined.Settings) {
         fun createRoute(type: String) = "pause_point_type/$type"
     }
+
+    object Profile :
+        Screen("profile", "Profile", Icons.Filled.Person, Icons.Outlined.PersonOutline)
 }
 
 val navItems = listOf(

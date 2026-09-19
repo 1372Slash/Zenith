@@ -138,6 +138,18 @@ class ShieldRepository(
         return dailyUsageDao.getUsagesForDate(date)
     }
 
+    suspend fun getDailyUsagesSinceSync(sinceDate: String): List<DailyUsageEntity> {
+        return dailyUsageDao.getUsagesSince(sinceDate)
+    }
+
+    suspend fun getPomodoroTotalCount(): Int {
+        return try { database.pomodoroSessionDao().getTotalCount() } catch (_: Exception) { 0 }
+    }
+
+    suspend fun getPomodoroTotalFocusMillis(): Long {
+        return try { database.pomodoroSessionDao().getTotalFocusMillis() } catch (_: Exception) { 0L }
+    }
+
     fun getShieldByPackageNameFlow(packageName: String): Flow<ShieldEntity?> {
         return shieldDao.getShieldByPackageNameFlow(packageName)
     }

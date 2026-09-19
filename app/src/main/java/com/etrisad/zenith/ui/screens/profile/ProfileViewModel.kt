@@ -1,0 +1,327 @@
+package com.etrisad.zenith.ui.screens.profile
+
+import android.content.Context
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.etrisad.zenith.data.local.entity.FocusType
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.data.repository.ShieldRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+data class LifetimeApp(
+    val packageName: String,
+    val appName: String,
+    val totalMillis: Long
+)
+
+data class PendingUnlock(
+    val defId: String,
+    val tierLevel: Int,
+    val tierValue: Int,
+    val date: String
+)
+
+data class ProfileUiState(
+    val isLoading: Boolean = true,
+    val topApps: List<LifetimeApp> = emptyList(),
+    val lifetimeTotal: Long = 0L,
+    val lifetimeAppCount: Int = 0,
+    val streakCurrent: Int = 0,
+    val streakBest: Int = 0,
+    val xpTotal: Long = 0L,
+    val xpToday: Int = 0,
+    val level: Int = 1,
+    val levelProgress: Float = 0f,
+    val totalSavedMillis: Long = 0L,
+    val pomodoroSessions: Int = 0,
+    val pomodoroFocusMillis: Long = 0L,
+    val achievements: List<AchievementState> = emptyList(),
+    val lastSyncDate: String = ""
+)
+
+private val AGGREGATE_EXCLUDE = setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL")
+
+class ProfileViewModel(
+    context: Context,
+    private val shieldRepository: ShieldRepository,
+    private val userPreferencesRepository: UserPreferencesRepository
+) : ViewModel() {
+
+    private val appContext = context.applicationContext
+    private val appNameCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    private val _uiState = MutableStateFlow(ProfileUiState())
+    val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
+
+    private val _pendingUnlocks = MutableStateFlow<List<PendingUnlock>>(emptyList())
+    val pendingUnlocks: StateFlow<List<PendingUnlock>> = _pendingUnlocks.asStateFlow()
+
+    fun consumeUnlock(defId: String, tierValue: Int) {
+        _pendingUnlocks.update { list ->
+            list.filterNot { it.defId == defId && it.tierValue == tierValue }
+        }
+    }
+
+    init {
+        refresh()
+    }
+
+    fun refresh() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                val lifetime = syncLifetime()
+                val prefs = userPreferencesRepository.userPreferencesFlow.first()
+                val todayStr = dateStr(System.currentTimeMillis())
+                val xpToday = awardXpIfNeeded(todayStr)
+                val freshPrefs = userPreferencesRepository.userPreferencesFlow.first()
+                val pomoSessions = shieldRepository.getPomodoroTotalCount()
+                val pomoFocus = shieldRepository.getPomodoroTotalFocusMillis()
+                val shields = try {
+                    shieldRepository.allShields.first()
+                } catch (_: Exception) { emptyList() }
+                val schedules = try {
+                    shieldRepository.allSchedules.first()
+                } catch (_: Exception) { emptyList() }
+                val stats = ProfileAchievementStats(
+                    hasPomodoro = pomoSessions > 0 || freshPrefs.pomodoroSessionEndTimestamp > 0L,
+                    hasLockdown = freshPrefs.lockdownEnabled,
+                    hasBedtime = freshPrefs.bedtimeEnabled || freshPrefs.bedtimeBestStreak > 0,
+                    hasAlarm = freshPrefs.alarmsJson.trim() != "[]",
+                    hasPausePoint = freshPrefs.pausePointEnabled,
+                    hasEyeCare = freshPrefs.eyeCareEnabled,
+                    hasGracePeriod = freshPrefs.gracePeriodEnabled,
+                    hasShield = shields.any { it.type == FocusType.SHIELD },
+                    hasGoal = shields.any { it.type == FocusType.GOAL },
+                    hasSchedule = schedules.isNotEmpty(),
+                    hasQr = freshPrefs.pausePointQrCodes.isNotEmpty(),
+                    hasPreset = freshPrefs.pomodoroPresets.trim() != "{}",
+                    hasCustomTheme = freshPrefs.expressiveColors,
+                    hasBackup = freshPrefs.autoBackupEnabled || freshPrefs.lastBackupTimestamp > 0L,
+                    hasMindful = freshPrefs.mindfulGatewayEnabled,
+                    hasGlimpse = freshPrefs.usageGlimpseEnabled,
+                    globalBestStreak = freshPrefs.globalBestStreak,
+                    totalSavedMillis = freshPrefs.userTotalSavedMillis,
+                    maxAppBestStreak = shields.maxOfOrNull { it.bestStreak } ?: 0,
+                    pomodoroSessions = pomoSessions,
+                    pomodoroFocusMillis = pomoFocus,
+                    lifetimeMillis = lifetime.total,
+                    bedtimeBestStreak = freshPrefs.bedtimeBestStreak,
+                    shieldCount = shields.size
+                )
+                val baseAchievements = buildAchievementStates(stats)
+                val achievements = recordUnlockDates(baseAchievements, todayStr)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        topApps = lifetime.top3,
+                        lifetimeTotal = lifetime.total,
+                        lifetimeAppCount = lifetime.appCount,
+                        streakCurrent = freshPrefs.globalCurrentStreak,
+                        streakBest = freshPrefs.globalBestStreak,
+                        xpTotal = freshPrefs.userXpTotal,
+                        xpToday = xpToday,
+                        level = levelForXp(freshPrefs.userXpTotal),
+                        levelProgress = levelProgressForXp(freshPrefs.userXpTotal),
+                        totalSavedMillis = freshPrefs.userTotalSavedMillis,
+                        pomodoroSessions = pomoSessions,
+                        pomodoroFocusMillis = pomoFocus,
+                        achievements = achievements,
+                        lastSyncDate = prefs.lifetimeLastSyncDate
+                    )
+                }
+            } catch (_: Exception) {
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+
+    private data class LifetimeResult(
+        val top3: List<LifetimeApp>,
+        val total: Long,
+        val appCount: Int
+    )
+
+    /**
+     * Incremental lifetime compaction: only rows newer than the last sync
+     * date are aggregated and merged into the persisted snapshot, instead of
+     * re-summing the whole table on every open.
+     */
+    private suspend fun syncLifetime(): LifetimeResult = withContext(Dispatchers.IO) {
+        val prefs = userPreferencesRepository.userPreferencesFlow.first()
+        val totals = decodeSnapshot(prefs.lifetimeSnapshot).toMutableMap()
+        val since = prefs.lifetimeLastSyncDate.ifEmpty { "0000-00-00" }
+        try {
+            val rows = shieldRepository.getDailyUsagesSinceSync(since)
+            var changed = rows.isNotEmpty()
+            rows.forEach { row ->
+                if (row.packageName in AGGREGATE_EXCLUDE) return@forEach
+                totals[row.packageName] = (totals[row.packageName] ?: 0L) + row.usageTimeMillis
+            }
+            if (changed) {
+                userPreferencesRepository.setLifetimeSnapshot(
+                    encodeSnapshot(totals),
+                    dateStr(System.currentTimeMillis())
+                )
+            }
+        } catch (_: Exception) {
+        }
+        val sorted = totals.entries.sortedByDescending { it.value }
+        val top3 = sorted.take(3).map { (pkg, total) ->
+            LifetimeApp(pkg, resolveAppName(pkg), total)
+        }
+        LifetimeResult(top3, sorted.sumOf { it.value }, totals.size)
+    }
+
+    /**
+     * Awards today's XP once per day: shields earn for staying under the
+     * limit (less usage = more XP), goals earn for reaching/over target.
+     */
+    private suspend fun awardXpIfNeeded(todayStr: String): Int {
+        return try {
+            val prefs = userPreferencesRepository.userPreferencesFlow.first()
+            val shields = try {
+                shieldRepository.allShields.first()
+            } catch (_: Exception) { emptyList() }
+            val todayRows = try {
+                shieldRepository.getDailyUsagesForDateSync(todayStr)
+            } catch (_: Exception) { emptyList() }
+            val usageByPkg = todayRows.associate { it.packageName to it.usageTimeMillis }
+            var xp = 0
+            var saved = 0L
+            shields.forEach { shield ->
+                val limit = shield.timeLimitMinutes * 60_000L
+                val usage = usageByPkg[shield.packageName] ?: 0L
+                when (shield.type) {
+                    FocusType.SHIELD -> {
+                        xp += calcShieldXp(limit, usage)
+                        if (usage <= limit) saved += (limit - usage).coerceAtLeast(0L)
+                    }
+                    FocusType.GOAL -> xp += calcGoalXp(limit, usage)
+                }
+            }
+            if (prefs.userXpLastAwardDate != todayStr) {
+                userPreferencesRepository.awardDailyXp(todayStr, xp, saved)
+            }
+            xp
+        } catch (_: Exception) { 0 }
+    }
+
+    private fun resolveAppName(pkg: String): String {
+        appNameCache[pkg]?.let { return it }
+        return try {
+            val pm = appContext.packageManager
+            val info = pm.getApplicationInfo(pkg, 0)
+            val name = pm.getApplicationLabel(info).toString()
+            appNameCache[pkg] = name
+            name
+        } catch (_: Exception) {
+            if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(pkg)) {
+                val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(pkg)
+                com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
+            } else pkg
+        }
+    }
+
+    private fun dateStr(millis: Long): String =
+        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(millis))
+
+    /**
+     * Records the first-observed date for every newly met achievement tier
+     * so the detail sheet can show an unlock history.
+     */
+    private suspend fun recordUnlockDates(
+        states: List<AchievementState>,
+        todayStr: String
+    ): List<AchievementState> {
+        return try {
+            val rawBefore = userPreferencesRepository.userPreferencesFlow.first().achievementHistory
+            // First run seeds the baseline silently so existing progress
+            // never floods the unlock notification queue.
+            val isBaseline = rawBefore.isBlank()
+            val stored = decodeHistory(rawBefore)
+                .mapValues { it.value.toMutableMap() }.toMutableMap()
+            var changed = false
+            val freshUnlocks = mutableListOf<PendingUnlock>()
+            val enriched = states.map { state ->
+                val dates = stored.getOrPut(state.def.id) { mutableMapOf() }
+                state.def.thresholds.forEach { threshold ->
+                    if (state.current >= threshold.required && !dates.containsKey(threshold.tier.value)) {
+                        dates[threshold.tier.value] = todayStr
+                        changed = true
+                        if (!isBaseline) {
+                            freshUnlocks.add(
+                                PendingUnlock(
+                                    defId = state.def.id,
+                                    tierLevel = state.def.thresholds.indexOfFirst {
+                                        it.tier.value == threshold.tier.value
+                                    } + 1,
+                                    tierValue = threshold.tier.value,
+                                    date = todayStr
+                                )
+                            )
+                        }
+                    }
+                }
+                state.copy(unlockedDates = dates.toMap())
+            }
+            if (changed) {
+                userPreferencesRepository.setAchievementHistory(encodeHistory(stored))
+            }
+            if (freshUnlocks.isNotEmpty()) {
+                _pendingUnlocks.update { it + freshUnlocks }
+            }
+            enriched
+        } catch (_: Exception) {
+            states
+        }
+    }
+
+    companion object {
+        fun decodeSnapshot(raw: String): Map<String, Long> {
+            if (raw.isBlank()) return emptyMap()
+            return buildMap {
+                raw.lines().forEach { line ->
+                    val tab = line.lastIndexOf('\t')
+                    if (tab <= 0) return@forEach
+                    val pkg = line.substring(0, tab)
+                    val total = line.substring(tab + 1).toLongOrNull() ?: return@forEach
+                    if (pkg.isNotEmpty() && total > 0) put(pkg, total)
+                }
+            }
+        }
+
+        fun encodeSnapshot(map: Map<String, Long>): String =
+            map.entries.sortedByDescending { it.value }
+                .joinToString("\n") { "${it.key}\t${it.value}" }
+
+        fun decodeHistory(raw: String): Map<String, Map<Int, String>> {
+            if (raw.isBlank()) return emptyMap()
+            return buildMap {
+                raw.lines().forEach { line ->
+                    val parts = line.split('\t')
+                    if (parts.size != 3) return@forEach
+                    val tier = parts[1].toIntOrNull() ?: return@forEach
+                    if (parts[0].isEmpty() || parts[2].isEmpty()) return@forEach
+                    val dates = getOrPut(parts[0]) { mutableMapOf() } as MutableMap<Int, String>
+                    dates[tier] = parts[2]
+                }
+            }
+        }
+
+        fun encodeHistory(map: Map<String, Map<Int, String>>): String =
+            map.entries.sortedBy { it.key }.flatMap { (id, dates) ->
+                dates.entries.sortedBy { it.key }.map { "$id\t${it.key}\t${it.value}" }
+            }.joinToString("\n")
+    }
+}

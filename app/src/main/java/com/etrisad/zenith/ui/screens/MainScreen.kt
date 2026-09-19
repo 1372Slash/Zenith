@@ -52,7 +52,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.etrisad.zenith.ui.components.PermissionBottomSheet
 import com.etrisad.zenith.ui.components.onboarding.OnboardingStatsBottomSheet
 import com.etrisad.zenith.ui.components.onboarding.OnboardingUpdateBottomSheet
-import com.etrisad.zenith.ui.components.UserBottomSheet
 import com.etrisad.zenith.ui.components.ZenithHeader
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.navigation.Screen
@@ -64,6 +63,9 @@ import com.etrisad.zenith.ui.screens.alarm.AlarmScreen
 import com.etrisad.zenith.ui.screens.bedtime.BedtimeScreen
 import com.etrisad.zenith.ui.screens.graceperiod.GracePeriodScreen
 import com.etrisad.zenith.ui.screens.pomodoro.PomodoroScreen
+import com.etrisad.zenith.ui.screens.profile.ProfileScreen
+import com.etrisad.zenith.ui.screens.profile.ProfileViewModel
+import com.etrisad.zenith.ui.screens.profile.ProfileViewModelFactory
 import com.etrisad.zenith.ui.screens.settings.EyeCareScreen
 import com.etrisad.zenith.ui.screens.settings.LockdownSettings
 import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointScreen
@@ -111,6 +113,9 @@ fun MainScreen(
     val PomodoroViewModel: PomodoroViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         factory = PomodoroViewModelFactory(context, userPreferencesRepository, shieldRepository)
     )
+    val profileViewModel: ProfileViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = ProfileViewModelFactory(context, shieldRepository, userPreferencesRepository)
+    )
     val navController = rememberNavController()
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -155,6 +160,7 @@ fun MainScreen(
                 currentRoute == Screen.EyeCare.route ||
                 currentRoute == Screen.Lockdown.route ||
                 currentRoute == Screen.Pomodoro.route ||
+                currentRoute == Screen.Profile.route ||
                 currentRoute == Screen.PausePoint.route ||
                 currentRoute == Screen.PausePointQr.route ||
                 currentRoute?.startsWith("pause_point_type") == true ||
@@ -212,7 +218,6 @@ fun MainScreen(
     var showPermissionSheet by remember { mutableStateOf(false) }
     var showOnboardingStatsSheet by remember { mutableStateOf(false) }
     var showOnboardingUpdateSheet by remember { mutableStateOf(false) }
-    var showUserSheet by remember { mutableStateOf(false) }
     var permissionsMissing by remember { mutableStateOf(false) }
 
     val updateManager = remember { GitHubUpdateManager(context) }
@@ -368,6 +373,7 @@ fun MainScreen(
                     currentRoute != Screen.EyeCare.route &&
                     currentRoute != Screen.Lockdown.route &&
                     currentRoute != Screen.Pomodoro.route &&
+                    currentRoute != Screen.Profile.route &&
                     currentRoute != Screen.PausePoint.route &&
                     currentRoute != Screen.PausePointQr.route &&
                     currentRoute?.startsWith("pause_point_type") == false &&
@@ -558,7 +564,7 @@ fun MainScreen(
                                     }
                                     "user" -> {
                                         IconButton(
-                                            onClick = { showUserSheet = true },
+                                            onClick = { navController.navigate(Screen.Profile.route) },
                                             modifier = Modifier.padding(end = 12.dp).clip(CircleShape)
                                         ) {
                                             Icon(
@@ -716,16 +722,6 @@ fun MainScreen(
                     showTimeSelection = false
                 )
             }
-            if (showUserSheet) {
-                UserBottomSheet(
-                    userName = preferences.userName,
-                    currentStreak = homeUiState.globalCurrentStreak,
-                    bestStreak = homeUiState.globalBestStreak,
-                    repository = userPreferencesRepository,
-                    onDismissRequest = { showUserSheet = false }
-                )
-            }
-
     if (showUpdateSheet && latestRelease != null) {
         val isDark = when (preferences.themeConfig) {
             ThemeConfig.FOLLOW_SYSTEM -> isSystemInDarkTheme()
@@ -761,6 +757,7 @@ fun MainScreen(
                                     targetRoute == Screen.EyeCare.route ||
                                     targetRoute == Screen.Lockdown.route ||
                                     targetRoute == Screen.Pomodoro.route ||
+                                    targetRoute == Screen.Profile.route ||
                                     targetRoute == Screen.PausePoint.route ||
                                     targetRoute == Screen.PausePointQr.route ||
                                     targetRoute?.startsWith("pause_point_type") == true ||
@@ -780,6 +777,7 @@ fun MainScreen(
                                     initialRoute == Screen.EyeCare.route ||
                                     initialRoute == Screen.Lockdown.route ||
                                     initialRoute == Screen.Pomodoro.route ||
+                                    initialRoute == Screen.Profile.route ||
                                     initialRoute == Screen.PausePoint.route ||
                                     initialRoute == Screen.PausePointQr.route ||
                                     initialRoute?.startsWith("pause_point_type") == true ||
@@ -831,6 +829,7 @@ fun MainScreen(
                                     targetRoute == Screen.EyeCare.route ||
                                     targetRoute == Screen.Lockdown.route ||
                                     targetRoute == Screen.Pomodoro.route ||
+                                    targetRoute == Screen.Profile.route ||
                                     targetRoute == Screen.PausePoint.route ||
                                     targetRoute == Screen.PausePointQr.route ||
                                     targetRoute?.startsWith("pause_point_type") == true ||
@@ -851,6 +850,7 @@ fun MainScreen(
                                     initialRoute == Screen.EyeCare.route ||
                                     initialRoute == Screen.Lockdown.route ||
                                     initialRoute == Screen.Pomodoro.route ||
+                                    initialRoute == Screen.Profile.route ||
                                     initialRoute == Screen.PausePoint.route ||
                                     initialRoute == Screen.PausePointQr.route ||
                                     initialRoute?.startsWith("pause_point_type") == true ||
@@ -1001,6 +1001,17 @@ fun MainScreen(
                             preferencesRepository = userPreferencesRepository
                         )
                     }
+                    composable(Screen.Profile.route) {
+                        ProfileScreen(
+                            profileViewModel = profileViewModel,
+                            homeViewModel = homeViewModel,
+                            preferencesRepository = userPreferencesRepository,
+                            innerPadding = innerPadding,
+                            onAppClick = { packageName ->
+                                navController.navigate(Screen.AppDetail.createRoute(packageName))
+                            }
+                        )
+                    }
                     composable(Screen.PausePoint.route) {
                         PausePointScreen(
                             preferences = preferences,
@@ -1142,6 +1153,7 @@ fun MainScreen(
                             currentRoute != Screen.SystemUsageDebug.route &&
                             currentRoute != Screen.OverlayAppearance.route &&
                             currentRoute != Screen.Pomodoro.route &&
+                            currentRoute != Screen.Profile.route &&
                             currentRoute != Screen.PausePoint.route &&
                             currentRoute != Screen.PausePointQr.route &&
                             currentRoute?.startsWith("pause_point_type") == false &&

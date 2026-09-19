@@ -14,4 +14,10 @@ interface PomodoroSessionDao {
 
     @Query("SELECT COUNT(*) FROM pomodoro_sessions WHERE date = :date")
     fun getCountForDateFlow(date: String): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM pomodoro_sessions")
+    suspend fun getTotalCount(): Int
+
+    @Query("SELECT COALESCE(SUM(focusMillis), 0) FROM pomodoro_sessions")
+    suspend fun getTotalFocusMillis(): Long
 }

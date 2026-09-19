@@ -17,6 +17,7 @@ object FeatureInfoRegistry {
         route == Screen.Lockdown.route -> lockdown
         route == Screen.Pomodoro.route -> pomodoro
         route == Screen.PausePoint.route -> pausePoint
+        route == Screen.Profile.route -> profile
         route == Screen.PausePointQr.route -> pausePointQr
         route?.startsWith("pause_point_type") == true -> pausePointType
         route == Screen.OverlayAppearance.route -> overlayAppearance
@@ -285,6 +286,26 @@ object FeatureInfoRegistry {
                 "Enable multiple task types so the challenge stays unpredictable.",
                 "If you enable QR scanning, register codes first — otherwise the task cannot be satisfied.",
                 "Fewer enabled types = faster unblock, more types = stronger friction."
+            )
+        )
+    )
+
+    private val profile = FeatureInfo(
+        title = "Profile",
+        summary = "Your identity, lifetime top apps, activity heatmap, streak, XP level, and achievements — all computed offline.",
+        sections = listOf(
+            FeatureInfoSections.whatItDoes(
+                "Shows your banner, photo, name, and bio (tap the edit icons to change them).",
+                "Top 3 lifetime apps come from an incremental snapshot so the full history is never re-summed on every open."
+            ),
+            FeatureInfoSections.whatYoullSee(
+                "Activity heatmap, screen time streak, and an XP level that rewards staying under shield limits and hitting goal targets.",
+                "Explorer badges for trying Zenith features and tiered accumulation badges (star, moon, sun, comet, crown, diamond, trophy).",
+                "A Share button that renders your profile to an image you can send anywhere."
+            ),
+            FeatureInfoSections.tips(
+                "XP is awarded once per day: shields pay for unused headroom, goals pay for reaching or passing the target.",
+                "Achievement tiers use custom roman numerals — collect higher tiers by growing streaks and saved time."
             )
         )
     )

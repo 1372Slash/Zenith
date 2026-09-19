@@ -117,6 +117,9 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val preferences by viewModel.homeScreenPreferences.collectAsState()
+    val bannerPrefs by userPreferencesRepository.userPreferencesFlow.collectAsState(
+        initial = UserPreferences()
+    )
 
     val coroutineScope = rememberCoroutineScope()
 
@@ -135,6 +138,8 @@ fun HomeScreen(
     HomeScreenContent(
         uiState = uiState,
         preferences = preferences,
+        bannerUri = bannerPrefs.userBannerUri,
+        showBanner = bannerPrefs.profileBannerOnHome,
         innerPadding = innerPadding,
         onSetTarget = onSetTarget,
         formatDuration = viewModel::formatDuration,
@@ -160,6 +165,8 @@ fun HomeScreenContent(
     uiState: HomeUiState,
     preferences: com.etrisad.zenith.data.preferences.UserPreferences,
     innerPadding: PaddingValues,
+    bannerUri: String = "",
+    showBanner: Boolean = false,
     onSetTarget: (Int) -> Unit,
     formatDuration: (Long) -> String,
     onShieldSortTypeChange: (ShieldSortType) -> Unit,
@@ -245,7 +252,9 @@ fun HomeScreenContent(
                     screenTimeTargetMinutes = preferences.screenTimeTargetMinutes,
                     onSetTarget = onSetTarget,
                     formatDuration = formatDuration,
-                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
+                    bannerUri = bannerUri,
+                    showBanner = showBanner
                 )
                 Spacer(modifier = Modifier.height(4.dp))
             }
@@ -568,17 +577,37 @@ fun UsageDashboard(
     screenTimeTargetMinutes: Int,
     onSetTarget: (Int) -> Unit,
     formatDuration: (Long) -> String,
-    shape: Shape = RoundedCornerShape(32.dp)
+    shape: Shape = RoundedCornerShape(32.dp),
+    bannerUri: String = "",
+    showBanner: Boolean = false
 ) {
     var showTargetSheet by remember { mutableStateOf(false) }
+    val bannerVisible = showBanner && bannerUri.isNotEmpty()
 
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            containerColor = if (bannerVisible) Color.Transparent
+            else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
         ),
         shape = shape
     ) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            if (bannerVisible) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(bannerUri).crossfade(300).build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize()
+                )
+                // Theme-aware scrim keeps the banner visible while
+                // preserving text readability in both themes.
+                Box(
+                    modifier = Modifier.matchParentSize()
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.55f))
+                )
+            }
         Column(
             modifier = Modifier.padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -741,6 +770,7 @@ fun UsageDashboard(
                 color = if (isExceeded) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                 trackColor = (if (isExceeded) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary).copy(alpha = 0.1f)
             )
+        }
         }
     }
 
