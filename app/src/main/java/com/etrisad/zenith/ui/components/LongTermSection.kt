@@ -248,15 +248,18 @@ fun LongTermSection(
         AnimatedContent(
             targetState = dailyHistory,
             transitionSpec = {
-                (fadeIn(spring(stiffness = Spring.StiffnessLow)) + expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
-                    .togetherWith(fadeOut(spring(stiffness = Spring.StiffnessLow)) + shrinkVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)))
+                // Fade + subtle scale on purpose: expand/shrink here re-measures
+                // the whole (up to 365-cell) grid every frame and drops frames on
+                // Monthly <-> Yearly swaps. Scale runs on the GPU layer instead,
+                // and the detail AnimatedVisibility below still drives resizing.
+                (fadeIn() + scaleIn(initialScale = 0.97f)) togetherWith
+                    (fadeOut() + scaleOut(targetScale = 0.97f)) using SizeTransform(
+                        clip = false,
+                        sizeAnimationSpec = { _, _ -> snap() }
+                    )
             },
             label = "longTermHeatmap"
         ) { history ->
-            // No animateContentSize here on purpose: the expand/shrink
-            // AnimatedVisibility below drives resizing directly. Nesting
-            // another size animation (like other cards avoid) makes the
-            // parent card lag seconds behind the collapsing content.
             Column(modifier = Modifier.fillMaxWidth()) {
                 if (history.isEmpty() || periodDays.isEmpty()) {
                     Text(heatmapEmptyText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
