@@ -187,7 +187,7 @@ abstract class ZenithDatabase : RoomDatabase() {
                             `lastDelayStartTimestamp`, `currentStreak`, `bestStreak`,
                             `lastStreakUpdateTimestamp`, `lastSessionEndTimestamp`,
                             `isPaused`, `pauseEndTimestamp`,
-                            1,
+                            `isHUDEnabled`,
                             `isGoalCallerEnabled`, `isGoalCallerSoundEnabled`,
                             `goalCallerSoundUri`, `limitPeriod`, `timeAdded`,
                             `isWebsite`, `url`
@@ -389,8 +389,8 @@ abstract class ZenithDatabase : RoomDatabase() {
         fun getDatabase(context: Context): ZenithDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: run {
-                    android.util.Log.d("ZenithDB", "Creating database instance (version=31, journal=WAL)")
-                    DbLogBuffer.d("ZenithDB", "Creating database instance (version=31, journal=WAL)")
+                    android.util.Log.d("ZenithDB", "Creating database instance (version=33, journal=WAL)")
+                    DbLogBuffer.d("ZenithDB", "Creating database instance (version=33, journal=WAL)")
                     val instance = Room.databaseBuilder(
                         context.applicationContext,
                         ZenithDatabase::class.java,
