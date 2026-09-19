@@ -281,12 +281,13 @@ fun LongTermSection(
                         if (selectedRange == StatsRange.YEARLY) calScroll.scrollTo(Int.MAX_VALUE)
                         calReady = true
                     }
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth()
                             .clip(RoundedCornerShape(16.dp))
                             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                             .padding(12.dp)
                     ) {
+                        Row(modifier = Modifier.fillMaxWidth()) {
                         Column(verticalArrangement = Arrangement.spacedBy(calGap)) {
                             Spacer(modifier = Modifier.height(20.dp))
                             CalWeekdayLetters.forEach { letter ->
@@ -469,6 +470,34 @@ fun LongTermSection(
                                     )
                                 }
                             }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Less",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            listOf(0.08f, 0.25f, 0.5f, 0.75f, 1f).forEach { step ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .clip(RoundedCornerShape(3.dp))
+                                        .background(accentColor.copy(alpha = step))
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                            }
+                            Text(
+                                "More",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         }
                     }
                     if (dataNote != null) {

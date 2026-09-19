@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -1063,7 +1064,41 @@ fun PomodoroStatusProgress(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(modifier = Modifier.height(10.dp))
+                SessionDots(
+                    currentSession = currentSession,
+                    totalSessions = totalSessions,
+                    accentColor = accentColor
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun SessionDots(
+    currentSession: Int,
+    totalSessions: Int,
+    accentColor: Color
+) {
+    val completed = (currentSession - 1).coerceIn(0, totalSessions.coerceAtLeast(1))
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        repeat(totalSessions.coerceIn(1, 12)) { index ->
+            val color = when {
+                index < completed -> accentColor
+                index == completed -> accentColor.copy(alpha = 0.45f)
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            }
+            val dotSize = if (index == completed) 10.dp else 8.dp
+            Box(
+                modifier = Modifier
+                    .size(dotSize)
+                    .clip(CircleShape)
+                    .background(color)
+            )
         }
     }
 }
