@@ -184,10 +184,6 @@ fun PomodoroScreen(
                 }
             }
 
-            item(key = "stats") {
-                PomodoroStatsSection(viewModel = viewModel)
-            }
-
             if (!uiState.isSessionActive) {
                 item(key = "settings") {
                     TimeSettingsCard(
@@ -204,7 +200,17 @@ fun PomodoroScreen(
                         containerColor = containerColor
                     )
                 }
+            }
 
+            item(key = "stats") {
+                Column {
+                    PreferenceCategory(title = "Statistics")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    PomodoroStatsSection(viewModel = viewModel)
+                }
+            }
+
+            if (!uiState.isSessionActive) {
                 item(key = "app_selection") {
                     AppSelectionCard(
                         allowedPackages = uiState.allowedPackages,

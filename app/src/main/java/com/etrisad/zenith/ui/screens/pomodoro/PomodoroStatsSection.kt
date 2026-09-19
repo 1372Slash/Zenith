@@ -84,7 +84,7 @@ fun PomodoroStatsSection(viewModel: PomodoroViewModel) {
 
     Column {
         Card(
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             modifier = Modifier.fillMaxWidth()
         ) {
