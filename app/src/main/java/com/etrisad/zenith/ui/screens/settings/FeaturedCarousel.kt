@@ -131,6 +131,30 @@ fun FeaturedCarousel(
                 onClick = { onNavigate(Screen.Bedtime.route) }
             ),
             FeaturedItem(
+                title = "Pomodoro Timer",
+                description = "Focus in timed sessions with breaks",
+                icon = Icons.Outlined.Timer,
+                onClick = { onNavigate(Screen.Pomodoro.route) }
+            ),
+            FeaturedItem(
+                title = "Lockdown Hours",
+                description = "Freeze shield edits on a schedule",
+                icon = Icons.Outlined.Lock,
+                onClick = { onNavigate(Screen.Lockdown.route) }
+            ),
+            FeaturedItem(
+                title = "Pause Point Tasks",
+                description = "Earn your unlock with quick tasks",
+                icon = Icons.Outlined.TouchApp,
+                onClick = { onNavigate(Screen.PausePoint.route) }
+            ),
+            FeaturedItem(
+                title = "Long-Term Heatmap",
+                description = "See months of usage patterns",
+                icon = Icons.Outlined.Insights,
+                onClick = { onNavigate(Screen.UsageStats.route) }
+            ),
+            FeaturedItem(
                 title = "Join Community",
                 description = "View development and sneak peaks",
                 icon = Icons.Outlined.Chat,
