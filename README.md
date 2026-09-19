@@ -126,6 +126,7 @@ These are optional, but they make Zenith much more reliable and powerful.
 14. **Storage Access (`READ_EXTERNAL_STORAGE`)**: Only used if you want to use the Backup & Restore feature to save or load your settings.
 15. **Internet Access (`INTERNET`)**: Used to check for app updates (depending on where you downloaded the app) and to let you visit our GitHub or community pages from the settings.
 16. **Calendar Access (`READ_CALENDAR`)**: Enables the "Show Current Event" feature, which displays your current calendar event (title, description, and progress) during the app-opening delay in the intercept overlay.
+17. **Camera (`CAMERA`)**: Only needed if you use QR Scan tasks in Pause Point, so you can scan one of your saved QR codes to continue. You can grant it from Settings > Features > Pause Point > QR Scan, or from the permission sheet under Optional Service.
 
 ## Support the Project
 
