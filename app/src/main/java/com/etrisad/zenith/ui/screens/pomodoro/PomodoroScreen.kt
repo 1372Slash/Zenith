@@ -184,6 +184,10 @@ fun PomodoroScreen(
                 }
             }
 
+            item(key = "stats") {
+                PomodoroStatsSection(viewModel = viewModel)
+            }
+
             if (!uiState.isSessionActive) {
                 item(key = "settings") {
                     TimeSettingsCard(
@@ -949,7 +953,13 @@ fun PomodoroStatusProgress(
         if (isPreview) remainingSessionMillis else remainingSessionMillis.coerceAtLeast(1L)
     }
     
-    val progressValue = if (isPreview) 1f else if (total > 0) (1f - remaining.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f
+    // Direction: fills up during focus, drains during rest. Idle shows empty.
+    val progressValue = when {
+        isPreview -> 0f
+        total <= 0L -> 0f
+        isBreakActive -> (remaining.toFloat() / total).coerceIn(0f, 1f)
+        else -> (1f - remaining.toFloat() / total).coerceIn(0f, 1f)
+    }
 
     val animatedProgress by animateFloatAsState(
         targetValue = progressValue,

@@ -63,7 +63,10 @@ fun LongTermSection(
     dayAppLoader: (suspend (Long) -> List<AppUsageInfo>)? = null,
     onAppClick: (String) -> Unit = {},
     getAppType: (String) -> String? = { null },
-    dataNote: String? = null
+    dataNote: String? = null,
+    // Optional extra line under the single-day header (loader == null branch),
+    // e.g. a session count for history sections that track more than durations.
+    detailExtraLine: (@Composable (dayMillis: Long) -> Unit)? = null
 ) {
     val safeMaxDaily = remember(dailyHistory) { (dailyHistory.maxOfOrNull { it.totalTime } ?: 1L).coerceAtLeast(1L) }
 
@@ -546,6 +549,7 @@ fun LongTermSection(
                                                     modifier = Modifier.padding(start = 8.dp, bottom = 2.dp)
                                                 )
                                             }
+                                            detailExtraLine?.invoke(dayMillis)
                                         }
                                     }
                                     Spacer(modifier = Modifier.height(8.dp))

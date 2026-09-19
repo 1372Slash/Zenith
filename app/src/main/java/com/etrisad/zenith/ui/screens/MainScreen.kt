@@ -109,7 +109,7 @@ fun MainScreen(
         factory = GracePeriodViewModelFactory(userPreferencesRepository)
     )
     val PomodoroViewModel: PomodoroViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
-        factory = PomodoroViewModelFactory(context, userPreferencesRepository)
+        factory = PomodoroViewModelFactory(context, userPreferencesRepository, shieldRepository)
     )
     val navController = rememberNavController()
 

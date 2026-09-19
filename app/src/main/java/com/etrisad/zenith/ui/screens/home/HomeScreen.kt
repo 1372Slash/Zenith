@@ -1281,7 +1281,10 @@ fun rememberPomodoroStatus(prefs: UserPreferences): PomodoroStatus {
     val total = if (onBreak) prefs.pomodoroBreakDurationMinutes * 60_000L
         else prefs.pomodoroSessionDurationMinutes * 60_000L
     val remaining = ((if (onBreak) breakEnd else sessionEnd) - now).coerceAtLeast(0L)
-    val progress = if (total > 0) (1f - remaining.toFloat() / total).coerceIn(0f, 1f) else 0f
+    // Fills up during focus, drains during rest.
+    val progress = if (total <= 0L) 0f
+    else if (onBreak) (remaining.toFloat() / total).coerceIn(0f, 1f)
+    else (1f - remaining.toFloat() / total).coerceIn(0f, 1f)
     return PomodoroStatus(true, onBreak, progress)
 }
 

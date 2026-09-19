@@ -380,4 +380,19 @@ class ShieldRepository(
     fun getIncentiveTier(): Flow<IncentiveTier> {
         return getIncentiveGoalProgress().map { IncentiveTier.fromProgress(it) }
     }
+
+    suspend fun recordPomodoroSession(date: String, focusMillis: Long, sessionNumber: Int) {
+        database.pomodoroSessionDao().insert(
+            com.etrisad.zenith.data.local.entity.PomodoroSessionEntity(
+                date = date,
+                completedAt = System.currentTimeMillis(),
+                focusMillis = focusMillis,
+                sessionNumber = sessionNumber
+            )
+        )
+    }
+
+    fun getPomodoroSessionsBetween(startDate: String, endDate: String): Flow<List<com.etrisad.zenith.data.local.entity.PomodoroSessionEntity>> {
+        return database.pomodoroSessionDao().getBetween(startDate, endDate)
+    }
 }

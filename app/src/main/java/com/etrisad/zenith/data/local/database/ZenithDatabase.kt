@@ -11,6 +11,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import java.util.concurrent.Executors
 import com.etrisad.zenith.data.local.dao.ScheduleDao
 import com.etrisad.zenith.data.local.dao.ShieldDao
+import com.etrisad.zenith.data.local.dao.PomodoroSessionDao
 import com.etrisad.zenith.data.local.dao.DailyUsageDao
 import com.etrisad.zenith.data.local.dao.HourlyUsageDao
 import com.etrisad.zenith.data.local.dao.InterceptedNotificationDao
@@ -21,6 +22,7 @@ import com.etrisad.zenith.data.local.entity.DailyUsageEntity
 import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
 import com.etrisad.zenith.data.local.entity.InterceptedNotificationEntity
 import com.etrisad.zenith.data.local.entity.WebsiteUsageEntity
+import com.etrisad.zenith.data.local.entity.PomodoroSessionEntity
 import com.etrisad.zenith.data.local.Converters
 
 @Database(
@@ -30,9 +32,10 @@ import com.etrisad.zenith.data.local.Converters
         DailyUsageEntity::class,
         HourlyUsageEntity::class,
         InterceptedNotificationEntity::class,
-        WebsiteUsageEntity::class
+        WebsiteUsageEntity::class,
+        PomodoroSessionEntity::class
     ],
-    version = 33,
+    version = 34,
     exportSchema = true,
     autoMigrations = [
         androidx.room.AutoMigration(from = 12, to = 13),
@@ -48,6 +51,7 @@ abstract class ZenithDatabase : RoomDatabase() {
     abstract fun hourlyUsageDao(): HourlyUsageDao
     abstract fun interceptedNotificationDao(): InterceptedNotificationDao
     abstract fun websiteUsageDao(): WebsiteUsageDao
+    abstract fun pomodoroSessionDao(): PomodoroSessionDao
 
     @Transaction
     open suspend fun deleteUsageForPackageTransaction(date: String, packageName: String) {
@@ -114,6 +118,17 @@ abstract class ZenithDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 try {
                     db.execSQL("ALTER TABLE schedules ADD COLUMN activeDays TEXT NOT NULL DEFAULT '1,2,3,4,5,6,7'")
+                } catch (_: Exception) {}
+            }
+        }
+
+        private val MIGRATION_33_34 = object : Migration(33, 34) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                try {
+                    db.execSQL("CREATE TABLE IF NOT EXISTS `pomodoro_sessions` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `date` TEXT NOT NULL, `completedAt` INTEGER NOT NULL, `focusMillis` INTEGER NOT NULL, `sessionNumber` INTEGER NOT NULL)")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_pomodoro_sessions_date` ON `pomodoro_sessions` (`date`)")
                 } catch (_: Exception) {}
             }
         }
@@ -389,8 +404,8 @@ abstract class ZenithDatabase : RoomDatabase() {
         fun getDatabase(context: Context): ZenithDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: run {
-                    android.util.Log.d("ZenithDB", "Creating database instance (version=33, journal=WAL)")
-                    DbLogBuffer.d("ZenithDB", "Creating database instance (version=33, journal=WAL)")
+                    android.util.Log.d("ZenithDB", "Creating database instance (version=34, journal=WAL)")
+                    DbLogBuffer.d("ZenithDB", "Creating database instance (version=34, journal=WAL)")
                     val instance = Room.databaseBuilder(
                         context.applicationContext,
                         ZenithDatabase::class.java,
@@ -402,7 +417,7 @@ abstract class ZenithDatabase : RoomDatabase() {
                             MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
                             MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18,
                             MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
-                            MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33
+                            MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25,                             MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34
                         )
                         .setQueryExecutor(Executors.newFixedThreadPool(4))
                         .setTransactionExecutor(Executors.newSingleThreadExecutor())
