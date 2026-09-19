@@ -150,11 +150,6 @@ class HomeViewModel(
     fun prevPerAppPeriod() { _perAppPeriodOffset.value = _perAppPeriodOffset.value + 1 }
     fun nextPerAppPeriod() { if (_perAppPeriodOffset.value > 0) _perAppPeriodOffset.value = _perAppPeriodOffset.value - 1 }
     fun getPerAppPeriodLabel(range: StatsRange, offset: Int): String = getPeriodLabel(range, offset)
-
-    /**
-     * Date-range label for a long-term period, e.g. "12 – 18 Agu 2026".
-     * Used as the paging indicator since unlimited paging makes dots meaningless.
-     */
     fun getPeriodRangeLabel(range: StatsRange, offset: Int): String {
         val (startStr, endStr) = getDateRangeForPeriod(range, offset)
         val parser = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())

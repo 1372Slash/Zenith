@@ -299,11 +299,6 @@ fun ZenithHeader(
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Info button keeps a stable identity across routes: it only
-                // fades/scales/expands when appearing or disappearing, never
-                // re-animates on route change. This keeps it anchored while the
-                // trailing switch slot expands/collapses beside it, so there is
-                // no sudden jump and no empty gap.
                 AnimatedVisibility(
                     visible = showInfoButton,
                     enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +

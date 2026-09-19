@@ -113,8 +113,6 @@ fun InterceptBottomSheet(
                     .pointerInput(dismissOnOutsideTap) {
                         detectTapGestures(
                             onTap = {
-                                // Hanya overlay test (forcedTaskType) yang boleh close via outside tap.
-                                // Overlay produksi tetap menelan tap agar tidak tembus ke app di bawah.
                                 if (dismissOnOutsideTap) currentOnCloseApp()
                             }
                         )

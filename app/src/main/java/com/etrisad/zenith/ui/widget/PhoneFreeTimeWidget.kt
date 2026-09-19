@@ -65,7 +65,6 @@ class PhoneFreeTimeWidget : GlanceAppWidget() {
         val now = System.currentTimeMillis()
         val startOfDay = DateTimeUtils.getDayStartTime(now, prefs.dayStartHour, prefs.dayStartMinute)
         val elapsedToday = (now - startOfDay).coerceAtLeast(0L)
-        // Same day-start boundary as elapsedToday (DB rows are keyed by it).
         val todayStr = DateTimeUtils.getDayStartDateString(now, prefs.dayStartHour, prefs.dayStartMinute)
         val totalMillis = try {
             val daily = withContext(Dispatchers.IO) { repo.getDailyUsagesForDateSync(todayStr) }
@@ -174,7 +173,6 @@ class PhoneFreeTimeWidget : GlanceAppWidget() {
                                 color = GlanceTheme.colors.primary
                             )
                         )
-                        // tertiary accent — secondary label, same as streak's tertiary badge
                         Text(
                             text = "AWAY",
                             style = TextStyle(

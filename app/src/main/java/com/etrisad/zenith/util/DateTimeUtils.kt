@@ -80,12 +80,6 @@ object DateTimeUtils {
         val dayStart = getDayStartTime(now, dayStartHour, dayStartMinute)
         return (now - dayStart).coerceAtLeast(0L)
     }
-
-    /**
-     * Formats a day range as a compact human label, e.g. "12 - 18 Agu 2026".
-     * Same month collapses the first day ("12 - 18 Agu 2026"), same year keeps
-     * one year suffix ("28 Jul - 3 Agu 2026"), different years show both.
-     */
     fun formatDateRange(
         startMillis: Long,
         endMillis: Long,

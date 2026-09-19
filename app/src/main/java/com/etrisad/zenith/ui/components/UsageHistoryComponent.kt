@@ -56,9 +56,6 @@ fun UsageHistoryCard(
 ) {
     var internalSelectedDate by rememberSaveable { mutableStateOf<Long?>(null) }
     val effectiveSelectedDate = selectedDateMillis ?: internalSelectedDate
-
-    // Days loaded on demand while swiping left (older than [history]); used for
-    // the header duration lookup when an older day is selected.
     var olderDays by remember(loaderKey) { mutableStateOf(emptyList<DailyUsage>()) }
 
     val dateFormat = remember { SimpleDateFormat("dd", Locale.getDefault()) }
@@ -132,13 +129,6 @@ fun UsageHistoryCard(
         }
     }
 }
-
-/**
- * Material 3 Expressive week stepper used as the paging indicator for
- * unbounded history: a tonal connected pill holding previous/next steppers
- * around the visible date range. Geometry is fixed - nothing shifts when a
- * stepper hides at an edge or the loader takes the hidden slot.
- */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun WeekStepperIndicator(

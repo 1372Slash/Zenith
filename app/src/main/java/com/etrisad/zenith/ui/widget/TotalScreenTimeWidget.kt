@@ -60,9 +60,6 @@ class TotalScreenTimeWidget : GlanceAppWidget() {
         val app = context.applicationContext as ZenithApplication
         val repo = app.shieldRepository
         val prefsRepo = app.userPreferencesRepository
-
-        // Fetch up-front on the worker thread: no runBlocking inside composition,
-        // and the day key honors the user's day-start boundary.
         val prefs = prefsRepo.userPreferencesFlow.first()
         val todayStr = DateTimeUtils.getDayStartDateString(
             System.currentTimeMillis(), prefs.dayStartHour, prefs.dayStartMinute
@@ -172,7 +169,6 @@ class TotalScreenTimeWidget : GlanceAppWidget() {
                                 color = GlanceTheme.colors.primary
                             )
                         )
-                        // tertiary accent — label as secondary info, mirroring streak's tertiary badge
                         Text(
                             text = "TODAY",
                             style = TextStyle(

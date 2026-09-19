@@ -46,8 +46,6 @@ import kotlin.random.Random
 private const val CONTENT_A = "pausePoint"
 private const val CONTENT_B = "actualContent"
 private const val CONTENT_C = "pausePointTestResult"
-
-/** One-shot camera check for task generation: overlays cannot request permissions. */
 private fun android.content.Context.isCameraGranted(): Boolean =
     ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 

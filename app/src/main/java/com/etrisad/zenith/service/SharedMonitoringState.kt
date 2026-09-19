@@ -95,8 +95,6 @@ object SharedMonitoringState {
         windDownUsedPackages.entries.removeIf { it.value && now - startOfDay > 86400000L }
         if (dailyUsageCache.size > 100) dailyUsageCache.entries.removeIf { it.value <= 0L }
         if (systemAppCache.size > 200) systemAppCache.clear()
-        // These sets have no natural eviction: reset them past any reasonable
-        // installed-app count instead of growing for the process lifetime.
         if (notifiedGoals.size > 500) notifiedGoals.clear()
         if (lastKnownPackageUsage.size > 500) lastKnownPackageUsage.clear()
         if (windDownUsedPackages.size > 500) windDownUsedPackages.clear()

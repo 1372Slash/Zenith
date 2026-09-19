@@ -141,7 +141,6 @@ class RemainingTargetWidget : GlanceAppWidget() {
         val sunnyIcon = if (isOver) R.drawable.ic_warning else R.drawable.ic_flag
         val sunnyTint = if (isOver) GlanceTheme.colors.error else GlanceTheme.colors.primary
         val sunnyContentTint = if (isOver) GlanceTheme.colors.onError else GlanceTheme.colors.primaryContainer
-        // tertiary accent for label — over switches to error as accent variant
         val labelColor = if (isOver) GlanceTheme.colors.error else GlanceTheme.colors.tertiary
 
         val mainFontSize = when {

@@ -249,7 +249,6 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
 
         if (!isBackup) {
             sendDataSavedNotification()
-            // unlimited retention for long-term yearly view - do not delete old daily usage
         }
 
         return Result.success()

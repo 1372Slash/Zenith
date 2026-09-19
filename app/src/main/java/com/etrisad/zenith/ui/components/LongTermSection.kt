@@ -42,15 +42,6 @@ import com.etrisad.zenith.ui.components.focus.appIconShape
 import com.etrisad.zenith.ui.viewmodel.AppUsageInfo
 import com.etrisad.zenith.ui.viewmodel.DailyUsage
 import com.etrisad.zenith.ui.viewmodel.StatsRange
-
-/**
- * Shared long-term statistics card used by both the global "Long-term Summary"
- * (Usage Stats) and the per-app "Long-term for this app" (App Detail).
- *
- * Visuals follow the existing app language; the shared parts are the period
- * navigator ([WeekStepperIndicator]), smooth pill weekday bars and breathing
- * heatmap cells. Accent colors differ per usage (primary / tertiary).
- */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LongTermSection(

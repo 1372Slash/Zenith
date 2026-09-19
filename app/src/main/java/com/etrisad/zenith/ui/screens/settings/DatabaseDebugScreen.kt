@@ -54,8 +54,6 @@ fun DatabaseDebugScreen(
     var showManagementSheet by remember { mutableStateOf(false) }
     var pendingResetAll by remember { mutableStateOf(false) }
     var pendingDeleteCarryover by remember { mutableStateOf<HourlyUsageEntity?>(null) }
-    // The history flow starts as emptyList, so an empty DB and a slow load look
-    // identical: stop showing the spinner after a grace period instead of forever.
     var historyLoadTimedOut by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         delay(10000)

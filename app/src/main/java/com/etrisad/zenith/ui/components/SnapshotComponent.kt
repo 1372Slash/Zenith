@@ -115,10 +115,6 @@ fun SnapshotSection(
     olderStampLoader: (suspend (chunkOffset: Int) -> List<AppUsageInfo>)? = null,
     loaderKey: Any? = null
 ) {
-    // Older 7-day stamp weeks loaded on demand while swiping left, oldest first.
-    // Unlike UsageGraph, everything stays in memory: streak shapes need one
-    // contiguous day sequence, and stamps are tiny. Queries still only happen
-    // for weeks near the viewed page.
     var olderStampWeeks by remember(loaderKey) { mutableStateOf(listOf<List<AppUsageInfo>>()) }
     var loadingOlder by remember(loaderKey) { mutableStateOf(false) }
     var olderExhausted by remember(loaderKey) { mutableStateOf(false) }
@@ -138,9 +134,6 @@ fun SnapshotSection(
             pagerInitDone = true
         }
     }
-
-    // Settle-gated prefetch: only a fresh settle at the left edge triggers one
-    // load, then the position is held so indices stay consistent (bounded).
     LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
         if (pagerState.isScrollInProgress) return@LaunchedEffect
         val current = pagerState.currentPage
@@ -162,7 +155,6 @@ fun SnapshotSection(
                     }
                 } else if (week.size == 7) {
                     olderStampWeeks = listOf(week) + olderStampWeeks
-                    // Hold only if the user stayed put mid-load.
                     if (pagerState.currentPage == current) {
                         pagerState.scrollToPage(current + 1)
                     }
@@ -653,7 +645,6 @@ fun SnapshotCard(
             }
             
             Spacer(modifier = Modifier.height(8.dp))
-            // Tonal connected stepper pill (M3 Expressive) instead of dots.
             val snapPage = pagerState.currentPage
             val snapData = pages.getOrNull(snapPage) ?: emptyList()
             val firstIdx = snapPage * 7

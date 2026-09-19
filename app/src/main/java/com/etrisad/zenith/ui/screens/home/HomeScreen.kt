@@ -185,8 +185,6 @@ fun HomeScreenContent(
 
     val bedtimeStatus = rememberBedtimeStatus(preferences)
     var activeTab by remember { mutableStateOf(AppTypeTab.APPS) }
-    // Minute ticker (same pattern as AppDetailScreen): pause/reset countdowns below
-    // read nowMillis, so a frozen value would leave them stale.
     val nowMillis by produceState(initialValue = System.currentTimeMillis()) {
         while (true) {
             delay(60000)
@@ -387,6 +385,7 @@ fun HomeScreenContent(
             item(key = "quick_actions") {
                 QuickActionsSection(
                     bedtimeStatus = bedtimeStatus,
+                    pomodoroStatus = rememberPomodoroStatus(preferences),
                     onAlarmClick = onAlarmClick,
                     onBedtimeClick = onBedtimeClick,
                     onStatsClick = onStatsClick,
@@ -1257,6 +1256,35 @@ data class BedtimeStatus(
     val progress: Float
 )
 
+data class PomodoroStatus(
+    val isActive: Boolean,
+    val isBreak: Boolean,
+    val progress: Float
+)
+
+@Composable
+fun rememberPomodoroStatus(prefs: UserPreferences): PomodoroStatus {
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    val sessionEnd = prefs.pomodoroSessionEndTimestamp
+    val breakEnd = prefs.pomodoroBreakEndTimestamp
+    val active = prefs.pomodoroEnabled && sessionEnd > now
+    // Tick every second, but only while a session is actually running.
+    LaunchedEffect(active) {
+        if (!active) return@LaunchedEffect
+        while (true) {
+            delay(1000)
+            now = System.currentTimeMillis()
+        }
+    }
+    if (!active) return PomodoroStatus(false, false, 0f)
+    val onBreak = breakEnd > now
+    val total = if (onBreak) prefs.pomodoroBreakDurationMinutes * 60_000L
+        else prefs.pomodoroSessionDurationMinutes * 60_000L
+    val remaining = ((if (onBreak) breakEnd else sessionEnd) - now).coerceAtLeast(0L)
+    val progress = if (total > 0) (1f - remaining.toFloat() / total).coerceIn(0f, 1f) else 0f
+    return PomodoroStatus(true, onBreak, progress)
+}
+
 @Composable
 fun rememberBedtimeStatus(prefs: UserPreferences): BedtimeStatus {
     var status by remember { mutableStateOf(BedtimeStatus(false, "", 1f)) }
@@ -1327,6 +1355,7 @@ fun rememberBedtimeStatus(prefs: UserPreferences): BedtimeStatus {
 @Composable
 fun QuickActionsSection(
     bedtimeStatus: BedtimeStatus,
+    pomodoroStatus: PomodoroStatus,
     onAlarmClick: () -> Unit,
     onBedtimeClick: () -> Unit,
     onStatsClick: () -> Unit,
@@ -1362,7 +1391,37 @@ fun QuickActionsSection(
         QuickActionCard(
             icon = Icons.Outlined.Timer,
             label = "Pomodoro",
-            onClick = onPomodoroClick
+            onClick = onPomodoroClick,
+            content = {
+                AnimatedContent(
+                    targetState = pomodoroStatus.isActive,
+                    transitionSpec = {
+                        (fadeIn() + scaleIn(initialScale = 0.6f))
+                            .togetherWith(fadeOut() + scaleOut(targetScale = 0.6f))
+                    },
+                    label = "PomodoroIconSwap"
+                ) { active ->
+                    if (active) {
+                        CircularWavyProgressIndicator(
+                            progress = { pomodoroStatus.progress },
+                            modifier = Modifier.size(32.dp * densityScale),
+                            color = if (pomodoroStatus.isBreak) MaterialTheme.colorScheme.tertiary
+                                else MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            stroke = Stroke(width = with(density) { 3.dp.toPx() } * densityScale),
+                            trackStroke = Stroke(width = with(density) { 3.dp.toPx() } * densityScale),
+                            wavelength = 8.dp * densityScale
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Outlined.Timer,
+                            contentDescription = "Pomodoro",
+                            modifier = Modifier.size(24.dp * densityScale),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
         )
         QuickActionCard(
             icon = Icons.Outlined.Insights,

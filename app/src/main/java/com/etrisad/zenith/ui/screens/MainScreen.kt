@@ -198,15 +198,6 @@ fun MainScreen(
 
     var showBatchDeleteSheet by remember { mutableStateOf(false) }
     var showBatchPauseSheet by remember { mutableStateOf(false) }
-
-    // Single header switch slot: one fixed-size container shared by all
-    // switch screens. Keeping a single slot (instead of one Box per feature
-    // with delayed layout reservation) prevents the info button from jumping
-    // and avoids an empty gap while the switch fades in. Navigating between
-    // two switch screens keeps the slot visible and only cross-fades the inner
-    // content, so the info button does not move at all. Enter/exit animates
-    // width (expand/shrink) together with fade/scale/slide, so the info button
-    // glides smoothly instead of snapping.
     val headerSwitchKey: String? = when {
         currentRoute == Screen.Bedtime.route && preferences.bedtimeEnabled -> "bedtime"
         currentRoute == Screen.GracePeriod.route && preferences.gracePeriodEnabled -> "grace"
@@ -639,8 +630,6 @@ fun MainScreen(
                                                 checked = preferences.lockdownEnabled,
                                                 onCheckedChange = {
                                                     if (preferences.lockdownEnabled) {
-                                                        // Disabling must pass the puzzle gate in Lockdown
-                                                        // settings - a direct toggle would bypass it.
                                                         navController.navigate(Screen.Lockdown.route)
                                                     } else {
                                                         scope.launch {
@@ -1018,8 +1007,6 @@ fun MainScreen(
                             innerPadding = innerPadding,
                             preferencesRepository = userPreferencesRepository,
                             onTaskTypeClick = { taskType ->
-                                // Every type (including QR_SCAN and CHOOSE_APP) has its own
-                                // settings screen; routing uniformly keeps them reachable.
                                 navController.navigate(Screen.PausePointTypeSettings.createRoute(taskType.name))
                             }
                         )
@@ -1052,8 +1039,6 @@ fun MainScreen(
                                 }
                             )
                         } else {
-                            // Unknown type argument (e.g. stale deep link): go back
-                            // instead of leaving a blank screen under the header.
                             LaunchedEffect(Unit) { navController.popBackStack() }
                         }
                     }

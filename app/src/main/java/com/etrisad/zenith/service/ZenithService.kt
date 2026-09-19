@@ -1560,11 +1560,6 @@ class ZenithService : AccessibilityService() {
             updateShieldCache = { updated -> currentShieldCache = updated }
         )
     }
-
-    // Best-effort back handling only: overlay windows are FLAG_NOT_FOCUSABLE by
-    // design, so BACK normally goes to the underlying app and never reaches here.
-    // The supported dismiss path is the explicit close control (CloseAppTextButton)
-    // plus the pull-down gesture - do not rely on this for dismissal UX.
     override fun onKeyEvent(event: android.view.KeyEvent): Boolean {
         if (event.keyCode == android.view.KeyEvent.KEYCODE_BACK &&
             event.action == android.view.KeyEvent.ACTION_DOWN &&

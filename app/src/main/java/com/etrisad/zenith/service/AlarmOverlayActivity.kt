@@ -295,7 +295,6 @@ class AlarmOverlayActivity : ComponentActivity() {
         } else {
             playbackService?.stopPlayback()
         }
-        // Guarded: release() on a non-held lock throws RuntimeException.
         if (wakeLock?.isHeld == true) {
             wakeLock?.release()
         }

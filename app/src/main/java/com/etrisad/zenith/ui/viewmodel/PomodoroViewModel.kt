@@ -139,8 +139,6 @@ class PomodoroViewModel(
                     SharedMonitoringState.isPomodoroBlockingActive = newBlockingActive
                     SharedMonitoringState.isPomodoroBreakActive = isBreak
                 }
-                // Park the 1s ticker when fully idle instead of spinning forever;
-                // restarted by startSession() or on init with a live session.
                 val fresh = _uiState.value
                 val idleNow = System.currentTimeMillis()
                 if (!fresh.isSessionActive && !fresh.isBreakActive &&

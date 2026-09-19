@@ -125,9 +125,6 @@ fun PermissionBottomSheet(
             if (!isGranted) cameraAsked = true
         }
     )
-
-    // Permanently denied = asked before + system will no longer show the dialog.
-    // Camera stays out of optionalAllGranted: it is only needed for QR scan tasks.
     val cameraPermanentlyDenied = !hasCamera && cameraAsked &&
         (context as? Activity)?.let {
             !ActivityCompat.shouldShowRequestPermissionRationale(it, android.Manifest.permission.CAMERA)

@@ -128,7 +128,6 @@ fun GracePeriodScreen(
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
-                // Cooldown info
                 val cooldownText = viewModel.getCooldownText(preferences)
                 if (cooldownText != null) {
                     Card(

@@ -232,14 +232,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         }
 
         const val EXTRA_ALARM_ID = "alarm_id"
-
-        /**
-         * Per-alarm request code: time-only codes collide when two alarms share
-         * HH:mm (same PendingIntent = one overwrites the other). Mixing in the
-         * alarm id keeps them distinct; ids are timestamp-based so the modulo
-         * keeps the value inside Int range. Cross-base numeric overlap is harmless
-         * because each base uses a different intent action.
-         */
         private fun requestCodeForId(base: Int, alarmTime: String, alarmId: Long): Int {
             val parts = alarmTime.split(":")
             val hour = parts.getOrNull(0)?.toIntOrNull() ?: 0

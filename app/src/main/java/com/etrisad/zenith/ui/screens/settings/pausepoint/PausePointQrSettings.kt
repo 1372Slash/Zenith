@@ -57,11 +57,9 @@ fun PausePointQrSettingsScreen(
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val cameraPermissionState = rememberPermissionState(android.Manifest.permission.CAMERA)
-    // Keyed on prefs so external changes (or returning from system Settings) resync.
     var codes by remember(preferences.pausePointQrCodes) { mutableStateOf(preferences.pausePointQrCodes) }
     var justAdded by remember { mutableStateOf<String?>(null) }
     var cameraAsked by remember { mutableStateOf(false) }
-    // Permanently denied = asked before + system will no longer show the dialog.
     val cameraPermanentlyDenied = !cameraPermissionState.status.isGranted &&
         !cameraPermissionState.status.shouldShowRationale && cameraAsked
     val onCameraButtonClick: () -> Unit = {
