@@ -1,11 +1,15 @@
 package com.etrisad.zenith.ui.components
 
+import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
@@ -78,6 +82,13 @@ fun PermissionBottomSheet(
     var hasNotificationPolicy by remember { mutableStateOf((context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted) }
     var hasNotificationListener by remember { mutableStateOf(isNotificationListenerEnabled(context)) }
     var hasCalendar by remember { mutableStateOf(hasCalendarPermission(context)) }
+    var hasCamera by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+    }
+    var cameraAsked by remember { mutableStateOf(false) }
     var isBatteryOptimized by remember { mutableStateOf(!isIgnoringBatteryOptimizations(context)) }
     var canExactAlarm by remember { mutableStateOf(canScheduleExactAlarms(context)) }
     
@@ -106,6 +117,34 @@ fun PermissionBottomSheet(
             }
         }
     )
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            hasCamera = isGranted
+            if (!isGranted) cameraAsked = true
+        }
+    )
+
+    // Permanently denied = asked before + system will no longer show the dialog.
+    // Camera stays out of optionalAllGranted: it is only needed for QR scan tasks.
+    val cameraPermanentlyDenied = !hasCamera && cameraAsked &&
+        (context as? Activity)?.let {
+            !ActivityCompat.shouldShowRequestPermissionRationale(it, android.Manifest.permission.CAMERA)
+        } == true
+
+    fun openCameraPermission() {
+        if (cameraPermanentlyDenied) {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", context.packageName, null)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } else {
+            cameraAsked = true
+            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+        }
+    }
 
     fun openAccessibilitySettings(ctx: android.content.Context) {
         ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
@@ -140,6 +179,10 @@ fun PermissionBottomSheet(
                 hasNotificationPolicy = (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted
                 hasNotificationListener = isNotificationListenerEnabled(context)
                 hasCalendar = hasCalendarPermission(context)
+                hasCamera = ContextCompat.checkSelfPermission(
+                    context,
+                    android.Manifest.permission.CAMERA
+                ) == PackageManager.PERMISSION_GRANTED
                 isBatteryOptimized = !isIgnoringBatteryOptimizations(context)
                 canExactAlarm = canScheduleExactAlarms(context)
             }
@@ -329,6 +372,19 @@ fun PermissionBottomSheet(
                             context.startActivity(intent)
                         },
                         icon = Icons.Outlined.CalendarMonth,
+                        position = GroupPosition.Middle,
+                        isInsideCollapse = true
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    PermissionItemRow(
+                        title = "Camera",
+                        description = if (cameraPermanentlyDenied)
+                            "Denied. Open Settings to enable for QR scan tasks"
+                        else
+                            "Only needed for QR scan tasks",
+                        isGranted = hasCamera,
+                        onClick = { openCameraPermission() },
+                        icon = Icons.Outlined.QrCodeScanner,
                         position = GroupPosition.Bottom,
                         isInsideCollapse = true
                     )
@@ -375,6 +431,7 @@ fun PermissionBottomSheet(
                         onClick = {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                 val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                                    data = Uri.fromParts("package", context.packageName, null)
                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 }
                                 context.startActivity(intent)
