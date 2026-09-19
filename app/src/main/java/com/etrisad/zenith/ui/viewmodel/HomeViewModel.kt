@@ -444,7 +444,12 @@ class HomeViewModel(
                     old.bedtimeEnabled == new.bedtimeEnabled &&
                     old.bedtimeStartTime == new.bedtimeStartTime &&
                     old.bedtimeEndTime == new.bedtimeEndTime &&
-                    old.bedtimeDays == new.bedtimeDays
+                    old.bedtimeDays == new.bedtimeDays &&
+                    old.pomodoroEnabled == new.pomodoroEnabled &&
+                    old.pomodoroSessionEndTimestamp == new.pomodoroSessionEndTimestamp &&
+                    old.pomodoroBreakEndTimestamp == new.pomodoroBreakEndTimestamp &&
+                    old.pomodoroSessionDurationMinutes == new.pomodoroSessionDurationMinutes &&
+                    old.pomodoroBreakDurationMinutes == new.pomodoroBreakDurationMinutes
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UserPreferences())
 
