@@ -672,6 +672,10 @@ fun MainScreen(
                                                             val enabledAlarms = alarms.filter { it.enabled }
                                                             com.etrisad.zenith.receiver.AlarmBroadcastReceiver.rescheduleAllAlarms(context, enabledAlarms)
                                                         } else {
+                                                            val alarms = userPreferencesRepository.parseAlarms(preferences.alarmsJson)
+                                                            for (alarm in alarms) {
+                                                                com.etrisad.zenith.receiver.AlarmBroadcastReceiver.cancelAlarm(context, alarm.timeString, alarm.id)
+                                                            }
                                                             com.etrisad.zenith.receiver.AlarmBroadcastReceiver.cancelAlarm(context)
                                                         }
                                                     }
