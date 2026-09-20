@@ -896,8 +896,53 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
     )
 )
 
+/**
+ * Display order following a new user's likely journey: setup targets and
+ * protectors first, first streaks and savings next, customization and
+ * power features in the middle, long grinds and tinkerer badges last.
+ * Unknown ids sink to the bottom so new defs never break the order.
+ */
+private val JOURNEY_ORDER = listOf(
+    // Setup: targets and first protections.
+    "target_setter", "shield_setter", "goal_setter",
+    // First protector trials.
+    "lockdown_explorer", "bedtime_explorer", "alarm_explorer",
+    "pausepoint_explorer", "grace_explorer",
+    // First focus and planning.
+    "pomo_first", "preset_saver", "schedule_keeper",
+    // Early streaks and savings.
+    "hot_streak", "streak_keeper", "under_budget", "time_saver", "night_guardian",
+    // First week of data.
+    "historian", "loyal_tracker", "app_atlas", "fortress_builder", "goal_getter",
+    // Customization wave.
+    "theme_stylist", "palette_painter", "floater", "pill_keeper", "hud_pilot",
+    "day_maker", "head_start",
+    // Shield power features.
+    "patient_player", "strict_enforcer", "caller_tuned", "auto_quitter",
+    "locked_in", "ghost_mode", "night_off",
+    // Awareness features.
+    "mindful_explorer", "glimpse_user", "web_watcher", "full_charge",
+    // Eye and bedtime depth.
+    "eyecare_explorer", "wind_downer", "bedtime_bouncer", "silent_sleeper",
+    // Planning depth (QR needs physical codes, so it sits with the
+    // optional Pause Point depth instead of the early journey).
+    "alarm_collector", "scheduler_pro", "qr_collector", "taskmaster", "variant_vanguard",
+    // Focus depth.
+    "focus_hours", "xp_hoarder",
+    // Sharing and ambient delights.
+    "town_crier", "shorts_spotter", "widget_wielder",
+    // Recovery and maintenance.
+    "second_chance", "cleaner", "backup_guardian", "data_doctor",
+    // Long grinds.
+    "app_streaker", "web_cartographer", "interceptor", "escape_artist",
+    // Tinkerer corner.
+    "dev_mode", "perf_tuner"
+)
+
 fun buildAchievementStates(stats: ProfileAchievementStats): List<AchievementState> {
-    val defs = buildAchievementDefs()
+    val defs = buildAchievementDefs().sortedBy {
+        JOURNEY_ORDER.indexOf(it.id).takeIf { i -> i >= 0 } ?: Int.MAX_VALUE
+    }
     val currentById = mapOf(
         "pomo_first" to stats.pomodoroSessions.toLong(),
         "focus_hours" to stats.pomodoroFocusMillis,
