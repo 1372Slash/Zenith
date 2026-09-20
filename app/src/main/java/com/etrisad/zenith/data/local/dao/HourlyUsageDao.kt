@@ -27,6 +27,9 @@ interface HourlyUsageDao {
     @Query("SELECT DISTINCT date FROM hourly_usage")
     fun getDatesWithHourlyUsage(): Flow<List<String>>
 
+    @Query("SELECT COUNT(DISTINCT date) FROM hourly_usage WHERE hour BETWEEN :startHour AND :endHour AND usageTimeMillis > 0")
+    suspend fun getActiveDatesInHourRange(startHour: Int, endHour: Int): Int
+
     @Query("DELETE FROM hourly_usage WHERE date < :thresholdDate")
     suspend fun deleteOldUsage(thresholdDate: String)
 

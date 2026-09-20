@@ -82,7 +82,8 @@ fun com.etrisad.zenith.data.preferences.UserPreferences.achievementTrackingKey()
         dayStartHour, dayStartMinute, disableTrackingAtUnusedHours,
         streakRecoveryPerformed, dismissedUninstalledApps.size,
         bedtimeWhitelistedPackages.size, bedtimeDndEnabled,
-        shortsScreenTimeMs > 0
+        shortsScreenTimeMs > 0,
+        infoVisitedRoutes.size, userBio, userAvatarUri, userBannerUri
     ).joinToString("|")
 }
 
@@ -245,11 +246,24 @@ class ProfileViewModel(
                     hasShorts = freshPrefs.shortsScreenTimeMs > 0L,
                     widgetCount = placedWidgetCount(),
                     webDomainCount = shieldRepository.getWebsiteDomainCount(),
+                    webTotalMillis = shieldRepository.getWebsiteTotalMillis(),
                     interceptedCount = shieldRepository.getInterceptedNotificationCount(),
                     trackedDayCount = shieldRepository.getTrackedDayCount(),
                     underBudgetDays = underBudgetDaysThisMonth(todayStr),
+                    overdrawDays = overdrawDaysThisMonth(todayStr),
                     lifetimeAppCount = lifetime.appCount,
-                    customVariantCount = customVariantCount(freshPrefs)
+                    customVariantCount = customVariantCount(freshPrefs),
+                    infoSheetCount = freshPrefs.infoVisitedRoutes.size,
+                    weekendDays = weekendTrackedDays(),
+                    nightNights = shieldRepository.getHourlyActiveDayCount(0, 4),
+                    earlyMornings = shieldRepository.getHourlyActiveDayCount(5, 7),
+                    profileFields = listOf(
+                        freshPrefs.userBio.isNotBlank(),
+                        freshPrefs.userAvatarUri.isNotBlank(),
+                        freshPrefs.userBannerUri.isNotBlank()
+                    ).count { it },
+                    sevenDayStreak = freshPrefs.globalBestStreak,
+                    distinctDatesCount = shieldRepository.getTrackedDayCount()
                 )
                 val baseAchievements = buildAchievementStates(stats)
                 val (achievements, newlyTieredIds) = recordUnlockDates(baseAchievements, todayStr)
@@ -420,6 +434,36 @@ class ProfileViewModel(
                 .format(cal.time)
             shieldRepository.getUsageBetween(monthStart, todayStr).first()
                 .count { it.packageName == "TOTAL" && it.usageTimeMillis <= target }
+        } catch (_: Exception) { 0 }
+    }
+
+    private suspend fun overdrawDaysThisMonth(todayStr: String): Int {
+        return try {
+            val target = userPreferencesRepository.userPreferencesFlow.first()
+                .screenTimeTargetMinutes * 60_000L
+            if (target <= 0L) return 0
+            val cal = java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.DAY_OF_MONTH, 1)
+            }
+            val monthStart = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                .format(cal.time)
+            shieldRepository.getUsageBetween(monthStart, todayStr).first()
+                .count { it.packageName == "TOTAL" && it.usageTimeMillis > target }
+        } catch (_: Exception) { 0 }
+    }
+
+    private suspend fun weekendTrackedDays(): Int {
+        return try {
+            val dates = shieldRepository.getAllTrackedDates()
+            dates.count { dateStr ->
+                try {
+                    val parsed = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+                        .parse(dateStr) ?: return@count false
+                    val cal = java.util.Calendar.getInstance().apply { time = parsed }
+                    val dow = cal.get(java.util.Calendar.DAY_OF_WEEK)
+                    dow == java.util.Calendar.SATURDAY || dow == java.util.Calendar.SUNDAY
+                } catch (_: Exception) { false }
+            }
         } catch (_: Exception) { 0 }
     }
 

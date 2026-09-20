@@ -45,6 +45,9 @@ interface DailyUsageDao {
     @Query("SELECT COUNT(DISTINCT date) FROM daily_usage")
     suspend fun getDistinctDateCount(): Int
 
+    @Query("SELECT DISTINCT date FROM daily_usage")
+    suspend fun getDistinctDates(): List<String>
+
     @Query("SELECT * FROM daily_usage WHERE date = :date")
     fun getUsagesForDateFlow(date: String): Flow<List<DailyUsageEntity>>
 

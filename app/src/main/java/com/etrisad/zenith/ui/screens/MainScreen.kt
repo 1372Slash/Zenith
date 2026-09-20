@@ -410,6 +410,12 @@ fun MainScreen(
     }
 
     if (showFeatureInfoSheet) {
+        LaunchedEffect(currentRoute, navBackStackEntry?.arguments?.getString("category")) {
+            val route = currentRoute ?: return@LaunchedEffect
+            val cat = navBackStackEntry?.arguments?.getString("category") ?: ""
+            val key = if (cat.isNotBlank()) "$route:$cat" else route
+            userPreferencesRepository.addInfoVisitedRoute(key)
+        }
         FeatureInfoSheet(
             info = FeatureInfoRegistry.infoFor(
                 currentRoute,

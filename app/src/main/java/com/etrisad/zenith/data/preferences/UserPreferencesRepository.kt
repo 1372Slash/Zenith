@@ -251,6 +251,7 @@ class UserPreferencesRepository(private val context: Context) {
         val USER_BANNER_URI = stringPreferencesKey("user_banner_uri")
         val PROFILE_BANNER_ON_HOME = booleanPreferencesKey("profile_banner_on_home")
         val USER_SHARED_PROFILE = booleanPreferencesKey("user_shared_profile")
+        val INFO_VISITED_ROUTES = stringPreferencesKey("info_visited_routes")
         val LIFETIME_SNAPSHOT = stringPreferencesKey("lifetime_snapshot")
         val LIFETIME_LAST_SYNC_DATE = stringPreferencesKey("lifetime_last_sync_date")
         val ACHIEVEMENT_HISTORY = stringPreferencesKey("achievement_history")
@@ -470,6 +471,8 @@ class UserPreferencesRepository(private val context: Context) {
             userBannerUri = settings[PreferencesKeys.USER_BANNER_URI] ?: "",
             profileBannerOnHome = settings[PreferencesKeys.PROFILE_BANNER_ON_HOME] ?: false,
             userSharedProfile = settings[PreferencesKeys.USER_SHARED_PROFILE] ?: false,
+            infoVisitedRoutes = settings[PreferencesKeys.INFO_VISITED_ROUTES]
+                ?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
             lifetimeSnapshot = settings[PreferencesKeys.LIFETIME_SNAPSHOT] ?: "",
             lifetimeLastSyncDate = settings[PreferencesKeys.LIFETIME_LAST_SYNC_DATE] ?: "",
             achievementHistory = settings[PreferencesKeys.ACHIEVEMENT_HISTORY] ?: "",
@@ -738,6 +741,17 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setUserSharedProfile(shared: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.USER_SHARED_PROFILE] = shared }
+    }
+
+    suspend fun addInfoVisitedRoute(route: String) {
+        if (route.isBlank()) return
+        context.dataStore.edit { preferences ->
+            val current = preferences[PreferencesKeys.INFO_VISITED_ROUTES]
+                ?.split(",")?.filter { it.isNotEmpty() }?.toMutableSet() ?: mutableSetOf()
+            if (current.add(route)) {
+                preferences[PreferencesKeys.INFO_VISITED_ROUTES] = current.joinToString(",")
+            }
+        }
     }
 
     suspend fun setLifetimeSnapshot(snapshot: String, lastSyncDate: String) {
@@ -1760,6 +1774,7 @@ data class UserPreferences(
     val userBannerUri: String = "",
     val profileBannerOnHome: Boolean = false,
     val userSharedProfile: Boolean = false,
+    val infoVisitedRoutes: Set<String> = emptySet(),
     val lifetimeSnapshot: String = "",
     val lifetimeLastSyncDate: String = "",
     val achievementHistory: String = "",

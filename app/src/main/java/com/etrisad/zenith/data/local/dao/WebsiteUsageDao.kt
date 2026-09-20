@@ -35,4 +35,7 @@ interface WebsiteUsageDao {
 
     @Query("SELECT COUNT(DISTINCT domain) FROM website_usage")
     suspend fun getDistinctDomainCount(): Int
+
+    @Query("SELECT COALESCE(SUM(usageTimeMillis), 0) FROM website_usage")
+    suspend fun getTotalMillis(): Long
 }

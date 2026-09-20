@@ -158,6 +158,20 @@ class ShieldRepository(
         return try { dailyUsageDao.getDistinctDateCount() } catch (_: Exception) { 0 }
     }
 
+    suspend fun getHourlyActiveDayCount(startHour: Int, endHour: Int): Int {
+        return try {
+            database.hourlyUsageDao().getActiveDatesInHourRange(startHour, endHour)
+        } catch (_: Exception) { 0 }
+    }
+
+    suspend fun getAllTrackedDates(): List<String> {
+        return try { dailyUsageDao.getDistinctDates() } catch (_: Exception) { emptyList() }
+    }
+
+    suspend fun getWebsiteTotalMillis(): Long {
+        return try { websiteUsageDao.getTotalMillis() } catch (_: Exception) { 0L }
+    }
+
     fun getPomodoroTotalCountFlow(): Flow<Int> {
         return database.pomodoroSessionDao().getTotalCountFlow()
     }

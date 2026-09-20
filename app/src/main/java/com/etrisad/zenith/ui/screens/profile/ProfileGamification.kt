@@ -6,11 +6,16 @@ import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.AlarmOn
 import androidx.compose.material.icons.outlined.Assignment
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.BatteryChargingFull
 import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.BedtimeOff
 import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.CalendarViewMonth
+import androidx.compose.material.icons.outlined.CloudDone
+import androidx.compose.material.icons.outlined.Contrast
+import androidx.compose.material.icons.outlined.DataArray
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Campaign
@@ -33,9 +38,11 @@ import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Hotel
 import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material.icons.outlined.HourglassFull
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Medication
 import androidx.compose.material.icons.outlined.NightsStay
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.PlayCircle
@@ -55,7 +62,10 @@ import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Savings
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.SelfImprovement
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Snooze
+import androidx.compose.material.icons.outlined.Update
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.TrackChanges
@@ -231,11 +241,20 @@ data class ProfileAchievementStats(
     val hasShorts: Boolean = false,
     val widgetCount: Int = 0,
     val webDomainCount: Int = 0,
+    val webTotalMillis: Long = 0L,
     val interceptedCount: Int = 0,
     val trackedDayCount: Int = 0,
     val underBudgetDays: Int = 0,
     val lifetimeAppCount: Int = 0,
-    val customVariantCount: Int = 0
+    val customVariantCount: Int = 0,
+    val infoSheetCount: Int = 0,
+    val sevenDayStreak: Int = 0,
+    val weekendDays: Int = 0,
+    val overdrawDays: Int = 0,
+    val distinctDatesCount: Int = 0,
+    val nightNights: Int = 0,
+    val earlyMornings: Int = 0,
+    val profileFields: Int = 0
 )
 
 private fun hoursLabel(millis: Long): String {
@@ -790,6 +809,118 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
             "First Save", "Under Budget", "Frugal", "Economist", "Minimalist"
         )
     ),
+    // Fun tiered
+    AchievementDef(
+        id = "info_hunter", title = "Info Hunter",
+        desc = "Tap the info button across screens",
+        icon = Icons.Outlined.Explore, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 3, "3 screens"),
+            TierThreshold(ProfileTier.V, 8, "8 screens"),
+            TierThreshold(ProfileTier.X, 15, "15 screens"),
+            TierThreshold(ProfileTier.M, 22, "22 screens")
+        ),
+        tierNames = listOf(
+            "Peeker", "Info Hunter", "Curious Cat", "Know-It-All"
+        )
+    ),
+    AchievementDef(
+        id = "night_owl_lite", title = "Night Owl Lite",
+        desc = "Active during midnight hours",
+        icon = Icons.Outlined.Bedtime, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 3, "3 nights"),
+            TierThreshold(ProfileTier.X, 7, "7 nights"),
+            TierThreshold(ProfileTier.M, 14, "14 nights")
+        ),
+        tierNames = listOf(
+            "Night Owl Lite", "Midnight Walker", "Insomniac"
+        )
+    ),
+    AchievementDef(
+        id = "early_bird", title = "Early Bird",
+        desc = "Active in the fresh morning",
+        icon = Icons.Outlined.WbSunny, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 3, "3 mornings"),
+            TierThreshold(ProfileTier.X, 7, "7 mornings"),
+            TierThreshold(ProfileTier.M, 14, "14 mornings")
+        ),
+        tierNames = listOf(
+            "Early Bird", "Sunrise Chaser", "Morning Person"
+        )
+    ),
+    AchievementDef(
+        id = "weekend_warrior", title = "Weekend Warrior",
+        desc = "Weekends tracked with activity",
+        icon = Icons.Outlined.CalendarViewMonth, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 4, "4 weekends"),
+            TierThreshold(ProfileTier.X, 8, "8 weekends"),
+            TierThreshold(ProfileTier.M, 16, "16 weekends")
+        ),
+        tierNames = listOf(
+            "Weekend Warrior", "Weekend Regular", "Weekend Veteran"
+        )
+    ),
+    AchievementDef(
+        id = "profile_polisher", title = "Profile Polisher",
+        desc = "Complete your profile identity",
+        icon = Icons.Outlined.Badge, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 1, "1 field"),
+            TierThreshold(ProfileTier.X, 2, "2 fields"),
+            TierThreshold(ProfileTier.M, 3, "3 fields")
+        ),
+        tierNames = listOf(
+            "First Touch", "Profile Polisher", "Identity Complete"
+        )
+    ),
+    AchievementDef(
+        id = "streak_roller", title = "Streak Roller",
+        desc = "Keep a week-long streak rolling",
+        icon = Icons.Outlined.EventRepeat, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 7, "7 days"),
+            TierThreshold(ProfileTier.X, 14, "14 days"),
+            TierThreshold(ProfileTier.M, 21, "21 days")
+        ),
+        tierNames = listOf(
+            "Seven Up", "Streak Roller", "Fortnight"
+        )
+    ),
+    AchievementDef(
+        id = "overachiever", title = "Overachiever",
+        desc = "Days you blew past the limit",
+        icon = Icons.Outlined.LocalFireDepartment, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 1, "1 day"),
+            TierThreshold(ProfileTier.X, 3, "3 days"),
+            TierThreshold(ProfileTier.M, 7, "7 days")
+        ),
+        tierNames = listOf(
+            "Guilty Pleasure", "Overachiever", "No Chill"
+        )
+    ),
+    // Fun single-tier
+    AchievementDef(
+        id = "midnight_oil", title = "Midnight Oil",
+        desc = "Burn after 23:00", icon = Icons.Outlined.DarkMode,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Spotted once"))
+    ),
+    AchievementDef(
+        id = "sunrise_club", title = "Sunrise Club",
+        desc = "Up before the world at 05:00", icon = Icons.Outlined.LightMode,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Spotted once"))
+    ),
+    AchievementDef(
+        id = "web_surf", title = "Web Surfer",
+        desc = "A web session sneaked into tracking", icon = Icons.Outlined.Language,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Spotted once"))
+    ),
     AchievementDef(
         id = "schedule_keeper", title = "Schedule Keeper",
         desc = "Create a focus schedule", icon = Icons.Outlined.EventRepeat,
@@ -910,13 +1041,16 @@ private val JOURNEY_ORDER = listOf(
     "pausepoint_explorer", "grace_explorer",
     // First focus and planning.
     "pomo_first", "preset_saver", "schedule_keeper",
-    // Early streaks and savings.
-    "hot_streak", "streak_keeper", "under_budget", "time_saver", "night_guardian",
+    // Early streaks, savings, and playful daily rhythms.
+    "hot_streak", "streak_keeper", "streak_roller", "under_budget", "overachiever",
+    "time_saver", "night_guardian", "night_owl_lite", "early_bird",
+    "midnight_oil", "sunrise_club",
     // First week of data.
     "historian", "loyal_tracker", "app_atlas", "fortress_builder", "goal_getter",
+    "weekend_warrior", "web_surf",
     // Customization wave.
     "theme_stylist", "palette_painter", "floater", "pill_keeper", "hud_pilot",
-    "day_maker", "head_start",
+    "day_maker", "head_start", "info_hunter", "profile_polisher",
     // Shield power features.
     "patient_player", "strict_enforcer", "caller_tuned", "auto_quitter",
     "locked_in", "ghost_mode", "night_off",
@@ -980,6 +1114,16 @@ fun buildAchievementStates(stats: ProfileAchievementStats): List<AchievementStat
         "goal_getter" to stats.goalCount.toLong(),
         "xp_hoarder" to stats.userXpTotal,
         "taskmaster" to stats.taskTypeCount.toLong(),
+        "info_hunter" to stats.infoSheetCount.toLong(),
+        "night_owl_lite" to stats.nightNights.toLong(),
+        "early_bird" to stats.earlyMornings.toLong(),
+        "weekend_warrior" to stats.weekendDays.toLong(),
+        "profile_polisher" to stats.profileFields.toLong(),
+        "streak_roller" to stats.sevenDayStreak.toLong(),
+        "overachiever" to stats.overdrawDays.toLong(),
+        "midnight_oil" to if (stats.nightNights > 0) 1L else 0L,
+        "sunrise_club" to if (stats.earlyMornings > 0) 1L else 0L,
+        "web_surf" to if (stats.webTotalMillis > 0L) 1L else 0L,
         "palette_painter" to if (stats.hasCustomOverlay) 1L else 0L,
         "floater" to if (stats.hasFloatingBar) 1L else 0L,
         "pill_keeper" to if (stats.hasUsagePill) 1L else 0L,
