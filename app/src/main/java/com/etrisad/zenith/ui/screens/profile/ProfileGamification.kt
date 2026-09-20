@@ -13,7 +13,11 @@ import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.BedtimeOff
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.CalendarViewMonth
+import androidx.compose.material.icons.outlined.ColorLens
 import androidx.compose.material.icons.outlined.CloudDone
+import androidx.compose.material.icons.outlined.Contrast
+import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.DataArray
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -254,7 +258,12 @@ data class ProfileAchievementStats(
     val distinctDatesCount: Int = 0,
     val nightNights: Int = 0,
     val earlyMornings: Int = 0,
-    val profileFields: Int = 0
+    val profileFields: Int = 0,
+    val hasCustomThemeAlt: Boolean = false,
+    val fontChanged: Boolean = false,
+    val contrastOff: Boolean = false,
+    val hasCalendarEvent: Boolean = false,
+    val hasOverlayTint: Boolean = false
 )
 
 private fun hoursLabel(millis: Long): String {
@@ -922,6 +931,36 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
         thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Spotted once"))
     ),
     AchievementDef(
+        id = "theme_explorer", title = "Theme Explorer",
+        desc = "Try a non-default theme", icon = Icons.Outlined.Palette,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Switched once"))
+    ),
+    AchievementDef(
+        id = "font_explorer", title = "Font Explorer",
+        desc = "Try a different font", icon = Icons.Outlined.TextFields,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Switched once"))
+    ),
+    AchievementDef(
+        id = "contrast_seeker", title = "Contrast Seeker",
+        desc = "Brave dynamic color off", icon = Icons.Outlined.Contrast,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Turned off"))
+    ),
+    AchievementDef(
+        id = "calendar_seeker", title = "Calendar Seeker",
+        desc = "Check the calendar overlay", icon = Icons.Outlined.DateRange,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Opened once"))
+    ),
+    AchievementDef(
+        id = "overlay_tinter", title = "Overlay Tinter",
+        desc = "Give the overlay a custom color", icon = Icons.Outlined.ColorLens,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Custom once"))
+    ),
+    AchievementDef(
         id = "schedule_keeper", title = "Schedule Keeper",
         desc = "Create a focus schedule", icon = Icons.Outlined.EventRepeat,
         category = AchievementCategory.EXPLORER,
@@ -1049,8 +1088,9 @@ private val JOURNEY_ORDER = listOf(
     "historian", "loyal_tracker", "app_atlas", "fortress_builder", "goal_getter",
     "weekend_warrior", "web_surf",
     // Customization wave.
-    "theme_stylist", "palette_painter", "floater", "pill_keeper", "hud_pilot",
-    "day_maker", "head_start", "info_hunter", "profile_polisher",
+    "theme_stylist", "theme_explorer", "font_explorer", "contrast_seeker",
+    "palette_painter", "overlay_tinter", "floater", "pill_keeper", "hud_pilot",
+    "day_maker", "head_start", "info_hunter", "profile_polisher", "calendar_seeker",
     // Shield power features.
     "patient_player", "strict_enforcer", "caller_tuned", "auto_quitter",
     "locked_in", "ghost_mode", "night_off",
@@ -1114,6 +1154,11 @@ fun buildAchievementStates(stats: ProfileAchievementStats): List<AchievementStat
         "goal_getter" to stats.goalCount.toLong(),
         "xp_hoarder" to stats.userXpTotal,
         "taskmaster" to stats.taskTypeCount.toLong(),
+        "theme_explorer" to if (stats.hasCustomThemeAlt) 1L else 0L,
+        "font_explorer" to if (stats.fontChanged) 1L else 0L,
+        "contrast_seeker" to if (stats.contrastOff) 1L else 0L,
+        "calendar_seeker" to if (stats.hasCalendarEvent) 1L else 0L,
+        "overlay_tinter" to if (stats.hasOverlayTint) 1L else 0L,
         "info_hunter" to stats.infoSheetCount.toLong(),
         "night_owl_lite" to stats.nightNights.toLong(),
         "early_bird" to stats.earlyMornings.toLong(),

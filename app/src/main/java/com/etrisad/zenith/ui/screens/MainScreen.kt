@@ -87,9 +87,11 @@ import com.etrisad.zenith.ui.screens.profile.ProfileScreen
 import com.etrisad.zenith.ui.screens.profile.AchievementState
 import com.etrisad.zenith.ui.screens.profile.ProfileViewModel
 import com.etrisad.zenith.ui.screens.profile.ProfileViewModelFactory
+import com.etrisad.zenith.ui.screens.profile.formatCompactDuration
 import com.etrisad.zenith.ui.screens.profile.formatProgressNumber
 import com.etrisad.zenith.ui.screens.profile.prettyProfileDate
 import com.etrisad.zenith.ui.screens.profile.tierDisplayName
+import com.etrisad.zenith.ui.screens.profile.tierIconsForLevel
 import com.etrisad.zenith.ui.screens.settings.EyeCareScreen
 import com.etrisad.zenith.ui.screens.settings.LockdownSettings
 import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointScreen
@@ -167,7 +169,7 @@ fun MainScreen(
                 .catch { emit(-1) }
                 .distinctUntilChanged()
         ) { _, _, _, _ -> Unit }
-            .debounce(3000)
+            .debounce(800)
             .catch { }
             .collect { profileViewModel.refresh(silent = true) }
     }
@@ -1083,10 +1085,21 @@ fun MainScreen(
                             }
                         )
                     }
-                    composable(Screen.Achievements.route) {
+                    composable(
+                        route = Screen.Achievements.route,
+                        arguments = listOf(
+                            androidx.navigation.navArgument("highlightId") {
+                                type = androidx.navigation.NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            }
+                        )
+                    ) { backStackEntry ->
+                        val highlightId = backStackEntry.arguments?.getString("highlightId")
                         AchievementsScreen(
                             profileViewModel = profileViewModel,
-                            innerPadding = innerPadding
+                            innerPadding = innerPadding,
+                            highlightAchievementId = highlightId
                         )
                     }
                     composable(Screen.PausePoint.route) {
@@ -1404,14 +1417,18 @@ fun MainScreen(
             onOpenPending = { event ->
                 profileViewModel.consumeBanner(event.key)
                 showNotifCenter = false
-                navController.navigate(Screen.Achievements.route)
+                val defId = when (event) {
+                    is ProfileBannerEvent.Unlock -> event.defId
+                    is ProfileBannerEvent.Progress -> event.defId
+                }
+                navController.navigate(Screen.Achievements.createRoute(defId))
             },
-            onDismissOne = { profileViewModel.consumeBanner(it) },
-            onClearAll = { profileViewModel.clearAllBanners() },
-            onOpenRecent = {
-                showNotifCenter = false
-                navController.navigate(Screen.Achievements.route)
-            },
+                            onDismissOne = { profileViewModel.consumeBanner(it) },
+                            onClearAll = { profileViewModel.clearAllBanners() },
+                            onOpenRecent = {
+                                showNotifCenter = false
+                                navController.navigate(Screen.Achievements.route)
+                            },
             onDismiss = { showNotifCenter = false }
         )
     }
@@ -1656,6 +1673,7 @@ private fun GlobalAchievementBanners(
     profileViewModel: ProfileViewModel,
     navController: androidx.navigation.NavController,
     onOpenCenter: () -> Unit,
+    onOpenAchievement: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val pendingBanners by profileViewModel.pendingBanners.collectAsState()
@@ -1674,7 +1692,16 @@ private fun GlobalAchievementBanners(
     )
     LaunchedEffect(currentBanner) {
         if (currentBanner != null) {
-            delay(if (currentBanner is ProfileBannerEvent.Progress) 3200L else 4500L)
+            val isFull = (currentBanner as? ProfileBannerEvent.Progress)?.let { banner ->
+                val thresholds = profileUiState.achievements.find { it.def.id == banner.defId }?.def?.thresholds
+                val nextReq = thresholds?.firstOrNull { banner.after < it.required }?.required
+                nextReq == null || banner.after >= (nextReq ?: Long.MAX_VALUE)
+            } ?: false
+            delay(
+                if (currentBanner is ProfileBannerEvent.Progress) {
+                    if (isFull) 5000L else 3200L
+                } else 4500L
+            )
             profileViewModel.consumeBanner(currentBanner.key)
         }
     }
@@ -1753,7 +1780,7 @@ private fun GlobalAchievementBanners(
                         state = bannerState,
                         onOpen = {
                             profileViewModel.consumeBanner(banner.key)
-                            navController.navigate(Screen.Achievements.route)
+                            onOpenAchievement(banner.defId)
                         },
                         onDismiss = { profileViewModel.consumeBanner(banner.key) },
                         modifier = Modifier.fillMaxWidth()
@@ -1761,21 +1788,30 @@ private fun GlobalAchievementBanners(
                 }
                 is ProfileBannerEvent.Progress -> {
                     val thresholds = bannerState?.def?.thresholds
-                    val afterLevel = thresholds?.count {
-                        banner.after >= it.required
-                    } ?: 0
-                    val progressTitle = bannerState?.def?.let {
-                        tierDisplayName(it, afterLevel)
-                    } ?: "Progress"
-                    val nextReq = thresholds?.firstOrNull {
-                        banner.after < it.required
-                    }?.required
-                    val beforeFraction = if (nextReq != null && nextReq > 0) {
-                        (banner.before.toFloat() / nextReq).coerceIn(0f, 1f)
-                    } else 1f
-                    val afterFraction = if (nextReq != null && nextReq > 0) {
-                        (banner.after.toFloat() / nextReq).coerceIn(0f, 1f)
-                    } else 1f
+                    val tierUpThreshold = thresholds?.firstOrNull {
+                        banner.after >= it.required && banner.before < it.required
+                    }
+                    val isFull: Boolean
+                    val beforeFraction: Float
+                    val afterFraction: Float
+                    val progressTitle: String
+                    val tierSymbols: List<androidx.compose.ui.graphics.vector.ImageVector>
+                    if (tierUpThreshold != null) {
+                        val level = (thresholds?.indexOf(tierUpThreshold) ?: -1) + 1
+                        beforeFraction = (banner.before.toFloat() / tierUpThreshold.required).coerceIn(0f, 1f)
+                        afterFraction = 1f
+                        progressTitle = bannerState?.def?.let { tierDisplayName(it, level) } ?: "Progress"
+                        tierSymbols = tierIconsForLevel(level)
+                        isFull = true
+                    } else {
+                        val afterLevel = thresholds?.count { banner.after >= it.required } ?: 0
+                        progressTitle = bannerState?.def?.let { tierDisplayName(it, afterLevel) } ?: "Progress"
+                        val nextReq = thresholds?.firstOrNull { banner.after < it.required }?.required
+                        beforeFraction = if (nextReq != null && nextReq > 0) (banner.before.toFloat() / nextReq).coerceIn(0f, 1f) else 1f
+                        afterFraction = if (nextReq != null && nextReq > 0) (banner.after.toFloat() / nextReq).coerceIn(0f, 1f) else 1f
+                        tierSymbols = emptyList()
+                        isFull = false
+                    }
                     AchievementProgressBanner(
                         title = progressTitle,
                         icon = bannerState?.def?.icon ?: Icons.Outlined.EmojiEvents,
@@ -1783,9 +1819,11 @@ private fun GlobalAchievementBanners(
                         afterLabel = formatProgressNumber(banner.defId, banner.after),
                         beforeFraction = beforeFraction,
                         afterFraction = afterFraction,
+                        isFull = isFull,
+                        tierSymbols = tierSymbols,
                         onOpen = {
                             profileViewModel.consumeBanner(banner.key)
-                            navController.navigate(Screen.Achievements.route)
+                            onOpenAchievement(banner.defId)
                         },
                         modifier = Modifier.fillMaxWidth()
                     )

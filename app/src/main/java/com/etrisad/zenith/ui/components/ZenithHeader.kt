@@ -335,18 +335,20 @@ fun ZenithHeader(
                                 animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
                             )
                 ) {
-                    IconButton(
-                        onClick = onInfoClick,
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .offset(x = infoButtonOffset)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Info,
-                            contentDescription = "Screen info",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                IconButton(
+                    onClick = onInfoClick,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .offset(x = infoButtonOffset)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Info,
+                        contentDescription = "Screen info",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
                 }
                 actions()
             }

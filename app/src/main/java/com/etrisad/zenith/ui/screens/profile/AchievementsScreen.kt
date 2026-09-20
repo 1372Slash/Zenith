@@ -1,5 +1,6 @@
 package com.etrisad.zenith.ui.screens.profile
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -23,7 +28,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,7 +49,8 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun AchievementsScreen(
     profileViewModel: ProfileViewModel,
-    innerPadding: PaddingValues
+    innerPadding: PaddingValues,
+    highlightAchievementId: String? = null
 ) {
     val state by profileViewModel.uiState.collectAsState()
     var selectedId by remember { mutableStateOf<String?>(null) }
@@ -57,8 +67,33 @@ fun AchievementsScreen(
     val symbolCounts = remember(state.achievements) {
         countTierSymbols(state.achievements)
     }
+    val listState = rememberLazyListState()
+    var pulseId by remember { mutableStateOf<String?>(highlightAchievementId) }
+    LaunchedEffect(highlightAchievementId) {
+        pulseId = highlightAchievementId
+        if (highlightAchievementId != null) {
+            kotlinx.coroutines.delay(3000)
+            pulseId = null
+        }
+    }
+    val highlightedId = pulseId ?: selectedId
+    LaunchedEffect(highlightAchievementId, state.achievements) {
+        val target = highlightAchievementId ?: return@LaunchedEffect
+        val explorerIdx = explorer.indexOfFirst { it.def.id == target }
+        val accumIdx = accumulation.indexOfFirst { it.def.id == target }
+        val lazyIndex = when {
+            explorerIdx >= 0 -> 3
+            accumIdx >= 0 -> 5
+            else -> -1
+        }
+        if (lazyIndex >= 0) {
+            kotlinx.coroutines.delay(200)
+            listState.animateScrollToItem(lazyIndex.coerceAtLeast(0))
+        }
+    }
 
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = 16.dp,
@@ -101,15 +136,6 @@ fun AchievementsScreen(
             TierCountStrip(counts = symbolCounts)
         }
 
-        item(key = "explorer_label") {
-            Text(
-                text = "Explorer - try Zenith features",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-            )
-        }
         item(key = "explorer_rows") {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 explorer.forEachIndexed { index, ach ->
@@ -117,6 +143,7 @@ fun AchievementsScreen(
                         achievement = ach,
                         index = index,
                         total = explorer.size,
+                        highlighted = ach.def.id == highlightedId,
                         onClick = { selectedId = ach.def.id }
                     )
                 }
@@ -139,6 +166,7 @@ fun AchievementsScreen(
                         achievement = ach,
                         index = index,
                         total = accumulation.size,
+                        highlighted = ach.def.id == highlightedId,
                         onClick = { selectedId = ach.def.id }
                     )
                 }
@@ -162,9 +190,24 @@ private fun AchievementFullRow(
     achievement: AchievementState,
     index: Int,
     total: Int,
+    highlighted: Boolean = false,
     onClick: () -> Unit
 ) {
     val earned = achievement.earnedTier != null
+    val bringIntoViewRequester = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    LaunchedEffect(highlighted) {
+        if (highlighted) {
+            kotlinx.coroutines.delay(500)
+            try { bringIntoViewRequester.bringIntoView() } catch (_: Exception) {}
+        }
+    }
+    val hlContainer by animateColorAsState(
+        targetValue = if (highlighted) MaterialTheme.colorScheme.primaryContainer
+        else if (earned) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+        else MaterialTheme.colorScheme.surfaceContainerLow,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "AchHighlight"
+    )
     val shape = when {
         total == 1 -> RoundedCornerShape(24.dp)
         index == 0 -> RoundedCornerShape(
@@ -178,14 +221,8 @@ private fun AchievementFullRow(
     Card(
         onClick = onClick,
         shape = shape,
-        colors = CardDefaults.cardColors(
-            containerColor = if (earned) {
-                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
-            }
-        ),
-        modifier = Modifier.fillMaxWidth()
+        colors = CardDefaults.cardColors(containerColor = hlContainer),
+        modifier = Modifier.fillMaxWidth().bringIntoViewRequester(bringIntoViewRequester)
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

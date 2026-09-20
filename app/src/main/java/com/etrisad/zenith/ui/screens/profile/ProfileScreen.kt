@@ -1615,7 +1615,8 @@ fun TierSymbolsRow(
     iconSize: androidx.compose.ui.unit.Dp,
     tint: Color,
     modifier: Modifier = Modifier,
-    popLast: Boolean = false
+    popLast: Boolean = false,
+    popKey: Any? = null
 ) {
     val icons = remember(level) { tierIconsForLevel(level) }
     Row(
@@ -1625,8 +1626,8 @@ fun TierSymbolsRow(
     ) {
         icons.forEachIndexed { index, icon ->
             val isPopping = popLast && index == icons.lastIndex
-            var shown by remember(level, index) { mutableStateOf(!isPopping) }
-            LaunchedEffect(level, index) { shown = true }
+            var shown by remember(popKey, level, index) { mutableStateOf(!isPopping) }
+            LaunchedEffect(popKey, level, index) { shown = true }
             val scale by animateFloatAsState(
                 targetValue = if (shown) 1f else 0.2f,
                 animationSpec = spring(
@@ -1719,13 +1720,20 @@ fun AchievementProgressBanner(
     afterLabel: String,
     beforeFraction: Float,
     afterFraction: Float,
+    isFull: Boolean = false,
+    tierSymbols: List<androidx.compose.ui.graphics.vector.ImageVector> = emptyList(),
     onOpen: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var started by remember { mutableStateOf(false) }
+    var starsShown by remember { mutableStateOf(!isFull) }
     LaunchedEffect(Unit) {
         delay(900)
         started = true
+        if (isFull) {
+            delay(1800)
+            starsShown = true
+        }
     }
     val fraction by animateFloatAsState(
         targetValue = if (started) afterFraction else beforeFraction,
@@ -1734,6 +1742,22 @@ fun AchievementProgressBanner(
             easing = EaseOutCubic
         ),
         label = "ProgressBannerBar"
+    )
+    val starsAlpha by animateFloatAsState(
+        targetValue = if (starsShown) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "ProgressStarsAlpha"
+    )
+    val starsScale by animateFloatAsState(
+        targetValue = if (starsShown) 1f else 0.6f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "ProgressStarsScale"
     )
     Card(
         onClick = onOpen,
@@ -1789,6 +1813,27 @@ fun AchievementProgressBanner(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1
                 )
+                if (isFull && tierSymbols.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.graphicsLayer {
+                            alpha = starsAlpha
+                            scaleX = starsScale
+                            scaleY = starsScale
+                        },
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        tierSymbols.forEach { icon ->
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }

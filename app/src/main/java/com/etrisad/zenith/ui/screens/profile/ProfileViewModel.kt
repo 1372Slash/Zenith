@@ -83,7 +83,8 @@ fun com.etrisad.zenith.data.preferences.UserPreferences.achievementTrackingKey()
         streakRecoveryPerformed, dismissedUninstalledApps.size,
         bedtimeWhitelistedPackages.size, bedtimeDndEnabled,
         shortsScreenTimeMs > 0,
-        infoVisitedRoutes.size, userBio, userAvatarUri, userBannerUri
+        infoVisitedRoutes.size, userBio, userAvatarUri, userBannerUri,
+        themeConfig.name, fontOption.name, dynamicColor, overlayCustomHue
     ).joinToString("|")
 }
 
@@ -263,7 +264,20 @@ class ProfileViewModel(
                         freshPrefs.userBannerUri.isNotBlank()
                     ).count { it },
                     sevenDayStreak = freshPrefs.globalBestStreak,
-                    distinctDatesCount = shieldRepository.getTrackedDayCount()
+                    distinctDatesCount = shieldRepository.getTrackedDayCount(),
+                    hasCustomThemeAlt = freshPrefs.themeConfig != com.etrisad.zenith.data.preferences.ThemeConfig.FOLLOW_SYSTEM,
+                    fontChanged = freshPrefs.fontOption != com.etrisad.zenith.data.preferences.FontOption.GOOGLE_SANS_FLEX ||
+                        freshPrefs.gsFlexSettings != com.etrisad.zenith.ui.theme.GSFlexSettings(),
+                    contrastOff = !freshPrefs.dynamicColor,
+                    hasCalendarEvent = try {
+                        val cr = appContext.contentResolver
+                        cr.query(
+                            android.provider.CalendarContract.Instances.CONTENT_URI,
+                            arrayOf(android.provider.CalendarContract.Instances.EVENT_ID),
+                            null, null, null
+                        )?.use { it.count > 0 } ?: false
+                    } catch (_: Exception) { false },
+                    hasOverlayTint = freshPrefs.overlayCustomHue != 270f
                 )
                 val baseAchievements = buildAchievementStates(stats)
                 val (achievements, newlyTieredIds) = recordUnlockDates(baseAchievements, todayStr)

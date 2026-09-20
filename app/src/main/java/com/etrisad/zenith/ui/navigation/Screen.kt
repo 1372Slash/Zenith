@@ -82,7 +82,11 @@ sealed class Screen(
         Screen("profile", "Profile", Icons.Filled.Person, Icons.Outlined.PersonOutline)
 
     object Achievements :
-        Screen("achievements", "Achievements", Icons.Filled.EmojiEvents, Icons.Outlined.EmojiEvents)
+        Screen("achievements?highlightId={highlightId}", "Achievements", Icons.Filled.EmojiEvents, Icons.Outlined.EmojiEvents) {
+        fun createRoute(highlightId: String? = null) =
+            if (highlightId.isNullOrBlank()) "achievements"
+            else "achievements?highlightId=$highlightId"
+    }
 }
 
 val navItems = listOf(
