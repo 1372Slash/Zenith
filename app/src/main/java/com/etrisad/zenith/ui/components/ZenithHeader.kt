@@ -338,7 +338,7 @@ fun ZenithHeader(
                 IconButton(
                     onClick = onInfoClick,
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .offset(x = infoButtonOffset)
                 ) {
