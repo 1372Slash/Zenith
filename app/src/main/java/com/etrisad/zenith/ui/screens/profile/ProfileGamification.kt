@@ -1,30 +1,68 @@
 package com.etrisad.zenith.ui.screens.profile
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Adjust
 import androidx.compose.material.icons.outlined.Alarm
+import androidx.compose.material.icons.outlined.AlarmOn
+import androidx.compose.material.icons.outlined.Assignment
+import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Backup
+import androidx.compose.material.icons.outlined.BatteryChargingFull
 import androidx.compose.material.icons.outlined.Bedtime
+import androidx.compose.material.icons.outlined.BedtimeOff
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.Campaign
+import androidx.compose.material.icons.outlined.CleaningServices
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Colorize
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.DashboardCustomize
 import androidx.compose.material.icons.outlined.Diamond
+import androidx.compose.material.icons.outlined.DirectionsRun
+import androidx.compose.material.icons.outlined.Dock
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.EventRepeat
+import androidx.compose.material.icons.outlined.ExitToApp
+import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.Gavel
+import androidx.compose.material.icons.outlined.Healing
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Hotel
 import androidx.compose.material.icons.outlined.HourglassEmpty
+import androidx.compose.material.icons.outlined.HourglassFull
+import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.Medication
+import androidx.compose.material.icons.outlined.NightsStay
+import androidx.compose.material.icons.outlined.NotificationsActive
+import androidx.compose.material.icons.outlined.NotificationsOff
+import androidx.compose.material.icons.outlined.PlayCircle
+import androidx.compose.material.icons.outlined.Replay
+import androidx.compose.material.icons.outlined.WbSunny
+import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PauseCircle
+import androidx.compose.material.icons.outlined.PictureInPicture
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material.icons.outlined.RocketLaunch
 import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.Savings
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.SelfImprovement
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.TrackChanges
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material.icons.outlined.Whatshot
 import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -43,8 +81,6 @@ enum class ProfileTier(val value: Int, val icon: ImageVector, val title: String)
             entries.filter { value >= it.value }.maxByOrNull { it.value }
     }
 }
-
-/** Formats a value in custom roman numerals, e.g. 7 -> "V II", 12 -> "X II". */
 fun toCustomRoman(value: Int): String {
     if (value <= 0) return "-"
     var rest = value
@@ -158,7 +194,48 @@ data class ProfileAchievementStats(
     val pomodoroFocusMillis: Long = 0L,
     val lifetimeMillis: Long = 0L,
     val bedtimeBestStreak: Int = 0,
-    val shieldCount: Int = 0
+    val shieldCount: Int = 0,
+    val hasOverlayHud: Boolean = false,
+    val hasDelayShield: Boolean = false,
+    val hasStrictShield: Boolean = false,
+    val hasCallerShield: Boolean = false,
+    val hasAutoQuitShield: Boolean = false,
+    val hasTarget: Boolean = false,
+    val hasWebsiteTracking: Boolean = false,
+    val isDeveloper: Boolean = false,
+    val isCustomPerf: Boolean = false,
+    val hasRepair: Boolean = false,
+    val hasExcluded: Boolean = false,
+    val hasWindDown: Boolean = false,
+    val hasSharedProfile: Boolean = false,
+    val globalCurrentStreak: Int = 0,
+    val emergencyTotal: Int = 0,
+    val scheduleCount: Int = 0,
+    val alarmCount: Int = 0,
+    val goalCount: Int = 0,
+    val qrCount: Int = 0,
+    val taskTypeCount: Int = 0,
+    val userXpTotal: Long = 0L,
+    val hasCustomOverlay: Boolean = false,
+    val hasFloatingBar: Boolean = false,
+    val hasUsagePill: Boolean = false,
+    val hasIncentiveLock: Boolean = false,
+    val hasEarlyKick: Boolean = false,
+    val hasBatteryReset: Boolean = false,
+    val hasCustomDayStart: Boolean = false,
+    val hasUnusedHours: Boolean = false,
+    val hasRecovery: Boolean = false,
+    val hasCleaned: Boolean = false,
+    val hasBedtimeWhitelist: Boolean = false,
+    val hasBedtimeDnd: Boolean = false,
+    val hasShorts: Boolean = false,
+    val widgetCount: Int = 0,
+    val webDomainCount: Int = 0,
+    val interceptedCount: Int = 0,
+    val trackedDayCount: Int = 0,
+    val underBudgetDays: Int = 0,
+    val lifetimeAppCount: Int = 0,
+    val customVariantCount: Int = 0
 )
 
 private fun hoursLabel(millis: Long): String {
@@ -344,6 +421,376 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
         thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Enabled once"))
     ),
     AchievementDef(
+        id = "hud_pilot", title = "HUD Pilot",
+        desc = "Enable the session usage overlay", icon = Icons.Outlined.PictureInPicture,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Enabled once"))
+    ),
+    AchievementDef(
+        id = "patient_player", title = "Patient Player",
+        desc = "Delay an app instead of blocking it", icon = Icons.Outlined.HourglassFull,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "1 delayed app"))
+    ),
+    AchievementDef(
+        id = "strict_enforcer", title = "Strict Enforcer",
+        desc = "Turn on strict mode on a shield", icon = Icons.Outlined.Gavel,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Enabled once"))
+    ),
+    AchievementDef(
+        id = "caller_tuned", title = "Voice of Goals",
+        desc = "Enable the goal caller voice", icon = Icons.Outlined.Call,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Enabled once"))
+    ),
+    AchievementDef(
+        id = "auto_quitter", title = "Auto Quitter",
+        desc = "Let Zenith auto-quit an app", icon = Icons.Outlined.ExitToApp,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Enabled once"))
+    ),
+    AchievementDef(
+        id = "target_setter", title = "Target Setter",
+        desc = "Set a daily screen time target", icon = Icons.Outlined.Adjust,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Target set"))
+    ),
+    AchievementDef(
+        id = "web_watcher", title = "Web Watcher",
+        desc = "Enable website auto-tracking", icon = Icons.Outlined.Public,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Enabled once"))
+    ),
+    AchievementDef(
+        id = "dev_mode", title = "Developer Mode",
+        desc = "Unlock developer options", icon = Icons.Outlined.Code,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Enabled once"))
+    ),
+    AchievementDef(
+        id = "perf_tuner", title = "Performance Tuner",
+        desc = "Craft a custom performance profile", icon = Icons.Outlined.Tune,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Custom profile"))
+    ),
+    AchievementDef(
+        id = "data_doctor", title = "Data Doctor",
+        desc = "Enable smart repair on refresh", icon = Icons.Outlined.Healing,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Enabled once"))
+    ),
+    AchievementDef(
+        id = "ghost_mode", title = "Ghost Mode",
+        desc = "Exclude an app from tracking", icon = Icons.Outlined.VisibilityOff,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "1 excluded app"))
+    ),
+    AchievementDef(
+        id = "wind_downer", title = "Wind Downer",
+        desc = "Enable bedtime wind-down", icon = Icons.Outlined.NightsStay,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Enabled once"))
+    ),
+    AchievementDef(
+        id = "town_crier", title = "Town Crier",
+        desc = "Share your profile card", icon = Icons.Outlined.Campaign,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Shared once"))
+    ),
+    AchievementDef(
+        id = "hot_streak", title = "Hot Streak",
+        desc = "Keep the current streak burning",
+        icon = Icons.Outlined.Whatshot, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 3, "3 days"),
+            TierThreshold(ProfileTier.V, 7, "7 days"),
+            TierThreshold(ProfileTier.X, 14, "14 days"),
+            TierThreshold(ProfileTier.L, 30, "30 days"),
+            TierThreshold(ProfileTier.C, 60, "60 days"),
+            TierThreshold(ProfileTier.D, 100, "100 days"),
+            TierThreshold(ProfileTier.M, 200, "200 days")
+        ),
+        tierNames = listOf(
+            "Warm Up", "Hot Streak", "On Fire", "Blazing",
+            "Inferno", "Unstoppable", "Eternal Flame"
+        )
+    ),
+    AchievementDef(
+        id = "escape_artist", title = "Escape Artist",
+        desc = "Total emergency uses spent",
+        icon = Icons.Outlined.DirectionsRun, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 1, "1 escape"),
+            TierThreshold(ProfileTier.V, 3, "3 escapes"),
+            TierThreshold(ProfileTier.X, 5, "5 escapes"),
+            TierThreshold(ProfileTier.L, 10, "10 escapes"),
+            TierThreshold(ProfileTier.C, 20, "20 escapes"),
+            TierThreshold(ProfileTier.D, 35, "35 escapes"),
+            TierThreshold(ProfileTier.M, 50, "50 escapes")
+        ),
+        tierNames = listOf(
+            "First Escape", "Escape Artist", "Sneaky", "Houdini Act",
+            "Ghost Protocol", "Phantom", "Uncontainable"
+        )
+    ),
+    AchievementDef(
+        id = "scheduler_pro", title = "Scheduler",
+        desc = "Active focus schedules",
+        icon = Icons.Outlined.CalendarMonth, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 1, "1 schedule"),
+            TierThreshold(ProfileTier.V, 2, "2 schedules"),
+            TierThreshold(ProfileTier.X, 3, "3 schedules"),
+            TierThreshold(ProfileTier.L, 5, "5 schedules"),
+            TierThreshold(ProfileTier.M, 8, "8 schedules")
+        ),
+        tierNames = listOf(
+            "First Plan", "Scheduler", "Planner", "Timetable Keeper", "Grand Scheduler"
+        )
+    ),
+    AchievementDef(
+        id = "alarm_collector", title = "Alarm Collector",
+        desc = "Alarms ringing for you",
+        icon = Icons.Outlined.AlarmOn, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 1, "1 alarm"),
+            TierThreshold(ProfileTier.V, 2, "2 alarms"),
+            TierThreshold(ProfileTier.X, 3, "3 alarms"),
+            TierThreshold(ProfileTier.L, 5, "5 alarms"),
+            TierThreshold(ProfileTier.M, 8, "8 alarms")
+        ),
+        tierNames = listOf(
+            "First Bell", "Alarm Collector", "Double Shift", "Morning Crew", "Ring Master"
+        )
+    ),
+    AchievementDef(
+        id = "goal_getter", title = "Goal Getter",
+        desc = "Goals you are growing",
+        icon = Icons.Outlined.Flag, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 1, "1 goal"),
+            TierThreshold(ProfileTier.V, 2, "2 goals"),
+            TierThreshold(ProfileTier.X, 3, "3 goals"),
+            TierThreshold(ProfileTier.L, 5, "5 goals"),
+            TierThreshold(ProfileTier.M, 8, "8 goals")
+        ),
+        tierNames = listOf(
+            "First Goal", "Goal Getter", "Goal Hunter", "Goal Crusher", "Goal Machine"
+        )
+    ),
+    AchievementDef(
+        id = "xp_hoarder", title = "XP Hoarder",
+        desc = "Lifetime XP piled up",
+        icon = Icons.Outlined.Savings, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 500, "500 XP"),
+            TierThreshold(ProfileTier.V, 1000, "1000 XP"),
+            TierThreshold(ProfileTier.X, 2500, "2500 XP"),
+            TierThreshold(ProfileTier.L, 5000, "5000 XP"),
+            TierThreshold(ProfileTier.C, 10000, "10000 XP"),
+            TierThreshold(ProfileTier.D, 25000, "25000 XP"),
+            TierThreshold(ProfileTier.M, 50000, "50000 XP")
+        ),
+        tierNames = listOf(
+            "First Hoard", "XP Hoarder", "XP Stacker", "XP Vault",
+            "XP Tycoon", "XP Legend", "XP Deity"
+        )
+    ),
+    AchievementDef(
+        id = "taskmaster", title = "Taskmaster",
+        desc = "Pause Point task types mastered",
+        icon = Icons.Outlined.Assignment, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 1, "1 type"),
+            TierThreshold(ProfileTier.V, 2, "2 types"),
+            TierThreshold(ProfileTier.X, 4, "4 types"),
+            TierThreshold(ProfileTier.M, 6, "6 types")
+        ),
+        tierNames = listOf(
+            "First Task", "Taskmaster", "Drill Sergeant", "Ringmaster"
+        )
+    ),
+    AchievementDef(
+        id = "palette_painter", title = "Palette Painter",
+        desc = "Paint overlays a custom hue", icon = Icons.Outlined.Colorize,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Custom hue"))
+    ),
+    AchievementDef(
+        id = "floater", title = "Floater",
+        desc = "Float the tab bar", icon = Icons.Outlined.Dock,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Enabled once"))
+    ),
+    AchievementDef(
+        id = "pill_keeper", title = "Pill Keeper",
+        desc = "Pin the total usage pill", icon = Icons.Outlined.Medication,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Enabled once"))
+    ),
+    AchievementDef(
+        id = "locked_in", title = "Locked In",
+        desc = "Arm the incentive lock", icon = Icons.Outlined.Lock,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Enabled once"))
+    ),
+    AchievementDef(
+        id = "head_start", title = "Head Start",
+        desc = "Enable the early kick", icon = Icons.Outlined.Bolt,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Enabled once"))
+    ),
+    AchievementDef(
+        id = "full_charge", title = "Full Charge",
+        desc = "Reset stats on full charge", icon = Icons.Outlined.BatteryChargingFull,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Enabled once"))
+    ),
+    AchievementDef(
+        id = "day_maker", title = "Day Maker",
+        desc = "Define when your day starts", icon = Icons.Outlined.WbSunny,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Custom start"))
+    ),
+    AchievementDef(
+        id = "night_off", title = "Night Off",
+        desc = "Pause tracking in unused hours", icon = Icons.Outlined.BedtimeOff,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Enabled once"))
+    ),
+    AchievementDef(
+        id = "second_chance", title = "Second Chance",
+        desc = "Recover a broken streak", icon = Icons.Outlined.Replay,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Recovered once"))
+    ),
+    AchievementDef(
+        id = "cleaner", title = "Cleaner",
+        desc = "Dismiss an uninstalled app", icon = Icons.Outlined.CleaningServices,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Cleaned once"))
+    ),
+    AchievementDef(
+        id = "bedtime_bouncer", title = "Bedtime Bouncer",
+        desc = "Curate the bedtime allowlist", icon = Icons.Outlined.Hotel,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "1 allowed app"))
+    ),
+    AchievementDef(
+        id = "silent_sleeper", title = "Silent Sleeper",
+        desc = "Sleep behind do-not-disturb", icon = Icons.Outlined.NotificationsOff,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Enabled once"))
+    ),
+    AchievementDef(
+        id = "shorts_spotter", title = "Shorts Spotter",
+        desc = "Catch Shorts in the act", icon = Icons.Outlined.PlayCircle,
+        category = AchievementCategory.EXPLORER,
+        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Spotted once"))
+    ),
+    AchievementDef(
+        id = "widget_wielder", title = "Widget Wielder",
+        desc = "Pin Zenith widgets to home",
+        icon = Icons.Outlined.Widgets, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 1, "1 widget"),
+            TierThreshold(ProfileTier.V, 2, "2 widgets"),
+            TierThreshold(ProfileTier.X, 3, "3 widgets"),
+            TierThreshold(ProfileTier.M, 5, "5 widgets")
+        ),
+        tierNames = listOf(
+            "First Pin", "Widget Wielder", "Home Decorator", "Widget Wall"
+        )
+    ),
+    AchievementDef(
+        id = "web_cartographer", title = "Web Cartographer",
+        desc = "Distinct domains tracked",
+        icon = Icons.Outlined.Explore, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 3, "3 domains"),
+            TierThreshold(ProfileTier.V, 10, "10 domains"),
+            TierThreshold(ProfileTier.X, 25, "25 domains"),
+            TierThreshold(ProfileTier.M, 50, "50 domains")
+        ),
+        tierNames = listOf(
+            "First Domain", "Web Cartographer", "Domain Mapper", "Magellan"
+        )
+    ),
+    AchievementDef(
+        id = "interceptor", title = "Interceptor",
+        desc = "Notifications caught by schedules",
+        icon = Icons.Outlined.NotificationsActive, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 10, "10 caught"),
+            TierThreshold(ProfileTier.V, 50, "50 caught"),
+            TierThreshold(ProfileTier.X, 200, "200 caught"),
+            TierThreshold(ProfileTier.M, 1000, "1000 caught")
+        ),
+        tierNames = listOf(
+            "First Block", "Interceptor", "Gatekeeper", "Firewall"
+        )
+    ),
+    AchievementDef(
+        id = "historian", title = "Historian",
+        desc = "Days of history preserved",
+        icon = Icons.Outlined.AutoStories, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 7, "7 days"),
+            TierThreshold(ProfileTier.V, 30, "30 days"),
+            TierThreshold(ProfileTier.X, 90, "90 days"),
+            TierThreshold(ProfileTier.L, 180, "180 days"),
+            TierThreshold(ProfileTier.M, 365, "365 days")
+        ),
+        tierNames = listOf(
+            "First Week", "Historian", "Chronicler", "Archivist", "Timekeeper"
+        )
+    ),
+    AchievementDef(
+        id = "app_atlas", title = "App Atlas",
+        desc = "Distinct apps ever tracked",
+        icon = Icons.Outlined.Map, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 10, "10 apps"),
+            TierThreshold(ProfileTier.V, 25, "25 apps"),
+            TierThreshold(ProfileTier.X, 50, "50 apps"),
+            TierThreshold(ProfileTier.L, 100, "100 apps"),
+            TierThreshold(ProfileTier.M, 200, "200 apps")
+        ),
+        tierNames = listOf(
+            "First Pin", "App Atlas", "Trailblazer", "Surveyor", "Cartographer"
+        )
+    ),
+    AchievementDef(
+        id = "variant_vanguard", title = "Variant Vanguard",
+        desc = "Custom Pause Point variants",
+        icon = Icons.Outlined.DashboardCustomize, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 1, "1 variant"),
+            TierThreshold(ProfileTier.V, 2, "2 variants"),
+            TierThreshold(ProfileTier.X, 4, "4 variants"),
+            TierThreshold(ProfileTier.M, 6, "6 variants")
+        ),
+        tierNames = listOf(
+            "First Twist", "Variant Vanguard", "Remixer", "Mad Scientist"
+        )
+    ),
+    AchievementDef(
+        id = "under_budget", title = "Under Budget",
+        desc = "Days under the screen target",
+        icon = Icons.Outlined.Savings, category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 5, "5 days"),
+            TierThreshold(ProfileTier.V, 10, "10 days"),
+            TierThreshold(ProfileTier.X, 15, "15 days"),
+            TierThreshold(ProfileTier.L, 20, "20 days"),
+            TierThreshold(ProfileTier.M, 25, "25 days")
+        ),
+        tierNames = listOf(
+            "First Save", "Under Budget", "Frugal", "Economist", "Minimalist"
+        )
+    ),
+    AchievementDef(
         id = "schedule_keeper", title = "Schedule Keeper",
         desc = "Create a focus schedule", icon = Icons.Outlined.EventRepeat,
         category = AchievementCategory.EXPLORER,
@@ -351,9 +798,17 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
     ),
     AchievementDef(
         id = "qr_collector", title = "QR Collector",
-        desc = "Save a Pause Point QR code", icon = Icons.Outlined.QrCode2,
-        category = AchievementCategory.EXPLORER,
-        thresholds = listOf(TierThreshold(ProfileTier.I, 1, "1 code"))
+        desc = "Pause Point QR codes saved", icon = Icons.Outlined.QrCode2,
+        category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 1, "1 code"),
+            TierThreshold(ProfileTier.V, 2, "2 codes"),
+            TierThreshold(ProfileTier.X, 3, "3 codes"),
+            TierThreshold(ProfileTier.M, 5, "5 codes")
+        ),
+        tierNames = listOf(
+            "First Code", "QR Collector", "Code Hoarder", "QR Master"
+        )
     ),
     AchievementDef(
         id = "preset_saver", title = "Preset Saver",
@@ -458,8 +913,48 @@ fun buildAchievementStates(stats: ProfileAchievementStats): List<AchievementStat
         "eyecare_explorer" to if (stats.hasEyeCare) 1L else 0L,
         "grace_explorer" to if (stats.hasGracePeriod) 1L else 0L,
         "schedule_keeper" to if (stats.hasSchedule) 1L else 0L,
-        "qr_collector" to if (stats.hasQr) 1L else 0L,
+        "qr_collector" to stats.qrCount.toLong(),
         "preset_saver" to if (stats.hasPreset) 1L else 0L,
+        "hud_pilot" to if (stats.hasOverlayHud) 1L else 0L,
+        "patient_player" to if (stats.hasDelayShield) 1L else 0L,
+        "strict_enforcer" to if (stats.hasStrictShield) 1L else 0L,
+        "caller_tuned" to if (stats.hasCallerShield) 1L else 0L,
+        "auto_quitter" to if (stats.hasAutoQuitShield) 1L else 0L,
+        "target_setter" to if (stats.hasTarget) 1L else 0L,
+        "web_watcher" to if (stats.hasWebsiteTracking) 1L else 0L,
+        "dev_mode" to if (stats.isDeveloper) 1L else 0L,
+        "perf_tuner" to if (stats.isCustomPerf) 1L else 0L,
+        "data_doctor" to if (stats.hasRepair) 1L else 0L,
+        "ghost_mode" to if (stats.hasExcluded) 1L else 0L,
+        "wind_downer" to if (stats.hasWindDown) 1L else 0L,
+        "town_crier" to if (stats.hasSharedProfile) 1L else 0L,
+        "hot_streak" to stats.globalCurrentStreak.toLong(),
+        "escape_artist" to stats.emergencyTotal.toLong(),
+        "scheduler_pro" to stats.scheduleCount.toLong(),
+        "alarm_collector" to stats.alarmCount.toLong(),
+        "goal_getter" to stats.goalCount.toLong(),
+        "xp_hoarder" to stats.userXpTotal,
+        "taskmaster" to stats.taskTypeCount.toLong(),
+        "palette_painter" to if (stats.hasCustomOverlay) 1L else 0L,
+        "floater" to if (stats.hasFloatingBar) 1L else 0L,
+        "pill_keeper" to if (stats.hasUsagePill) 1L else 0L,
+        "locked_in" to if (stats.hasIncentiveLock) 1L else 0L,
+        "head_start" to if (stats.hasEarlyKick) 1L else 0L,
+        "full_charge" to if (stats.hasBatteryReset) 1L else 0L,
+        "day_maker" to if (stats.hasCustomDayStart) 1L else 0L,
+        "night_off" to if (stats.hasUnusedHours) 1L else 0L,
+        "second_chance" to if (stats.hasRecovery) 1L else 0L,
+        "cleaner" to if (stats.hasCleaned) 1L else 0L,
+        "bedtime_bouncer" to if (stats.hasBedtimeWhitelist) 1L else 0L,
+        "silent_sleeper" to if (stats.hasBedtimeDnd) 1L else 0L,
+        "shorts_spotter" to if (stats.hasShorts) 1L else 0L,
+        "widget_wielder" to stats.widgetCount.toLong(),
+        "web_cartographer" to stats.webDomainCount.toLong(),
+        "interceptor" to stats.interceptedCount.toLong(),
+        "historian" to stats.trackedDayCount.toLong(),
+        "app_atlas" to stats.lifetimeAppCount.toLong(),
+        "variant_vanguard" to stats.customVariantCount.toLong(),
+        "under_budget" to stats.underBudgetDays.toLong(),
         "theme_stylist" to if (stats.hasCustomTheme) 1L else 0L,
         "backup_guardian" to if (stats.hasBackup) 1L else 0L,
         "mindful_explorer" to if (stats.hasMindful) 1L else 0L,

@@ -1,7 +1,9 @@
 package com.etrisad.zenith.ui.screens.profile
 
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Typeface
@@ -45,6 +47,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.Image
@@ -116,6 +119,35 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+private suspend fun deleteProfileImage(context: Context, fileName: String) =
+    withContext(Dispatchers.IO) {
+        try {
+            File(File(context.filesDir, "profile"), fileName).delete()
+        } catch (_: Exception) {
+        }
+    }
+
+/**
+ * Copies a gallery pick into app-internal storage so the photo survives
+ * permission loss, reboot, and gallery moves. Returns the absolute path,
+ * or null when the copy fails (caller keeps the old image).
+ */
+private suspend fun persistPickedImage(
+    context: Context,
+    uri: Uri,
+    fileName: String
+): String? = withContext(Dispatchers.IO) {
+    try {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            val dir = File(context.filesDir, "profile").apply { mkdirs() }
+            val out = File(dir, fileName)
+            out.outputStream().use { output -> input.copyTo(output) }
+            out.absolutePath
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
 
 private const val MAX_PROFILE_NAME_LENGTH = 20
 private const val MAX_PROFILE_BIO_LENGTH = 120
@@ -157,24 +189,28 @@ fun ProfileScreen(
         ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (_: Exception) { }
-            scope.launch { preferencesRepository.setUserAvatarUri(uri.toString()) }
+            scope.launch {
+                val path = persistPickedImage(context, uri, "avatar.jpg")
+                if (path != null) {
+                    preferencesRepository.setUserAvatarUri(path)
+                } else {
+                    Toast.makeText(context, "Could not save photo", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
     val bannerPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (_: Exception) { }
-            scope.launch { preferencesRepository.setUserBannerUri(uri.toString()) }
+            scope.launch {
+                val path = persistPickedImage(context, uri, "banner.jpg")
+                if (path != null) {
+                    preferencesRepository.setUserBannerUri(path)
+                } else {
+                    Toast.makeText(context, "Could not save banner", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
@@ -214,7 +250,19 @@ fun ProfileScreen(
                 onEditName = { showNameDialog = true },
                 onEditBio = { showBioDialog = true },
                 onAvatarClick = { avatarPicker.launch("image/*") },
-                onBannerClick = { bannerPicker.launch("image/*") }
+                onBannerClick = { bannerPicker.launch("image/*") },
+                onDeleteAvatar = {
+                    scope.launch {
+                        deleteProfileImage(context, "avatar.jpg")
+                        preferencesRepository.setUserAvatarUri("")
+                    }
+                },
+                onDeleteBanner = {
+                    scope.launch {
+                        deleteProfileImage(context, "banner.jpg")
+                        preferencesRepository.setUserBannerUri("")
+                    }
+                }
             )
         }
         item(key = "xp") {
@@ -348,6 +396,8 @@ fun ProfileScreen(
                         isSharing = false
                         if (!ok) {
                             Toast.makeText(context, "Could not share profile", Toast.LENGTH_SHORT).show()
+                        } else {
+                            preferencesRepository.setUserSharedProfile(true)
                         }
                     }
                 },
@@ -539,6 +589,16 @@ fun AchievementUnlockBanner(
 private fun PendingUnlock.fallbackIcon() = Icons.Outlined.EmojiEvents
 
 @Composable
+private fun DefaultAvatarIcon() {
+    Icon(
+        imageVector = Icons.Outlined.Person,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+        modifier = Modifier.size(44.dp)
+    )
+}
+
+@Composable
 private fun EditRevealButton(
     visible: Boolean,
     onClick: () -> Unit,
@@ -598,7 +658,9 @@ private fun ProfileIdentityCard(
     onEditName: () -> Unit,
     onEditBio: () -> Unit,
     onAvatarClick: () -> Unit,
-    onBannerClick: () -> Unit
+    onBannerClick: () -> Unit,
+    onDeleteAvatar: () -> Unit,
+    onDeleteBanner: () -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(24.dp),
@@ -615,27 +677,50 @@ private fun ProfileIdentityCard(
                         .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
                 ) {
                     if (bannerUri.isNotEmpty()) {
-                        AsyncImage(
+                        SubcomposeAsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
                                 .data(bannerUri).crossfade(300).build(),
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
+                            // Transparent on failure so the default tint
+                            // behind it stays visible instead of a blank gap.
+                            loading = { },
+                            error = { }
                         )
                     }
-                    EditRevealButton(
-                        visible = isEditing,
-                        onClick = onBannerClick,
-                        modifier = Modifier.align(Alignment.TopEnd),
-                        buttonModifier = Modifier.padding(8.dp).size(44.dp),
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Image,
-                            contentDescription = "Change banner",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        EditRevealButton(
+                            visible = isEditing && bannerUri.isNotEmpty(),
+                            onClick = onDeleteBanner,
+                            buttonModifier = Modifier.size(44.dp),
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Delete,
+                                contentDescription = "Remove banner",
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        EditRevealButton(
+                            visible = isEditing,
+                            onClick = onBannerClick,
+                            buttonModifier = Modifier.size(44.dp),
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Image,
+                                contentDescription = "Change banner",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(52.dp))
@@ -737,20 +822,20 @@ private fun ProfileIdentityCard(
                     .background(MaterialTheme.colorScheme.tertiaryContainer),
                 contentAlignment = Alignment.Center
             ) {
-                if (avatarUri.isNotEmpty()) {
+                // No loading placeholder: blank tint fades straight into
+                // the photo. The icon only shows when there is no photo
+                // or the file fails to load.
+                var imgError by remember(avatarUri) { mutableStateOf(false) }
+                if (avatarUri.isEmpty() || imgError) {
+                    DefaultAvatarIcon()
+                } else {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(avatarUri).crossfade(300).build(),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
+                        onError = { imgError = true },
                         modifier = Modifier.fillMaxSize().clip(CircleShape)
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Outlined.Person,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.size(44.dp)
                     )
                 }
             }
@@ -766,6 +851,20 @@ private fun ProfileIdentityCard(
                     contentDescription = "Change photo",
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(16.dp)
+                )
+            }
+            EditRevealButton(
+                visible = isEditing && avatarUri.isNotEmpty(),
+                onClick = onDeleteAvatar,
+                modifier = Modifier.padding(start = 76.dp, top = 98.dp),
+                buttonModifier = Modifier.size(28.dp),
+                containerColor = MaterialTheme.colorScheme.errorContainer
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Delete,
+                    contentDescription = "Remove photo",
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(14.dp)
                 )
             }
         }
@@ -1273,26 +1372,20 @@ private fun AchievementSquareCard(
                 )
             }
             Spacer(modifier = Modifier.height(4.dp))
+            // The tier name IS the display name: it keeps changing with the
+            // level. Locked badges fall back to the base title.
             Text(
-                text = achievement.def.title,
+                text = if (earned) tierDisplayName(achievement.def, achievement.earnedLevel)
+                else achievement.def.title,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
+                color = if (earned) MaterialTheme.colorScheme.tertiary
+                else MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            if (earned && achievement.next != null) {
-                Text(
-                    text = tierDisplayName(achievement.def, achievement.earnedLevel),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.tertiary,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
             if (earned) {
                 Box(
                     modifier = Modifier.height(20.dp),
@@ -1368,16 +1461,6 @@ fun AchievementDetailSheet(
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    if (achievement.earnedLevel > 0) {
-                        Text(
-                            text = achievement.def.title,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
                     Text(
                         text = tierDisplayName(achievement.def, achievement.earnedLevel),
                         style = MaterialTheme.typography.titleLarge,
@@ -1487,22 +1570,32 @@ fun AchievementDetailSheet(
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     history.forEach { (tierValue, date) ->
                         val threshold = thresholds.find { it.tier.value == tierValue }
+                        val tierLevel = thresholds.indexOfFirst { it.tier.value == tierValue } + 1
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Box(modifier = Modifier.width(64.dp)) {
                                 TierSymbolsRow(
-                                    level = thresholds.indexOfFirst { it.tier.value == tierValue } + 1,
+                                    level = tierLevel,
                                     iconSize = 14.dp,
                                     tint = MaterialTheme.colorScheme.tertiary
                                 )
                             }
-                            Text(
-                                text = threshold?.requireLabel ?: "",
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.weight(1f)
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = tierDisplayName(achievement.def, tierLevel),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = threshold?.requireLabel ?: "",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                             Text(
                                 text = prettyProfileDate(date),
                                 style = MaterialTheme.typography.labelSmall,
@@ -1798,7 +1891,7 @@ private fun TierMiniCard(
     }
 }
 
-private fun prettyProfileDate(raw: String): String {
+fun prettyProfileDate(raw: String): String {
     return try {
         val parsed = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ENGLISH).parse(raw)
             ?: return raw

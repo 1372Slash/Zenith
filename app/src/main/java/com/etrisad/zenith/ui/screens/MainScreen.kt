@@ -22,9 +22,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.EmojiEvents
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
@@ -37,6 +42,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -46,8 +52,14 @@ import androidx.navigation.compose.rememberNavController
 import com.etrisad.zenith.data.preferences.ThemeConfig
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import com.etrisad.zenith.ui.screens.profile.achievementTrackingKey
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -55,6 +67,7 @@ import com.etrisad.zenith.ui.components.PermissionBottomSheet
 import com.etrisad.zenith.ui.components.onboarding.OnboardingStatsBottomSheet
 import com.etrisad.zenith.ui.components.onboarding.OnboardingUpdateBottomSheet
 import com.etrisad.zenith.ui.components.ZenithHeader
+import com.etrisad.zenith.ui.components.TopSheet
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.navigation.Screen
 import com.etrisad.zenith.ui.navigation.navItems
@@ -71,9 +84,11 @@ import com.etrisad.zenith.ui.screens.profile.AchievementsScreen
 import com.etrisad.zenith.ui.screens.profile.PendingUnlock
 import com.etrisad.zenith.ui.screens.profile.ProfileBannerEvent
 import com.etrisad.zenith.ui.screens.profile.ProfileScreen
+import com.etrisad.zenith.ui.screens.profile.AchievementState
 import com.etrisad.zenith.ui.screens.profile.ProfileViewModel
 import com.etrisad.zenith.ui.screens.profile.ProfileViewModelFactory
 import com.etrisad.zenith.ui.screens.profile.formatProgressNumber
+import com.etrisad.zenith.ui.screens.profile.prettyProfileDate
 import com.etrisad.zenith.ui.screens.profile.tierDisplayName
 import com.etrisad.zenith.ui.screens.settings.EyeCareScreen
 import com.etrisad.zenith.ui.screens.settings.LockdownSettings
@@ -101,7 +116,11 @@ import com.etrisad.zenith.data.preferences.UserPreferences
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
+@OptIn(
+    ExperimentalMaterial3ExpressiveApi::class,
+    ExperimentalMaterial3Api::class,
+    kotlinx.coroutines.FlowPreview::class
+)
 @Composable
 fun MainScreen(
     homeViewModel: HomeViewModel,
@@ -126,6 +145,32 @@ fun MainScreen(
         factory = ProfileViewModelFactory(context, shieldRepository, userPreferencesRepository)
     )
     val navController = rememberNavController()
+    LaunchedEffect(Unit) {
+        combine(
+            userPreferencesRepository.userPreferencesFlow
+                .map { it.achievementTrackingKey() }
+                .distinctUntilChanged(),
+            shieldRepository.allShields
+                .map { shields ->
+                    shields.map {
+                        it.packageName + it.type + it.bestStreak + it.timeLimitMinutes +
+                            it.emergencyUseCount + it.isDelayAppEnabled +
+                            it.isStrictModeEnabled + it.isGoalCallerEnabled +
+                            it.isAutoQuitEnabled
+                    }
+                }
+                .distinctUntilChanged(),
+            shieldRepository.allSchedules
+                .map { schedules -> schedules.map { it.id } }
+                .distinctUntilChanged(),
+            shieldRepository.getPomodoroTotalCountFlow()
+                .catch { emit(-1) }
+                .distinctUntilChanged()
+        ) { _, _, _, _ -> Unit }
+            .debounce(3000)
+            .catch { }
+            .collect { profileViewModel.refresh(silent = true) }
+    }
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -233,6 +278,7 @@ fun MainScreen(
     val updateManager = remember { GitHubUpdateManager(context) }
     var latestRelease by remember { mutableStateOf<GitHubRelease?>(null) }
     var showUpdateSheet by remember { mutableStateOf(false) }
+    var showNotifCenter by remember { mutableStateOf(false) }
 
     LaunchedEffect(preferences.checkUpdateOnStart) {
         if (com.etrisad.zenith.BuildConfig.SHOW_UPDATES && preferences.checkUpdateOnStart) {
@@ -317,6 +363,7 @@ fun MainScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 updatePermissionsBadge()
+                profileViewModel.refresh(silent = true)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -371,7 +418,7 @@ fun MainScreen(
             onDismissRequest = { showFeatureInfoSheet = false }
         )
     }
-
+    Box(modifier = Modifier.fillMaxSize()) {
     Row(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -1335,22 +1382,290 @@ fun MainScreen(
                 GlobalAchievementBanners(
                     profileViewModel = profileViewModel,
                     navController = navController,
+                    onOpenCenter = { showNotifCenter = true },
                     modifier = Modifier.align(Alignment.TopCenter)
+                )
+            }
+        }
+    }
+    run {
+        val centerPending by profileViewModel.pendingBanners.collectAsState()
+        val centerProfile by profileViewModel.uiState.collectAsState()
+        NotificationCenterSheet(
+            visible = showNotifCenter,
+            pending = centerPending,
+            achievements = centerProfile.achievements,
+            onOpenPending = { event ->
+                profileViewModel.consumeBanner(event.key)
+                showNotifCenter = false
+                navController.navigate(Screen.Achievements.route)
+            },
+            onDismissOne = { profileViewModel.consumeBanner(it) },
+            onClearAll = { profileViewModel.clearAllBanners() },
+            onOpenRecent = {
+                showNotifCenter = false
+                navController.navigate(Screen.Achievements.route)
+            },
+            onDismiss = { showNotifCenter = false }
+        )
+    }
+    }
+}
+
+@Composable
+private fun NotificationCenterSheet(
+    visible: Boolean,
+    pending: List<ProfileBannerEvent>,
+    achievements: List<AchievementState>,
+    onOpenPending: (ProfileBannerEvent) -> Unit,
+    onDismissOne: (String) -> Unit,
+    onClearAll: () -> Unit,
+    onOpenRecent: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val recent = remember(achievements, pending) {
+        val pendingKeys = pending.mapNotNull { event ->
+            (event as? ProfileBannerEvent.Unlock)?.let { it.defId to it.tierValue }
+        }.toSet()
+        achievements.flatMap { state ->
+            state.unlockedDates.mapNotNull { (tierValue, date) ->
+                if (state.def.id to tierValue in pendingKeys) null
+                else Triple(state.def, tierValue, date)
+            }
+        }.sortedByDescending { it.third }.take(8)
+    }
+    TopSheet(
+        visible = visible,
+        onDismissRequest = onDismiss
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 24.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Notifications",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    onClick = onClearAll,
+                    enabled = pending.isNotEmpty()
+                ) { Text("Clear all") }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "New",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            if (pending.isEmpty()) {
+                Text(
+                    text = "You're all caught up",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    pending.forEachIndexed { index, event ->
+                        val def = achievements.find {
+                            it.def.id == when (event) {
+                                is ProfileBannerEvent.Unlock -> event.defId
+                                is ProfileBannerEvent.Progress -> event.defId
+                            }
+                        }?.def
+                        val (title, subtitle) = when (event) {
+                            is ProfileBannerEvent.Unlock -> {
+                                val name = def?.let { tierDisplayName(it, event.tierLevel) }
+                                    ?: "Achievement unlocked"
+                                name to "Achievement unlocked - ${prettyProfileDate(event.date)}"
+                            }
+                            is ProfileBannerEvent.Progress -> {
+                                val level = def?.thresholds?.count { event.after >= it.required } ?: 0
+                                val name = def?.let { tierDisplayName(it, level) } ?: "Progress"
+                                name to "${formatProgressNumber(event.defId, event.before)} → ${
+                                    formatProgressNumber(event.defId, event.after)
+                                }"
+                            }
+                        }
+                        Card(
+                            onClick = { onOpenPending(event) },
+                            shape = notifGroupShape(index, pending.size),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.tertiaryContainer),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = def?.icon ?: Icons.Outlined.EmojiEvents,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        text = subtitle,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { onDismissOne(event.key) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Close,
+                                        contentDescription = "Dismiss",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Earlier",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            if (recent.isEmpty()) {
+                Text(
+                    text = "No earlier notifications",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    recent.forEachIndexed { index, (def, tierValue, date) ->
+                        val level = def.thresholds.indexOfFirst { it.tier.value == tierValue } + 1
+                        Card(
+                            onClick = onOpenRecent,
+                            shape = notifGroupShape(index, recent.size),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = def.icon,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = tierDisplayName(def, level),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1
+                                )
+                                Text(
+                                    text = prettyProfileDate(date),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(40.dp)
+                        .height(4.dp)
+                        .clip(CircleShape)
+                        .background(
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        )
                 )
             }
         }
     }
 }
 
+private fun notifGroupShape(index: Int, total: Int): RoundedCornerShape = when {
+    total == 1 -> RoundedCornerShape(24.dp)
+    index == 0 -> RoundedCornerShape(
+        topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp
+    )
+    index == total - 1 -> RoundedCornerShape(
+        topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp
+    )
+    else -> RoundedCornerShape(8.dp)
+}
+
 @Composable
 private fun GlobalAchievementBanners(
     profileViewModel: ProfileViewModel,
     navController: androidx.navigation.NavController,
+    onOpenCenter: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val pendingBanners by profileViewModel.pendingBanners.collectAsState()
     val profileUiState by profileViewModel.uiState.collectAsState()
     val currentBanner = pendingBanners.firstOrNull()
+    var bannerDrag by remember { mutableFloatStateOf(0f) }
+    var bannerReleased by remember { mutableStateOf(true) }
+    val bannerDensity = LocalDensity.current
+    val bannerFollowOffset by animateFloatAsState(
+        targetValue = if (bannerReleased) 0f else bannerDrag,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "BannerDragFollow"
+    )
     LaunchedEffect(currentBanner) {
         if (currentBanner != null) {
             delay(if (currentBanner is ProfileBannerEvent.Progress) 3200L else 4500L)
@@ -1361,7 +1676,24 @@ private fun GlobalAchievementBanners(
         targetState = currentBanner,
         modifier = modifier
             .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(top = 72.dp, start = 16.dp, end = 16.dp),
+            .padding(top = 72.dp, start = 16.dp, end = 16.dp)
+            .offset { IntOffset(0, bannerFollowOffset.roundToInt()) }
+            .draggable(
+                state = rememberDraggableState {
+                    bannerReleased = false
+                    bannerDrag += it
+                },
+                orientation = Orientation.Vertical,
+                onDragStopped = {
+                    val threshold = with(bannerDensity) { 56.dp.toPx() }
+                    when {
+                        bannerDrag > threshold -> onOpenCenter()
+                        bannerDrag < -threshold -> profileViewModel.clearAllBanners()
+                    }
+                    bannerDrag = 0f
+                    bannerReleased = true
+                }
+            ),
         transitionSpec = {
             val slideBouncy = spring<IntOffset>(
                 dampingRatio = Spring.DampingRatioMediumBouncy,

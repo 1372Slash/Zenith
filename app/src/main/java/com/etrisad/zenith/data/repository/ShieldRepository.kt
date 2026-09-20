@@ -146,6 +146,22 @@ class ShieldRepository(
         return try { database.pomodoroSessionDao().getTotalCount() } catch (_: Exception) { 0 }
     }
 
+    suspend fun getWebsiteDomainCount(): Int {
+        return try { websiteUsageDao.getDistinctDomainCount() } catch (_: Exception) { 0 }
+    }
+
+    suspend fun getInterceptedNotificationCount(): Int {
+        return try { database.interceptedNotificationDao().getTotalCount() } catch (_: Exception) { 0 }
+    }
+
+    suspend fun getTrackedDayCount(): Int {
+        return try { dailyUsageDao.getDistinctDateCount() } catch (_: Exception) { 0 }
+    }
+
+    fun getPomodoroTotalCountFlow(): Flow<Int> {
+        return database.pomodoroSessionDao().getTotalCountFlow()
+    }
+
     suspend fun getPomodoroTotalFocusMillis(): Long {
         return try { database.pomodoroSessionDao().getTotalFocusMillis() } catch (_: Exception) { 0L }
     }

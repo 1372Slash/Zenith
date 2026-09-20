@@ -23,4 +23,7 @@ interface InterceptedNotificationDao {
 
     @Query("DELETE FROM intercepted_notifications")
     suspend fun deleteAll()
+
+    @Query("SELECT COUNT(*) FROM intercepted_notifications")
+    suspend fun getTotalCount(): Int
 }

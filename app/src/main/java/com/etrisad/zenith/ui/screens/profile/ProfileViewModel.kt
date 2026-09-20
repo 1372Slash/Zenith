@@ -62,6 +62,29 @@ data class XpDay(
     val xp: Int,
     val savedMillis: Long
 )
+fun com.etrisad.zenith.data.preferences.UserPreferences.achievementTrackingKey(): String {
+    return listOf(
+        globalBestStreak, globalCurrentStreak, bedtimeBestStreak,
+        alarmsJson, pausePointEnabled, pausePointQrCodes.size,
+        eyeCareEnabled, gracePeriodEnabled, lockdownEnabled,
+        pomodoroSessionEndTimestamp, pomodoroPresets,
+        expressiveColors, autoBackupEnabled, lastBackupTimestamp,
+        mindfulGatewayEnabled, usageGlimpseEnabled,
+        userXpLastAwardDate, achievementHistory, achievementLastValues,
+        sessionUsageOverlayEnabled, screenTimeTargetMinutes,
+        websiteAutoTrackingEnabled, developerModeEnabled,
+        performanceLevel.name, smartRepairOnRefresh,
+        excludedFromTrackingPackages.size, bedtimeWindDownEnabled,
+        pausePointTaskTypes.size, pausePointQrCodes.size,
+        userSharedProfile, globalCurrentStreak, userXpTotal,
+        overlayPaletteId, floatingTabBarEnabled, totalUsagePillEnabled,
+        incentiveLockEnabled, earlyKickEnabled, batteryStatsResetEnabled,
+        dayStartHour, dayStartMinute, disableTrackingAtUnusedHours,
+        streakRecoveryPerformed, dismissedUninstalledApps.size,
+        bedtimeWhitelistedPackages.size, bedtimeDndEnabled,
+        shortsScreenTimeMs > 0
+    ).joinToString("|")
+}
 
 data class ProfileUiState(
     val isLoading: Boolean = true,
@@ -112,6 +135,10 @@ class ProfileViewModel(
     fun consumeBanner(key: String) {
         _pendingBanners.update { list -> list.filterNot { it.key == key } }
     }
+
+    fun clearAllBanners() {
+        _pendingBanners.update { emptyList() }
+    }
     fun testUnlockBanner() {
         val today = dateStr(System.currentTimeMillis())
         _pendingUnlocks.update {
@@ -134,10 +161,12 @@ class ProfileViewModel(
         refresh()
     }
 
-    fun refresh() {
+    fun refresh(silent: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {
             refreshMutex.withLock {
-                _uiState.update { it.copy(isLoading = true) }
+                if (!silent) {
+                    _uiState.update { it.copy(isLoading = true) }
+                }
             try {
                 val lifetime = syncLifetime()
                 val prefs = userPreferencesRepository.userPreferencesFlow.first()
@@ -176,7 +205,51 @@ class ProfileViewModel(
                     pomodoroFocusMillis = pomoFocus,
                     lifetimeMillis = lifetime.total,
                     bedtimeBestStreak = freshPrefs.bedtimeBestStreak,
-                    shieldCount = shields.size
+                    shieldCount = shields.size,
+                    hasOverlayHud = freshPrefs.sessionUsageOverlayEnabled,
+                    hasDelayShield = shields.any { it.isDelayAppEnabled },
+                    hasStrictShield = shields.any { it.isStrictModeEnabled },
+                    hasCallerShield = shields.any { it.isGoalCallerEnabled },
+                    hasAutoQuitShield = shields.any { it.isAutoQuitEnabled },
+                    hasTarget = freshPrefs.screenTimeTargetMinutes > 0,
+                    hasWebsiteTracking = freshPrefs.websiteAutoTrackingEnabled,
+                    isDeveloper = freshPrefs.developerModeEnabled,
+                    isCustomPerf = freshPrefs.performanceLevel ==
+                        com.etrisad.zenith.data.preferences.PerformanceLevel.CUSTOM,
+                    hasRepair = freshPrefs.smartRepairOnRefresh,
+                    hasExcluded = freshPrefs.excludedFromTrackingPackages.isNotEmpty(),
+                    hasWindDown = freshPrefs.bedtimeWindDownEnabled,
+                    hasSharedProfile = freshPrefs.userSharedProfile,
+                    globalCurrentStreak = freshPrefs.globalCurrentStreak,
+                    emergencyTotal = shields.sumOf { it.emergencyUseCount },
+                    scheduleCount = schedules.size,
+                    alarmCount = try {
+                        userPreferencesRepository.parseAlarms(freshPrefs.alarmsJson).size
+                    } catch (_: Exception) { 0 },
+                    goalCount = shields.count { it.type == FocusType.GOAL },
+                    qrCount = freshPrefs.pausePointQrCodes.size,
+                    taskTypeCount = freshPrefs.pausePointTaskTypes.size,
+                    userXpTotal = freshPrefs.userXpTotal,
+                    hasCustomOverlay = freshPrefs.overlayPaletteId != "dynamic",
+                    hasFloatingBar = freshPrefs.floatingTabBarEnabled,
+                    hasUsagePill = freshPrefs.totalUsagePillEnabled,
+                    hasIncentiveLock = freshPrefs.incentiveLockEnabled,
+                    hasEarlyKick = freshPrefs.earlyKickEnabled,
+                    hasBatteryReset = freshPrefs.batteryStatsResetEnabled,
+                    hasCustomDayStart = freshPrefs.dayStartHour != 0 || freshPrefs.dayStartMinute != 0,
+                    hasUnusedHours = freshPrefs.disableTrackingAtUnusedHours,
+                    hasRecovery = freshPrefs.streakRecoveryPerformed,
+                    hasCleaned = freshPrefs.dismissedUninstalledApps.isNotEmpty(),
+                    hasBedtimeWhitelist = freshPrefs.bedtimeWhitelistedPackages.isNotEmpty(),
+                    hasBedtimeDnd = freshPrefs.bedtimeDndEnabled,
+                    hasShorts = freshPrefs.shortsScreenTimeMs > 0L,
+                    widgetCount = placedWidgetCount(),
+                    webDomainCount = shieldRepository.getWebsiteDomainCount(),
+                    interceptedCount = shieldRepository.getInterceptedNotificationCount(),
+                    trackedDayCount = shieldRepository.getTrackedDayCount(),
+                    underBudgetDays = underBudgetDaysThisMonth(todayStr),
+                    lifetimeAppCount = lifetime.appCount,
+                    customVariantCount = customVariantCount(freshPrefs)
                 )
                 val baseAchievements = buildAchievementStates(stats)
                 val (achievements, newlyTieredIds) = recordUnlockDates(baseAchievements, todayStr)
@@ -184,7 +257,7 @@ class ProfileViewModel(
                 val xpHistory = decodeXpHistory(freshPrefs.userXpHistory)
                 _uiState.update {
                     it.copy(
-                        isLoading = false,
+                        isLoading = if (silent) it.isLoading else false,
                         topApps = lifetime.top3,
                         lifetimeTotal = lifetime.total,
                         lifetimeAppCount = lifetime.appCount,
@@ -298,6 +371,57 @@ class ProfileViewModel(
 
     private fun dateStr(millis: Long): String =
         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(millis))
+
+    /** Widgets currently pinned to the launcher, counted per provider. */
+    private fun placedWidgetCount(): Int {
+        return try {
+            val manager = appContext.getSystemService(Context.APPWIDGET_SERVICE)
+                as android.appwidget.AppWidgetManager
+            val pkg = appContext.packageName
+            listOf(
+                "GlobalStreakWidgetReceiver",
+                "AppStreakWidgetReceiver",
+                "TotalScreenTimeWidgetReceiver",
+                "RemainingTargetWidgetReceiver",
+                "PhoneFreeTimeWidgetReceiver"
+            ).sumOf { cls ->
+                manager.getAppWidgetIds(android.content.ComponentName(pkg, "$pkg.ui.widget.$cls")).size
+            }
+        } catch (_: Exception) { 0 }
+    }
+
+    /** Pause Point variant lists the user customized away from defaults. */
+    private fun customVariantCount(
+        prefs: com.etrisad.zenith.data.preferences.UserPreferences
+    ): Int {
+        val defaults = com.etrisad.zenith.ui.components.pausepoint.PausePointDefaults
+        return listOf(
+            prefs.pausePointWaitingVariants != defaults.waitingVariants,
+            prefs.pausePointBreathingVariants != defaults.breathingVariants,
+            prefs.pausePointWalkVariants != defaults.walkVariants,
+            prefs.pausePointNumberSlideVariants != defaults.numberSlideVariants,
+            prefs.pausePointSwitchVariants != defaults.switchVariants,
+            prefs.pausePointMathVariants != defaults.mathVariants,
+            prefs.pausePointCountingVariants != defaults.countingVariants,
+            prefs.pausePointTypingVariants != defaults.typingVariants
+        ).count { it }
+    }
+
+    /** Days since month start with total usage at or under the target. */
+    private suspend fun underBudgetDaysThisMonth(todayStr: String): Int {
+        return try {
+            val target = userPreferencesRepository.userPreferencesFlow.first()
+                .screenTimeTargetMinutes * 60_000L
+            if (target <= 0L) return 0
+            val cal = java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.DAY_OF_MONTH, 1)
+            }
+            val monthStart = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                .format(cal.time)
+            shieldRepository.getUsageBetween(monthStart, todayStr).first()
+                .count { it.packageName == "TOTAL" && it.usageTimeMillis <= target }
+        } catch (_: Exception) { 0 }
+    }
 
     /**
      * Records the first-observed date for every newly met achievement tier

@@ -679,8 +679,6 @@ private data class DayListState(
     val loading: Boolean,
     val apps: List<AppUsageInfo>
 )
-
-/** Monday-first week columns for the calendar heatmap, padded with nulls. */
 private fun buildCalWeeks(days: List<Long>, monthPattern: String = "MMM yyyy"): List<CalWeek> {
     if (days.isEmpty()) return emptyList()
     val monthFmt = java.text.SimpleDateFormat(monthPattern, java.util.Locale.ENGLISH)

@@ -231,8 +231,6 @@ class HomeViewModel(
     fun getLongTermAppUsage(range: StatsRange): Flow<List<AppUsageInfo>> {
         return getLongTermAppUsage(range, 0)
     }
-
-    /** Period total reusing the long-term aggregation (for prev-period delta). */
     fun getLongTermTotal(range: StatsRange, offset: Int): Flow<Long> {
         return getLongTermAppUsage(range, offset).map { list -> list.sumOf { it.totalTimeVisible } }
     }

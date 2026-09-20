@@ -210,22 +210,15 @@ private fun AchievementFullRow(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = achievement.def.title,
+                        text = if (earned) tierDisplayName(achievement.def, achievement.earnedLevel)
+                        else achievement.def.title,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
+                        color = if (earned) MaterialTheme.colorScheme.tertiary
+                        else MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    if (earned && achievement.next != null) {
-                        Text(
-                            text = tierDisplayName(achievement.def, achievement.earnedLevel),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
                     Text(
                         text = achievement.def.desc,
                         style = MaterialTheme.typography.bodySmall,

@@ -250,6 +250,7 @@ class UserPreferencesRepository(private val context: Context) {
         val USER_AVATAR_URI = stringPreferencesKey("user_avatar_uri")
         val USER_BANNER_URI = stringPreferencesKey("user_banner_uri")
         val PROFILE_BANNER_ON_HOME = booleanPreferencesKey("profile_banner_on_home")
+        val USER_SHARED_PROFILE = booleanPreferencesKey("user_shared_profile")
         val LIFETIME_SNAPSHOT = stringPreferencesKey("lifetime_snapshot")
         val LIFETIME_LAST_SYNC_DATE = stringPreferencesKey("lifetime_last_sync_date")
         val ACHIEVEMENT_HISTORY = stringPreferencesKey("achievement_history")
@@ -468,6 +469,7 @@ class UserPreferencesRepository(private val context: Context) {
             userAvatarUri = settings[PreferencesKeys.USER_AVATAR_URI] ?: "",
             userBannerUri = settings[PreferencesKeys.USER_BANNER_URI] ?: "",
             profileBannerOnHome = settings[PreferencesKeys.PROFILE_BANNER_ON_HOME] ?: false,
+            userSharedProfile = settings[PreferencesKeys.USER_SHARED_PROFILE] ?: false,
             lifetimeSnapshot = settings[PreferencesKeys.LIFETIME_SNAPSHOT] ?: "",
             lifetimeLastSyncDate = settings[PreferencesKeys.LIFETIME_LAST_SYNC_DATE] ?: "",
             achievementHistory = settings[PreferencesKeys.ACHIEVEMENT_HISTORY] ?: "",
@@ -732,6 +734,10 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setProfileBannerOnHome(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.PROFILE_BANNER_ON_HOME] = enabled }
+    }
+
+    suspend fun setUserSharedProfile(shared: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.USER_SHARED_PROFILE] = shared }
     }
 
     suspend fun setLifetimeSnapshot(snapshot: String, lastSyncDate: String) {
@@ -1753,6 +1759,7 @@ data class UserPreferences(
     val userAvatarUri: String = "",
     val userBannerUri: String = "",
     val profileBannerOnHome: Boolean = false,
+    val userSharedProfile: Boolean = false,
     val lifetimeSnapshot: String = "",
     val lifetimeLastSyncDate: String = "",
     val achievementHistory: String = "",

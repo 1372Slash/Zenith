@@ -55,8 +55,6 @@ fun PomodoroStatsSection(viewModel: PomodoroViewModel) {
     val dailyHistory = remember(dailyStats) {
         dailyStats.map { DailyUsage(date = it.dateMillis, totalTime = it.focusMillis) }
     }
-
-    // Today + this-week accumulation (only meaningful on the current period).
     val countsLine = remember(statByKey, offset, prefs) {
         if (offset != 0) {
             val sessions = dailyStats.sumOf { it.sessions }
@@ -120,8 +118,6 @@ fun PomodoroStatsSection(viewModel: PomodoroViewModel) {
         Spacer(modifier = Modifier.height(4.dp))
     }
 }
-
-/** Monday-first yyyy-MM-dd keys of the current week. */
 private fun mondayWeekKeys(keyFmt: SimpleDateFormat): Set<String> {
     val cal = Calendar.getInstance().apply {
         firstDayOfWeek = Calendar.MONDAY

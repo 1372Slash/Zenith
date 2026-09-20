@@ -377,8 +377,6 @@ class PomodoroViewModel(
         loadInstalledApps()
     }
 
-    // ---- Session-history stats (monthly/yearly, mirrors the long-term summary) ----
-
     data class PomodoroDayStat(
         val dateMillis: Long,
         val sessions: Int,

@@ -594,12 +594,28 @@ fun UsageDashboard(
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             if (bannerVisible) {
-                AsyncImage(
+                SubcomposeAsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(bannerUri).crossfade(300).build(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.matchParentSize()
+                    modifier = Modifier.matchParentSize(),
+                    loading = {
+                        Box(
+                            modifier = Modifier.matchParentSize()
+                                .background(
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                                )
+                        )
+                    },
+                    error = {
+                        Box(
+                            modifier = Modifier.matchParentSize()
+                                .background(
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                                )
+                        )
+                    }
                 )
                 Box(
                     modifier = Modifier.matchParentSize()

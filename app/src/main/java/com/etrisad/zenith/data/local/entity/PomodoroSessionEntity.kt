@@ -14,7 +14,6 @@ import androidx.room.PrimaryKey
 data class PomodoroSessionEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
-    /** Day-start yyyy-MM-dd key, honoring the user's day-start boundary. */
     val date: String,
     val completedAt: Long = System.currentTimeMillis(),
     val focusMillis: Long,
