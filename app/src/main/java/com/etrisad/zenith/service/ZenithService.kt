@@ -64,7 +64,8 @@ class ZenithService : AccessibilityService() {
 
     private var lastKickTime = 0L
     private var lastKickedPackage: String? = null
-    private var lastDndFilter: Int? = null
+    private var dndSetByApp = false
+    private var dndPreviousFilter: Int? = null
 
     private var monitoringJob: kotlinx.coroutines.Job? = null
     private var bypassCheckRunnable: Runnable? = null
@@ -1498,21 +1499,36 @@ class ZenithService : AccessibilityService() {
     }
 
     private fun updateDndAndWindDown(dnd: Boolean, windDown: Boolean) {
-        if (notificationManager.isNotificationPolicyAccessGranted) {
-            try {
-                val targetFilter = if (dnd) NotificationManager.INTERRUPTION_FILTER_PRIORITY else NotificationManager.INTERRUPTION_FILTER_ALL
-
-                if (lastDndFilter == null) {
-                    lastDndFilter = notificationManager.currentInterruptionFilter
+        if (!notificationManager.isNotificationPolicyAccessGranted) return
+        try {
+            val current = notificationManager.currentInterruptionFilter
+            if (dnd) {
+                if (!dndSetByApp) {
+                    // Remember what was active before WE touch it - it could
+                    // be the user's own manual DND.
+                    dndPreviousFilter = current
+                    dndSetByApp = true
                 }
-
-                if (lastDndFilter != targetFilter) {
-                    notificationManager.setInterruptionFilter(targetFilter)
-                    lastDndFilter = targetFilter
+                if (current != NotificationManager.INTERRUPTION_FILTER_PRIORITY) {
+                    notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
+            } else if (dndSetByApp) {
+                dndSetByApp = false
+                // Only undo what WE enabled. If the filter is no longer the
+                // one we set, the user changed DND themselves meanwhile, so
+                // leave their choice untouched. Otherwise restore exactly what
+                // was active before bedtime took over (not hardcoded ALL).
+                if (current == NotificationManager.INTERRUPTION_FILTER_PRIORITY) {
+                    notificationManager.setInterruptionFilter(
+                        dndPreviousFilter ?: NotificationManager.INTERRUPTION_FILTER_ALL
+                    )
+                }
+                dndPreviousFilter = null
             }
+            // NOTE: when bedtime DND is off and we never enabled it, a manual
+            // DND (meeting mode etc.) is left completely untouched.
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
