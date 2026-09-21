@@ -68,12 +68,6 @@ fun ZenithHeader(
 
     val sideSlotWidth = 68.dp
 
-    val infoButtonOffset by animateDpAsState(
-        targetValue = if (infoNextToAction) 8.dp else 0.dp,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "InfoButtonOffset"
-    )
-
     val smoothedAlpha by animateFloatAsState(
         targetValue = (1f - scrollBehavior.state.collapsedFraction).coerceIn(0f, 1f),
         animationSpec = spring(stiffness = Spring.StiffnessLow),
@@ -267,11 +261,10 @@ fun ZenithHeader(
                 Box(
                     modifier = Modifier
                         .padding(start = 16.dp)
-                        .size(40.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        .clickable(onClick = onBack)
-                        .padding(8.dp),
+                        .clickable(onClick = onBack),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -301,7 +294,8 @@ fun ZenithHeader(
             contentAlignment = Alignment.CenterEnd
         ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 AnimatedVisibility(
                     visible = showInfoButton,
@@ -340,7 +334,6 @@ fun ZenithHeader(
                     modifier = Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .offset(x = infoButtonOffset)
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Info,

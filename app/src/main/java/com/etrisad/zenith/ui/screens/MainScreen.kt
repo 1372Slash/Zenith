@@ -545,6 +545,7 @@ fun MainScreen(
                                     onClick = { focusViewModel.toggleSelectionMode() },
                                     modifier = Modifier
                                         .padding(start = 12.dp)
+                                        .size(48.dp)
                                         .clip(CircleShape)
                                         .scale(scale),
                                     interactionSource = interactionSource
@@ -552,7 +553,8 @@ fun MainScreen(
                                     Icon(
                                         imageVector = if (isSelected) Icons.Outlined.Close else Icons.Outlined.Checklist,
                                         contentDescription = "Select",
-                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
                             }
@@ -619,23 +621,25 @@ fun MainScreen(
                                                 if (!detailLocked) homeViewModel.openSettingsSheet()
                                                 else Toast.makeText(context, "Locked during lockdown hours", Toast.LENGTH_SHORT).show()
                                             },
-                                            modifier = Modifier.padding(end = 12.dp).clip(CircleShape)
+                                            modifier = Modifier.padding(end = 12.dp).size(48.dp).clip(CircleShape)
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Outlined.Edit,
                                                 contentDescription = "Edit App Settings",
-                                                tint = if (detailLocked) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary
+                                                tint = if (detailLocked) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(24.dp)
                                             )
                                         }
                                     }
                                     "user" -> {
                                         IconButton(
                                             onClick = { navController.navigate(Screen.Profile.route) },
-                                            modifier = Modifier.padding(end = 12.dp).clip(CircleShape)
+                                            modifier = Modifier.padding(end = 12.dp).size(48.dp).clip(CircleShape)
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Outlined.AccountCircle,
-                                                contentDescription = "User Profile"
+                                                contentDescription = "User Profile",
+                                                modifier = Modifier.size(24.dp)
                                             )
                                         }
                                     }

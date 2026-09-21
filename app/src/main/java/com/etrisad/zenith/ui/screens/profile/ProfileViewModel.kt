@@ -62,6 +62,16 @@ data class XpDay(
     val xp: Int,
     val savedMillis: Long
 )
+
+/**
+ * Day-gated counter for a day-based achievement: how many qualifying days
+ * have been counted, and which date was counted last. Persisted so cold
+ * starts can never inflate the count — at most +1 per calendar day.
+ */
+data class DailyCount(
+    val count: Int,
+    val lastDate: String
+)
 fun com.etrisad.zenith.data.preferences.UserPreferences.achievementTrackingKey(): String {
     return listOf(
         globalBestStreak, globalCurrentStreak, bedtimeBestStreak,
@@ -183,6 +193,41 @@ class ProfileViewModel(
                 val schedules = try {
                     shieldRepository.allSchedules.first()
                 } catch (_: Exception) { emptyList() }
+                // Day-gated counters for day-based achievements (historian,
+                // weekend_warrior, night_owl_lite, early_bird). Each id
+                // increments at most once per calendar day, and only when
+                // that day's condition holds — cold starts never inflate them.
+                val trackedDates = try {
+                    shieldRepository.getAllTrackedDates().toSet()
+                } catch (_: Exception) { emptySet() }
+                val hourlyToday = try {
+                    shieldRepository.getHourlyUsageForDateSync(todayStr)
+                } catch (_: Exception) { emptyList() }
+                val todayCal = java.util.Calendar.getInstance()
+                val isWeekendToday = todayCal.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.SATURDAY ||
+                    todayCal.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.SUNDAY
+                val hasAnyUsageToday = todayStr in trackedDates
+                val nightToday = hourlyToday.any { it.hour in 0..4 && it.usageTimeMillis > 0 }
+                val earlyToday = hourlyToday.any { it.hour in 5..7 && it.usageTimeMillis > 0 }
+                val dbDayCounts = mapOf(
+                    "historian" to try { shieldRepository.getTrackedDayCount() } catch (_: Exception) { 0 },
+                    "weekend_warrior" to weekendTrackedDays(),
+                    "night_owl_lite" to try { shieldRepository.getHourlyActiveDayCount(0, 4) } catch (_: Exception) { 0 },
+                    "early_bird" to try { shieldRepository.getHourlyActiveDayCount(5, 7) } catch (_: Exception) { 0 }
+                )
+                val dayConditions = mapOf(
+                    "historian" to hasAnyUsageToday,
+                    "weekend_warrior" to (isWeekendToday && hasAnyUsageToday),
+                    "night_owl_lite" to nightToday,
+                    "early_bird" to earlyToday
+                )
+                val todayCounted = mapOf(
+                    "historian" to hasAnyUsageToday,
+                    "weekend_warrior" to (isWeekendToday && hasAnyUsageToday),
+                    "night_owl_lite" to nightToday,
+                    "early_bird" to earlyToday
+                )
+                val dayCounts = refreshDailyCounts(todayStr, dayConditions, dbDayCounts, todayCounted)
                 val stats = ProfileAchievementStats(
                     hasPomodoro = pomoSessions > 0 || freshPrefs.pomodoroSessionEndTimestamp > 0L,
                     hasLockdown = freshPrefs.lockdownEnabled,
@@ -249,15 +294,18 @@ class ProfileViewModel(
                     webDomainCount = shieldRepository.getWebsiteDomainCount(),
                     webTotalMillis = shieldRepository.getWebsiteTotalMillis(),
                     interceptedCount = shieldRepository.getInterceptedNotificationCount(),
-                    trackedDayCount = shieldRepository.getTrackedDayCount(),
+                    trackedDayCount = dayCounts["historian"]
+                        ?: try { shieldRepository.getTrackedDayCount() } catch (_: Exception) { 0 },
                     underBudgetDays = underBudgetDaysThisMonth(todayStr),
                     overdrawDays = overdrawDaysThisMonth(todayStr),
                     lifetimeAppCount = lifetime.appCount,
                     customVariantCount = customVariantCount(freshPrefs),
                     infoSheetCount = freshPrefs.infoVisitedRoutes.size,
-                    weekendDays = weekendTrackedDays(),
-                    nightNights = shieldRepository.getHourlyActiveDayCount(0, 4),
-                    earlyMornings = shieldRepository.getHourlyActiveDayCount(5, 7),
+                    weekendDays = dayCounts["weekend_warrior"] ?: weekendTrackedDays(),
+                    nightNights = dayCounts["night_owl_lite"]
+                        ?: try { shieldRepository.getHourlyActiveDayCount(0, 4) } catch (_: Exception) { 0 },
+                    earlyMornings = dayCounts["early_bird"]
+                        ?: try { shieldRepository.getHourlyActiveDayCount(5, 7) } catch (_: Exception) { 0 },
                     profileFields = listOf(
                         freshPrefs.userBio.isNotBlank(),
                         freshPrefs.userAvatarUri.isNotBlank(),
@@ -482,6 +530,52 @@ class ProfileViewModel(
     }
 
     /**
+     * Day-gated counters for day-based achievements.
+     *
+     * Each id increments at most once per calendar day, and only when that
+     * day's condition holds. Unknown ids are seeded once from the DB: if
+     * today is already counted in the seeded value, today is marked counted
+     * so it can't be counted twice; otherwise today stays uncounted so the
+     * normal gate below counts it exactly once.
+     *
+     * @return id to counted days, for every id in [conditions].
+     */
+    private suspend fun refreshDailyCounts(
+        todayStr: String,
+        conditions: Map<String, Boolean>,
+        dbCounts: Map<String, Int>,
+        todayCounted: Map<String, Boolean>
+    ): Map<String, Int> {
+        return try {
+            val stored = decodeDailyCounts(
+                userPreferencesRepository.userPreferencesFlow.first().achievementDailyCounts
+            ).toMutableMap()
+            var changed = false
+            conditions.keys.forEach { id ->
+                val entry = stored[id]
+                if (entry == null) {
+                    val seedDate = if (todayCounted[id] == true) todayStr else ""
+                    stored[id] = DailyCount(dbCounts[id] ?: 0, seedDate)
+                    changed = true
+                }
+            }
+            conditions.forEach { (id, qualifies) ->
+                val entry = stored[id] ?: return@forEach
+                if (qualifies && entry.lastDate != todayStr) {
+                    stored[id] = entry.copy(count = entry.count + 1, lastDate = todayStr)
+                    changed = true
+                }
+            }
+            if (changed) {
+                userPreferencesRepository.setAchievementDailyCounts(encodeDailyCounts(stored))
+            }
+            stored.filterKeys { it in conditions }.mapValues { it.value.count }
+        } catch (_: Exception) {
+            dbCounts
+        }
+    }
+
+    /**
      * Records the first-observed date for every newly met achievement tier
      * so the detail sheet can show an unlock history.
      */
@@ -664,5 +758,22 @@ class ProfileViewModel(
         fun encodeLastValues(map: Map<String, Long>): String =
             map.entries.sortedBy { it.key }
                 .joinToString("\n") { "${it.key}\t${it.value}" }
+
+        fun decodeDailyCounts(raw: String): Map<String, DailyCount> {
+            if (raw.isBlank()) return emptyMap()
+            return buildMap {
+                raw.lines().forEach { line ->
+                    val parts = line.split('\t')
+                    if (parts.size != 3) return@forEach
+                    val count = parts[1].toIntOrNull() ?: return@forEach
+                    if (parts[0].isEmpty()) return@forEach
+                    put(parts[0], DailyCount(count.coerceAtLeast(0), parts[2]))
+                }
+            }
+        }
+
+        fun encodeDailyCounts(map: Map<String, DailyCount>): String =
+            map.entries.sortedBy { it.key }
+                .joinToString("\n") { "${it.key}\t${it.value.count}\t${it.value.lastDate}" }
     }
 }
