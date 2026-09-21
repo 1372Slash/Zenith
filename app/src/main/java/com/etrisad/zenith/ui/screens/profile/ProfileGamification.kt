@@ -18,8 +18,8 @@ import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.TextFields
-import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.DataArray
+import kotlin.math.pow
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Campaign
@@ -46,7 +46,6 @@ import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Medication
 import androidx.compose.material.icons.outlined.NightsStay
-import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.PlayCircle
@@ -168,19 +167,25 @@ data class AchievementDef(
     val category: AchievementCategory,
     val thresholds: List<TierThreshold>,
     /** Unique name per tier level, index 0 = tier 1. Falls back to [title]. */
-    val tierNames: List<String> = emptyList()
+    val tierNames: List<String> = emptyList(),
+    /**
+     * Explicit opt-in for infinite tiers. When false (default), [isUnlimited]
+     * still extends ACCUMULATION ladders, which are counters by nature.
+     */
+    val unlimited: Boolean = false,
+    /** Multiplier applied per generated tier beyond the handcrafted list. */
+    val curveGrowth: Double = 2.0
 )
 
 data class AchievementState(
     val def: AchievementDef,
     val current: Long,
     val earnedTier: ProfileTier?,
-    /** How many tier thresholds are met, 0..thresholds.size. Displayed roman style. */
+    /** How many tier thresholds are met (unbounded for unlimited ladders). */
     val earnedLevel: Int,
-    val totalLevels: Int,
     val next: TierThreshold?,
     val progressFraction: Float,
-    /** Tier value -> yyyy-MM-dd unlock date, recorded when first observed met. */
+    /** Tier position (1-based) -> yyyy-MM-dd unlock date. See [historyKeyFor]. */
     val unlockedDates: Map<Int, String> = emptyMap()
 )
 
@@ -287,11 +292,178 @@ fun formatProgressNumber(defId: String, value: Long): String =
 
 /**
  * Unique name per tier level, e.g. "Streak in a Cup", "Streak Keeper".
- * Falls back to the base title when no custom name exists.
+ * Handcrafted [AchievementDef.tierNames] win; beyond them (or when missing),
+ * unlimited ladders get a stable generated name; otherwise the base title.
  */
 fun tierDisplayName(def: AchievementDef, level: Int): String {
     if (level <= 0) return def.title
-    return def.tierNames.getOrNull(level - 1) ?: def.title
+    def.tierNames.getOrNull(level - 1)?.let { return it }
+    if (!isUnlimited(def)) return def.title
+    return generatedTierName(def.id, level)
+}
+
+/**
+ * Accumulation ladders whose counters are naturally bounded never extend:
+ * 3 profile fields, 10 task types, 5 widget slots. Everything else with a
+ * counter (or explicit opt-in) grows forever.
+ */
+private val CAPPED_ACCUMULATION_IDS = setOf("profile_polisher", "taskmaster", "widget_wielder")
+
+fun isUnlimited(def: AchievementDef): Boolean =
+    def.unlimited || (def.category == AchievementCategory.ACCUMULATION && def.id !in CAPPED_ACCUMULATION_IDS)
+
+/** Highest roman denomination at or below a tier position (display only). */
+fun highestDenomForLevel(level: Int): ProfileTier =
+    ProfileTier.entries.sortedByDescending { it.value }.firstOrNull { level >= it.value }
+        ?: ProfileTier.I
+
+/** Snap a raw curve value to a human 1-1.5-2-3-5-8-10 step. */
+fun niceNumber(v: Double): Long {
+    if (!v.isFinite() || v <= 0) return Long.MAX_VALUE
+    val cap = Long.MAX_VALUE / 4.0
+    if (v >= cap) return Long.MAX_VALUE
+    val magnitude = 10.0.pow(kotlin.math.floor(kotlin.math.log10(v)))
+    val f = v / magnitude
+    val snapped = when {
+        f < 1.2 -> 1.0
+        f < 1.75 -> 1.5
+        f < 2.75 -> 2.0
+        f < 3.75 -> 3.0
+        f < 6.0 -> 5.0
+        f < 8.5 -> 8.0
+        else -> 10.0
+    }
+    return (snapped * magnitude).toLong().coerceAtLeast(1L)
+}
+
+/**
+ * Required value for a 1-based tier position. The handcrafted list wins;
+ * beyond it (unlimited ladders only) the curve grows from the last value.
+ * Returns [Long.MAX_VALUE] when no such tier exists (capped ladders).
+ */
+fun requiredFor(def: AchievementDef, level: Int): Long {
+    if (level < 1) return 1L
+    val i = level - 1
+    if (i < def.thresholds.size) return def.thresholds[i].required
+    if (!isUnlimited(def)) return Long.MAX_VALUE
+    val growth = if (def.curveGrowth > 1.0) def.curveGrowth else 2.0
+    var v = def.thresholds.lastOrNull()?.required?.toDouble() ?: 1.0
+    var k = def.thresholds.size
+    val cap = Long.MAX_VALUE / 4.0
+    while (k < level) {
+        v *= growth
+        if (v >= cap) return Long.MAX_VALUE
+        k++
+    }
+    return niceNumber(v)
+}
+
+/**
+ * Full threshold for a 1-based tier position (handcrafted or generated),
+ * or null when the ladder ends there.
+ */
+fun thresholdAtOrNull(def: AchievementDef, level: Int): TierThreshold? {
+    if (level < 1) return null
+    def.thresholds.getOrNull(level - 1)?.let { return it }
+    if (!isUnlimited(def)) return null
+    val required = requiredFor(def, level)
+    if (required == Long.MAX_VALUE) return null
+    return TierThreshold(
+        tier = highestDenomForLevel(level),
+        required = required,
+        requireLabel = generatedRequireLabel(def, required)
+    )
+}
+
+/** How many tiers are met at [current]; works past any list length. */
+fun tierCountFor(def: AchievementDef, current: Long): Int {
+    var level = 0
+    while (level < 100000) {
+        val req = requiredFor(def, level + 1)
+        if (req == Long.MAX_VALUE || current < req) break
+        level++
+    }
+    return level
+}
+
+/** First unmet tier, or null when the ladder is complete (capped defs only). */
+fun nextThresholdFor(def: AchievementDef, current: Long): TierThreshold? =
+    thresholdAtOrNull(def, tierCountFor(def, current) + 1)
+
+private fun generatedRequireLabel(def: AchievementDef, required: Long): String {
+    val lastLabel = def.thresholds.lastOrNull()?.requireLabel ?: ""
+    val suffix = lastLabel.replace(Regex("^\\d[\\d.,]*\\s*"), "")
+    return if (def.id in MILLIS_ACHIEVEMENTS) {
+        val unit = suffix.replace(Regex("^[a-zA-Z]+"), "").trim()
+        val base = formatCompactDuration(required)
+        if (unit.isEmpty()) base else "$base $unit"
+    } else {
+        "$required ${suffix.trim()}".trim()
+    }
+}
+
+/**
+ * Storage key for a tier position. Handcrafted tiers keep their legacy roman
+ * value (no migration needed); generated tiers use negative levels, which
+ * can never collide with positive legacy values.
+ */
+fun historyKeyFor(def: AchievementDef, level: Int): Int {
+    if (level < 1) return level
+    return def.thresholds.getOrNull(level - 1)?.tier?.value ?: -level
+}
+
+/**
+ * Tier position for a storage key, or -1 when the key no longer maps to any
+ * tier (def edited between versions) - callers should skip such rows.
+ */
+fun levelForHistoryKey(def: AchievementDef, key: Int): Int {
+    if (key < 0) return -key
+    val idx = def.thresholds.indexOfFirst { it.tier.value == key }
+    return if (idx >= 0) idx + 1 else -1
+}
+
+private val TIER_ADJECTIVES = listOf(
+    "Amber", "Arctic", "Astral", "Bouncy", "Brisk", "Cardinal",
+    "Celestial", "Cheerful", "Cinder", "Clockwork", "Cosmic", "Crimson",
+    "Dapper", "Drowsy", "Electric", "Ember", "Fern", "Fizz",
+    "Foggy", "Gallant", "Gilded", "Ginger", "Glacier", "Gleeful",
+    "Granite", "Hazel", "Honeyed", "Indigo", "Iron", "Ivory",
+    "Jolly", "Juniper", "Lively", "Lunar", "Maple", "Marble",
+    "Mellow", "Midnight", "Misty", "Molasses", "Mossy", "Neon",
+    "Nimble", "Onyx", "Opal", "Paprika", "Pebble", "Pepper",
+    "Quartz", "Ripple", "Roaring", "Ruby", "Saffron", "Sassy",
+    "Scarlet", "Solar", "Stellar", "Thunder", "Topaz", "Velvet",
+    "Wandering", "Whisper", "Willow", "Zephyr"
+)
+
+private val TIER_NOUNS = listOf(
+    "Acorn", "Badger", "Beacon", "Bison", "Bluff", "Bonsai",
+    "Boulder", "Breeze", "Brook", "Burrow", "Cabin", "Cactus",
+    "Canoe", "Canyon", "Carousel", "Castle", "Cedar", "Comet",
+    "Compass", "Cougar", "Coyote", "Crane", "Dune", "Eagle",
+    "Elm", "Falcon", "Fox", "Galaxy", "Gecko", "Grove",
+    "Harbor", "Hawk", "Hedgehog", "Heron", "Hollow", "Ibex",
+    "Island", "Jackal", "Jaguar", "Jasper", "Kestrel", "Lagoon",
+    "Lark", "Lighthouse", "Lynx", "Mammoth", "Manatee", "Meadow",
+    "Mesa", "Meteor", "Mole", "Monarch", "Moose", "Narwhal",
+    "Nugget", "Otter", "Owl", "Oxbow", "Panda", "Pine",
+    "Pinnacle", "Plover", "Quail", "Raccoon"
+)
+
+private val generatedNameOrder = java.util.concurrent.ConcurrentHashMap<String, List<Int>>()
+
+/**
+ * Stable generated name for tiers past the handcrafted list: a per-achievement
+ * seeded shuffle of adjective+noun pairs, so every ladder gets different names
+ * that never change between runs. Practically inexhaustible (4096 combos).
+ */
+fun generatedTierName(defId: String, level: Int): String {
+    val total = TIER_ADJECTIVES.size * TIER_NOUNS.size
+    val order = generatedNameOrder.getOrPut(defId) {
+        (0 until total).shuffled(kotlin.random.Random(defId.hashCode().toLong()))
+    }
+    val idx = order[(level - 1) % total]
+    return "${TIER_ADJECTIVES[idx / TIER_NOUNS.size]} ${TIER_NOUNS[idx % TIER_NOUNS.size]}"
 }
 
 /** Counts owned symbols per tier across achievements. */
@@ -1199,9 +1371,9 @@ fun buildAchievementStates(stats: ProfileAchievementStats): List<AchievementStat
     )
     return defs.map { def ->
         val current = currentById[def.id] ?: 0L
-        val earned = def.thresholds.filter { current >= it.required }.maxByOrNull { it.tier.value }
-        val earnedLevel = def.thresholds.count { current >= it.required }
-        val next = def.thresholds.filter { current < it.required }.minByOrNull { it.required }
+        val earnedLevel = tierCountFor(def, current)
+        val earnedTier = thresholdAtOrNull(def, earnedLevel)?.tier
+        val next = nextThresholdFor(def, current)
         val progress = when {
             next == null -> 1f
             next.required <= 0L -> 1f
@@ -1210,9 +1382,8 @@ fun buildAchievementStates(stats: ProfileAchievementStats): List<AchievementStat
         AchievementState(
             def = def,
             current = current,
-            earnedTier = earned?.tier,
+            earnedTier = earnedTier,
             earnedLevel = earnedLevel,
-            totalLevels = def.thresholds.size,
             next = next,
             progressFraction = progress
         )

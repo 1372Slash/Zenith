@@ -1507,20 +1507,21 @@ fun AchievementDetailSheet(
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(8.dp))
-            val thresholds = achievement.def.thresholds
             val level = achievement.earnedLevel
+            // Positions work past any list length (generated tiers included).
+            val beforeLevel = level - 1
+            val nextLevel = level + 1
             Row(
                 modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 TierMiniCard(
                     label = "Before",
-                    threshold = thresholds.getOrNull(level - 2),
-                    tierLevel = level - 1,
-                    tierName = achievement.def.tierNames.getOrNull(level - 2),
-                    date = thresholds.getOrNull(level - 2)?.let {
-                        achievement.unlockedDates[it.tier.value]
-                    },
+                    threshold = thresholdAtOrNull(achievement.def, beforeLevel),
+                    tierLevel = beforeLevel,
+                    tierName = tierDisplayName(achievement.def, beforeLevel)
+                        .takeIf { beforeLevel >= 1 },
+                    date = achievement.unlockedDates[historyKeyFor(achievement.def, beforeLevel)],
                     highlighted = false,
                     index = 0,
                     total = 3,
@@ -1528,12 +1529,11 @@ fun AchievementDetailSheet(
                 )
                 TierMiniCard(
                     label = "Current",
-                    threshold = thresholds.getOrNull(level - 1),
+                    threshold = thresholdAtOrNull(achievement.def, level),
                     tierLevel = level,
-                    tierName = achievement.def.tierNames.getOrNull(level - 1),
-                    date = thresholds.getOrNull(level - 1)?.let {
-                        achievement.unlockedDates[it.tier.value]
-                    },
+                    tierName = tierDisplayName(achievement.def, level)
+                        .takeIf { level >= 1 },
+                    date = achievement.unlockedDates[historyKeyFor(achievement.def, level)],
                     highlighted = true,
                     index = 1,
                     total = 3,
@@ -1541,9 +1541,9 @@ fun AchievementDetailSheet(
                 )
                 TierMiniCard(
                     label = "Next",
-                    threshold = thresholds.getOrNull(level),
-                    tierLevel = level + 1,
-                    tierName = achievement.def.tierNames.getOrNull(level),
+                    threshold = thresholdAtOrNull(achievement.def, nextLevel),
+                    tierLevel = nextLevel,
+                    tierName = tierDisplayName(achievement.def, nextLevel),
                     date = null,
                     highlighted = false,
                     index = 2,
@@ -1559,7 +1559,12 @@ fun AchievementDetailSheet(
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(8.dp))
-            val history = achievement.unlockedDates.entries.sortedBy { it.key }
+            // Keys are tier positions (legacy roman values were migrated);
+            // unknown keys (def edited) are dropped.
+            val history = achievement.unlockedDates.entries.mapNotNull { (key, date) ->
+                val lvl = levelForHistoryKey(achievement.def, key)
+                if (lvl < 1) null else lvl to date
+            }.sortedBy { it.first }
             if (history.isEmpty()) {
                 Text(
                     text = "No tier unlocked yet",
@@ -1568,9 +1573,8 @@ fun AchievementDetailSheet(
                 )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    history.forEach { (tierValue, date) ->
-                        val threshold = thresholds.find { it.tier.value == tierValue }
-                        val tierLevel = thresholds.indexOfFirst { it.tier.value == tierValue } + 1
+                    history.forEach { (tierLevel, date) ->
+                        val threshold = thresholdAtOrNull(achievement.def, tierLevel)
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()

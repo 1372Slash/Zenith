@@ -89,7 +89,11 @@ import com.etrisad.zenith.ui.screens.profile.ProfileViewModel
 import com.etrisad.zenith.ui.screens.profile.ProfileViewModelFactory
 import com.etrisad.zenith.ui.screens.profile.formatCompactDuration
 import com.etrisad.zenith.ui.screens.profile.formatProgressNumber
+import com.etrisad.zenith.ui.screens.profile.levelForHistoryKey
+import com.etrisad.zenith.ui.screens.profile.nextThresholdFor
 import com.etrisad.zenith.ui.screens.profile.prettyProfileDate
+import com.etrisad.zenith.ui.screens.profile.requiredFor
+import com.etrisad.zenith.ui.screens.profile.tierCountFor
 import com.etrisad.zenith.ui.screens.profile.tierDisplayName
 import com.etrisad.zenith.ui.screens.profile.tierIconsForLevel
 import com.etrisad.zenith.ui.screens.settings.EyeCareScreen
@@ -1455,9 +1459,12 @@ private fun NotificationCenterSheet(
             (event as? ProfileBannerEvent.Unlock)?.let { it.defId to it.tierValue }
         }.toSet()
         achievements.flatMap { state ->
-            state.unlockedDates.mapNotNull { (tierValue, date) ->
-                if (state.def.id to tierValue in pendingKeys) null
-                else Triple(state.def, tierValue, date)
+            state.unlockedDates.mapNotNull { (key, date) ->
+                if (state.def.id to key in pendingKeys) null
+                else {
+                    val level = levelForHistoryKey(state.def, key)
+                    if (level < 1) null else Triple(state.def, level, date)
+                }
             }
         }.sortedByDescending { it.third }.take(8)
     }
@@ -1513,7 +1520,7 @@ private fun NotificationCenterSheet(
                                 name to "Achievement unlocked - ${prettyProfileDate(event.date)}"
                             }
                             is ProfileBannerEvent.Progress -> {
-                                val level = def?.thresholds?.count { event.after >= it.required } ?: 0
+                                val level = def?.let { tierCountFor(it, event.after) } ?: 0
                                 val name = def?.let { tierDisplayName(it, level) } ?: "Progress"
                                 name to "${formatProgressNumber(event.defId, event.before)} → ${
                                     formatProgressNumber(event.defId, event.after)
@@ -1593,8 +1600,7 @@ private fun NotificationCenterSheet(
                 )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    recent.forEachIndexed { index, (def, tierValue, date) ->
-                        val level = def.thresholds.indexOfFirst { it.tier.value == tierValue } + 1
+                    recent.forEachIndexed { index, (def, level, date) ->
                         Card(
                             onClick = onOpenRecent,
                             shape = notifGroupShape(index, recent.size),
@@ -1697,9 +1703,8 @@ private fun GlobalAchievementBanners(
     LaunchedEffect(currentBanner) {
         if (currentBanner != null) {
             val isFull = (currentBanner as? ProfileBannerEvent.Progress)?.let { banner ->
-                val thresholds = profileUiState.achievements.find { it.def.id == banner.defId }?.def?.thresholds
-                val nextReq = thresholds?.firstOrNull { banner.after < it.required }?.required
-                nextReq == null || banner.after >= (nextReq ?: Long.MAX_VALUE)
+                val def = profileUiState.achievements.find { it.def.id == banner.defId }?.def
+                def == null || nextThresholdFor(def, banner.after) == null
             } ?: false
             delay(
                 if (currentBanner is ProfileBannerEvent.Progress) {
@@ -1791,26 +1796,24 @@ private fun GlobalAchievementBanners(
                     )
                 }
                 is ProfileBannerEvent.Progress -> {
-                    val thresholds = bannerState?.def?.thresholds
-                    val tierUpThreshold = thresholds?.firstOrNull {
-                        banner.after >= it.required && banner.before < it.required
-                    }
+                    val def = bannerState?.def
+                    val levelBefore = def?.let { tierCountFor(it, banner.before) } ?: 0
+                    val levelAfter = def?.let { tierCountFor(it, banner.after) } ?: 0
                     val isFull: Boolean
                     val beforeFraction: Float
                     val afterFraction: Float
                     val progressTitle: String
                     val tierSymbols: List<androidx.compose.ui.graphics.vector.ImageVector>
-                    if (tierUpThreshold != null) {
-                        val level = (thresholds?.indexOf(tierUpThreshold) ?: -1) + 1
-                        beforeFraction = (banner.before.toFloat() / tierUpThreshold.required).coerceIn(0f, 1f)
+                    if (def != null && levelAfter > levelBefore) {
+                        val req = requiredFor(def, levelAfter).coerceAtLeast(1L)
+                        beforeFraction = (banner.before.toFloat() / req).coerceIn(0f, 1f)
                         afterFraction = 1f
-                        progressTitle = bannerState?.def?.let { tierDisplayName(it, level) } ?: "Progress"
-                        tierSymbols = tierIconsForLevel(level)
+                        progressTitle = tierDisplayName(def, levelAfter)
+                        tierSymbols = tierIconsForLevel(levelAfter)
                         isFull = true
                     } else {
-                        val afterLevel = thresholds?.count { banner.after >= it.required } ?: 0
-                        progressTitle = bannerState?.def?.let { tierDisplayName(it, afterLevel) } ?: "Progress"
-                        val nextReq = thresholds?.firstOrNull { banner.after < it.required }?.required
+                        progressTitle = def?.let { tierDisplayName(it, levelAfter) } ?: "Progress"
+                        val nextReq = def?.let { nextThresholdFor(it, banner.after) }?.required
                         beforeFraction = if (nextReq != null && nextReq > 0) (banner.before.toFloat() / nextReq).coerceIn(0f, 1f) else 1f
                         afterFraction = if (nextReq != null && nextReq > 0) (banner.after.toFloat() / nextReq).coerceIn(0f, 1f) else 1f
                         tierSymbols = emptyList()

@@ -596,30 +596,50 @@ class ProfileViewModel(
             val newlyTieredIds = mutableSetOf<String>()
             val enriched = states.map { state ->
                 val dates = stored.getOrPut(state.def.id) { mutableMapOf() }
-                state.def.thresholds.forEach { threshold ->
-                    if (state.current >= threshold.required && !dates.containsKey(threshold.tier.value)) {
-                        dates[threshold.tier.value] = todayStr
+                // One-time migration: legacy keys are roman-denomination values
+                // (1, 5, 10, ...), new keys are 1-based positions. A stored map
+                // is only migrated when it does NOT already look new: new maps
+                // always hold exactly {1..k} (plus maybe negative generated
+                // keys), while no legacy map can take that shape (there is no
+                // denomination 2..4, 6..9, ...). Without this gate, a legit
+                // new key like position 5 would be mistaken for tier V.
+                val positives = dates.keys.filter { it > 0 }
+                val looksNew = positives.isEmpty() ||
+                    (positives.minOrNull() == 1 && positives.size == positives.maxOrNull())
+                if (!looksNew) {
+                    positives.toList().forEach { oldKey ->
+                        val pos = state.def.thresholds.indexOfFirst { it.tier.value == oldKey } + 1
+                        if (pos < 1 || oldKey == pos) return@forEach
+                        val existing = dates[oldKey] ?: return@forEach
+                        if (!dates.containsKey(pos)) {
+                            dates[pos] = existing
+                        }
+                        dates.remove(oldKey)
+                        changed = true
+                    }
+                }
+                for (level in 1..state.earnedLevel) {
+                    val key = historyKeyFor(state.def, level)
+                    if (!dates.containsKey(key)) {
+                        dates[key] = todayStr
                         changed = true
                         if (!isBaseline) {
-                            val tierLevel = state.def.thresholds.indexOfFirst {
-                                it.tier.value == threshold.tier.value
-                            } + 1
                             newlyTieredIds.add(state.def.id)
                             freshUnlocks.add(
                                 PendingUnlock(
                                     defId = state.def.id,
-                                    tierLevel = tierLevel,
-                                    tierValue = threshold.tier.value,
+                                    tierLevel = level,
+                                    tierValue = key,
                                     date = todayStr,
-                                    prevLevel = tierLevel - 1
+                                    prevLevel = level - 1
                                 )
                             )
                             freshBannerUnlocks.add(
                                 ProfileBannerEvent.Unlock(
                                     defId = state.def.id,
-                                    tierLevel = tierLevel,
-                                    tierValue = threshold.tier.value,
-                                    prevLevel = tierLevel - 1,
+                                    tierLevel = level,
+                                    tierValue = key,
+                                    prevLevel = level - 1,
                                     date = todayStr
                                 )
                             )
