@@ -28,7 +28,6 @@ import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Colorize
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.DashboardCustomize
-import androidx.compose.material.icons.outlined.Diamond
 import androidx.compose.material.icons.outlined.DirectionsRun
 import androidx.compose.material.icons.outlined.Dock
 import androidx.compose.material.icons.outlined.EmojiEvents
@@ -60,7 +59,7 @@ import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material.icons.outlined.PictureInPicture
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.QrCode2
-import androidx.compose.material.icons.outlined.RocketLaunch
+import androidx.compose.material.icons.outlined.Rocket
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Savings
 import androidx.compose.material.icons.outlined.Security
@@ -76,7 +75,7 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.Whatshot
-import androidx.compose.material.icons.outlined.WorkspacePremium
+import androidx.compose.material.icons.outlined.Satellite
 import androidx.compose.ui.graphics.vector.ImageVector
 
 const val PROFILE_XP_PER_LEVEL = 500
@@ -84,10 +83,10 @@ enum class ProfileTier(val value: Int, val icon: ImageVector, val title: String)
     I(1, Icons.Outlined.Star, "Star"),
     V(5, Icons.Outlined.DarkMode, "Moon"),
     X(10, Icons.Outlined.LightMode, "Sun"),
-    L(50, Icons.Outlined.RocketLaunch, "Comet"),
-    C(100, Icons.Outlined.WorkspacePremium, "Crown"),
-    D(500, Icons.Outlined.Diamond, "Diamond"),
-    M(1000, Icons.Outlined.EmojiEvents, "Trophy");
+    L(50, Icons.Outlined.Rocket, "Rocket"),
+    C(100, Icons.Outlined.Satellite, "Satellite"),
+    D(500, Icons.Outlined.Flag, "Claim"),
+    M(1000, Icons.Outlined.Public, "World");
 
     companion object {
         fun highestAtOrBelow(value: Long): ProfileTier? =
