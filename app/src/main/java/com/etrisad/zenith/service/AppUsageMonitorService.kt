@@ -230,7 +230,14 @@ class AppUsageMonitorService : Service() {
             "com.etrisad.zenith.action.SCREEN_OFF_GOAL_CHECK" -> {
                 if (!isScreenOn) {
                     Log.d("Zenith_SCREEN", "SCREEN_OFF_GOAL_CHECK: running checkGoalReminders()")
-                    serviceScope.launch { checkGoalReminders() }
+                    serviceScope.launch {
+                        // After a process restart the in-memory shield cache is
+                        // empty and checkGoalReminders() would silently return;
+                        // load it first so a revived process still fires.
+                        ensureGoalCacheLoaded()
+                        checkGoalReminders()
+                        scheduleScreenOffGoalAlarm()
+                    }
                     scheduleScreenOffGoalAlarm()
                 } else {
                     Log.d("Zenith_SCREEN", "SCREEN_OFF_GOAL_CHECK: ignored, screen is ON")
@@ -504,6 +511,28 @@ class AppUsageMonitorService : Service() {
     }
 
     private var lastGoalReminderCheckTime = 0L
+
+    /**
+     * Loads shields into the in-memory cache when it is empty (fresh process
+     * after a screen-off revival). Without this, checkGoalReminders() sees an
+     * empty goalShieldsCache and returns silently, and the reschedule gate in
+     * scheduleScreenOffGoalAlarm() stops the whole screen-off chain.
+     */
+    private suspend fun ensureGoalCacheLoaded() {
+        if (SharedMonitoringState.goalShieldsCache.isNotEmpty()) return
+        try {
+            kotlinx.coroutines.withTimeoutOrNull(8000) {
+                shieldRepository.isShieldsLoaded.first { it }
+                val shields = shieldRepository.allShields.first()
+                if (shields.isNotEmpty()) {
+                    SharedMonitoringState.goalShieldsCache = shields.filter {
+                        it.type == FocusType.GOAL && it.goalReminderPeriodMinutes > 0
+                    }
+                }
+            }
+        } catch (_: Exception) {
+        }
+    }
 
     private suspend fun checkGoalReminders() {
         Log.d("Zenith_SCREEN", "checkGoalReminders() called (isScreenOn=$isScreenOn)")
