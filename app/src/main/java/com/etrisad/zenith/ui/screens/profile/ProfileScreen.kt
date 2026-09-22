@@ -22,7 +22,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,10 +50,7 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.CheckCircleOutline
 import androidx.compose.material.icons.outlined.EmojiEvents
-import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
@@ -93,7 +89,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
@@ -1244,54 +1239,7 @@ private fun XpCard(
 }
 
 
-@Composable
-fun RewardRow(
-    name: String,
-    requirement: String,
-    unlocked: Boolean,
-    equipped: Boolean,
-    leading: @Composable () -> Unit,
-    onClick: () -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .then(if (unlocked) Modifier.clickable(onClick = onClick) else Modifier)
-            .alpha(if (unlocked) 1f else 0.55f)
-            .padding(vertical = 8.dp)
-    ) {
-        leading()
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = name,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = requirement,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        when {
-            equipped -> Icon(
-                imageVector = Icons.Outlined.CheckCircleOutline,
-                contentDescription = "Equipped",
-                tint = MaterialTheme.colorScheme.tertiary,
-                modifier = Modifier.size(22.dp)
-            )
-            !unlocked -> Icon(
-                imageVector = Icons.Outlined.Lock,
-                contentDescription = "Locked",
-                tint = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-    }
-}
+
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -1787,7 +1735,7 @@ fun AchievementProgressBanner(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "$beforeLabel â†’ $afterLabel",
+                    text = "$beforeLabel ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ $afterLabel",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1

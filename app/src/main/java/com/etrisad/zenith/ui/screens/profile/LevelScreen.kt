@@ -3,6 +3,7 @@ package com.etrisad.zenith.ui.screens.profile
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,9 +16,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircleOutline
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.material3.Card
@@ -35,15 +39,33 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.focus.PreferenceCategory
 import kotlinx.coroutines.launch
+
+/**
+ * Group-strip corner shapes mirroring AchievementSquareCard: the equipped
+ * card pops out fully rounded, the rest fuse into one strip.
+ */
+private fun rewardGroupShape(index: Int, total: Int, highlighted: Boolean) = when {
+    highlighted || total == 1 -> RoundedCornerShape(24.dp)
+    index == 0 -> RoundedCornerShape(
+        topStart = 24.dp, bottomStart = 24.dp, topEnd = 8.dp, bottomEnd = 8.dp
+    )
+    index == total - 1 -> RoundedCornerShape(
+        topStart = 8.dp, bottomStart = 8.dp, topEnd = 24.dp, bottomEnd = 24.dp
+    )
+    else -> RoundedCornerShape(8.dp)
+}
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -153,39 +175,99 @@ fun LevelScreen(
         item(key = "titles") {
             Column {
                 PreferenceCategory(title = "Titles")
-                Card(
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
                 ) {
-                    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
-                        LEVEL_TITLES.forEach { title ->
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        itemsIndexed(LEVEL_TITLES, key = { _, t -> "title-${t.id}" }) { index, title ->
                             val unlocked = level >= title.requiredLevel
                             val equipped = equippedTitleId == title.id && unlocked
-                            RewardRow(
-                                name = title.name,
-                                requirement = "Level ${title.requiredLevel}",
-                                unlocked = unlocked,
-                                equipped = equipped,
-                                leading = {
-                                    Icon(
-                                        imageVector = Icons.Outlined.WorkspacePremium,
-                                        contentDescription = null,
-                                        tint = if (unlocked) MaterialTheme.colorScheme.tertiary
-                                        else MaterialTheme.colorScheme.outline,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                },
+                            Card(
                                 onClick = {
                                     scope.launch {
                                         preferencesRepository.setUserTitle(
                                             if (equipped) "" else title.id
                                         )
                                     }
+                                },
+                                enabled = unlocked,
+                                shape = rewardGroupShape(index, LEVEL_TITLES.size, equipped),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (equipped) {
+                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceContainerHigh
+                                    }
+                                ),
+                                modifier = Modifier.width(124.dp).aspectRatio(0.78f)
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxSize().padding(10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (unlocked) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.WorkspacePremium,
+                                            contentDescription = null,
+                                            tint = if (unlocked) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = title.name,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center,
+                                        color = if (equipped) MaterialTheme.colorScheme.tertiary
+                                        else MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        text = "Lv ${title.requiredLevel}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                    Box(
+                                        modifier = Modifier.height(20.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (equipped) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.CheckCircleOutline,
+                                                contentDescription = "Equipped",
+                                                tint = MaterialTheme.colorScheme.tertiary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        } else if (!unlocked) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Lock,
+                                                contentDescription = "Locked",
+                                                tint = MaterialTheme.colorScheme.outline,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
                                 }
-                            )
+                            }
                         }
                     }
                 }
@@ -195,32 +277,49 @@ fun LevelScreen(
         item(key = "borders") {
             Column {
                 PreferenceCategory(title = "Avatar Borders")
-                Card(
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
                 ) {
-                    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
-                        AVATAR_BORDERS.forEach { border ->
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        itemsIndexed(AVATAR_BORDERS, key = { _, b -> "border-${b.id}" }) { index, border ->
                             val unlocked = level >= border.requiredLevel
                             val equipped = equippedBorderId == border.id && unlocked
-                            RewardRow(
-                                name = "${border.name} - ${border.colors.size} color" +
-                                    if (border.colors.size > 1) "s" else "",
-                                requirement = "Level ${border.requiredLevel}",
-                                unlocked = unlocked,
-                                equipped = equipped,
-                                leading = {
+                            Card(
+                                onClick = {
+                                    scope.launch {
+                                        preferencesRepository.setUserAvatarBorder(
+                                            if (equipped) "" else border.id
+                                        )
+                                    }
+                                },
+                                enabled = unlocked,
+                                shape = rewardGroupShape(index, AVATAR_BORDERS.size, equipped),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (equipped) {
+                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceContainerHigh
+                                    }
+                                ),
+                                modifier = Modifier.width(124.dp).aspectRatio(0.78f)
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxSize().padding(10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(28.dp)
+                                            .size(40.dp)
                                             .border(
-                                                3.dp,
+                                                4.dp,
                                                 if (unlocked) borderBrushFor(border)
                                                 else SolidColor(
-                                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
                                                 ),
                                                 CircleShape
                                             ),
@@ -229,21 +328,47 @@ fun LevelScreen(
                                         if (!unlocked) {
                                             Icon(
                                                 imageVector = Icons.Outlined.Lock,
-                                                contentDescription = null,
+                                                contentDescription = "Locked",
                                                 tint = MaterialTheme.colorScheme.outline,
-                                                modifier = Modifier.size(12.dp)
+                                                modifier = Modifier.size(14.dp)
                                             )
                                         }
                                     }
-                                },
-                                onClick = {
-                                    scope.launch {
-                                        preferencesRepository.setUserAvatarBorder(
-                                            if (equipped) "" else border.id
-                                        )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = border.name,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center,
+                                        color = if (equipped) MaterialTheme.colorScheme.tertiary
+                                        else MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        text = "Lv ${border.requiredLevel} - ${border.colors.size} color" +
+                                            if (border.colors.size > 1) "s" else "",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Box(
+                                        modifier = Modifier.height(20.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (equipped) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.CheckCircleOutline,
+                                                contentDescription = "Equipped",
+                                                tint = MaterialTheme.colorScheme.tertiary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
                                     }
                                 }
-                            )
+                            }
                         }
                     }
                 }
