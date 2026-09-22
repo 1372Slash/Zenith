@@ -213,33 +213,122 @@ val LEVEL_TITLES = listOf(
     LevelTitle("sentinel", "Sentinel", 15),
     LevelTitle("paragon", "Paragon", 20),
     LevelTitle("luminary", "Luminary", 25),
-    LevelTitle("zenith", "Zenith", 30)
+    LevelTitle("zenith", "Zenith", 30),
+    LevelTitle("celestial", "Celestial", 35),
+    LevelTitle("eternal", "Eternal", 40),
+    LevelTitle("mythic", "Mythic", 45),
+    LevelTitle("transcendent", "Transcendent", 50),
+    LevelTitle("infinite", "Infinite", 55)
 )
 
 /**
- * Avatar borders, escalating in color count with level: early rings are a
- * single color, higher rings blend 2, 3, 4, then 5 colors as a gradient.
+ * Avatar borders, escalating in color count with level: 5 solid rings,
+ * then 5 rings each blending 2, 3, 4, and finally 5 colors as a gradient.
  */
 val AVATAR_BORDERS = listOf(
+    // 1 color
     AvatarBorder("ember", "Ember", 3, listOf(Color(0xFFFF7043))),
-    AvatarBorder("tide", "Tide", 7, listOf(Color(0xFF29B6F6))),
-    AvatarBorder("moss", "Moss", 12, listOf(Color(0xFF9CCC65), Color(0xFF2E7D32))),
+    AvatarBorder("tide", "Tide", 5, listOf(Color(0xFF29B6F6))),
+    AvatarBorder("leaf", "Leaf", 7, listOf(Color(0xFF66BB6A))),
+    AvatarBorder("violet", "Violet", 9, listOf(Color(0xFF7E57C2))),
+    AvatarBorder("rose", "Rose", 11, listOf(Color(0xFFEC407A))),
+    // 2 colors
+    AvatarBorder("moss", "Moss", 14, listOf(Color(0xFF9CCC65), Color(0xFF2E7D32))),
+    AvatarBorder("gold", "Gold", 17, listOf(Color(0xFFFFE082), Color(0xFFFF8F00))),
+    AvatarBorder("frost", "Frost", 20, listOf(Color(0xFF80DEEA), Color(0xFF00838F))),
+    AvatarBorder("magma", "Magma", 23, listOf(Color(0xFFFF8A65), Color(0xFFBF360C))),
+    AvatarBorder("lagoon", "Lagoon", 26, listOf(Color(0xFF4DD0E1), Color(0xFF0D47A1))),
+    // 3 colors
     AvatarBorder(
-        "dusk", "Dusk", 17,
+        "dusk", "Dusk", 29,
         listOf(Color(0xFFCE93D8), Color(0xFF7B1FA2), Color(0xFF311B92))
     ),
     AvatarBorder(
-        "gold", "Gold", 22,
+        "sunset", "Sunset", 32,
+        listOf(Color(0xFFFFD54F), Color(0xFFFF7043), Color(0xFFAD1457))
+    ),
+    AvatarBorder(
+        "ocean", "Ocean", 35,
+        listOf(Color(0xFF80DEEA), Color(0xFF1E88E5), Color(0xFF0D47A1))
+    ),
+    AvatarBorder(
+        "forest", "Forest", 38,
+        listOf(Color(0xFFAED581), Color(0xFF43A047), Color(0xFF1B5E20))
+    ),
+    AvatarBorder(
+        "candy", "Candy", 41,
+        listOf(Color(0xFFF48FB1), Color(0xFFEC407A), Color(0xFF880E4F))
+    ),
+    // 4 colors
+    AvatarBorder(
+        "treasure", "Treasure", 44,
         listOf(
-            Color(0xFFFFE082), Color(0xFFFFC107),
+            Color(0xFFFFF176), Color(0xFFFFC107),
             Color(0xFFFF8F00), Color(0xFFE65100)
         )
     ),
     AvatarBorder(
-        "prism", "Prism", 30,
+        "aurora", "Aurora", 47,
+        listOf(
+            Color(0xFFA7FFEB), Color(0xFF4DD0E1),
+            Color(0xFF7B1FA2), Color(0xFF311B92)
+        )
+    ),
+    AvatarBorder(
+        "inferno", "Inferno", 50,
+        listOf(
+            Color(0xFFFFD180), Color(0xFFFF7043),
+            Color(0xFFD84315), Color(0xFF3E2723)
+        )
+    ),
+    AvatarBorder(
+        "glacier", "Glacier", 53,
+        listOf(
+            Color(0xFFE1F5FE), Color(0xFF80DEEA),
+            Color(0xFF00838F), Color(0xFF004D40)
+        )
+    ),
+    AvatarBorder(
+        "spring", "Spring", 56,
+        listOf(
+            Color(0xFFF0F4C3), Color(0xFFAED581),
+            Color(0xFF689F38), Color(0xFF33691E)
+        )
+    ),
+    // 5 colors
+    AvatarBorder(
+        "prism", "Prism", 59,
         listOf(
             Color(0xFFFF8A80), Color(0xFFFFD180), Color(0xFFA7FFEB),
             Color(0xFF82B1FF), Color(0xFFEA80FC)
+        )
+    ),
+    AvatarBorder(
+        "spectrum", "Spectrum", 62,
+        listOf(
+            Color(0xFFFF5252), Color(0xFFFFD740), Color(0xFF69F0AE),
+            Color(0xFF40C4FF), Color(0xFFE040FB)
+        )
+    ),
+    AvatarBorder(
+        "nebula", "Nebula", 65,
+        listOf(
+            Color(0xFFEA80FC), Color(0xFF7B1FA2), Color(0xFF29B6F6),
+            Color(0xFFA7FFEB), Color(0xFFFFF176)
+        )
+    ),
+    AvatarBorder(
+        "carnival", "Carnival", 68,
+        listOf(
+            Color(0xFFFF8A80), Color(0xFFFFAB40), Color(0xFFB9F6CA),
+            Color(0xFF84FFFF), Color(0xFFB388FF)
+        )
+    ),
+    AvatarBorder(
+        "eternity", "Eternity", 71,
+        listOf(
+            Color(0xFFD1C4E9), Color(0xFFB39DDB), Color(0xFF90CAF9),
+            Color(0xFF80DEEA), Color(0xFFA5D6A7)
         )
     )
 )
