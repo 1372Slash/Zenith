@@ -26,9 +26,11 @@ import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.CleaningServices
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Colorize
+import androidx.compose.material.icons.outlined.Cyclone
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.DashboardCustomize
 import androidx.compose.material.icons.outlined.DirectionsRun
+import androidx.compose.material.icons.outlined.FilterVintage
 import androidx.compose.material.icons.outlined.Dock
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.EventRepeat
@@ -38,12 +40,14 @@ import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Gavel
 import androidx.compose.material.icons.outlined.Healing
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Hive
 import androidx.compose.material.icons.outlined.Hotel
 import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material.icons.outlined.HourglassFull
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Medication
+import androidx.compose.material.icons.outlined.MilitaryTech
 import androidx.compose.material.icons.outlined.NightsStay
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsOff
@@ -59,7 +63,6 @@ import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material.icons.outlined.PictureInPicture
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.QrCode2
-import androidx.compose.material.icons.outlined.Rocket
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Savings
 import androidx.compose.material.icons.outlined.Security
@@ -68,25 +71,25 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Snooze
 import androidx.compose.material.icons.outlined.Update
-import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.TrackChanges
+import androidx.compose.material.icons.outlined.Token
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.Whatshot
-import androidx.compose.material.icons.outlined.Satellite
 import androidx.compose.ui.graphics.vector.ImageVector
 
 const val PROFILE_XP_PER_LEVEL = 500
 enum class ProfileTier(val value: Int, val icon: ImageVector, val title: String) {
-    I(1, Icons.Outlined.Star, "Star"),
-    V(5, Icons.Outlined.DarkMode, "Moon"),
-    X(10, Icons.Outlined.LightMode, "Sun"),
-    L(50, Icons.Outlined.Rocket, "Rocket"),
-    C(100, Icons.Outlined.Satellite, "Satellite"),
-    D(500, Icons.Outlined.Flag, "Claim"),
-    M(1000, Icons.Outlined.Public, "World");
+    I(1, Icons.Outlined.StarOutline, "Spark"),
+    V(5, Icons.Outlined.Hive, "Nest"),
+    X(10, Icons.Outlined.Token, "Mint"),
+    L(50, Icons.Outlined.Cyclone, "Vortex"),
+    C(100, Icons.Outlined.FilterVintage, "Bloom"),
+    D(500, Icons.Outlined.MilitaryTech, "Valor"),
+    M(1000, Icons.Outlined.EmojiEvents, "Legend");
 
     companion object {
         fun highestAtOrBelow(value: Long): ProfileTier? =
