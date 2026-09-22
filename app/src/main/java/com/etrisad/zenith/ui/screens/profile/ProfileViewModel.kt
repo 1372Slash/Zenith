@@ -154,18 +154,18 @@ class ProfileViewModel(
     fun consumeBanner(key: String) {
         val removed = _pendingBanners.value.filter { it.key == key }
         _pendingBanners.update { list -> list.filterNot { it.key == key } }
-        if (removed.none { it.key in testBannerKeys }) {
+        if (removed.any { it.key in testBannerKeys }) {
             testBannerKeys.remove(key)
-            markBannersSeen(removed.map { bannerDefId(it) })
         } else {
             testBannerKeys.remove(key)
+            markBannersSeen(removed.mapNotNull { seenKeyFor(it) })
         }
     }
 
     fun clearAllBanners() {
         val queued = _pendingBanners.value
         _pendingBanners.update { emptyList() }
-        markBannersSeen(queued.filterNot { it.key in testBannerKeys }.map { bannerDefId(it) })
+        markBannersSeen(queued.filterNot { it.key in testBannerKeys }.mapNotNull { seenKeyFor(it) })
         testBannerKeys.clear()
     }
     fun testUnlockBanner() {
@@ -189,14 +189,30 @@ class ProfileViewModel(
         _pendingBanners.update { it + testEvents }
     }
 
-    private fun bannerDefId(event: ProfileBannerEvent): String = when (event) {
-        is ProfileBannerEvent.Unlock -> event.defId
-        is ProfileBannerEvent.Progress -> event.defId
+    /**
+     * Seen keys are scoped per achievement AND tier band so every new tier
+     * is still celebrated, but the same banner can never repeat:
+     * - unlock: "$defId#u#$tierLevel" (tierLevel = 1-based position)
+     * - progress: "$defId#p#$band" where band = tiers earned so far
+     *   (i.e. one progress banner per approach toward the next tier).
+     */
+    private fun unlockSeenKey(defId: String, tierLevel: Int) = "$defId#u#$tierLevel"
+
+    private fun progressSeenKey(defId: String, band: Int) = "$defId#p#$band"
+
+    private fun seenKeyFor(event: ProfileBannerEvent): String? = when (event) {
+        is ProfileBannerEvent.Unlock -> unlockSeenKey(event.defId, event.tierLevel)
+        is ProfileBannerEvent.Progress -> {
+            val band = _uiState.value.achievements.find { it.def.id == event.defId }?.earnedLevel
+                ?: return null
+            progressSeenKey(event.defId, band)
+        }
     }
 
     /**
-     * Persists banner-seen ids so each achievement notifies at most once
-     * ever: re-entry, resume, and Clear all can never resurrect it.
+     * Persists banner-seen keys so the same banner never shows twice:
+     * re-entry, resume, and Clear all can never resurrect it, while a
+     * newly reached tier still earns its own celebration.
      */
     private fun markBannersSeen(defIds: List<String>) {
         val fresh = defIds.filter { it.isNotBlank() }.toSet()
@@ -631,7 +647,7 @@ class ProfileViewModel(
         return try {
             val prefsSnapshot = userPreferencesRepository.userPreferencesFlow.first()
             val rawBefore = prefsSnapshot.achievementHistory
-            // Ids whose banner already showed once ever — never enqueue again.
+            // Per-tier banner keys already shown — never enqueue the same one again.
             val seen = decodeSeen(prefsSnapshot.achievementBannersSeen).toMutableSet()
             var seenChanged = false
             // First run seeds the baseline silently so existing progress
@@ -686,8 +702,9 @@ class ProfileViewModel(
                                     prevLevel = level - 1
                                 )
                             )
-                            if (state.def.id !in seenAtStart) {
-                                if (seen.add(state.def.id)) seenChanged = true
+                            val unlockKey = unlockSeenKey(state.def.id, level)
+                            if (unlockKey !in seenAtStart) {
+                                if (seen.add(unlockKey)) seenChanged = true
                                 freshBannerUnlocks.add(
                                     ProfileBannerEvent.Unlock(
                                         defId = state.def.id,
@@ -753,10 +770,11 @@ class ProfileViewModel(
                     lastVals[state.def.id] = state.current
                     changed = true
                 }
+                val progressKey = progressSeenKey(state.def.id, state.earnedLevel)
                 if (last != null && state.current > last && state.def.id !in newlyTieredIds &&
-                    state.def.id !in seen
+                    progressKey !in seen
                 ) {
-                    seen.add(state.def.id)
+                    seen.add(progressKey)
                     seenChanged = true
                     events.add(
                         ProfileBannerEvent.Progress(
