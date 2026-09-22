@@ -847,7 +847,10 @@ private fun ProfileIdentityCard(
                     .then(
                         if (equippedBorder != null) {
                             Modifier
-                                .border(4.dp, borderBrushFor(equippedBorder), CircleShape)
+                                .avatarRing(
+                                    equippedBorder, 4.dp,
+                                    SolidColor(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                                )
                                 .padding(4.dp)
                         } else {
                             Modifier

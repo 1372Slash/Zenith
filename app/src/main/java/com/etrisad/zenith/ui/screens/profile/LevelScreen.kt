@@ -114,14 +114,11 @@ fun LevelScreen(
                         Box(
                             modifier = Modifier
                                 .size(72.dp)
-                                .border(
-                                    3.dp,
-                                    AVATAR_BORDERS.find { it.id == equippedBorderId }
-                                        ?.let { borderBrushFor(it) }
-                                        ?: SolidColor(
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                                        ),
-                                    CircleShape
+                                .avatarRing(
+                                    AVATAR_BORDERS.find { it.id == equippedBorderId }, 3.dp,
+                                    SolidColor(
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                    )
                                 )
                                 .padding(3.dp)
                                 .background(MaterialTheme.colorScheme.primary, CircleShape),
@@ -318,13 +315,20 @@ fun LevelScreen(
                                     Box(
                                         modifier = Modifier
                                             .size(40.dp)
-                                            .border(
-                                                4.dp,
-                                                if (unlocked) borderBrushFor(border)
-                                                else SolidColor(
-                                                    MaterialTheme.colorScheme.surfaceContainerHighest
-                                                ),
-                                                CircleShape
+                                            .then(
+                                                if (unlocked) Modifier.avatarRing(
+                                                    border, 4.dp,
+                                                    SolidColor(
+                                                        MaterialTheme.colorScheme.surfaceContainerHighest
+                                                    )
+                                                )
+                                                else Modifier.border(
+                                                    4.dp,
+                                                    SolidColor(
+                                                        MaterialTheme.colorScheme.surfaceContainerHighest
+                                                    ),
+                                                    CircleShape
+                                                )
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {

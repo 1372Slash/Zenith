@@ -199,11 +199,19 @@ data class LevelTitle(val id: String, val name: String, val requiredLevel: Int)
  * Level milestone avatar borders. Owned automatically once the level is
  * reached, equipped manually — drawn as a ring around the profile avatar.
  */
+/**
+ * Special animated effect for pinnacle rings. NONE is static, SPIN slowly
+ * rotates the gradient around the ring, SHINE sweeps a highlight arc over
+ * a solid ring.
+ */
+enum class BorderEffect { NONE, SPIN, SHINE }
+
 data class AvatarBorder(
     val id: String,
     val name: String,
     val requiredLevel: Int,
-    val colors: List<Color>
+    val colors: List<Color>,
+    val effect: BorderEffect = BorderEffect.NONE
 )
 
 val LEVEL_TITLES = listOf(
@@ -231,13 +239,13 @@ val AVATAR_BORDERS = listOf(
     AvatarBorder("tide", "Tide", 5, listOf(Color(0xFF29B6F6))),
     AvatarBorder("leaf", "Leaf", 7, listOf(Color(0xFF66BB6A))),
     AvatarBorder("violet", "Violet", 9, listOf(Color(0xFF7E57C2))),
-    AvatarBorder("rose", "Rose", 11, listOf(Color(0xFFEC407A))),
+    AvatarBorder("rose", "Rose", 11, listOf(Color(0xFFEC407A)), BorderEffect.SHINE),
     // 2 colors
     AvatarBorder("moss", "Moss", 14, listOf(Color(0xFF9CCC65), Color(0xFF2E7D32))),
     AvatarBorder("gold", "Gold", 17, listOf(Color(0xFFFFE082), Color(0xFFFF8F00))),
     AvatarBorder("frost", "Frost", 20, listOf(Color(0xFF80DEEA), Color(0xFF00838F))),
     AvatarBorder("magma", "Magma", 23, listOf(Color(0xFFFF8A65), Color(0xFFBF360C))),
-    AvatarBorder("lagoon", "Lagoon", 26, listOf(Color(0xFF4DD0E1), Color(0xFF0D47A1))),
+    AvatarBorder("lagoon", "Lagoon", 26, listOf(Color(0xFF4DD0E1), Color(0xFF0D47A1)), BorderEffect.SPIN),
     // 3 colors
     AvatarBorder(
         "dusk", "Dusk", 29,
@@ -257,7 +265,8 @@ val AVATAR_BORDERS = listOf(
     ),
     AvatarBorder(
         "candy", "Candy", 41,
-        listOf(Color(0xFFF48FB1), Color(0xFFEC407A), Color(0xFF880E4F))
+        listOf(Color(0xFFF48FB1), Color(0xFFEC407A), Color(0xFF880E4F)),
+        BorderEffect.SPIN
     ),
     // 4 colors
     AvatarBorder(
@@ -293,7 +302,8 @@ val AVATAR_BORDERS = listOf(
         listOf(
             Color(0xFFF0F4C3), Color(0xFFAED581),
             Color(0xFF689F38), Color(0xFF33691E)
-        )
+        ),
+        BorderEffect.SPIN
     ),
     // 5 colors
     AvatarBorder(
@@ -329,7 +339,8 @@ val AVATAR_BORDERS = listOf(
         listOf(
             Color(0xFFD1C4E9), Color(0xFFB39DDB), Color(0xFF90CAF9),
             Color(0xFF80DEEA), Color(0xFFA5D6A7)
-        )
+        ),
+        BorderEffect.SPIN
     )
 )
 

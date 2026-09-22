@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.Orientation
@@ -87,7 +88,7 @@ import com.etrisad.zenith.ui.screens.profile.AchievementUnlockBanner
 import com.etrisad.zenith.ui.screens.profile.AVATAR_BORDERS
 import com.etrisad.zenith.ui.screens.profile.AchievementsScreen
 import com.etrisad.zenith.ui.screens.profile.LevelScreen
-import com.etrisad.zenith.ui.screens.profile.borderBrushFor
+import com.etrisad.zenith.ui.screens.profile.avatarRing
 import com.etrisad.zenith.ui.screens.profile.PendingUnlock
 import com.etrisad.zenith.ui.screens.profile.ProfileBannerEvent
 import com.etrisad.zenith.ui.screens.profile.ProfileScreen
@@ -685,10 +686,11 @@ fun MainScreen(
                                                             .then(
                                                                 if (headerBorder != null) {
                                                                     Modifier
-                                                                        .border(
-                                                                            2.dp,
-                                                                            borderBrushFor(headerBorder),
-                                                                            CircleShape
+                                                                        .avatarRing(
+                                                                            headerBorder, 2.dp,
+                                                                            SolidColor(
+                                                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                                                            )
                                                                         )
                                                                         .padding(2.dp)
                                                                 } else {

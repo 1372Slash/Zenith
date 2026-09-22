@@ -339,7 +339,8 @@ object FeatureInfoRegistry {
                 "Level milestones unlock titles and avatar borders you can equip from the card rows."
             ),
             FeatureInfoSections.whatYoullSee(
-                "Titles from Initiate up to Zenith, and avatar rings growing from 1 solid color to a 5-color gradient.",
+                "Titles from Initiate up to Infinite, and avatar rings growing from 1 solid color to a 5-color gradient.",
+                "The 5th ring of each color group is animated: Rose shines, Lagoon, Candy, Spring, and Eternity spin.",
                 "Unlocked rewards turn primary-colored; locked ones stay neutral until their level is reached.",
                 "Daily XP history with saved screen time per day."
             ),
