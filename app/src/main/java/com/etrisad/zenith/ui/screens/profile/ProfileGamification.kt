@@ -216,15 +216,27 @@ val LEVEL_TITLES = listOf(
     LevelTitle("zenith", "Zenith", 30)
 )
 
+/**
+ * Avatar borders, escalating in color count with level: early rings are a
+ * single color, higher rings blend 2, 3, 4, then 5 colors as a gradient.
+ */
 val AVATAR_BORDERS = listOf(
-    AvatarBorder("ember", "Ember", 3, listOf(Color(0xFFFF7043), Color(0xFFFFCA28))),
-    AvatarBorder("tide", "Tide", 7, listOf(Color(0xFF4FC3F7), Color(0xFF1E88E5))),
+    AvatarBorder("ember", "Ember", 3, listOf(Color(0xFFFF7043))),
+    AvatarBorder("tide", "Tide", 7, listOf(Color(0xFF29B6F6))),
     AvatarBorder("moss", "Moss", 12, listOf(Color(0xFF9CCC65), Color(0xFF2E7D32))),
-    AvatarBorder("dusk", "Dusk", 17, listOf(Color(0xFFB39DDB), Color(0xFF4527A0))),
-    AvatarBorder("gold", "Gold", 22, listOf(Color(0xFFFFE082), Color(0xFFFF8F00))),
-    AvatarBorder("frost", "Frost", 27, listOf(Color(0xFF80DEEA), Color(0xFF00838F))),
     AvatarBorder(
-        "prism", "Prism", 35,
+        "dusk", "Dusk", 17,
+        listOf(Color(0xFFCE93D8), Color(0xFF7B1FA2), Color(0xFF311B92))
+    ),
+    AvatarBorder(
+        "gold", "Gold", 22,
+        listOf(
+            Color(0xFFFFE082), Color(0xFFFFC107),
+            Color(0xFFFF8F00), Color(0xFFE65100)
+        )
+    ),
+    AvatarBorder(
+        "prism", "Prism", 30,
         listOf(
             Color(0xFFFF8A80), Color(0xFFFFD180), Color(0xFFA7FFEB),
             Color(0xFF82B1FF), Color(0xFFEA80FC)
@@ -242,7 +254,7 @@ fun nextLevelReward(level: Int): Pair<Int, String>? {
 
 fun borderBrushFor(border: AvatarBorder): Brush =
     if (border.colors.size == 1) SolidColor(border.colors.first())
-    else Brush.linearGradient(border.colors)
+    else Brush.sweepGradient(border.colors + border.colors.first())
 
 enum class AchievementCategory { EXPLORER, ACCUMULATION }
 

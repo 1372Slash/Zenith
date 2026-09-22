@@ -176,7 +176,8 @@ fun ProfileScreen(
     preferencesRepository: UserPreferencesRepository,
     innerPadding: PaddingValues,
     onAppClick: (String) -> Unit,
-    onSeeAllAchievements: () -> Unit = {}
+    onSeeAllAchievements: () -> Unit = {},
+    onOpenLevel: () -> Unit = {}
 ) {
     val state by profileViewModel.uiState.collectAsState()
     val preferences by preferencesRepository.userPreferencesFlow.collectAsState(
@@ -190,7 +191,6 @@ fun ProfileScreen(
     var isSharing by remember { mutableStateOf(false) }
     var isEditing by rememberSaveable { mutableStateOf(false) }
     var selectedAchId by remember { mutableStateOf<String?>(null) }
-    var showXpSheet by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { profileViewModel.refresh() }
 
     val avatarPicker = rememberLauncherForActivityResult(
@@ -295,24 +295,7 @@ fun ProfileScreen(
                     xpTotal = state.xpTotal,
                     unlockedBadges = unlockedBadges,
                     totalBadges = state.achievements.size,
-                    onClick = { showXpSheet = true }
-                )
-            }
-        }
-
-        item(key = "rewards") {
-            Column {
-                PreferenceCategory(title = "Level Rewards")
-                LevelRewardsCard(
-                    level = state.level,
-                    equippedTitleId = preferences.userTitle,
-                    equippedBorderId = preferences.userAvatarBorder,
-                    onEquipTitle = { id ->
-                        scope.launch { preferencesRepository.setUserTitle(id) }
-                    },
-                    onEquipBorder = { id ->
-                        scope.launch { preferencesRepository.setUserAvatarBorder(id) }
-                    }
+                    onClick = onOpenLevel
                 )
             }
         }
@@ -537,16 +520,6 @@ fun ProfileScreen(
         }
     }
 
-    if (showXpSheet) {
-        XpDetailSheet(
-            level = state.level,
-            xpTotal = state.xpTotal,
-            xpHistory = state.xpHistory,
-            totalSavedMillis = state.totalSavedMillis,
-            formatDuration = homeViewModel::formatLongDuration,
-            onDismiss = { showXpSheet = false }
-        )
-    }
 }
 
 @Composable
@@ -1254,7 +1227,7 @@ private fun XpCard(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "$xpToNext XP to Level ${level + 1} - tap for details",
+                text = "$xpToNext XP to Level ${level + 1} - tap to open Level",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -1270,226 +1243,9 @@ private fun XpCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun XpDetailSheet(
-    level: Int,
-    xpTotal: Long,
-    xpHistory: List<XpDay>,
-    totalSavedMillis: Long,
-    formatDuration: (Long) -> String,
-    onDismiss: () -> Unit
-) {
-    var showRules by remember { mutableStateOf(false) }
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .navigationBarsPadding()
-                .padding(bottom = 32.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "$level",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Level $level",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Black
-                    )
-                    Text(
-                        text = "$xpTotal XP total - saved ${formatDuration(totalSavedMillis)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(onClick = { showRules = !showRules }) {
-                    Icon(
-                        imageVector = Icons.Outlined.Info,
-                        contentDescription = "How XP works",
-                        tint = if (showRules) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            AnimatedVisibility(
-                visible = showRules,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                Column {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Shields earn XP for staying under the limit " +
-                            "(less usage = more XP, over the limit = 0). Goals earn " +
-                            "XP for reaching the target, plus a bonus for going over. " +
-                            "XP is awarded once per day. Each level needs more XP " +
-                            "than the last, and level milestones unlock titles " +
-                            "and avatar borders you can equip below.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(
-                text = "Daily XP",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            if (xpHistory.isEmpty()) {
-                Text(
-                    text = "No XP recorded yet - check back tomorrow",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    xpHistory.forEach { day ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = prettyProfileDate(day.date),
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                text = "saved ${formatDuration(day.savedMillis)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(end = 12.dp)
-                            )
-                            Text(
-                                text = "+${day.xp} XP",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Black,
-                                color = MaterialTheme.colorScheme.tertiary
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
-private fun LevelRewardsCard(
-    level: Int,
-    equippedTitleId: String,
-    equippedBorderId: String,
-    onEquipTitle: (String) -> Unit,
-    onEquipBorder: (String) -> Unit
-) {
-    Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = "Titles",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            LEVEL_TITLES.forEach { title ->
-                val unlocked = level >= title.requiredLevel
-                val equipped = equippedTitleId == title.id && unlocked
-                RewardRow(
-                    name = title.name,
-                    requirement = "Level ${title.requiredLevel}",
-                    unlocked = unlocked,
-                    equipped = equipped,
-                    leading = {
-                        Icon(
-                            imageVector = Icons.Outlined.WorkspacePremium,
-                            contentDescription = null,
-                            tint = if (unlocked) MaterialTheme.colorScheme.tertiary
-                            else MaterialTheme.colorScheme.outline,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    },
-                    onClick = { onEquipTitle(if (equipped) "" else title.id) }
-                )
-            }
-            HorizontalDivider(
-                thickness = 0.5.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
-            Text(
-                text = "Avatar Borders",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            AVATAR_BORDERS.forEach { border ->
-                val unlocked = level >= border.requiredLevel
-                val equipped = equippedBorderId == border.id && unlocked
-                RewardRow(
-                    name = border.name,
-                    requirement = "Level ${border.requiredLevel}",
-                    unlocked = unlocked,
-                    equipped = equipped,
-                    leading = {
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .border(
-                                    3.dp,
-                                    if (unlocked) borderBrushFor(border)
-                                    else SolidColor(
-                                        MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                                    ),
-                                    CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (!unlocked) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Lock,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.outline,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                            }
-                        }
-                    },
-                    onClick = { onEquipBorder(if (equipped) "" else border.id) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RewardRow(
+fun RewardRow(
     name: String,
     requirement: String,
     unlocked: Boolean,
@@ -2031,7 +1787,7 @@ fun AchievementProgressBanner(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "$beforeLabel → $afterLabel",
+                    text = "$beforeLabel â†’ $afterLabel",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1

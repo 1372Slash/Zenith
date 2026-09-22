@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -40,8 +41,11 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import kotlin.math.roundToInt
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -80,7 +84,10 @@ import com.etrisad.zenith.ui.screens.graceperiod.GracePeriodScreen
 import com.etrisad.zenith.ui.screens.pomodoro.PomodoroScreen
 import com.etrisad.zenith.ui.screens.profile.AchievementProgressBanner
 import com.etrisad.zenith.ui.screens.profile.AchievementUnlockBanner
+import com.etrisad.zenith.ui.screens.profile.AVATAR_BORDERS
 import com.etrisad.zenith.ui.screens.profile.AchievementsScreen
+import com.etrisad.zenith.ui.screens.profile.LevelScreen
+import com.etrisad.zenith.ui.screens.profile.borderBrushFor
 import com.etrisad.zenith.ui.screens.profile.PendingUnlock
 import com.etrisad.zenith.ui.screens.profile.ProfileBannerEvent
 import com.etrisad.zenith.ui.screens.profile.ProfileScreen
@@ -222,6 +229,7 @@ fun MainScreen(
                 currentRoute == Screen.Pomodoro.route ||
                 currentRoute == Screen.Profile.route ||
                 currentRoute == Screen.Achievements.route ||
+                currentRoute == Screen.Level.route ||
                 currentRoute == Screen.PausePoint.route ||
                 currentRoute == Screen.PausePointQr.route ||
                 currentRoute?.startsWith("pause_point_type") == true ||
@@ -256,6 +264,13 @@ fun MainScreen(
 
     val homeUiState by homeViewModel.uiState.collectAsState()
     val focusUiState by focusViewModel.uiState.collectAsState()
+    val headerProfile by profileViewModel.uiState.collectAsState()
+    val headerBorder = remember(
+        preferences.userAvatarBorder, headerProfile.level
+    ) {
+        AVATAR_BORDERS.find { it.id == preferences.userAvatarBorder }
+            ?.takeIf { it.requiredLevel <= headerProfile.level }
+    }
 
     val useNavigationRail = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
 
@@ -444,6 +459,7 @@ fun MainScreen(
                     currentRoute != Screen.Pomodoro.route &&
                     currentRoute != Screen.Profile.route &&
                     currentRoute != Screen.Achievements.route &&
+                    currentRoute != Screen.Level.route &&
                     currentRoute != Screen.PausePoint.route &&
                     currentRoute != Screen.PausePointQr.route &&
                     currentRoute?.startsWith("pause_point_type") == false &&
@@ -640,11 +656,49 @@ fun MainScreen(
                                             onClick = { navController.navigate(Screen.Profile.route) },
                                             modifier = Modifier.padding(end = 12.dp).size(48.dp).clip(CircleShape)
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.AccountCircle,
-                                                contentDescription = "User Profile",
-                                                modifier = Modifier.size(24.dp)
-                                            )
+                                            if (preferences.userAvatarUri.isEmpty()) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.AccountCircle,
+                                                    contentDescription = "User Profile",
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                            } else {
+                                                var headerImgError by remember(preferences.userAvatarUri) {
+                                                    mutableStateOf(false)
+                                                }
+                                                if (headerImgError) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.AccountCircle,
+                                                        contentDescription = "User Profile",
+                                                        modifier = Modifier.size(24.dp)
+                                                    )
+                                                } else {
+                                                    AsyncImage(
+                                                        model = ImageRequest.Builder(context)
+                                                            .data(preferences.userAvatarUri)
+                                                            .crossfade(300).build(),
+                                                        contentDescription = "User Profile",
+                                                        contentScale = ContentScale.Crop,
+                                                        onError = { headerImgError = true },
+                                                        modifier = Modifier
+                                                            .size(32.dp)
+                                                            .then(
+                                                                if (headerBorder != null) {
+                                                                    Modifier
+                                                                        .border(
+                                                                            2.dp,
+                                                                            borderBrushFor(headerBorder),
+                                                                            CircleShape
+                                                                        )
+                                                                        .padding(2.dp)
+                                                                } else {
+                                                                    Modifier
+                                                                }
+                                                            )
+                                                            .clip(CircleShape)
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -833,6 +887,7 @@ fun MainScreen(
                                     targetRoute == Screen.Pomodoro.route ||
                                     targetRoute == Screen.Profile.route ||
                                     targetRoute == Screen.Achievements.route ||
+                            targetRoute == Screen.Level.route ||
                                     targetRoute == Screen.PausePoint.route ||
                                     targetRoute == Screen.PausePointQr.route ||
                                     targetRoute?.startsWith("pause_point_type") == true ||
@@ -854,6 +909,7 @@ fun MainScreen(
                                     initialRoute == Screen.Pomodoro.route ||
                                     initialRoute == Screen.Profile.route ||
                                     initialRoute == Screen.Achievements.route ||
+                            initialRoute == Screen.Level.route ||
                                     initialRoute == Screen.PausePoint.route ||
                                     initialRoute == Screen.PausePointQr.route ||
                                     initialRoute?.startsWith("pause_point_type") == true ||
@@ -907,6 +963,7 @@ fun MainScreen(
                                     targetRoute == Screen.Pomodoro.route ||
                                     targetRoute == Screen.Profile.route ||
                                     targetRoute == Screen.Achievements.route ||
+                            targetRoute == Screen.Level.route ||
                                     targetRoute == Screen.PausePoint.route ||
                                     targetRoute == Screen.PausePointQr.route ||
                                     targetRoute?.startsWith("pause_point_type") == true ||
@@ -929,6 +986,7 @@ fun MainScreen(
                                     initialRoute == Screen.Pomodoro.route ||
                                     initialRoute == Screen.Profile.route ||
                                     initialRoute == Screen.Achievements.route ||
+                            initialRoute == Screen.Level.route ||
                                     initialRoute == Screen.PausePoint.route ||
                                     initialRoute == Screen.PausePointQr.route ||
                                     initialRoute?.startsWith("pause_point_type") == true ||
@@ -1090,7 +1148,17 @@ fun MainScreen(
                             },
                             onSeeAllAchievements = {
                                 navController.navigate(Screen.Achievements.route)
+                            },
+                            onOpenLevel = {
+                                navController.navigate(Screen.Level.route)
                             }
+                        )
+                    }
+                    composable(Screen.Level.route) {
+                        LevelScreen(
+                            profileViewModel = profileViewModel,
+                            preferencesRepository = userPreferencesRepository,
+                            innerPadding = innerPadding
                         )
                     }
                     composable(
@@ -1257,6 +1325,7 @@ fun MainScreen(
                             currentRoute != Screen.Pomodoro.route &&
                             currentRoute != Screen.Profile.route &&
                             currentRoute != Screen.Achievements.route &&
+                    currentRoute != Screen.Level.route &&
                             currentRoute != Screen.PausePoint.route &&
                             currentRoute != Screen.PausePointQr.route &&
                             currentRoute?.startsWith("pause_point_type") == false &&

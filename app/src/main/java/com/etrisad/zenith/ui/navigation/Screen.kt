@@ -87,6 +87,9 @@ sealed class Screen(
             if (highlightId.isNullOrBlank()) "achievements"
             else "achievements?highlightId=$highlightId"
     }
+
+    object Level :
+        Screen("level", "Level", Icons.Filled.EmojiEvents, Icons.Outlined.EmojiEvents)
 }
 
 val navItems = listOf(
