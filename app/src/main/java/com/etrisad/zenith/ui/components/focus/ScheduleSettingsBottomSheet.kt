@@ -67,8 +67,19 @@ fun ScheduleSettingsBottomSheet(
     var linkedGoalPackageName by remember { mutableStateOf(editingSchedule?.linkedGoalPackageName ?: "") }
     var activeDays by remember { mutableStateOf(editingSchedule?.activeDays ?: setOf(1, 2, 3, 4, 5, 6, 7)) }
 
-    val initialStart = editingSchedule?.startTime?.split(":")?.map { it.toInt() } ?: listOf(9, 0)
-    val initialEnd = editingSchedule?.endTime?.split(":")?.map { it.toInt() } ?: listOf(17, 0)
+    fun parseTimeOrDefault(raw: String?, defHour: Int, defMin: Int): List<Int> {
+        return try {
+            val parts = raw?.split(":")?.map { it.trim().toIntOrNull() } ?: return listOf(defHour, defMin)
+            if (parts.size != 2 || parts[0] == null || parts[1] == null) return listOf(defHour, defMin)
+            val h = (parts[0] ?: defHour).coerceIn(0, 23)
+            val m = (parts[1] ?: defMin).coerceIn(0, 59)
+            listOf(h, m)
+        } catch (_: Exception) {
+            listOf(defHour, defMin)
+        }
+    }
+    val initialStart = parseTimeOrDefault(editingSchedule?.startTime, 9, 0)
+    val initialEnd = parseTimeOrDefault(editingSchedule?.endTime, 17, 0)
 
     val startTimeState = rememberTimePickerState(initialHour = initialStart[0], initialMinute = initialStart[1], is24Hour = true)
     val endTimeState = rememberTimePickerState(initialHour = initialEnd[0], initialMinute = initialEnd[1], is24Hour = true)

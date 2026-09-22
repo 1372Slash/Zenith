@@ -252,13 +252,14 @@ class ShieldRepository(
     }
 
     suspend fun getShieldByPackageName(packageName: String): ShieldEntity? {
-        val cached = _allShieldsCache.value.find { it.packageName == packageName }
-        if (cached != null) return cached
-
-        if (_allShieldsCache.value.isEmpty()) {
-            return shieldDao.getShieldByPackageName(packageName)
+        _allShieldsCache.value.find { it.packageName == packageName }?.let { return it }
+        // Cache may lag behind Room (debounce / fresh REPLACE). Always fall
+        // back to DAO so callers never see a false-null right after insert.
+        return try {
+            shieldDao.getShieldByPackageName(packageName)
+        } catch (_: Exception) {
+            null
         }
-        return null
     }
 
     suspend fun insertShield(shield: ShieldEntity) {

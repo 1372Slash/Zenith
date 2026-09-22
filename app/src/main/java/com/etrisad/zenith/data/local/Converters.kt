@@ -10,7 +10,8 @@ class Converters {
 
     @TypeConverter
     fun toList(data: String): List<String> {
-        return if (data.isEmpty()) emptyList() else data.split(",")
+        if (data.isBlank()) return emptyList()
+        return data.split(",").map { it.trim() }.filter { it.isNotEmpty() }
     }
 
     @TypeConverter
@@ -20,7 +21,12 @@ class Converters {
 
     @TypeConverter
     fun toIntSet(data: String): Set<Int> {
-        return if (data.isEmpty()) emptySet() else data.split(",").map { it.toInt() }.toSet()
+        if (data.isBlank()) return setOf(1, 2, 3, 4, 5, 6, 7)
+        val parsed = data.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
+        // Never return empty for a corrupt row: a corrupt activeDays must not
+        // wipe the Flow (which would freeze shields/schedules UI). Fall back
+        // to all-days so the row stays visible and editable.
+        return parsed.ifEmpty { setOf(1, 2, 3, 4, 5, 6, 7) }
     }
 
     @TypeConverter

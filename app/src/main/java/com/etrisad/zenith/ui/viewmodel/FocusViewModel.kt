@@ -433,23 +433,52 @@ class FocusViewModel(
     }
 
     fun selectAppForFocus(app: AppInfo?, type: FocusType) {
-        viewModelScope.launch {
-            val usage = if (app != null) {
-                withContext(Dispatchers.IO) {
-                    getUsageTodayForPackage(app.packageName)
-                }
-            } else 0L
-
+        // Sync the picker type immediately so FAB -> picker -> onAppSelected
+        // can never read a stale selectedFocusType (race that saved Shield
+        // as Goal and vice versa).
+        if (app == null) {
             _uiState.update {
                 it.copy(
-                    selectedAppForFocus = app,
+                    selectedAppForFocus = null,
                     selectedFocusType = type,
-                    isSettingsSheetOpen = app != null,
-                    selectedAppUsageToday = usage,
+                    isSettingsSheetOpen = false,
+                    selectedAppUsageToday = 0L,
+                    selectedWebsiteUrl = null,
+                    // Fresh picker: stale query from a previous search would
+                    // filter everything out and look like "cannot add".
+                    searchQuery = "",
+                    websiteSearchQuery = "",
+                    websiteSuggestions = emptyList(),
+                    websiteSuggestionsLoading = false,
                     isSchedulePickerOpen = false,
                     isScheduleSettingsOpen = false
                 )
             }
+            return
+        }
+        // Open the settings sheet instantly with a placeholder usage, then
+        // refresh the real usage async. Previously the sheet only opened
+        // AFTER the UsageStats query, so a slow/denied query left the user
+        // staring at a closed picker with no feedback (looked blocked).
+        _uiState.update {
+            it.copy(
+                selectedAppForFocus = app,
+                selectedFocusType = type,
+                isSettingsSheetOpen = true,
+                selectedAppUsageToday = 0L,
+                isSchedulePickerOpen = false,
+                isScheduleSettingsOpen = false
+            )
+        }
+        viewModelScope.launch {
+            val usage = try {
+                withContext(Dispatchers.IO) {
+                    getUsageTodayForPackage(app.packageName)
+                }
+            } catch (_: Exception) {
+                0L
+            }
+            _uiState.update { it.copy(selectedAppUsageToday = usage) }
         }
     }
 
@@ -458,7 +487,13 @@ class FocusViewModel(
             isSchedulePickerOpen = true,
             selectedAppsForSchedule = if (resetSelection) emptySet() else _uiState.value.selectedAppsForSchedule,
             isSettingsSheetOpen = false,
-            editingSchedule = if (resetSelection) null else _uiState.value.editingSchedule
+            editingSchedule = if (resetSelection) null else _uiState.value.editingSchedule,
+            // Stale app-search query carried from the shield/goal picker
+            // would filter the schedule picker to empty (looks blocked).
+            searchQuery = "",
+            websiteSearchQuery = "",
+            websiteSuggestions = emptyList(),
+            websiteSuggestionsLoading = false
         )
     }
 
@@ -487,7 +522,7 @@ class FocusViewModel(
     }
 
     fun closeSchedulePicker() {
-        _uiState.value = _uiState.value.copy(isSchedulePickerOpen = false, pickerTab = PickerTab.APPS, websiteSearchQuery = "", websiteSuggestions = emptyList(), websiteSuggestionsLoading = false)
+        _uiState.value = _uiState.value.copy(isSchedulePickerOpen = false, pickerTab = PickerTab.APPS, searchQuery = "", websiteSearchQuery = "", websiteSuggestions = emptyList(), websiteSuggestionsLoading = false)
     }
 
     fun closeScheduleSettings() {
@@ -540,7 +575,7 @@ class FocusViewModel(
                     endTime = endTime,
                     mode = mode,
                     interceptNotifications = interceptNotifications,
-                    emergencyUseCount = maxEmergencyUses,
+                    emergencyUseCount = 0,
                     maxEmergencyUses = maxEmergencyUses,
                     linkedGoalPackageName = linkedGoalPackageName,
                     activeDays = activeDays
@@ -563,9 +598,13 @@ class FocusViewModel(
     }
 
     private fun getUsageTodayForPackage(packageName: String): Long {
-        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
-        val accurateUsageMap = com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usm, dayStartHour = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartHour, dayStartMinute = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartMinute)
-        return accurateUsageMap[packageName] ?: 0L
+        return try {
+            val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
+            val accurateUsageMap = com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usm, dayStartHour = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartHour, dayStartMinute = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartMinute)
+            accurateUsageMap[packageName] ?: 0L
+        } catch (_: Exception) {
+            0L
+        }
     }
 
     fun closeSettingsSheet() {
@@ -623,7 +662,7 @@ class FocusViewModel(
                     type = type,
                     timeLimitMinutes = timeLimitMinutes,
                     limitPeriod = limitPeriod,
-                    emergencyUseCount = existing?.emergencyUseCount ?: (if (type == FocusType.SHIELD) maxEmergencyUses else 0),
+                    emergencyUseCount = existing?.emergencyUseCount ?: 0,
                     maxEmergencyUses = if (type == FocusType.SHIELD) maxEmergencyUses else 0,
                     isRemindersEnabled = isRemindersEnabled,
                     isStrictModeEnabled = if (type == FocusType.SHIELD) isStrictModeEnabled else false,
@@ -674,19 +713,24 @@ class FocusViewModel(
     }
 
     fun editShield(shield: ShieldEntity) {
+        val appInfo = AppInfo(shield.packageName, shield.appName)
+        _uiState.update {
+            it.copy(
+                selectedAppForFocus = appInfo,
+                selectedFocusType = shield.type,
+                isSettingsSheetOpen = true,
+                selectedAppUsageToday = 0L
+            )
+        }
         viewModelScope.launch {
-            val appInfo = AppInfo(shield.packageName, shield.appName)
-            val usage = withContext(Dispatchers.IO) {
-                getUsageTodayForPackage(shield.packageName)
+            val usage = try {
+                withContext(Dispatchers.IO) {
+                    getUsageTodayForPackage(shield.packageName)
+                }
+            } catch (_: Exception) {
+                0L
             }
-            _uiState.update {
-                it.copy(
-                    selectedAppForFocus = appInfo,
-                    selectedFocusType = shield.type,
-                    isSettingsSheetOpen = true,
-                    selectedAppUsageToday = usage
-                )
-            }
+            _uiState.update { it.copy(selectedAppUsageToday = usage) }
         }
     }
 

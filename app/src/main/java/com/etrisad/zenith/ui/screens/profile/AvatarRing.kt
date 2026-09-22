@@ -48,6 +48,11 @@ fun Modifier.avatarRing(
             )
             then(
                 Modifier.drawWithContent {
+                    // Must draw the wrapped content first, otherwise the
+                    // animated ring replaces the avatar/level content and the
+                    // profile picture disappears whenever a SPIN border is
+                    // equipped.
+                    drawContent()
                     val stroke = width.toPx()
                     val radius = (size.minDimension - stroke) / 2f
                     rotate(angle) {

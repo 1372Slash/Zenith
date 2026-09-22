@@ -1738,7 +1738,7 @@ fun AchievementProgressBanner(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "$beforeLabel ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ $afterLabel",
+                    text = "$beforeLabel → $afterLabel",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1

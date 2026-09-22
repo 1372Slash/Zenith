@@ -38,6 +38,8 @@ class ShieldOperationsManager(
                 val periodChanged = existing != null && existing.limitPeriod != limitPeriod
                 val newRemainingMillis = if (periodChanged) timeLimitMinutes * 60 * 1000L else (existing?.remainingTimeMillis ?: (timeLimitMinutes * 60 * 1000L))
                 val shield = existing?.copy(
+                    appName = appName,
+                    type = type,
                     timeLimitMinutes = timeLimitMinutes, limitPeriod = limitPeriod,
                     remainingTimeMillis = newRemainingMillis, maxEmergencyUses = maxEmergencyUses,
                     isRemindersEnabled = isRemindersEnabled, isStrictModeEnabled = isStrictModeEnabled,
