@@ -198,10 +198,10 @@ fun LevelScreen(
                                 enabled = unlocked,
                                 shape = rewardGroupShape(index, LEVEL_TITLES.size, equipped),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = when {
-                                        equipped -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
-                                        unlocked -> MaterialTheme.colorScheme.surfaceContainerHigh
-                                        else -> MaterialTheme.colorScheme.surfaceContainerLow
+                                    containerColor = if (equipped) {
+                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceContainerHigh
                                     }
                                 ),
                                 modifier = Modifier.width(124.dp).aspectRatio(0.78f)
@@ -216,7 +216,7 @@ fun LevelScreen(
                                             .clip(CircleShape)
                                             .background(
                                                 if (unlocked) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                                else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
+                                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -234,11 +234,8 @@ fun LevelScreen(
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
                                         textAlign = TextAlign.Center,
-                                        color = when {
-                                            equipped -> MaterialTheme.colorScheme.tertiary
-                                            unlocked -> MaterialTheme.colorScheme.onSurface
-                                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                        },
+                                        color = if (equipped) MaterialTheme.colorScheme.tertiary
+                                        else MaterialTheme.colorScheme.onSurface,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         modifier = Modifier.weight(1f)
@@ -303,10 +300,10 @@ fun LevelScreen(
                                 enabled = unlocked,
                                 shape = rewardGroupShape(index, AVATAR_BORDERS.size, equipped),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = when {
-                                        equipped -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
-                                        unlocked -> MaterialTheme.colorScheme.surfaceContainerHigh
-                                        else -> MaterialTheme.colorScheme.surfaceContainerLow
+                                    containerColor = if (equipped) {
+                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceContainerHigh
                                     }
                                 ),
                                 modifier = Modifier.width(124.dp).aspectRatio(0.78f)
@@ -343,11 +340,8 @@ fun LevelScreen(
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
                                         textAlign = TextAlign.Center,
-                                        color = when {
-                                            equipped -> MaterialTheme.colorScheme.tertiary
-                                            unlocked -> MaterialTheme.colorScheme.onSurface
-                                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                        },
+                                        color = if (equipped) MaterialTheme.colorScheme.tertiary
+                                        else MaterialTheme.colorScheme.onSurface,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         modifier = Modifier.weight(1f)
