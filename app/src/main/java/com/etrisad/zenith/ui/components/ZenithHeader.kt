@@ -64,7 +64,8 @@ fun ZenithHeader(
         currentRoute?.startsWith("settings_category") == true ||
         currentRoute?.startsWith("app_detail") == true ||
         currentRoute == Screen.Profile.route ||
-        currentRoute == Screen.Achievements.route
+        currentRoute == Screen.Achievements.route ||
+        currentRoute == Screen.Level.route
 
     val sideSlotWidth = 68.dp
 
@@ -152,8 +153,9 @@ fun ZenithHeader(
                 currentRoute == Screen.Pomodoro.route -> "Pomodoro"
                 currentRoute == Screen.PausePoint.route -> "Pause Point"
                 currentRoute == Screen.PausePointQr.route -> "QR Codes"
-                currentRoute == Screen.Profile.route -> "Profile"
-                currentRoute == Screen.Achievements.route -> "Achievements"
+        currentRoute == Screen.Profile.route -> "Profile"
+        currentRoute == Screen.Achievements.route -> "Achievements"
+        currentRoute == Screen.Level.route -> "Level"
                 currentRoute?.startsWith("pause_point_type") == true ->
                     pausePointTypeName?.ifEmpty { null } ?: "Pause Point"
                 currentRoute?.startsWith("settings_category") == true -> {

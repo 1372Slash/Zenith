@@ -196,13 +196,14 @@ fun LevelScreen(
                                     }
                                 },
                                 enabled = unlocked,
-                                shape = rewardGroupShape(index, LEVEL_TITLES.size, equipped),
+                                shape = rewardGroupShape(index, LEVEL_TITLES.size, unlocked),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = if (equipped) {
-                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+                                    containerColor = if (unlocked) {
+                                        MaterialTheme.colorScheme.primary
                                     } else {
                                         MaterialTheme.colorScheme.surfaceContainerHigh
-                                    }
+                                    },
+                                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                                 ),
                                 modifier = Modifier.width(124.dp).aspectRatio(0.78f)
                             ) {
@@ -215,14 +216,16 @@ fun LevelScreen(
                                             .size(36.dp)
                                             .clip(CircleShape)
                                             .background(
-                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                                if (unlocked) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)
+                                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = Icons.Outlined.WorkspacePremium,
                                             contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
+                                            tint = if (unlocked) MaterialTheme.colorScheme.onPrimary
+                                            else MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -232,7 +235,7 @@ fun LevelScreen(
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
                                         textAlign = TextAlign.Center,
-                                        color = if (equipped) MaterialTheme.colorScheme.tertiary
+                                        color = if (unlocked) MaterialTheme.colorScheme.onPrimary
                                         else MaterialTheme.colorScheme.onSurface,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
@@ -241,7 +244,8 @@ fun LevelScreen(
                                     Text(
                                         text = "Lv ${title.requiredLevel}",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = if (unlocked) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.75f)
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1
                                     )
                                     Box(
@@ -252,7 +256,7 @@ fun LevelScreen(
                                             Icon(
                                                 imageVector = Icons.Outlined.CheckCircleOutline,
                                                 contentDescription = "Equipped",
-                                                tint = MaterialTheme.colorScheme.tertiary,
+                                                tint = MaterialTheme.colorScheme.onPrimary,
                                                 modifier = Modifier.size(16.dp)
                                             )
                                         } else if (!unlocked) {
@@ -296,13 +300,14 @@ fun LevelScreen(
                                     }
                                 },
                                 enabled = unlocked,
-                                shape = rewardGroupShape(index, AVATAR_BORDERS.size, equipped),
+                                shape = rewardGroupShape(index, AVATAR_BORDERS.size, unlocked),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = if (equipped) {
-                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+                                    containerColor = if (unlocked) {
+                                        MaterialTheme.colorScheme.primary
                                     } else {
                                         MaterialTheme.colorScheme.surfaceContainerHigh
-                                    }
+                                    },
+                                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                                 ),
                                 modifier = Modifier.width(124.dp).aspectRatio(0.78f)
                             ) {
@@ -338,7 +343,7 @@ fun LevelScreen(
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
                                         textAlign = TextAlign.Center,
-                                        color = if (equipped) MaterialTheme.colorScheme.tertiary
+                                        color = if (unlocked) MaterialTheme.colorScheme.onPrimary
                                         else MaterialTheme.colorScheme.onSurface,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
@@ -348,7 +353,8 @@ fun LevelScreen(
                                         text = "Lv ${border.requiredLevel} - ${border.colors.size} color" +
                                             if (border.colors.size > 1) "s" else "",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = if (unlocked) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.75f)
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -360,7 +366,7 @@ fun LevelScreen(
                                             Icon(
                                                 imageVector = Icons.Outlined.CheckCircleOutline,
                                                 contentDescription = "Equipped",
-                                                tint = MaterialTheme.colorScheme.tertiary,
+                                                tint = MaterialTheme.colorScheme.onPrimary,
                                                 modifier = Modifier.size(16.dp)
                                             )
                                         }
