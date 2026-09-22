@@ -258,6 +258,7 @@ class UserPreferencesRepository(private val context: Context) {
         val USER_XP_HISTORY = stringPreferencesKey("user_xp_history")
         val ACHIEVEMENT_LAST_VALUES = stringPreferencesKey("achievement_last_values")
         val ACHIEVEMENT_DAILY_COUNTS = stringPreferencesKey("achievement_daily_counts")
+val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
         val EARLY_KICK_ENABLED = booleanPreferencesKey("early_kick_enabled")
         val INTERCEPT_AUDIO_FOCUS_ENABLED = booleanPreferencesKey("intercept_audio_focus_enabled")
         val SHOW_DATABASE_INDICATOR = booleanPreferencesKey("show_database_indicator")
@@ -479,6 +480,7 @@ class UserPreferencesRepository(private val context: Context) {
             achievementHistory = settings[PreferencesKeys.ACHIEVEMENT_HISTORY] ?: "",
             achievementLastValues = settings[PreferencesKeys.ACHIEVEMENT_LAST_VALUES] ?: "",
             achievementDailyCounts = settings[PreferencesKeys.ACHIEVEMENT_DAILY_COUNTS] ?: "",
+achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "",
             userXpTotal = runtime[RuntimeKeys.USER_XP_TOTAL] ?: 0L,
             userXpLastAwardDate = runtime[RuntimeKeys.USER_XP_LAST_AWARD_DATE] ?: "",
             userTotalSavedMillis = runtime[RuntimeKeys.USER_TOTAL_SAVED_MILLIS] ?: 0L,
@@ -773,6 +775,10 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setAchievementDailyCounts(counts: String) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.ACHIEVEMENT_DAILY_COUNTS] = counts }
+    }
+
+    suspend fun setAchievementBannersSeen(seen: String) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] = seen }
     }
 
     suspend fun awardDailyXp(todayDate: String, xp: Int, savedMillis: Long) {
@@ -1786,6 +1792,7 @@ data class UserPreferences(
     val achievementHistory: String = "",
     val achievementLastValues: String = "",
     val achievementDailyCounts: String = "",
+    val achievementBannersSeen: String = "",
     val userXpTotal: Long = 0L,
     val userXpLastAwardDate: String = "",
     val userTotalSavedMillis: Long = 0L,
