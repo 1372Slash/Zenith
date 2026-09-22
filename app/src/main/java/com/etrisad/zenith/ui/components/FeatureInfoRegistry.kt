@@ -19,6 +19,7 @@ object FeatureInfoRegistry {
         route == Screen.PausePoint.route -> pausePoint
         route == Screen.Profile.route -> profile
         route == Screen.Achievements.route -> achievements
+        route == Screen.Level.route -> level
         route == Screen.PausePointQr.route -> pausePointQr
         route?.startsWith("pause_point_type") == true -> pausePointType
         route == Screen.OverlayAppearance.route -> overlayAppearance
@@ -325,6 +326,26 @@ object FeatureInfoRegistry {
             ),
             FeatureInfoSections.tips(
                 "New unlocks also pop up as a springy banner on the Profile screen."
+            )
+        )
+    )
+
+    private val level = FeatureInfo(
+        title = "Level",
+        summary = "Your XP level, level rewards, and daily XP history.",
+        sections = listOf(
+            FeatureInfoSections.whatItDoes(
+                "Tracks total XP and shows progress to the next level — each level needs more XP than the last.",
+                "Level milestones unlock titles and avatar borders you can equip from the card rows."
+            ),
+            FeatureInfoSections.whatYoullSee(
+                "Titles from Initiate up to Zenith, and avatar rings growing from 1 solid color to a 5-color gradient.",
+                "Unlocked rewards turn primary-colored; locked ones stay neutral until their level is reached.",
+                "Daily XP history with saved screen time per day."
+            ),
+            FeatureInfoSections.tips(
+                "Tap an unlocked reward to equip it, tap again to unequip.",
+                "Your equipped title also appears on the shared profile card."
             )
         )
     )
