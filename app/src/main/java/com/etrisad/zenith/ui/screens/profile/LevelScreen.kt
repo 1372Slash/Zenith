@@ -215,16 +215,14 @@ fun LevelScreen(
                                             .size(36.dp)
                                             .clip(CircleShape)
                                             .background(
-                                                if (unlocked) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = Icons.Outlined.WorkspacePremium,
                                             contentDescription = null,
-                                            tint = if (unlocked) MaterialTheme.colorScheme.primary
-                                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                            tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -319,7 +317,7 @@ fun LevelScreen(
                                                 4.dp,
                                                 if (unlocked) borderBrushFor(border)
                                                 else SolidColor(
-                                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                                                    MaterialTheme.colorScheme.surfaceContainerHighest
                                                 ),
                                                 CircleShape
                                             ),
