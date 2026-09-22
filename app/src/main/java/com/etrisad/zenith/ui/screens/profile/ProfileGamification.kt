@@ -79,9 +79,19 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.Whatshot
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 
-const val PROFILE_XP_PER_LEVEL = 500
+/** Base XP cost of the first level-up (Level 1 -> 2), kept flat-compatible. */
+const val PROFILE_XP_BASE = 500
+/**
+ * Gentle exponential curve exponent. Each level costs more than the last,
+ * but softly: 1.35 keeps early levels within days and level 30 within
+ * roughly a year of steady use.
+ */
+const val PROFILE_XP_CURVE = 1.35
 enum class ProfileTier(val value: Int, val icon: ImageVector, val title: String) {
     I(1, Icons.Outlined.StarOutline, "Spark"),
     V(5, Icons.Outlined.Hive, "Nest"),
@@ -152,10 +162,87 @@ fun calcGoalXp(targetMillis: Long, usageMillis: Long): Int {
     }
 }
 
-fun levelForXp(xp: Long): Int = (xp / PROFILE_XP_PER_LEVEL).toInt() + 1
+/**
+ * Cumulative XP required to REACH [level]. Level 1 starts at 0, level 2
+ * costs PROFILE_XP_BASE, higher levels grow gently exponentially.
+ */
+fun xpForLevel(level: Int): Long {
+    if (level <= 1) return 0L
+    return (PROFILE_XP_BASE * (level - 1).toDouble().pow(PROFILE_XP_CURVE)).toLong()
+}
 
-fun levelProgressForXp(xp: Long): Float =
-    ((xp % PROFILE_XP_PER_LEVEL).toFloat() / PROFILE_XP_PER_LEVEL).coerceIn(0f, 1f)
+fun levelForXp(xp: Long): Int {
+    var level = 1
+    while (xp >= xpForLevel(level + 1)) level++
+    return level
+}
+
+fun levelProgressForXp(xp: Long): Float {
+    val level = levelForXp(xp)
+    val current = xpForLevel(level)
+    val next = xpForLevel(level + 1)
+    if (next <= current) return 1f
+    return ((xp - current).toFloat() / (next - current)).coerceIn(0f, 1f)
+}
+
+/** XP still needed from [xpTotal] to reach the next level. */
+fun xpToNextLevel(xpTotal: Long): Long =
+    (xpForLevel(levelForXp(xpTotal) + 1) - xpTotal).coerceAtLeast(0L)
+
+/**
+ * Level milestone titles. Owned automatically once the level is reached,
+ * equipped manually — shown under the profile name and on the share card.
+ */
+data class LevelTitle(val id: String, val name: String, val requiredLevel: Int)
+
+/**
+ * Level milestone avatar borders. Owned automatically once the level is
+ * reached, equipped manually — drawn as a ring around the profile avatar.
+ */
+data class AvatarBorder(
+    val id: String,
+    val name: String,
+    val requiredLevel: Int,
+    val colors: List<Color>
+)
+
+val LEVEL_TITLES = listOf(
+    LevelTitle("initiate", "Initiate", 2),
+    LevelTitle("keeper", "Keeper", 5),
+    LevelTitle("warden", "Warden", 10),
+    LevelTitle("sentinel", "Sentinel", 15),
+    LevelTitle("paragon", "Paragon", 20),
+    LevelTitle("luminary", "Luminary", 25),
+    LevelTitle("zenith", "Zenith", 30)
+)
+
+val AVATAR_BORDERS = listOf(
+    AvatarBorder("ember", "Ember", 3, listOf(Color(0xFFFF7043), Color(0xFFFFCA28))),
+    AvatarBorder("tide", "Tide", 7, listOf(Color(0xFF4FC3F7), Color(0xFF1E88E5))),
+    AvatarBorder("moss", "Moss", 12, listOf(Color(0xFF9CCC65), Color(0xFF2E7D32))),
+    AvatarBorder("dusk", "Dusk", 17, listOf(Color(0xFFB39DDB), Color(0xFF4527A0))),
+    AvatarBorder("gold", "Gold", 22, listOf(Color(0xFFFFE082), Color(0xFFFF8F00))),
+    AvatarBorder("frost", "Frost", 27, listOf(Color(0xFF80DEEA), Color(0xFF00838F))),
+    AvatarBorder(
+        "prism", "Prism", 35,
+        listOf(
+            Color(0xFFFF8A80), Color(0xFFFFD180), Color(0xFFA7FFEB),
+            Color(0xFF82B1FF), Color(0xFFEA80FC)
+        )
+    )
+)
+
+/** Next locked reward (title or border) above [level], or null when maxed. */
+fun nextLevelReward(level: Int): Pair<Int, String>? {
+    val upcoming = (LEVEL_TITLES.map { it.requiredLevel to it.name } +
+        AVATAR_BORDERS.map { it.requiredLevel to it.name })
+        .filter { it.first > level }
+    return upcoming.minByOrNull { it.first }
+}
+
+fun borderBrushFor(border: AvatarBorder): Brush =
+    if (border.colors.size == 1) SolidColor(border.colors.first())
+    else Brush.linearGradient(border.colors)
 
 enum class AchievementCategory { EXPLORER, ACCUMULATION }
 

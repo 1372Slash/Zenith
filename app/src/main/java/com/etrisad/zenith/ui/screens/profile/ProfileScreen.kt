@@ -21,6 +21,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,7 +51,10 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.CheckCircleOutline
 import androidx.compose.material.icons.outlined.EmojiEvents
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
@@ -87,8 +92,11 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -236,12 +244,22 @@ fun ProfileScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item(key = "identity") {
+            val equippedTitle = remember(preferences.userTitle, state.level) {
+                LEVEL_TITLES.find { it.id == preferences.userTitle }
+                    ?.takeIf { it.requiredLevel <= state.level }
+            }
+            val equippedBorder = remember(preferences.userAvatarBorder, state.level) {
+                AVATAR_BORDERS.find { it.id == preferences.userAvatarBorder }
+                    ?.takeIf { it.requiredLevel <= state.level }
+            }
             ProfileIdentityCard(
                 userName = preferences.userName,
                 userBio = preferences.userBio,
                 avatarUri = preferences.userAvatarUri,
                 bannerUri = preferences.userBannerUri,
                 level = state.level,
+                equippedTitle = equippedTitle?.name ?: "",
+                equippedBorder = equippedBorder,
                 isEditing = isEditing,
                 showBannerOnHome = preferences.profileBannerOnHome,
                 onShowBannerOnHomeChange = {
@@ -278,6 +296,23 @@ fun ProfileScreen(
                     unlockedBadges = unlockedBadges,
                     totalBadges = state.achievements.size,
                     onClick = { showXpSheet = true }
+                )
+            }
+        }
+
+        item(key = "rewards") {
+            Column {
+                PreferenceCategory(title = "Level Rewards")
+                LevelRewardsCard(
+                    level = state.level,
+                    equippedTitleId = preferences.userTitle,
+                    equippedBorderId = preferences.userAvatarBorder,
+                    onEquipTitle = { id ->
+                        scope.launch { preferencesRepository.setUserTitle(id) }
+                    },
+                    onEquipBorder = { id ->
+                        scope.launch { preferencesRepository.setUserAvatarBorder(id) }
+                    }
                 )
             }
         }
@@ -388,6 +423,8 @@ fun ProfileScreen(
                                 userName = preferences.userName.ifBlank { "User" },
                                 level = state.level,
                                 xpTotal = state.xpTotal,
+                                userTitle = LEVEL_TITLES.find { it.id == preferences.userTitle }
+                                    ?.takeIf { it.requiredLevel <= state.level }?.name ?: "",
                                 streakBest = state.streakBest,
                                 topApps = state.topApps,
                                 achievements = state.achievements
@@ -652,6 +689,8 @@ private fun ProfileIdentityCard(
     avatarUri: String,
     bannerUri: String,
     level: Int,
+    equippedTitle: String,
+    equippedBorder: AvatarBorder?,
     isEditing: Boolean,
     showBannerOnHome: Boolean,
     onShowBannerOnHomeChange: (Boolean) -> Unit,
@@ -746,17 +785,36 @@ private fun ProfileIdentityCard(
                             )
                         }
                     }
-                    Surface(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        contentColor = MaterialTheme.colorScheme.primary,
-                        shape = CircleShape
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Level $level",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                        )
+                        Surface(
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            contentColor = MaterialTheme.colorScheme.primary,
+                            shape = CircleShape
+                        ) {
+                            Text(
+                                text = "Level $level",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                            )
+                        }
+                        if (equippedTitle.isNotBlank()) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f),
+                                contentColor = MaterialTheme.colorScheme.tertiary,
+                                shape = CircleShape
+                            ) {
+                                Text(
+                                    text = equippedTitle,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -818,6 +876,15 @@ private fun ProfileIdentityCard(
                 modifier = Modifier
                     .padding(start = 20.dp, top = 106.dp)
                     .size(88.dp)
+                    .then(
+                        if (equippedBorder != null) {
+                            Modifier
+                                .border(4.dp, borderBrushFor(equippedBorder), CircleShape)
+                                .padding(4.dp)
+                        } else {
+                            Modifier
+                        }
+                    )
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.tertiaryContainer),
                 contentAlignment = Alignment.Center
@@ -1122,7 +1189,8 @@ private fun XpCard(
     totalBadges: Int,
     onClick: () -> Unit
 ) {
-    val xpToNext = PROFILE_XP_PER_LEVEL - (xpTotal % PROFILE_XP_PER_LEVEL)
+    val xpToNext = xpToNextLevel(xpTotal)
+    val nextReward = remember(level) { nextLevelReward(level) }
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(24.dp),
@@ -1190,6 +1258,13 @@ private fun XpCard(
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = nextReward?.let { (req, name) ->
+                    "Next reward: $name at Level $req"
+                } ?: "All level rewards unlocked",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.tertiary
             )
         }
     }
@@ -1266,7 +1341,9 @@ private fun XpDetailSheet(
                         text = "Shields earn XP for staying under the limit " +
                             "(less usage = more XP, over the limit = 0). Goals earn " +
                             "XP for reaching the target, plus a bonus for going over. " +
-                            "XP is awarded once per day.",
+                            "XP is awarded once per day. Each level needs more XP " +
+                            "than the last, and level milestones unlock titles " +
+                            "and avatar borders you can equip below.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1314,6 +1391,148 @@ private fun XpDetailSheet(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LevelRewardsCard(
+    level: Int,
+    equippedTitleId: String,
+    equippedBorderId: String,
+    onEquipTitle: (String) -> Unit,
+    onEquipBorder: (String) -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "Titles",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            LEVEL_TITLES.forEach { title ->
+                val unlocked = level >= title.requiredLevel
+                val equipped = equippedTitleId == title.id && unlocked
+                RewardRow(
+                    name = title.name,
+                    requirement = "Level ${title.requiredLevel}",
+                    unlocked = unlocked,
+                    equipped = equipped,
+                    leading = {
+                        Icon(
+                            imageVector = Icons.Outlined.WorkspacePremium,
+                            contentDescription = null,
+                            tint = if (unlocked) MaterialTheme.colorScheme.tertiary
+                            else MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    },
+                    onClick = { onEquipTitle(if (equipped) "" else title.id) }
+                )
+            }
+            HorizontalDivider(
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+            Text(
+                text = "Avatar Borders",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            AVATAR_BORDERS.forEach { border ->
+                val unlocked = level >= border.requiredLevel
+                val equipped = equippedBorderId == border.id && unlocked
+                RewardRow(
+                    name = border.name,
+                    requirement = "Level ${border.requiredLevel}",
+                    unlocked = unlocked,
+                    equipped = equipped,
+                    leading = {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .border(
+                                    3.dp,
+                                    if (unlocked) borderBrushFor(border)
+                                    else SolidColor(
+                                        MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                                    ),
+                                    CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (!unlocked) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Lock,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        }
+                    },
+                    onClick = { onEquipBorder(if (equipped) "" else border.id) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RewardRow(
+    name: String,
+    requirement: String,
+    unlocked: Boolean,
+    equipped: Boolean,
+    leading: @Composable () -> Unit,
+    onClick: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .then(if (unlocked) Modifier.clickable(onClick = onClick) else Modifier)
+            .alpha(if (unlocked) 1f else 0.55f)
+            .padding(vertical = 8.dp)
+    ) {
+        leading()
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = requirement,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        when {
+            equipped -> Icon(
+                imageVector = Icons.Outlined.CheckCircleOutline,
+                contentDescription = "Equipped",
+                tint = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.size(22.dp)
+            )
+            !unlocked -> Icon(
+                imageVector = Icons.Outlined.Lock,
+                contentDescription = "Locked",
+                tint = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
@@ -1961,6 +2180,7 @@ private fun renderAndShareProfile(
     userName: String,
     level: Int,
     xpTotal: Long,
+    userTitle: String,
     streakBest: Int,
     topApps: List<LifetimeApp>,
     achievements: List<AchievementState>
@@ -1968,7 +2188,7 @@ private fun renderAndShareProfile(
     return try {
         val width = 1080
         val rowH = 90
-        val height = 980 + topApps.size * rowH
+        val height = 980 + topApps.size * rowH + if (userTitle.isNotBlank()) 70 else 0
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
@@ -2005,6 +2225,10 @@ private fun renderAndShareProfile(
         y += 100f
         canvas.drawText(userName.take(24), 64f, y, title)
         y += 70f
+        if (userTitle.isNotBlank()) {
+            canvas.drawText(userTitle, 64f, y, accent)
+            y += 70f
+        }
         canvas.drawText("Level $level  -  $xpTotal XP  -  Best streak $streakBest days", 64f, y, sub)
 
         y += 120f
@@ -2045,7 +2269,7 @@ private fun renderAndShareProfile(
             putExtra(Intent.EXTRA_STREAM, uri)
             putExtra(
                 Intent.EXTRA_TEXT,
-                "$userName - Zenith Level $level ($xpTotal XP), best streak $streakBest days"
+                "$userName${if (userTitle.isNotBlank()) " ($userTitle)" else ""} - Zenith Level $level ($xpTotal XP), best streak $streakBest days"
             )
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
