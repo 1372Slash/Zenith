@@ -412,6 +412,7 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
         val POMODORO_NEXT_BREAK_ALLOWED_TIMESTAMP = longPreferencesKey("pomodoro_next_break_allowed_timestamp")
         val POMODORO_CURRENT_SESSION_NUMBER = intPreferencesKey("pomodoro_current_session_number")
         val USER_XP_TOTAL = longPreferencesKey("user_xp_total")
+        val USER_XP_DEBUG_BASE = longPreferencesKey("user_xp_debug_base")
         val USER_XP_LAST_AWARD_DATE = stringPreferencesKey("user_xp_last_award_date")
         val USER_TOTAL_SAVED_MILLIS = longPreferencesKey("user_total_saved_millis")
     }
@@ -486,6 +487,7 @@ userAvatarBorder = settings[PreferencesKeys.USER_AVATAR_BORDER] ?: "",
             achievementDailyCounts = settings[PreferencesKeys.ACHIEVEMENT_DAILY_COUNTS] ?: "",
 achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "",
             userXpTotal = runtime[RuntimeKeys.USER_XP_TOTAL] ?: 0L,
+            userXpDebugBase = runtime[RuntimeKeys.USER_XP_DEBUG_BASE] ?: -1L,
             userXpLastAwardDate = runtime[RuntimeKeys.USER_XP_LAST_AWARD_DATE] ?: "",
             userTotalSavedMillis = runtime[RuntimeKeys.USER_TOTAL_SAVED_MILLIS] ?: 0L,
             userXpHistory = settings[PreferencesKeys.USER_XP_HISTORY] ?: "",
@@ -807,6 +809,41 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             lines.add(0, "$todayDate\t$xp\t$savedMillis")
             preferences[PreferencesKeys.USER_XP_HISTORY] = lines.take(30).joinToString("\n")
         }
+    }
+
+    /**
+     * Isolated debug override for the lifetime XP total (developer
+     * settings). The pre-debug value is frozen as the base: level and
+     * rewards follow the override, but XP achievements keep computing
+     * from the base so debugging never pollutes the real collection.
+     * Setting twice without clearing keeps the original base.
+     */
+    suspend fun setUserXpTotal(xp: Long) {
+        context.runtimeDataStore.edit { preferences ->
+            if ((preferences[RuntimeKeys.USER_XP_DEBUG_BASE] ?: -1L) < 0L) {
+                preferences[RuntimeKeys.USER_XP_DEBUG_BASE] =
+                    preferences[RuntimeKeys.USER_XP_TOTAL] ?: 0L
+            }
+            preferences[RuntimeKeys.USER_XP_TOTAL] = xp.coerceAtLeast(0L)
+        }
+    }
+
+    /**
+     * Clears the debug override and restores the frozen pre-debug XP
+     * total. Returns false when no override was active. Daily XP awarded
+     * while the override was active is discarded with it.
+     */
+    suspend fun clearXpDebugOverride(): Boolean {
+        var hadOverride = false
+        context.runtimeDataStore.edit { preferences ->
+            val base = preferences[RuntimeKeys.USER_XP_DEBUG_BASE]
+            if (base != null) {
+                preferences[RuntimeKeys.USER_XP_TOTAL] = base
+                preferences.remove(RuntimeKeys.USER_XP_DEBUG_BASE)
+                hadOverride = true
+            }
+        }
+        return hadOverride
     }
 
     suspend fun setThemeConfig(themeConfig: ThemeConfig) {
@@ -1808,6 +1845,7 @@ data class UserPreferences(
     val achievementDailyCounts: String = "",
     val achievementBannersSeen: String = "",
     val userXpTotal: Long = 0L,
+    val userXpDebugBase: Long = -1L,
     val userXpLastAwardDate: String = "",
     val userTotalSavedMillis: Long = 0L,
     val userXpHistory: String = "",

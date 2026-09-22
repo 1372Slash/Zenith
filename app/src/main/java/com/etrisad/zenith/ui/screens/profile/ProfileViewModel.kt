@@ -337,7 +337,12 @@ class ProfileViewModel(
                     goalCount = shields.count { it.type == FocusType.GOAL },
                     qrCount = freshPrefs.pausePointQrCodes.size,
                     taskTypeCount = freshPrefs.pausePointTaskTypes.size,
-                    userXpTotal = freshPrefs.userXpTotal,
+                    // While a debug XP override is active, achievements
+                    // compute from the frozen pre-debug base so debugging
+                    // never unlocks real XP achievements. Level display
+                    // keeps following the override total.
+                    userXpTotal = if (freshPrefs.userXpDebugBase >= 0L) freshPrefs.userXpDebugBase
+                    else freshPrefs.userXpTotal,
                     hasCustomOverlay = freshPrefs.overlayPaletteId != "dynamic",
                     hasFloatingBar = freshPrefs.floatingTabBarEnabled,
                     hasUsagePill = freshPrefs.totalUsagePillEnabled,

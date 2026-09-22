@@ -31,6 +31,7 @@ import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.ui.components.ZenithButton
+import com.etrisad.zenith.ui.screens.profile.levelForXp
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithButtonType
 import com.etrisad.zenith.ui.components.focus.AppPickerBottomSheet
@@ -61,6 +62,8 @@ fun DeveloperSettings(
     onUpdateAppStreak: (String, Int) -> Unit,
     onUpdateGlobalScreenTime: (Long) -> Unit,
     onUpdateAppScreenTime: (String, Long) -> Unit,
+    onUpdateProfileLevel: (Int) -> Unit = {},
+    onResetXpDebug: () -> Unit = {},
     onTestUsageGlimpse: () -> Unit,
     onTestGoalCallerDelayed: () -> Unit,
     onTestAlarmOverlay: () -> Unit,
@@ -71,6 +74,7 @@ fun DeveloperSettings(
     var showAppPickerForStreak by remember { mutableStateOf(false) }
     var showAppPickerForUsage by remember { mutableStateOf(false) }
     var showGlobalUsageDialog by remember { mutableStateOf(false) }
+    var showProfileLevelDialog by remember { mutableStateOf(false) }
 
     var selectedAppInfo by remember { mutableStateOf<AppInfo?>(null) }
     var showStreakEditSheet by remember { mutableStateOf(false) }
@@ -106,8 +110,28 @@ fun DeveloperSettings(
                 summary = "Override today's usage for a specific app",
                 onClick = { showAppPickerForUsage = true },
                 icon = Icons.Outlined.Smartphone,
-                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                shape = RoundedCornerShape(8.dp)
             )
+
+            Spacer(modifier = Modifier.height(4.dp))
+            SettingsActionItem(
+                title = "Edit Profile Level",
+                summary = "Level ${levelForXp(preferences.userXpTotal)} (${preferences.userXpTotal} XP) - jump to any level; XP achievements stay frozen at pre-debug value",
+                onClick = { showProfileLevelDialog = true },
+                icon = Icons.Outlined.EmojiEvents,
+                shape = if (preferences.userXpDebugBase >= 0L) RoundedCornerShape(8.dp)
+                else RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+            )
+            if (preferences.userXpDebugBase >= 0L) {
+                Spacer(modifier = Modifier.height(4.dp))
+                SettingsActionItem(
+                    title = "Reset XP Debug Override",
+                    summary = "Restore pre-debug XP (${preferences.userXpDebugBase} XP) and drop the override",
+                    onClick = onResetXpDebug,
+                    icon = Icons.Outlined.RestartAlt,
+                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
             PreferenceCategory(title = "Database & Data")
@@ -511,6 +535,22 @@ fun DeveloperSettings(
                 val minutes = newValue.toLongOrNull() ?: 0L
                 onUpdateGlobalScreenTime(minutes * 60 * 1000)
                 showGlobalUsageDialog = false
+            }
+        )
+    }
+
+    if (showProfileLevelDialog) {
+        val currentLevel = levelForXp(preferences.userXpTotal)
+        EditValueBottomSheet(
+            title = "Edit Profile Level",
+            currentValueLabel = "Current",
+            currentValue = "Level $currentLevel (${preferences.userXpTotal} XP)",
+            inputValueLabel = "New Level",
+            initialValue = currentLevel.toString(),
+            onDismiss = { showProfileLevelDialog = false },
+            onConfirm = { newValue ->
+                onUpdateProfileLevel((newValue.toIntOrNull() ?: currentLevel).coerceAtLeast(1))
+                showProfileLevelDialog = false
             }
         )
     }
