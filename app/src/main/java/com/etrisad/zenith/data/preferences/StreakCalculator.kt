@@ -202,6 +202,12 @@ class StreakCalculator(
             val pkg = shield.packageName
             val history = allUsage[pkg] ?: emptyList()
             val oldestHistoryDate = history.map { it.date }.minOrNull()
+            // Streaks must only count days since the shield was created. Usage
+            // rows for the package can predate the shield (general tracking),
+            // and missing SHIELD days count as success — without this bound a
+            // brand-new shield inherits a phantom streak (e.g. jumps to 5/15
+            // the day after creation). Mirrors refreshWebStreaks.
+            val timeAddedDateStr = if (shield.timeAdded > 0L) dateFormat.format(Date(shield.timeAdded)) else null
             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
             val isWeekly = shield.limitPeriod == LimitPeriod.WEEKLY
 
@@ -238,6 +244,7 @@ class StreakCalculator(
                     weekCal.add(Calendar.DAY_OF_YEAR, -7)
                     if (shield.lastStreakUpdateTimestamp == 0L && shield.currentStreak == 0) break
                     val weekStartStr = dateFormat.format(weekCal.time)
+                    if (timeAddedDateStr != null && weekStartStr < timeAddedDateStr) break
                     val weekEnd = Calendar.getInstance().apply { timeInMillis = weekCal.timeInMillis; add(Calendar.DAY_OF_YEAR, 6) }
                     val weekEndStr = dateFormat.format(weekEnd.time)
                     var weekTotal = history.filter { it.date >= weekStartStr && it.date <= weekEndStr }.sumOf { it.usageTimeMillis }
@@ -268,6 +275,7 @@ class StreakCalculator(
                     val dayOfWeek = c.get(Calendar.DAY_OF_WEEK)
                     if (dayOfWeek !in shield.activeDays) continue
                     val dStr = dateFormat.format(c.time)
+                    if (timeAddedDateStr != null && dStr < timeAddedDateStr) break
                     var usage = history.find { it.date == dStr }?.usageTimeMillis
 
                     if (usage == null) {
@@ -325,10 +333,12 @@ class StreakCalculator(
                     } else 0
                 }
 
-                var bestStreak = shield.bestStreak
+                // Recompute best from bounded history starting at 0 (not from the
+                // stored value) so a previously inflated best self-heals.
+                var bestStreak = 0
                 var tempStreak = 0
                 try {
-                    val startDateStr = oldestHistoryDate ?: todayStr
+                    val startDateStr = timeAddedDateStr ?: (oldestHistoryDate ?: todayStr)
                     val startD = dateFormat.parse(startDateStr) ?: Date()
                     val todayDate = dateFormat.parse(todayStr) ?: Date()
 
@@ -388,11 +398,13 @@ class StreakCalculator(
                     } else 0
                 }
 
-                var bestStreak = shield.bestStreak
+                // Recompute best from bounded history starting at 0 (not from the
+                // stored value) so a previously inflated best self-heals.
+                var bestStreak = 0
                 var tempStreak = 0
                 val calendarForBest = Calendar.getInstance()
                 try {
-                    val startDateStr = oldestHistoryDate ?: todayStr
+                    val startDateStr = timeAddedDateStr ?: (oldestHistoryDate ?: todayStr)
                     val startD = dateFormat.parse(startDateStr) ?: Date()
                     calendarForBest.time = startD
                     val todayDate = dateFormat.parse(todayStr) ?: Date()
@@ -769,6 +781,9 @@ class StreakCalculator(
             val pkg = shield.packageName
             val history = allUsage[pkg] ?: emptyList()
             val oldestHistoryDate = history.map { it.date }.minOrNull()
+            // Same creation-date bound as refreshAppStreaks: never count days
+            // before the shield existed.
+            val timeAddedDateStr = if (shield.timeAdded > 0L) dateFormat.format(Date(shield.timeAdded)) else null
             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
             if (limitMillis <= 0 && shield.type == FocusType.SHIELD) return@forEach
 
@@ -780,6 +795,7 @@ class StreakCalculator(
                 val dayOfWeek = c.get(Calendar.DAY_OF_WEEK)
                 if (dayOfWeek !in shield.activeDays) continue
                 val dStr = dateFormat.format(c.time)
+                if (timeAddedDateStr != null && dStr < timeAddedDateStr) break
                 var usage = history.find { it.date == dStr }?.usageTimeMillis
                 if (usage == null) {
                     if (oldestHistoryDate != null && dStr >= oldestHistoryDate) {
