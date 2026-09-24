@@ -689,7 +689,10 @@ class HomeViewModel(
                     syncManager.syncUsageData()
                 }
 
-                ScreenUsageHelper.clearCache()
+                // NOTE: do NOT clear ScreenUsageHelper's incremental cache here.
+                // It self-resets on day change; a mid-day clear forces a full
+                // re-parse where a transient empty queryEvents yields an empty
+                // snapshot and flashes the UI to zero.
                 usageHistoryManager.updateGlobalFallbackInternal(forceFull = isInitial)
                 performUsageStatsRefresh(showLoading = false)
 
@@ -753,10 +756,11 @@ class HomeViewModel(
             com.etrisad.zenith.util.DateTimeUtils.getDayStartTime(now, dayStartHour, dayStartMinute)
         }
         if (_uiState.value.selectedDateMillis == date && refreshJob?.isActive == true) return
+        // Keep the previous lists on screen while reloading: clearing them
+        // here leaves the UI permanently empty if the refresh is cancelled
+        // or returns a transient empty snapshot (intermittent all-zero UI).
         _uiState.update { it.copy(
             selectedDateMillis = date,
-            allAppsUsage = emptyList(),
-            topApps = emptyList(),
             isLoading = true
         ) }
         refreshUsageStats(showLoading = true)
@@ -1309,11 +1313,15 @@ class HomeViewModel(
         val prevToday = prevState.dailyUsageHistory.firstOrNull()
         val curToday = history.reversed().firstOrNull()
         val todayBarChanged = prevToday?.totalTime != curToday?.totalTime
+        // If the previous frame was empty (e.g. cleared before first load or a
+        // transient empty refresh), always take the full update path so the UI
+        // can recover instead of staying stuck on zeros.
+        val wasEmpty = prevState.allAppsUsage.isEmpty() || prevState.dailyUsageHistory.isEmpty()
 
-        android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: UI_UPDATE prevTotal=${prevState.totalScreenTime} selectedDayTotal=$selectedDayTotal todayChanged=$todayChanged todayBarChanged=$todayBarChanged appListSize=${allAppsUsage.size} hourlySize=${hourlyUsage.size} shields=${liveShields.size} websiteSize=${websiteUsage.size}")
-        DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: UI_UPDATE prevTotal=${prevState.totalScreenTime} selectedDayTotal=$selectedDayTotal todayChanged=$todayChanged todayBarChanged=$todayBarChanged appListSize=${allAppsUsage.size} hourlySize=${hourlyUsage.size} shields=${liveShields.size} websiteSize=${websiteUsage.size}")
+        android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: UI_UPDATE prevTotal=${prevState.totalScreenTime} selectedDayTotal=$selectedDayTotal todayChanged=$todayChanged todayBarChanged=$todayBarChanged wasEmpty=$wasEmpty appListSize=${allAppsUsage.size} hourlySize=${hourlyUsage.size} shields=${liveShields.size} websiteSize=${websiteUsage.size}")
+        DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: UI_UPDATE prevTotal=${prevState.totalScreenTime} selectedDayTotal=$selectedDayTotal todayChanged=$todayChanged todayBarChanged=$todayBarChanged wasEmpty=$wasEmpty appListSize=${allAppsUsage.size} hourlySize=${hourlyUsage.size} shields=${liveShields.size} websiteSize=${websiteUsage.size}")
 
-        if (!todayChanged && !todayBarChanged) {
+        if (!todayChanged && !todayBarChanged && !wasEmpty) {
             _uiState.update { state -> state.copy(
                 hourlyUsage      = hourlyUsage,
                 activeShields    = sortShields(liveShields.filter { it.type == FocusType.SHIELD }, state.shieldSortType),
@@ -1323,19 +1331,27 @@ class HomeViewModel(
                 isLoading        = false
             ) }
         } else {
+            // Guard against transient empty system snapshots: if today produced
+            // no apps at all while the clock is well past midnight and the
+            // previous frame had data, keep the previous totals/history instead
+            // of flashing everything to zero (the 15s realtime loop + deferred
+            // repair will fill in the real values on the next pass).
+            val freshIsTransientlyEmpty = isSelectedToday && allAppsUsage.isEmpty() &&
+                    timeSinceMidnight > 300_000L &&
+                    (prevState.totalScreenTime > 0L || prevState.allAppsUsage.isNotEmpty())
             _uiState.update { state -> state.copy(
-                totalScreenTime      = selectedDayTotal,
+                totalScreenTime      = if (freshIsTransientlyEmpty) state.totalScreenTime else selectedDayTotal,
                 yesterdayScreenTime  = totalYesterday,
-                percentageChange     = percentageChange,
-                dailyUsageHistory    = history.reversed(),
+                percentageChange     = if (freshIsTransientlyEmpty) state.percentageChange else percentageChange,
+                dailyUsageHistory    = if (freshIsTransientlyEmpty) state.dailyUsageHistory else history.reversed(),
                 hourlyUsage          = hourlyUsage,
-                snapshotStamps       = snapshotStamps.reversed(),
+                snapshotStamps       = if (freshIsTransientlyEmpty) state.snapshotStamps else snapshotStamps.reversed(),
                 topApps              = if (topApps.isEmpty() && isSelectedToday) state.topApps else topApps,
                 allAppsUsage         = if (allAppsUsage.isEmpty() && isSelectedToday) state.allAppsUsage else allAppsUsage,
                 websiteUsage         = websiteUsage,
-                shieldUsage          = finalShieldUsage,
-                goalUsage            = finalGoalUsage,
-                otherUsage           = finalOtherUsage,
+                shieldUsage          = if (freshIsTransientlyEmpty) state.shieldUsage else finalShieldUsage,
+                goalUsage            = if (freshIsTransientlyEmpty) state.goalUsage else finalGoalUsage,
+                otherUsage           = if (freshIsTransientlyEmpty) state.otherUsage else finalOtherUsage,
                 activeShields = sortShields(liveShields.filter { it.type == FocusType.SHIELD }, state.shieldSortType),
                 activeGoals   = sortShields(liveShields.filter { it.type == FocusType.GOAL }, state.goalSortType),
                 globalCurrentStreak = liveStreak,

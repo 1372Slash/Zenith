@@ -103,14 +103,14 @@ class ShieldRepository(
         val cappedDays = days.coerceAtMost(30)
         val cal = java.util.Calendar.getInstance()
         cal.add(java.util.Calendar.DAY_OF_YEAR, -cappedDays)
-        val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
+        val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(cal.time)
         return dailyUsageDao.getRecentUsage(dateStr)
     }
 
     fun getLongTermUsage(days: Int): Flow<List<DailyUsageEntity>> {
         val cal = java.util.Calendar.getInstance()
         cal.add(java.util.Calendar.DAY_OF_YEAR, -days)
-        val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
+        val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(cal.time)
         return dailyUsageDao.getRecentUsage(dateStr)
     }
 
@@ -224,13 +224,13 @@ class ShieldRepository(
         val cal = java.util.Calendar.getInstance()
         cal.firstDayOfWeek = java.util.Calendar.MONDAY
         cal.set(java.util.Calendar.DAY_OF_WEEK, java.util.Calendar.MONDAY)
-        val weekStart = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
+        val weekStart = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
         return dailyUsageDao.getTotalUsageSince(packageName, weekStart)
     }
 
     suspend fun getWeeklyUsageLive(packageName: String, todayLiveUsage: Long): Long {
         val weeklyFromDb = getWeeklyUsageForPackage(packageName)
-        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         val todayFromDb = dailyUsageDao.getUsageTimeByDateAndPackage(todayStr, packageName) ?: 0L
         return weeklyFromDb - todayFromDb + todayLiveUsage
     }
@@ -383,7 +383,7 @@ class ShieldRepository(
     }
 
     fun getSingleGoalProgress(packageName: String): Flow<Float> {
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         return combine(
             allShields,
             dailyUsageDao.getUsagesForDateFlow(today)
@@ -397,7 +397,7 @@ class ShieldRepository(
     }
 
     fun getIncentiveGoalProgress(): Flow<Float> {
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         return combine(
             allShields,
             dailyUsageDao.getUsagesForDateFlow(today)

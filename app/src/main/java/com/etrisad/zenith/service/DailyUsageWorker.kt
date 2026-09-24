@@ -72,7 +72,8 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
                 prefsRepo.resetIncentiveBonusUsesIfNeeded()
             } catch (_: Exception) {}
         }
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        // DB date keys must be locale-independent, see DateTimeUtils.
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val dateString = DateTimeUtils.getDayStartDateString(now, dayStartHour, dayStartMinute)
         val isDateToday = !isBeforeDayStart
         android.util.Log.d("ZenithDB", "DAILY_WORKER_START: isBackup=$isBackup isDateToday=$isDateToday date=$dateString")
@@ -217,13 +218,24 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
         }
 
         if (finalAppUsages.isEmpty()) {
-            android.util.Log.w("ZenithDB", "DAILY_WORKER_NO_DATA: date=$dateString isDateToday=$isDateToday no usage stats found")
-            DbLogBuffer.w("ZenithDB", "DAILY_WORKER_NO_DATA: date=$dateString isDateToday=$isDateToday no usage stats found")
+            android.util.Log.w("ZenithDB", "DAILY_WORKER_NO_DATA: date=$dateString isDateToday=$isDateToday no usage stats found, keeping existing rows untouched")
+            DbLogBuffer.w("ZenithDB", "DAILY_WORKER_NO_DATA: date=$dateString isDateToday=$isDateToday no usage stats found, keeping existing rows untouched")
+            // Never persist an empty snapshot: writing TOTAL=0 rows here would
+            // wipe previously stored data via REPLACE (intermittent all-zero UI).
+            return Result.success()
+        }
+
+        // Monotonic merge with already-stored rows: the system snapshot can be
+        // partial (transient empty queryEvents right after boot, OEM throttling),
+        // so never let it shrink stored values.
+        finalAppUsages.forEach { (pkg, time) ->
+            val existing = existingDaily[pkg]?.usageTimeMillis ?: 0L
+            if (existing > time) finalAppUsages[pkg] = existing
         }
 
         val calculatedSum = finalAppUsages.values.sum()
 
-        var totalUsage = calculatedSum.coerceAtMost(timeSinceMidnight)
+        var totalUsage = maxOf(calculatedSum, existingTotalVal).coerceAtMost(timeSinceMidnight)
 
         val usagesToInsert = mutableListOf<DailyUsageEntity>()
         finalAppUsages.forEach { (pkg, time) ->
@@ -239,8 +251,8 @@ class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWo
             if (pkg in shieldPkgs) sUsage += time else if (pkg in goalPkgs) gUsage += time
         }
 
-        usagesToInsert.add(DailyUsageEntity(date = dateString, packageName = "SHIELD_TOTAL", usageTimeMillis = sUsage))
-        usagesToInsert.add(DailyUsageEntity(date = dateString, packageName = "GOAL_TOTAL", usageTimeMillis = gUsage))
+        usagesToInsert.add(DailyUsageEntity(date = dateString, packageName = "SHIELD_TOTAL", usageTimeMillis = maxOf(sUsage, existingDaily["SHIELD_TOTAL"]?.usageTimeMillis ?: 0L)))
+        usagesToInsert.add(DailyUsageEntity(date = dateString, packageName = "GOAL_TOTAL", usageTimeMillis = maxOf(gUsage, existingDaily["GOAL_TOTAL"]?.usageTimeMillis ?: 0L)))
         usagesToInsert.add(DailyUsageEntity(date = dateString, packageName = "OTHER_TOTAL", usageTimeMillis = (totalUsage - (sUsage + gUsage)).coerceAtLeast(0L)))
 
         dailyUsageDao.insertAll(usagesToInsert)
