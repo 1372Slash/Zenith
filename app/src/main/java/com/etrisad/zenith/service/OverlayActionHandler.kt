@@ -890,7 +890,9 @@ class OverlayActionHandler(
 
         if (packageName in SharedMonitoringState.whitelistedPackages) return true
 
-        if (isBedtimeOrWindDown && packageName in SharedMonitoringState.bedtimeWhitelistedPackages) return true
+        // NOTE: bedtime-whitelisted apps intentionally do NOT bypass here.
+        // The whitelist only skips the bedtime overlay itself (handled in
+        // checkSchedules below); Shields, Goals and Schedules still apply.
 
         if (isKeyboardApp(packageName)) return true
 
@@ -1029,7 +1031,8 @@ class OverlayActionHandler(
                 showBedtimeOverlay(packageName)
                 return true
             }
-            return false
+            // Bedtime-whitelisted: skip only the bedtime overlay and fall
+            // through so Shields, Goals and Schedules below still apply.
         }
 
         if (SharedMonitoringState.isWindDownActive && prefs.bedtimeWindDownEnabled) {
@@ -1038,7 +1041,7 @@ class OverlayActionHandler(
                 showWindDownOverlay(packageName, sessionUsed, recheckSchedules)
                 return true
             }
-            return false
+            // Same fall-through for wind-down-whitelisted apps.
         }
 
         val schedules = SharedMonitoringState.parsedSchedulesCache
