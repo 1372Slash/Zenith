@@ -90,6 +90,7 @@ private fun pausePointSummary(taskType: PausePointTaskType, preferences: UserPre
     PausePointTaskType.BREATHING -> "${preferences.pausePointBreathingVariants.size} sub task${if (preferences.pausePointBreathingVariants.size == 1) "" else "s"}"
     PausePointTaskType.WALK -> "${preferences.pausePointWalkVariants.size} sub task${if (preferences.pausePointWalkVariants.size == 1) "" else "s"}"
     PausePointTaskType.QR_SCAN -> "${preferences.pausePointQrCodes.size} saved code${if (preferences.pausePointQrCodes.size == 1) "" else "s"}"
+    PausePointTaskType.NFC_SCAN -> "${preferences.pausePointNfcTagIds.size} saved tag${if (preferences.pausePointNfcTagIds.size == 1) "" else "s"}"
     PausePointTaskType.NUMBER_SLIDE -> "${preferences.pausePointNumberSlideVariants.size} sub task${if (preferences.pausePointNumberSlideVariants.size == 1) "" else "s"}"
     PausePointTaskType.SWITCH -> "${preferences.pausePointSwitchVariants.size} sub task${if (preferences.pausePointSwitchVariants.size == 1) "" else "s"}"
     PausePointTaskType.MATH -> "${preferences.pausePointMathVariants.size} sub task${if (preferences.pausePointMathVariants.size == 1) "" else "s"}"

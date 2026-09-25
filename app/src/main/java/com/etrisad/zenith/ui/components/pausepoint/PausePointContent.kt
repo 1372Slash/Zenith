@@ -48,6 +48,12 @@ import com.etrisad.zenith.ui.components.Lever
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithButtonType
+import com.etrisad.zenith.ui.components.nfc.NfcScanActivity
+import com.etrisad.zenith.ui.components.nfc.NfcScanResultBus
+import com.etrisad.zenith.ui.components.nfc.isNfcEnabled
+import com.etrisad.zenith.ui.components.nfc.isNfcSupported
+import com.etrisad.zenith.ui.components.nfc.normalizeNfcTagId
+import com.etrisad.zenith.ui.components.nfc.openNfcSettings
 import com.etrisad.zenith.ui.components.qr.QrScanner
 import kotlin.math.ceil
 import kotlin.math.sqrt
@@ -60,7 +66,8 @@ fun PausePointTaskContent(
     onTaskCompleted: () -> Unit,
     onOpenApp: ((String) -> Unit)? = null,
     onUserActivity: () -> Unit = {},
-    onKeyboardFocusChange: (Boolean) -> Unit = {}
+    onKeyboardFocusChange: (Boolean) -> Unit = {},
+    onNfcScanRequested: ((PausePointTask.NfcScan) -> Unit)? = null
 ) {
     Column(
         modifier = Modifier
@@ -82,6 +89,7 @@ fun PausePointTaskContent(
             is PausePointTask.Breathing -> BreathingTask(task, onTaskCompleted)
             is PausePointTask.Walk -> WalkTask(task, onTaskCompleted, onUserActivity)
             is PausePointTask.QrScan -> QrScanTask(task, onTaskCompleted, onUserActivity)
+            is PausePointTask.NfcScan -> NfcScanTask(task, onTaskCompleted, onUserActivity, onNfcScanRequested)
             is PausePointTask.NumberSlide -> NumberSlideTask(task, onTaskCompleted)
             is PausePointTask.Switch -> SwitchTask(task, onTaskCompleted)
             is PausePointTask.Counting -> CountingTask(task, onTaskCompleted, onUserActivity)
@@ -413,6 +421,162 @@ private fun QrScanTask(
                 else "Align a saved QR code within the frame",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+internal const val NFC_SCAN_FRESHNESS_MS = 120_000L
+
+@Composable
+private fun NfcScanTask(
+    task: PausePointTask.NfcScan,
+    onTaskCompleted: () -> Unit,
+    onUserActivity: () -> Unit,
+    onNfcScanRequested: ((PausePointTask.NfcScan) -> Unit)? = null
+) {
+    val context = LocalContext.current
+    val supported = remember { isNfcSupported(context) }
+    var nfcEnabled by remember { mutableStateOf(isNfcEnabled(context)) }
+    var showError by remember { mutableStateOf(false) }
+    var wrongTagId by remember { mutableStateOf<String?>(null) }
+    var handledTimestamp by remember { mutableStateOf<Long?>(null) }
+    val lastScan by NfcScanResultBus.lastScan.collectAsState()
+    val currentOnCompleted by rememberUpdatedState(onTaskCompleted)
+    val normalizedValid = remember(task.validTagIds) {
+        task.validTagIds.map { normalizeNfcTagId(it) }.filter { it.isNotEmpty() }
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            nfcEnabled = isNfcEnabled(context)
+            delay(1000)
+        }
+    }
+
+    LaunchedEffect(lastScan) {
+        val scan = lastScan ?: return@LaunchedEffect
+        if (handledTimestamp == scan.timestamp) return@LaunchedEffect
+        // Ignore scans from long ago (e.g. a previous overlay session) so the
+        // task can never auto-complete the moment it appears.
+        if (System.currentTimeMillis() - scan.timestamp > NFC_SCAN_FRESHNESS_MS) return@LaunchedEffect
+        handledTimestamp = scan.timestamp
+        onUserActivity()
+        val scannedId = normalizeNfcTagId(scan.tagId)
+        if (task.acceptAny || scannedId in normalizedValid) {
+            showError = false
+            wrongTagId = null
+            NfcScanResultBus.clear()
+            currentOnCompleted()
+        } else {
+            showError = true
+            wrongTagId = scannedId
+        }
+    }
+
+    DisposableEffect(task) {
+        onDispose {
+            showError = false
+            wrongTagId = null
+        }
+    }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Nfc,
+            contentDescription = null,
+            modifier = Modifier.size(80.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+
+        when {
+            !supported -> {
+                Text(
+                    text = "NFC is not supported on this device",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "Enable another Pause Point type to continue, or register tags on an NFC-capable device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+            !nfcEnabled -> {
+                Text(
+                    text = "NFC is turned off",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                )
+                ZenithButton(
+                    onClick = { openNfcSettings(context) },
+                    text = "Turn On NFC",
+                    icon = Icons.Outlined.Nfc,
+                    type = ZenithButtonType.Filled,
+                    size = ZenithButtonSize.Large,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            else -> {
+                if (normalizedValid.isNotEmpty() && !task.acceptAny) {
+                    Text(
+                        text = "${normalizedValid.size} registered tag${if (normalizedValid.size == 1) "" else "s"} — any of them passes",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                ZenithButton(
+                    onClick = {
+                        onUserActivity()
+                        showError = false
+                        wrongTagId = null
+                        val requested = onNfcScanRequested
+                        if (requested != null) {
+                            requested(task)
+                        } else {
+                            try {
+                                NfcScanActivity.start(
+                                    context = context,
+                                    expectedTagIds = normalizedValid,
+                                    acceptAny = task.acceptAny
+                                )
+                            } catch (_: Exception) {}
+                        }
+                    },
+                    text = "Scan NFC Tag",
+                    icon = Icons.Outlined.Nfc,
+                    type = ZenithButtonType.Filled,
+                    size = ZenithButtonSize.Large,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    text = if (onNfcScanRequested != null)
+                        "Tap to open the scanner — this sheet slides away while you scan, then returns"
+                    else
+                        "Tap to open the scanner, then hold a registered tag near your phone",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        if (showError) {
+            Text(
+                text = if (wrongTagId != null) "Wrong tag ($wrongTagId) — use one of your registered tags"
+                else "Wrong tag — use one of your registered tags",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
                 textAlign = TextAlign.Center
             )
         }

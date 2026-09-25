@@ -8,6 +8,7 @@ import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.Nature
+import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.ToggleOn
 import androidx.compose.material.icons.outlined.TouchApp
@@ -19,6 +20,7 @@ enum class PausePointTaskType(val displayName: String, val description: String, 
     BREATHING("Breathing", "Follow a breathing exercise", Icons.Outlined.Nature),
     WALK("Walk", "Walk a certain number of steps", Icons.AutoMirrored.Outlined.DirectionsWalk),
     QR_SCAN("QR Scan", "Scan a QR code", Icons.Outlined.QrCodeScanner),
+    NFC_SCAN("NFC Scan", "Scan a registered NFC tag", Icons.Outlined.Nfc),
     NUMBER_SLIDE("Number Slide", "Slide the tiles to solve the puzzle", Icons.Outlined.GridView),
     SWITCH("Switch Puzzle", "Match the switch sequence", Icons.Outlined.ToggleOn),
     COUNTING("Counting", "Complete a counting exercise", Icons.Outlined.FitnessCenter),
@@ -61,6 +63,16 @@ sealed class PausePointTask {
         override val instruction get() =
             if (validCodes.isNotEmpty()) "Scan a QR code that matches one of your saved codes"
             else "Scan the QR code to proceed"
+    }
+
+    data class NfcScan(
+        val validTagIds: List<String> = emptyList(),
+        val acceptAny: Boolean = false
+    ) : PausePointTask() {
+        override val type get() = PausePointTaskType.NFC_SCAN
+        override val instruction get() =
+            if (validTagIds.isNotEmpty()) "Tap one of your registered NFC tags to proceed"
+            else "Tap an NFC tag to proceed"
     }
 
     data class NumberSlide(
@@ -154,6 +166,7 @@ data class PausePointConfig(
         PausePointTaskType.COUNTING -> countingVariants
         PausePointTaskType.TYPING -> typingVariants
         PausePointTaskType.QR_SCAN -> emptyList()
+        PausePointTaskType.NFC_SCAN -> emptyList()
         PausePointTaskType.CHOOSE_APP -> emptyList()
     }
 }
@@ -178,6 +191,7 @@ object PausePointDefaults {
         PausePointTaskType.COUNTING -> countingVariants
         PausePointTaskType.TYPING -> typingVariants
         PausePointTaskType.QR_SCAN -> emptyList()
+        PausePointTaskType.NFC_SCAN -> emptyList()
         PausePointTaskType.CHOOSE_APP -> emptyList()
     }
 }
@@ -189,16 +203,60 @@ object PausePointEngine {
         return if (pool.isNotEmpty()) pool.random() else PausePointVariant()
     }
 
+    fun isTypeAvailable(
+        type: PausePointTaskType,
+        qrCodes: List<String> = emptyList(),
+        nfcTagIds: List<String> = emptyList(),
+        goalPackageNames: Set<String> = emptySet(),
+        cameraGranted: Boolean = true,
+        nfcAvailable: Boolean = true
+    ): Boolean = when (type) {
+        PausePointTaskType.QR_SCAN -> qrCodes.isNotEmpty() && cameraGranted
+        PausePointTaskType.NFC_SCAN -> nfcTagIds.isNotEmpty() && nfcAvailable
+        PausePointTaskType.CHOOSE_APP -> goalPackageNames.isNotEmpty()
+        else -> true
+    }
+
+    fun availableAlternatives(
+        currentType: PausePointTaskType,
+        enabledTypes: Set<PausePointTaskType>,
+        qrCodes: List<String> = emptyList(),
+        nfcTagIds: List<String> = emptyList(),
+        goalPackageNames: Set<String> = emptySet(),
+        cameraGranted: Boolean = true,
+        nfcAvailable: Boolean = true
+    ): List<PausePointTaskType> = enabledTypes
+        .filter { it != currentType }
+        .filter {
+            isTypeAvailable(
+                type = it,
+                qrCodes = qrCodes,
+                nfcTagIds = nfcTagIds,
+                goalPackageNames = goalPackageNames,
+                cameraGranted = cameraGranted,
+                nfcAvailable = nfcAvailable
+            )
+        }
+
     fun generateTask(
         enabledTypes: Set<PausePointTaskType> = PausePointTaskType.entries.toSet(),
         goalPackageNames: Set<String> = emptySet(),
         goalAppNames: Map<String, String> = emptyMap(),
         qrCodes: List<String> = emptyList(),
+        nfcTagIds: List<String> = emptyList(),
         config: PausePointConfig = PausePointConfig(),
-        cameraGranted: Boolean = true
+        cameraGranted: Boolean = true,
+        nfcAvailable: Boolean = true
     ): PausePointTask {
         val filteredTypes = enabledTypes
-            .filter { it != PausePointTaskType.QR_SCAN || (qrCodes.isNotEmpty() && cameraGranted) }
+            .filter { type ->
+                when (type) {
+                    PausePointTaskType.QR_SCAN -> qrCodes.isNotEmpty() && cameraGranted
+                    PausePointTaskType.NFC_SCAN -> nfcTagIds.isNotEmpty() && nfcAvailable
+                    PausePointTaskType.CHOOSE_APP -> goalPackageNames.isNotEmpty()
+                    else -> true
+                }
+            }
             .toList()
         if (filteredTypes.isEmpty()) return PausePointTask.Waiting()
 
@@ -217,6 +275,9 @@ object PausePointEngine {
             PausePointTaskType.QR_SCAN -> PausePointTask.QrScan(
                 code = if (qrCodes.isNotEmpty()) qrCodes.random() else "PAUSE-${Random.nextInt(100000, 999999)}",
                 validCodes = qrCodes
+            )
+            PausePointTaskType.NFC_SCAN -> PausePointTask.NfcScan(
+                validTagIds = nfcTagIds
             )
             PausePointTaskType.NUMBER_SLIDE -> PausePointTask.NumberSlide(
                 size = pickVariant(config.numberSlideVariants, PausePointDefaults.numberSlideVariants).size.coerceAtLeast(3)

@@ -4,14 +4,18 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,8 +34,12 @@ import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.service.InterceptOverlayManager
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
+import com.etrisad.zenith.ui.components.ZenithButtonType
+import com.etrisad.zenith.ui.components.nfc.NfcScanActivity
+import com.etrisad.zenith.ui.components.nfc.isNfcSupported
 import com.etrisad.zenith.ui.components.pausepoint.PausePointEngine
 import com.etrisad.zenith.ui.components.pausepoint.PausePointTask
 import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskContent
@@ -41,6 +49,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.ceil
 import kotlin.random.Random
 
 private const val CONTENT_A = "pausePoint"
@@ -98,17 +107,28 @@ fun InterceptOverlayContent(
     val enabledTypes = forcedTaskType?.let { setOf(it) } ?: userPrefs.pausePointTaskTypes
     var currentPauseTask by remember(packageName, forcedTaskType) { mutableStateOf<PausePointTask?>(null) }
     var pauseTaskCompleted by remember { mutableStateOf(false) }
+    var goalPackagesForSwitch by remember { mutableStateOf(emptySet<String>()) }
+    val nfcAvailableForSwitch = remember { isNfcSupported(context) }
 
     LaunchedEffect(pausePointEnabled, packageName, forcedTaskType, prefsLoaded) {
         if (!prefsLoaded) return@LaunchedEffect
         if (pausePointEnabled && currentPauseTask == null) {
+            val retained = if (forcedTaskType == null &&
+                InterceptOverlayManager.retainedPauseTaskForPackage == packageName
+            ) InterceptOverlayManager.retainedPauseTask else null
+            InterceptOverlayManager.clearRetainedPauseTask()
             val goals = withContext(Dispatchers.IO) {
                 shieldRepository.allShields.first().filter { it.type == FocusType.GOAL }
             }
-            currentPauseTask = when (forcedTaskType) {
+            goalPackagesForSwitch = goals.map { it.packageName }.toSet()
+            currentPauseTask = retained ?: when (forcedTaskType) {
                 PausePointTaskType.QR_SCAN -> PausePointTask.QrScan(
                     code = "PAUSE-${Random.nextInt(100000, 999999)}",
                     validCodes = userPrefs.pausePointQrCodes,
+                    acceptAny = true
+                )
+                PausePointTaskType.NFC_SCAN -> PausePointTask.NfcScan(
+                    validTagIds = userPrefs.pausePointNfcTagIds,
                     acceptAny = true
                 )
                 PausePointTaskType.CHOOSE_APP ->
@@ -126,9 +146,58 @@ fun InterceptOverlayContent(
                     goalPackageNames = goals.map { it.packageName }.toSet(),
                     goalAppNames = goals.associate { it.packageName to it.appName },
                     qrCodes = userPrefs.pausePointQrCodes,
+                    nfcTagIds = userPrefs.pausePointNfcTagIds,
                     config = userPrefs.pausePointConfig,
-                    cameraGranted = context.isCameraGranted()
+                    cameraGranted = context.isCameraGranted(),
+                    nfcAvailable = nfcAvailableForSwitch
                 )
+            }
+        }
+    }
+
+    val switchAlternatives = remember(currentPauseTask, enabledTypes, userPrefs, goalPackagesForSwitch) {
+        val task = currentPauseTask
+        if (forcedTaskType != null || task == null) emptyList()
+        else PausePointEngine.availableAlternatives(
+            currentType = task.type,
+            enabledTypes = enabledTypes,
+            qrCodes = userPrefs.pausePointQrCodes,
+            nfcTagIds = userPrefs.pausePointNfcTagIds,
+            goalPackageNames = goalPackagesForSwitch,
+            cameraGranted = context.isCameraGranted(),
+            nfcAvailable = nfcAvailableForSwitch
+        )
+    }
+
+    val onSwitchPauseTask: () -> Unit = {
+        val current = currentPauseTask
+        if (current != null) {
+            scope.launch {
+            val goals = withContext(Dispatchers.IO) {
+                shieldRepository.allShields.first().filter { it.type == FocusType.GOAL }
+            }
+            goalPackagesForSwitch = goals.map { it.packageName }.toSet()
+            val alternatives = PausePointEngine.availableAlternatives(
+                currentType = current.type,
+                enabledTypes = enabledTypes,
+                qrCodes = userPrefs.pausePointQrCodes,
+                nfcTagIds = userPrefs.pausePointNfcTagIds,
+                goalPackageNames = goals.map { it.packageName }.toSet(),
+                cameraGranted = context.isCameraGranted(),
+                nfcAvailable = isNfcSupported(context)
+            )
+            if (alternatives.isNotEmpty()) {
+                currentPauseTask = PausePointEngine.generateTask(
+                    enabledTypes = alternatives.toSet(),
+                    goalPackageNames = goals.map { it.packageName }.toSet(),
+                    goalAppNames = goals.associate { it.packageName to it.appName },
+                    qrCodes = userPrefs.pausePointQrCodes,
+                    nfcTagIds = userPrefs.pausePointNfcTagIds,
+                    config = userPrefs.pausePointConfig,
+                    cameraGranted = context.isCameraGranted(),
+                    nfcAvailable = isNfcSupported(context)
+                )
+            }
             }
         }
     }
@@ -154,6 +223,31 @@ fun InterceptOverlayContent(
             showSheet = false
             delay(400)
             currentOnCloseApp()
+        }
+    }
+
+    val onNfcScanRequested: (PausePointTask.NfcScan) -> Unit = { nfcTask ->
+        // The overlay window sits above every activity window, so the scanner
+        // could never be seen while the overlay is up. Keep the same task,
+        // slide the sheet down first, then hide the overlay (not destroyed —
+        // the flow continues) and open the scanner. The monitor re-shows the
+        // overlay when the scanner closes. If the user is kicked to the
+        // launcher instead, nothing is re-shown.
+        InterceptOverlayManager.retainedPauseTask = nfcTask
+        InterceptOverlayManager.retainedPauseTaskForPackage = packageName
+        showSheet = false
+        scope.launch {
+            delay(450)
+            try {
+                NfcScanActivity.start(
+                    context = context,
+                    expectedTagIds = nfcTask.validTagIds,
+                    acceptAny = nfcTask.acceptAny
+                )
+                InterceptOverlayManager.hideActiveOverlayForNfcScan()
+            } catch (_: Exception) {
+                InterceptOverlayManager.clearRetainedPauseTask()
+            }
         }
     }
 
@@ -227,7 +321,10 @@ fun InterceptOverlayContent(
                             closeOverlay()
                         },
                         onCloseApp = closeOverlay,
-                        onKeyboardFocusChange = onKeyboardFocusChange
+                        onKeyboardFocusChange = onKeyboardFocusChange,
+                        showSwitchButton = switchAlternatives.isNotEmpty(),
+                        onSwitchTask = onSwitchPauseTask,
+                        onNfcScanRequested = onNfcScanRequested
                     )
                 } else {
                     Box(modifier = Modifier.fillMaxWidth().height(240.dp))
@@ -307,21 +404,77 @@ fun ScheduleOverlayContent(
     val enabledTypes = userPrefs.pausePointTaskTypes
     var currentPauseTask by remember(packageName) { mutableStateOf<PausePointTask?>(null) }
     var pauseTaskCompleted by remember { mutableStateOf(false) }
+    var goalPackagesForSwitch by remember { mutableStateOf(emptySet<String>()) }
+    val nfcAvailableForSwitch = remember { isNfcSupported(context) }
 
     LaunchedEffect(pausePointEnabled, packageName, prefsLoaded) {
         if (!prefsLoaded) return@LaunchedEffect
         if (pausePointEnabled && currentPauseTask == null) {
+            val retained = if (InterceptOverlayManager.retainedPauseTaskForPackage == packageName) {
+                InterceptOverlayManager.retainedPauseTask
+            } else null
+            InterceptOverlayManager.clearRetainedPauseTask()
             val goals = withContext(Dispatchers.IO) {
                 shieldRepository.allShields.first().filter { it.type == FocusType.GOAL }
             }
-            currentPauseTask = PausePointEngine.generateTask(
+            goalPackagesForSwitch = goals.map { it.packageName }.toSet()
+            currentPauseTask = retained ?: PausePointEngine.generateTask(
                 enabledTypes = enabledTypes,
                 goalPackageNames = goals.map { it.packageName }.toSet(),
                 goalAppNames = goals.associate { it.packageName to it.appName },
                 qrCodes = userPrefs.pausePointQrCodes,
+                nfcTagIds = userPrefs.pausePointNfcTagIds,
                 config = userPrefs.pausePointConfig,
-                cameraGranted = context.isCameraGranted()
+                cameraGranted = context.isCameraGranted(),
+                nfcAvailable = nfcAvailableForSwitch
             )
+        }
+    }
+
+    val switchAlternatives = remember(currentPauseTask, enabledTypes, userPrefs, goalPackagesForSwitch) {
+        val task = currentPauseTask
+        if (task == null) emptyList()
+        else PausePointEngine.availableAlternatives(
+            currentType = task.type,
+            enabledTypes = enabledTypes,
+            qrCodes = userPrefs.pausePointQrCodes,
+            nfcTagIds = userPrefs.pausePointNfcTagIds,
+            goalPackageNames = goalPackagesForSwitch,
+            cameraGranted = context.isCameraGranted(),
+            nfcAvailable = nfcAvailableForSwitch
+        )
+    }
+
+    val onSwitchPauseTask: () -> Unit = {
+        val current = currentPauseTask
+        if (current != null) {
+            scope.launch {
+            val goals = withContext(Dispatchers.IO) {
+                shieldRepository.allShields.first().filter { it.type == FocusType.GOAL }
+            }
+            goalPackagesForSwitch = goals.map { it.packageName }.toSet()
+            val alternatives = PausePointEngine.availableAlternatives(
+                currentType = current.type,
+                enabledTypes = enabledTypes,
+                qrCodes = userPrefs.pausePointQrCodes,
+                nfcTagIds = userPrefs.pausePointNfcTagIds,
+                goalPackageNames = goals.map { it.packageName }.toSet(),
+                cameraGranted = context.isCameraGranted(),
+                nfcAvailable = isNfcSupported(context)
+            )
+            if (alternatives.isNotEmpty()) {
+                currentPauseTask = PausePointEngine.generateTask(
+                    enabledTypes = alternatives.toSet(),
+                    goalPackageNames = goals.map { it.packageName }.toSet(),
+                    goalAppNames = goals.associate { it.packageName to it.appName },
+                    qrCodes = userPrefs.pausePointQrCodes,
+                    nfcTagIds = userPrefs.pausePointNfcTagIds,
+                    config = userPrefs.pausePointConfig,
+                    cameraGranted = context.isCameraGranted(),
+                    nfcAvailable = isNfcSupported(context)
+                )
+            }
+            }
         }
     }
 
@@ -346,6 +499,25 @@ fun ScheduleOverlayContent(
             showSheet = false
             delay(400)
             currentOnCloseApp()
+        }
+    }
+
+    val onNfcScanRequested: (PausePointTask.NfcScan) -> Unit = { nfcTask ->
+        InterceptOverlayManager.retainedPauseTask = nfcTask
+        InterceptOverlayManager.retainedPauseTaskForPackage = packageName
+        showSheet = false
+        scope.launch {
+            delay(450)
+            try {
+                NfcScanActivity.start(
+                    context = context,
+                    expectedTagIds = nfcTask.validTagIds,
+                    acceptAny = nfcTask.acceptAny
+                )
+                InterceptOverlayManager.hideActiveOverlayForNfcScan()
+            } catch (_: Exception) {
+                InterceptOverlayManager.clearRetainedPauseTask()
+            }
         }
     }
 
@@ -383,7 +555,10 @@ fun ScheduleOverlayContent(
                             closeOverlay()
                         },
                         onCloseApp = closeOverlay,
-                        onKeyboardFocusChange = onKeyboardFocusChange
+                        onKeyboardFocusChange = onKeyboardFocusChange,
+                        showSwitchButton = switchAlternatives.isNotEmpty(),
+                        onSwitchTask = onSwitchPauseTask,
+                        onNfcScanRequested = onNfcScanRequested
                     )
                 } else {
                     Box(modifier = Modifier.fillMaxWidth().height(240.dp))
@@ -408,6 +583,67 @@ fun ScheduleOverlayContent(
     }
 }
 
+private const val SWITCH_HOLD_MS = 5000L
+
+private fun <S> pauseTaskSwitchTransform(): AnimatedContentTransitionScope<S>.() -> ContentTransform = {
+    (fadeIn(animationSpec = tween(350, easing = FastOutSlowInEasing)) +
+        slideInHorizontally(animationSpec = tween(350, easing = FastOutSlowInEasing)) { it / 3 }
+        ).togetherWith(
+            fadeOut(animationSpec = tween(250)) +
+                slideOutHorizontally(animationSpec = tween(250)) { -it / 3 }
+        ).using(SizeTransform(clip = false))
+}
+
+@Composable
+private fun SwitchPauseTaskButton(
+    onSwitchTask: () -> Unit,
+    size: ZenithButtonSize,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val holdProgress = remember { Animatable(0f) }
+    var switching by remember { mutableStateOf(false) }
+    val currentOnSwitch by rememberUpdatedState(onSwitchTask)
+
+    LaunchedEffect(isPressed) {
+        if (isPressed && !switching) {
+            val startTime = System.currentTimeMillis()
+            while (true) {
+                val p = ((System.currentTimeMillis() - startTime) / SWITCH_HOLD_MS.toFloat()).coerceIn(0f, 1f)
+                holdProgress.snapTo(p)
+                if (p >= 1f) break
+                delay(16)
+            }
+            switching = true
+            currentOnSwitch()
+            delay(1200)
+            holdProgress.snapTo(0f)
+            switching = false
+        } else if (!isPressed && !switching) {
+            holdProgress.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+        }
+    }
+
+    val holdSeconds = ceil(SWITCH_HOLD_MS / 1000f * (1f - holdProgress.value)).toInt().coerceAtLeast(1)
+    ZenithButton(
+        onClick = {},
+        text = when {
+            switching -> "Switching…"
+            isPressed -> "Hold ${holdSeconds}s to switch"
+            else -> "I cannot do this now"
+        },
+        icon = Icons.Outlined.SwapHoriz,
+        type = ZenithButtonType.Tonal,
+        size = size,
+        fillMaxWidth = true,
+        enabled = !switching,
+        interactionSource = interactionSource,
+        backgroundProgressProvider = { holdProgress.value },
+        modifier = modifier
+    )
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun PausePointContent(
@@ -415,7 +651,10 @@ private fun PausePointContent(
     onTaskCompleted: () -> Unit,
     onOpenApp: (String) -> Unit,
     onCloseApp: () -> Unit,
-    onKeyboardFocusChange: (Boolean) -> Unit
+    onKeyboardFocusChange: (Boolean) -> Unit,
+    showSwitchButton: Boolean = false,
+    onSwitchTask: () -> Unit = {},
+    onNfcScanRequested: ((PausePointTask.NfcScan) -> Unit)? = null
 ) {
     val configuration = LocalConfiguration.current
     if (configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
@@ -424,7 +663,10 @@ private fun PausePointContent(
             onTaskCompleted = onTaskCompleted,
             onOpenApp = onOpenApp,
             onCloseApp = onCloseApp,
-            onKeyboardFocusChange = onKeyboardFocusChange
+            onKeyboardFocusChange = onKeyboardFocusChange,
+            showSwitchButton = showSwitchButton,
+            onSwitchTask = onSwitchTask,
+            onNfcScanRequested = onNfcScanRequested
         )
         return
     }
@@ -475,50 +717,70 @@ private fun PausePointContent(
                 }
             },
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(32.dp)
+        verticalArrangement = Arrangement.spacedBy(if (showSwitchButton) 12.dp else 0.dp)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = task.type.icon,
-                    contentDescription = task.type.displayName,
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-
+        AnimatedContent(
+            targetState = task,
+            transitionSpec = pauseTaskSwitchTransform(),
+            label = "pause_task_switch"
+        ) { currentTask ->
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(32.dp)
             ) {
-                Text(
-                    text = "Pause Point",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = currentTask.type.icon,
+                            contentDescription = currentTask.type.displayName,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
 
-                Text(
-                    text = task.type.displayName,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Pause Point",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
 
-                Text(
-                    text = task.type.description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
+                        Text(
+                            text = currentTask.type.displayName,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        Text(
+                            text = currentTask.type.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                PausePointTaskContent(
+                    task = currentTask,
+                    onTaskCompleted = onTaskCompleted,
+                    onOpenApp = onOpenApp,
+                    onUserActivity = bumpActivity,
+                    onKeyboardFocusChange = onKeyboardFocusChange,
+                    onNfcScanRequested = onNfcScanRequested
                 )
             }
         }
@@ -527,13 +789,17 @@ private fun PausePointContent(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            PausePointTaskContent(
-                task = task,
-                onTaskCompleted = onTaskCompleted,
-                onOpenApp = onOpenApp,
-                onUserActivity = bumpActivity,
-                onKeyboardFocusChange = onKeyboardFocusChange
-            )
+            if (showSwitchButton) {
+                key(task) {
+                    SwitchPauseTaskButton(
+                        onSwitchTask = {
+                            bumpActivity()
+                            onSwitchTask()
+                        },
+                        size = ZenithButtonSize.Large
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -553,7 +819,10 @@ private fun PausePointLandscapeContent(
     onTaskCompleted: () -> Unit,
     onOpenApp: (String) -> Unit,
     onCloseApp: () -> Unit,
-    onKeyboardFocusChange: (Boolean) -> Unit
+    onKeyboardFocusChange: (Boolean) -> Unit,
+    showSwitchButton: Boolean = false,
+    onSwitchTask: () -> Unit = {},
+    onNfcScanRequested: ((PausePointTask.NfcScan) -> Unit)? = null
 ) {
     val autoKickProgress = remember { Animatable(0f) }
     var interactionTick by remember { mutableIntStateOf(0) }
@@ -610,53 +879,59 @@ private fun PausePointLandscapeContent(
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                    contentAlignment = Alignment.Center
+            AnimatedContent(
+                targetState = task.type,
+                transitionSpec = pauseTaskSwitchTransform(),
+                label = "pause_task_info_switch",
+                modifier = Modifier.weight(1f)
+            ) { currentType ->
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    Icon(
-                        imageVector = task.type.icon,
-                        contentDescription = task.type.displayName,
-                        modifier = Modifier.size(40.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = currentType.icon,
+                            contentDescription = currentType.displayName,
+                            modifier = Modifier.size(40.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = currentType.displayName,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = "Pause Point",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = currentType.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
                     )
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = task.type.displayName,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = "Pause Point",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = task.type.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
             }
 
             Column(
@@ -666,13 +941,33 @@ private fun PausePointLandscapeContent(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                PausePointTaskContent(
-                    task = task,
-                    onTaskCompleted = onTaskCompleted,
-                    onOpenApp = onOpenApp,
-                    onUserActivity = bumpActivity,
-                    onKeyboardFocusChange = onKeyboardFocusChange
-                )
+                AnimatedContent(
+                    targetState = task,
+                    transitionSpec = pauseTaskSwitchTransform(),
+                    label = "pause_task_switch_landscape"
+                ) { currentTask ->
+                    PausePointTaskContent(
+                        task = currentTask,
+                        onTaskCompleted = onTaskCompleted,
+                        onOpenApp = onOpenApp,
+                        onUserActivity = bumpActivity,
+                        onKeyboardFocusChange = onKeyboardFocusChange,
+                        onNfcScanRequested = onNfcScanRequested
+                    )
+                }
+
+                if (showSwitchButton) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    key(task) {
+                        SwitchPauseTaskButton(
+                            onSwitchTask = {
+                                bumpActivity()
+                                onSwitchTask()
+                            },
+                            size = ZenithButtonSize.Medium
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 

@@ -1,4 +1,4 @@
-package com.etrisad.zenith.ui.screens
+﻿package com.etrisad.zenith.ui.screens
 
 import android.widget.Toast
 import androidx.compose.animation.*
@@ -108,6 +108,7 @@ import com.etrisad.zenith.ui.screens.settings.EyeCareScreen
 import com.etrisad.zenith.ui.screens.settings.LockdownSettings
 import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointScreen
 import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointQrSettingsScreen
+import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointNfcSettingsScreen
 import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointTypeSettingsScreen
 import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
 import com.etrisad.zenith.ui.screens.settings.SettingsScreen
@@ -233,6 +234,7 @@ fun MainScreen(
                 currentRoute == Screen.Level.route ||
                 currentRoute == Screen.PausePoint.route ||
                 currentRoute == Screen.PausePointQr.route ||
+                currentRoute == Screen.PausePointNfc.route ||
                 currentRoute?.startsWith("pause_point_type") == true ||
                 currentRoute == Screen.DatabaseDebug.route ||
                 currentRoute == Screen.DataRepairment.route ||
@@ -463,6 +465,7 @@ fun MainScreen(
                     currentRoute != Screen.Level.route &&
                     currentRoute != Screen.PausePoint.route &&
                     currentRoute != Screen.PausePointQr.route &&
+                    currentRoute != Screen.PausePointNfc.route &&
                     currentRoute?.startsWith("pause_point_type") == false &&
                     currentRoute != Screen.DatabaseDebug.route &&
                     currentRoute != Screen.DataRepairment.route &&
@@ -892,6 +895,7 @@ fun MainScreen(
                             targetRoute == Screen.Level.route ||
                                     targetRoute == Screen.PausePoint.route ||
                                     targetRoute == Screen.PausePointQr.route ||
+                                    targetRoute == Screen.PausePointNfc.route ||
                                     targetRoute?.startsWith("pause_point_type") == true ||
                                     targetRoute == Screen.DatabaseDebug.route ||
                                     targetRoute == Screen.DataRepairment.route ||
@@ -914,6 +918,7 @@ fun MainScreen(
                             initialRoute == Screen.Level.route ||
                                     initialRoute == Screen.PausePoint.route ||
                                     initialRoute == Screen.PausePointQr.route ||
+                                    initialRoute == Screen.PausePointNfc.route ||
                                     initialRoute?.startsWith("pause_point_type") == true ||
                                     initialRoute == Screen.DatabaseDebug.route ||
                                     initialRoute == Screen.DataRepairment.route ||
@@ -968,6 +973,7 @@ fun MainScreen(
                             targetRoute == Screen.Level.route ||
                                     targetRoute == Screen.PausePoint.route ||
                                     targetRoute == Screen.PausePointQr.route ||
+                                    targetRoute == Screen.PausePointNfc.route ||
                                     targetRoute?.startsWith("pause_point_type") == true ||
                                     targetRoute == Screen.DatabaseDebug.route ||
                                     targetRoute == Screen.DataRepairment.route ||
@@ -991,6 +997,7 @@ fun MainScreen(
                             initialRoute == Screen.Level.route ||
                                     initialRoute == Screen.PausePoint.route ||
                                     initialRoute == Screen.PausePointQr.route ||
+                                    initialRoute == Screen.PausePointNfc.route ||
                                     initialRoute?.startsWith("pause_point_type") == true ||
                                     initialRoute == Screen.DatabaseDebug.route ||
                                     initialRoute == Screen.DataRepairment.route ||
@@ -1197,6 +1204,13 @@ fun MainScreen(
                             preferencesRepository = userPreferencesRepository
                         )
                     }
+                    composable(Screen.PausePointNfc.route) {
+                        PausePointNfcSettingsScreen(
+                            preferences = preferences,
+                            innerPadding = innerPadding,
+                            preferencesRepository = userPreferencesRepository
+                        )
+                    }
                     composable(
                         route = Screen.PausePointTypeSettings.route,
                         arguments = listOf(androidx.navigation.navArgument("type") {
@@ -1215,6 +1229,9 @@ fun MainScreen(
                                 preferencesRepository = userPreferencesRepository,
                                 onOpenQrSettings = {
                                     navController.navigate(Screen.PausePointQr.route)
+                                },
+                                onOpenNfcSettings = {
+                                    navController.navigate(Screen.PausePointNfc.route)
                                 }
                             )
                         } else {
@@ -1330,6 +1347,7 @@ fun MainScreen(
                     currentRoute != Screen.Level.route &&
                             currentRoute != Screen.PausePoint.route &&
                             currentRoute != Screen.PausePointQr.route &&
+                            currentRoute != Screen.PausePointNfc.route &&
                             currentRoute?.startsWith("pause_point_type") == false &&
                             currentRoute?.startsWith("settings_category") == false &&
                             currentRoute?.startsWith("app_detail") == false

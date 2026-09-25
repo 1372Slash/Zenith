@@ -21,6 +21,7 @@ object FeatureInfoRegistry {
         route == Screen.Achievements.route -> achievements
         route == Screen.Level.route -> level
         route == Screen.PausePointQr.route -> pausePointQr
+        route == Screen.PausePointNfc.route -> pausePointNfc
         route?.startsWith("pause_point_type") == true -> pausePointType
         route == Screen.OverlayAppearance.route -> overlayAppearance
         route == Screen.GSFlexCustomizer.route -> gsFlexCustomizer
@@ -141,7 +142,7 @@ object FeatureInfoRegistry {
             ),
             FeatureInfoSections.tips(
                 "Turning bedtime OFF mid-window intentionally requires the hardest confirmation (10 levers in 10 seconds).",
-                "Add trusted apps (e.g. music, phone) to Allowed Apps so they bypass blocking.",
+                "Add trusted apps (e.g. music, phone) to Allowed Apps so they skip the bedtime block — their Shields and Goals still apply.",
                 "Tap an activity bar to see exactly which apps were used at that hour."
             )
         )
@@ -371,6 +372,26 @@ object FeatureInfoRegistry {
         )
     )
 
+    private val pausePointNfc = FeatureInfo(
+        title = "NFC Tags",
+        summary = "Register the physical NFC tags accepted by the Pause Point NFC-scan task.",
+        sections = listOf(
+            FeatureInfoSections.whatItDoes(
+                "Scans and saves NFC tag IDs that Pause Point will later demand when you try to unblock an app.",
+                "Any saved tag satisfies the task — so put them somewhere getting up matters."
+            ),
+            FeatureInfoSections.whatYoullSee(
+                "An NFC status card (with enable/scan toggle and last-read tag ID) and a manual tag-ID entry.",
+                "A Saved Tags list where each entry can be copied or deleted."
+            ),
+            FeatureInfoSections.tips(
+                "Stick tags far from your desk — fridge, another room — to add real friction.",
+                "Keep at least one spare tag registered in case one gets lost.",
+                "Tag IDs are stored locally; delete ones you no longer use."
+            )
+        )
+    )
+
     private val pausePointType = FeatureInfo(
         title = "Pause Point Task",
         summary = "Tune exactly how each Pause Point task behaves so the difficulty matches your intent.",
@@ -385,7 +406,7 @@ object FeatureInfoRegistry {
             ),
             FeatureInfoSections.tips(
                 "Changes save instantly and apply to the next generated pause task.",
-                "QR Scan links to the Saved QR Codes screen; Choose App uses your goal apps automatically.",
+                "QR Scan links to the Saved QR Codes screen; NFC Scan links to the Saved NFC Tags screen; Choose App uses your goal apps automatically.",
                 "Defaults match the original values, so untouched tasks behave exactly as before."
             )
         )

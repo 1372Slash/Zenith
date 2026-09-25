@@ -24,6 +24,8 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
 
     <application
         android:name=".ZenithApplication"
@@ -78,6 +80,17 @@
             android:name=".service.AppGoalOverlayActivity"
             android:exported="false"
             android:launchMode="singleInstance"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize"
+            android:theme="@style/Theme.Zenith" />
+
+        <activity
+            android:name=".ui.components.nfc.NfcScanActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:taskAffinity="com.etrisad.zenith.nfcscan"
+            android:excludeFromRecents="true"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize"

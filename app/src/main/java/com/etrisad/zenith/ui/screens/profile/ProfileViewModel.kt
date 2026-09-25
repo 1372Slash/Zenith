@@ -75,7 +75,7 @@ data class DailyCount(
 fun com.etrisad.zenith.data.preferences.UserPreferences.achievementTrackingKey(): String {
     return listOf(
         globalBestStreak, globalCurrentStreak, bedtimeBestStreak,
-        alarmsJson, pausePointEnabled, pausePointQrCodes.size,
+        alarmsJson, pausePointEnabled, pausePointQrCodes.size, pausePointNfcTagIds.size,
         eyeCareEnabled, gracePeriodEnabled, lockdownEnabled,
         pomodoroSessionEndTimestamp, pomodoroPresets,
         expressiveColors, autoBackupEnabled, lastBackupTimestamp,
@@ -85,7 +85,7 @@ fun com.etrisad.zenith.data.preferences.UserPreferences.achievementTrackingKey()
         websiteAutoTrackingEnabled, developerModeEnabled,
         performanceLevel.name, smartRepairOnRefresh,
         excludedFromTrackingPackages.size, bedtimeWindDownEnabled,
-        pausePointTaskTypes.size, pausePointQrCodes.size,
+        pausePointTaskTypes.size, pausePointQrCodes.size, pausePointNfcTagIds.size,
         userSharedProfile, globalCurrentStreak, userXpTotal,
         overlayPaletteId, floatingTabBarEnabled, totalUsagePillEnabled,
         incentiveLockEnabled, earlyKickEnabled, batteryStatsResetEnabled,
@@ -301,6 +301,7 @@ class ProfileViewModel(
                     hasGoal = shields.any { it.type == FocusType.GOAL },
                     hasSchedule = schedules.isNotEmpty(),
                     hasQr = freshPrefs.pausePointQrCodes.isNotEmpty(),
+                    hasNfc = freshPrefs.pausePointNfcTagIds.isNotEmpty(),
                     hasPreset = freshPrefs.pomodoroPresets.trim() != "{}",
                     hasCustomTheme = freshPrefs.expressiveColors,
                     hasBackup = freshPrefs.autoBackupEnabled || freshPrefs.lastBackupTimestamp > 0L,
@@ -336,6 +337,7 @@ class ProfileViewModel(
                     } catch (_: Exception) { 0 },
                     goalCount = shields.count { it.type == FocusType.GOAL },
                     qrCount = freshPrefs.pausePointQrCodes.size,
+                    nfcCount = freshPrefs.pausePointNfcTagIds.size,
                     taskTypeCount = freshPrefs.pausePointTaskTypes.size,
                     // While a debug XP override is active, achievements
                     // compute from the frozen pre-debug base so debugging

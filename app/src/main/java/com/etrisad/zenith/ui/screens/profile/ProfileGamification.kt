@@ -61,6 +61,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material.icons.outlined.PictureInPicture
+import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material.icons.outlined.Save
@@ -402,6 +403,7 @@ data class ProfileAchievementStats(
     val hasGoal: Boolean = false,
     val hasSchedule: Boolean = false,
     val hasQr: Boolean = false,
+    val hasNfc: Boolean = false,
     val hasPreset: Boolean = false,
     val hasCustomTheme: Boolean = false,
     val hasBackup: Boolean = false,
@@ -434,6 +436,7 @@ data class ProfileAchievementStats(
     val alarmCount: Int = 0,
     val goalCount: Int = 0,
     val qrCount: Int = 0,
+    val nfcCount: Int = 0,
     val taskTypeCount: Int = 0,
     val userXpTotal: Long = 0L,
     val hasCustomOverlay: Boolean = false,
@@ -1354,6 +1357,20 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
         )
     ),
     AchievementDef(
+        id = "nfc_collector", title = "NFC Collector",
+        desc = "Pause Point NFC tags saved", icon = Icons.Outlined.Nfc,
+        category = AchievementCategory.ACCUMULATION,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 1, "1 tag"),
+            TierThreshold(ProfileTier.V, 2, "2 tags"),
+            TierThreshold(ProfileTier.X, 3, "3 tags"),
+            TierThreshold(ProfileTier.M, 5, "5 tags")
+        ),
+        tierNames = listOf(
+            "First Tap", "NFC Collector", "Tag Hoarder", "NFC Master"
+        )
+    ),
+    AchievementDef(
         id = "preset_saver", title = "Preset Saver",
         desc = "Save a Pomodoro preset", icon = Icons.Outlined.Save,
         category = AchievementCategory.EXPLORER,
@@ -1473,7 +1490,7 @@ private val JOURNEY_ORDER = listOf(
     "eyecare_explorer", "wind_downer", "bedtime_bouncer", "silent_sleeper",
     // Planning depth (QR needs physical codes, so it sits with the
     // optional Pause Point depth instead of the early journey).
-    "alarm_collector", "scheduler_pro", "qr_collector", "taskmaster", "variant_vanguard",
+    "alarm_collector", "scheduler_pro", "qr_collector", "nfc_collector", "taskmaster", "variant_vanguard",
     // Focus depth.
     "focus_hours", "xp_hoarder",
     // Sharing and ambient delights.
@@ -1506,6 +1523,7 @@ fun buildAchievementStates(stats: ProfileAchievementStats): List<AchievementStat
         "grace_explorer" to if (stats.hasGracePeriod) 1L else 0L,
         "schedule_keeper" to if (stats.hasSchedule) 1L else 0L,
         "qr_collector" to stats.qrCount.toLong(),
+        "nfc_collector" to stats.nfcCount.toLong(),
         "preset_saver" to if (stats.hasPreset) 1L else 0L,
         "hud_pilot" to if (stats.hasOverlayHud) 1L else 0L,
         "patient_player" to if (stats.hasDelayShield) 1L else 0L,

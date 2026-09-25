@@ -372,6 +372,7 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
         val PAUSE_POINT_ENABLED = booleanPreferencesKey("pause_point_enabled")
         val PAUSE_POINT_TASK_TYPES = stringPreferencesKey("pause_point_task_types")
         val PAUSE_POINT_QR_CODES = stringPreferencesKey("pause_point_qr_codes")
+        val PAUSE_POINT_NFC_TAG_IDS = stringPreferencesKey("pause_point_nfc_tag_ids")
         val PAUSE_POINT_WAITING_VARIANTS = stringPreferencesKey("pause_point_waiting_variants")
         val PAUSE_POINT_BREATHING_VARIANTS = stringPreferencesKey("pause_point_breathing_variants")
         val PAUSE_POINT_WALK_VARIANTS = stringPreferencesKey("pause_point_walk_variants")
@@ -633,6 +634,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
                 ?.mapNotNull { runCatching { PausePointTaskType.valueOf(it) }.getOrNull() }
                 ?.toSet() ?: emptySet(),
             pausePointQrCodes = parseStringList(settings[PreferencesKeys.PAUSE_POINT_QR_CODES]),
+            pausePointNfcTagIds = parseStringList(settings[PreferencesKeys.PAUSE_POINT_NFC_TAG_IDS]),
             pausePointWaitingVariants = parseVariantList(settings[PreferencesKeys.PAUSE_POINT_WAITING_VARIANTS]).distinct(),
             pausePointBreathingVariants = parseVariantList(settings[PreferencesKeys.PAUSE_POINT_BREATHING_VARIANTS]).distinct(),
             pausePointWalkVariants = parseVariantList(settings[PreferencesKeys.PAUSE_POINT_WALK_VARIANTS]).distinct(),
@@ -1610,6 +1612,10 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.PAUSE_POINT_QR_CODES] = serializeStringList(codes) }
     }
 
+    suspend fun setPausePointNfcTagIds(tagIds: List<String>) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.PAUSE_POINT_NFC_TAG_IDS] = serializeStringList(tagIds) }
+    }
+
     suspend fun setPausePointVariants(type: PausePointTaskType, variants: List<PausePointVariant>) {
         context.dataStore.edit { preferences -> preferences[keyForPausePointVariants(type)] = serializePausePointVariants(variants) }
     }
@@ -1623,7 +1629,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         PausePointTaskType.MATH -> PreferencesKeys.PAUSE_POINT_MATH_VARIANTS
         PausePointTaskType.COUNTING -> PreferencesKeys.PAUSE_POINT_COUNTING_VARIANTS
         PausePointTaskType.TYPING -> PreferencesKeys.PAUSE_POINT_TYPING_VARIANTS
-        PausePointTaskType.QR_SCAN, PausePointTaskType.CHOOSE_APP ->
+        PausePointTaskType.QR_SCAN, PausePointTaskType.NFC_SCAN, PausePointTaskType.CHOOSE_APP ->
             throw IllegalArgumentException("No sub-task variants for $type")
     }
 
@@ -1918,6 +1924,7 @@ data class UserPreferences(
     val pausePointEnabled: Boolean = false,
     val pausePointTaskTypes: Set<PausePointTaskType> = emptySet(),
     val pausePointQrCodes: List<String> = emptyList(),
+    val pausePointNfcTagIds: List<String> = emptyList(),
     val pausePointWaitingVariants: List<PausePointVariant> = PausePointDefaults.waitingVariants,
     val pausePointBreathingVariants: List<PausePointVariant> = PausePointDefaults.breathingVariants,
     val pausePointWalkVariants: List<PausePointVariant> = PausePointDefaults.walkVariants,
