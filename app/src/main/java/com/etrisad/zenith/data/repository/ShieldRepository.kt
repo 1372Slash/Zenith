@@ -31,12 +31,12 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 class ShieldRepository(
-    private val shieldDao: ShieldDao,
-    private val scheduleDao: ScheduleDao,
-    private val dailyUsageDao: DailyUsageDao,
-    private val hourlyUsageDao: HourlyUsageDao,
-    private val websiteUsageDao: WebsiteUsageDao,
-    private val database: ZenithDatabase,
+    private var shieldDao: ShieldDao,
+    private var scheduleDao: ScheduleDao,
+    private var dailyUsageDao: DailyUsageDao,
+    private var hourlyUsageDao: HourlyUsageDao,
+    private var websiteUsageDao: WebsiteUsageDao,
+    private var database: ZenithDatabase,
     private val userPreferencesRepository: UserPreferencesRepository
 ) {
     val allowedApps = ConcurrentHashMap<String, Long>()
@@ -50,10 +50,23 @@ class ShieldRepository(
     private val _isShieldsLoaded = MutableStateFlow(false)
     val isShieldsLoaded: Flow<Boolean> = _isShieldsLoaded.asStateFlow()
 
-    val allSchedules: Flow<List<ScheduleEntity>> = scheduleDao.getAllSchedules()
+    // Getter (not a one-time val): after rebindDatabase() this must serve the
+    // new DAO handles, otherwise collectors stay blind on a closed instance.
+    val allSchedules: Flow<List<ScheduleEntity>> get() = scheduleDao.getAllSchedules()
+
+    private var collectorJob: kotlinx.coroutines.Job? = null
 
     init {
+        startShieldCollectors()
         repositoryScope.launch {
+            kotlinx.coroutines.delay(5000)
+            verifyTableHealth()
+        }
+    }
+
+    private fun startShieldCollectors() {
+        collectorJob?.cancel()
+        collectorJob = repositoryScope.launch {
             shieldDao.getAllShields().collect {
                 _allShieldsCache.value = it
                 _isShieldsLoaded.value = true
@@ -61,11 +74,28 @@ class ShieldRepository(
                 DbLogBuffer.d("ZenithGoalShield", "DB_LOADED: ${it.size} shields from DB [${it.filter { s -> s.type == com.etrisad.zenith.data.local.entity.FocusType.SHIELD }.size} shields, ${it.filter { s -> s.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL }.size} goals]")
             }
         }
-        repositoryScope.launch {
-            kotlinx.coroutines.delay(5000)
-            verifyTableHealth()
-        }
     }
+
+    /**
+     * Re-points every DAO handle at a freshly opened database instance.
+     * Needed after ZenithDatabase.closeDatabase() (backup/restore): the old
+     * handles are bound to a closed connection pool, so every Flow/suspend
+     * query on them fails silently and the UI goes permanently all-zero until
+     * the process restarts. Callers should then re-collect their streams.
+     */
+    fun rebindDatabase(db: ZenithDatabase) {
+        database = db
+        shieldDao = db.shieldDao()
+        scheduleDao = db.scheduleDao()
+        dailyUsageDao = db.dailyUsageDao()
+        hourlyUsageDao = db.hourlyUsageDao()
+        websiteUsageDao = db.websiteUsageDao()
+        startShieldCollectors()
+        android.util.Log.d("ZenithDB", "DB_REBOUND: repository DAO handles re-pointed at a fresh instance")
+        DbLogBuffer.d("ZenithDB", "DB_REBOUND: repository DAO handles re-pointed at a fresh instance")
+    }
+
+    fun isDatabaseOpen(): Boolean = try { database.isOpen } catch (_: Exception) { false }
 
     private suspend fun verifyTableHealth() {
         try {

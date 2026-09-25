@@ -49,7 +49,18 @@ object BackupUtils {
             val dbShm = File("${dbFile.path}-shm")
             val prefsFile = File(context.filesDir, "datastore/$PREFS_FILE_NAME")
 
-            ZenithDatabase.closeDatabase()
+            // NEVER close the database for backup: closeDatabase() orphans every
+            // DAO/Flow held by the live process (repository, services, viewmodels)
+            // and blinds the UI with all-zero data until the next app restart.
+            // Instead checkpoint WAL into the main file so it is self-contained.
+            try {
+                ZenithDatabase.getDatabase(context).openHelper.writableDatabase
+                    .execSQL("PRAGMA wal_checkpoint(TRUNCATE)")
+            } catch (e: Exception) {
+                com.etrisad.zenith.data.local.database.DbLogBuffer.w(
+                    "ZenithDB", "BACKUP_CHECKPOINT_FAILED: ${e.message} (continuing anyway)"
+                )
+            }
 
             context.contentResolver.openOutputStream(targetUri)?.use { outputStream ->
                 ZipOutputStream(outputStream).use { zipOut ->

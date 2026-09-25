@@ -494,10 +494,62 @@ class HomeViewModel(
         }
     }
 
-    private fun setupDataObservers() {
-        var lastPreferSystem: Boolean? = null
-        var lastOnboardingCompleted: Boolean? = null
+    // Factories (not one-time vals): the self-healing observer re-collects after
+    // a DB rebind, so each attempt must build streams from current DAO handles.
+    private fun recentUsageFlow() = shieldRepository.getRecentUsage(21).onEach {
+        android.util.Log.d("ZenithDB", "DATA_OBSERVER: recentUsageFlow emitted ${it.size} items")
+        DbLogBuffer.d("ZenithDB", "DATA_OBSERVER: recentUsageFlow emitted ${it.size} items")
+    }
+    private fun globalUsageFlow() = shieldRepository.getLastNDaysGlobalUsage(60).onEach {
+        android.util.Log.d("ZenithDB", "DATA_OBSERVER: globalUsageFlow emitted ${it.size} items")
+        DbLogBuffer.d("ZenithDB", "DATA_OBSERVER: globalUsageFlow emitted ${it.size} items")
+    }
+    private val prefsFlow = userPreferencesRepository.userPreferencesFlow.onEach {
+        android.util.Log.d("ZenithDB", "DATA_OBSERVER: userPrefsFlow emitted")
+        DbLogBuffer.d("ZenithDB", "DATA_OBSERVER: userPrefsFlow emitted")
+    }
 
+    private fun buildObserverSnapshot(
+        usage: List<DailyUsageEntity>,
+        global: List<DailyUsageEntity>,
+        prefs: UserPreferences
+    ): Boolean {
+        android.util.Log.d("ZenithDB", "DATA_OBSERVER: recentUsage=${usage.size} records, globalUsage=${global.size} records")
+        DbLogBuffer.d("ZenithDB", "DATA_OBSERVER: recentUsage=${usage.size} records, globalUsage=${global.size} records")
+        if (usage.isEmpty() && global.isEmpty()) {
+            android.util.Log.w("ZenithDB", "DATA_OBSERVER: BOTH recentUsage AND globalUsage are EMPTY!")
+            DbLogBuffer.w("ZenithDB", "DATA_OBSERVER: BOTH recentUsage AND globalUsage are EMPTY!")
+        }
+        val forceUpdate = (lastPreferSystem != null && lastPreferSystem != prefs.preferSystemUsageHistory) ||
+                (lastOnboardingCompleted != null && lastOnboardingCompleted != prefs.onboardingStatsCompleted)
+
+        lastPreferSystem = prefs.preferSystemUsageHistory
+        lastOnboardingCompleted = prefs.onboardingStatsCompleted
+
+        allHistory = usage
+        globalHistory = global
+
+        currentTargetMinutes = prefs.screenTimeTargetMinutes
+        prefGlobalBestStreak = prefs.globalBestStreak
+        preferSystemUsageHistory = prefs.preferSystemUsageHistory
+        dayStartHour = prefs.dayStartHour.also { usageHistoryManager.dayStartHour = it }
+        dayStartMinute = prefs.dayStartMinute.also { usageHistoryManager.dayStartMinute = it }
+
+        dismissedUninstalledApps = prefs.dismissedUninstalledApps
+        _uiState.update { it.copy(
+            bedtimeEnabled = prefs.bedtimeEnabled,
+            bedtimeStartTime = prefs.bedtimeStartTime,
+            bedtimeEndTime = prefs.bedtimeEndTime,
+            bedtimeDays = prefs.bedtimeDays
+        ) }
+
+        return forceUpdate
+    }
+
+    private var lastPreferSystem: Boolean? = null
+    private var lastOnboardingCompleted: Boolean? = null
+
+    private fun setupDataObservers() {
         viewModelScope.launch {
             shieldRepository.allShields.collect { shields ->
                 allShields = shields
@@ -564,64 +616,45 @@ class HomeViewModel(
         }
 
         viewModelScope.launch(Dispatchers.IO) {
-            val recentUsageFlow = shieldRepository.getRecentUsage(21).onEach {
-                android.util.Log.d("ZenithDB", "DATA_OBSERVER: recentUsageFlow emitted ${it.size} items")
-                DbLogBuffer.d("ZenithDB", "DATA_OBSERVER: recentUsageFlow emitted ${it.size} items")
-            }
-            val globalUsageFlow = shieldRepository.getLastNDaysGlobalUsage(60).onEach {
-                android.util.Log.d("ZenithDB", "DATA_OBSERVER: globalUsageFlow emitted ${it.size} items")
-                DbLogBuffer.d("ZenithDB", "DATA_OBSERVER: globalUsageFlow emitted ${it.size} items")
-            }
-            val prefsFlow = userPreferencesRepository.userPreferencesFlow.onEach {
-                android.util.Log.d("ZenithDB", "DATA_OBSERVER: userPrefsFlow emitted")
-                DbLogBuffer.d("ZenithDB", "DATA_OBSERVER: userPrefsFlow emitted")
-            }
-            combine(
-                recentUsageFlow,
-                globalUsageFlow,
-                prefsFlow
-            ) { usage, global, prefs ->
-                android.util.Log.d("ZenithDB", "DATA_OBSERVER: recentUsage=${usage.size} records, globalUsage=${global.size} records")
-                DbLogBuffer.d("ZenithDB", "DATA_OBSERVER: recentUsage=${usage.size} records, globalUsage=${global.size} records")
-                if (usage.isEmpty() && global.isEmpty()) {
-                    android.util.Log.w("ZenithDB", "DATA_OBSERVER: BOTH recentUsage AND globalUsage are EMPTY!")
-                    DbLogBuffer.w("ZenithDB", "DATA_OBSERVER: BOTH recentUsage AND globalUsage are EMPTY!")
-                }
-                val forceUpdate = (lastPreferSystem != null && lastPreferSystem != prefs.preferSystemUsageHistory) ||
-                        (lastOnboardingCompleted != null && lastOnboardingCompleted != prefs.onboardingStatsCompleted)
-
-                lastPreferSystem = prefs.preferSystemUsageHistory
-                lastOnboardingCompleted = prefs.onboardingStatsCompleted
-
-                allHistory = usage
-                globalHistory = global
-
-                currentTargetMinutes = prefs.screenTimeTargetMinutes
-                prefGlobalBestStreak = prefs.globalBestStreak
-                preferSystemUsageHistory = prefs.preferSystemUsageHistory
-                dayStartHour = prefs.dayStartHour.also { usageHistoryManager.dayStartHour = it }
-                dayStartMinute = prefs.dayStartMinute.also { usageHistoryManager.dayStartMinute = it }
-
-                dismissedUninstalledApps = prefs.dismissedUninstalledApps
-                _uiState.update { it.copy(
-                    bedtimeEnabled = prefs.bedtimeEnabled,
-                    bedtimeStartTime = prefs.bedtimeStartTime,
-                    bedtimeEndTime = prefs.bedtimeEndTime,
-                    bedtimeDays = prefs.bedtimeDays
-                ) }
-
-                forceUpdate
-            }.debounce(2000).collect { forceUpdate ->
+            // Self-healing collection: if an upstream Room stream dies (e.g. the
+            // DB instance was closed by backup/restore while this process kept
+            // stale DAO handles), the whole combine dies silently and the UI is
+            // stuck on empty snapshots forever. Rebind to a fresh instance and
+            // re-collect instead of staying blind.
+            var observerAttempt = 0
+            while (currentCoroutineContext().isActive) {
                 try {
-                    refreshMutex.withLock {
-                        if (forceUpdate) _uiState.update { it.copy(isLoading = true) }
-                        usageHistoryManager.updateGlobalFallbackInternal(forceFull = forceUpdate)
-                        performUsageStatsRefresh(showLoading = false)
-                    }
+                    combine(
+                        recentUsageFlow(),
+                        globalUsageFlow(),
+                        prefsFlow
+                    ) { usage, global, prefs -> buildObserverSnapshot(usage, global, prefs) }
+                        .debounce(2000).collect { forceUpdate ->
+                            try {
+                                refreshMutex.withLock {
+                                    if (forceUpdate) _uiState.update { it.copy(isLoading = true) }
+                                    usageHistoryManager.updateGlobalFallbackInternal(forceFull = forceUpdate)
+                                    performUsageStatsRefresh(showLoading = false)
+                                }
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                android.util.Log.e("HomeVM", "Data observer collect failed: ${e.message}")
+                            }
+                        }
+                    break
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    android.util.Log.e("HomeVM", "Data observer collect failed: ${e.message}")
+                    observerAttempt++
+                    android.util.Log.e("ZenithDB", "DATA_OBSERVER_DIED[$observerAttempt]: ${e::class.simpleName}: ${e.message} dbOpen=${shieldRepository.isDatabaseOpen()} — rebinding and retrying")
+                    DbLogBuffer.e("ZenithDB", "DATA_OBSERVER_DIED[$observerAttempt]: ${e::class.simpleName}: ${e.message} dbOpen=${shieldRepository.isDatabaseOpen()} — rebinding and retrying")
+                    try {
+                        shieldRepository.rebindDatabase(
+                            com.etrisad.zenith.data.local.database.ZenithDatabase.getDatabase(context)
+                        )
+                    } catch (_: Exception) {}
+                    delay(5000)
                 }
             }
         }
@@ -632,28 +665,44 @@ class HomeViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun observeWebsiteUsage() {
         viewModelScope.launch {
-            _uiState.map { it.selectedDateMillis }
-                .distinctUntilChanged()
-                .flatMapLatest { millis ->
-                    val dateStr = usageHistoryManager.getDateFormat().format(Date(millis))
-                    shieldRepository.getWebsiteUsageForDate(dateStr)
+            // Same self-healing as the main observer: a dead Room stream must
+            // rebind and retry instead of going silent forever.
+            var attempt = 0
+            while (currentCoroutineContext().isActive) {
+                try {
+                    _uiState.map { it.selectedDateMillis }
+                        .distinctUntilChanged()
+                        .flatMapLatest { millis ->
+                            val dateStr = usageHistoryManager.getDateFormat().format(Date(millis))
+                            shieldRepository.getWebsiteUsageForDate(dateStr)
+                        }
+                        .flowOn(Dispatchers.Default)
+                        .collect { entities ->
+                            val usage = entities.map { entity ->
+                                val domain = entity.domain
+                                val displayName = com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
+                                val pkgName = com.etrisad.zenith.data.website.WebsiteRepository.createPackageName(domain)
+                                AppUsageInfo(
+                                    packageName = pkgName,
+                                    appName = displayName,
+                                    totalTimeVisible = entity.usageTimeMillis,
+                                    hasDatabaseRecord = true,
+                                    isLive = false
+                                )
+                            }.sortedByDescending { it.totalTimeVisible }
+                            _uiState.update { it.copy(websiteUsage = usage) }
+                        }
+                    break
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    attempt++
+                    android.util.Log.e("ZenithDB", "WEBSITE_OBSERVER_DIED[$attempt]: ${e::class.simpleName}: ${e.message} — rebinding and retrying")
+                    DbLogBuffer.e("ZenithDB", "WEBSITE_OBSERVER_DIED[$attempt]: ${e::class.simpleName}: ${e.message} — rebinding and retrying")
+                    rebindDatabaseHandles("websiteObserver")
+                    delay(5000)
                 }
-                .flowOn(Dispatchers.Default)
-                .collect { entities ->
-                    val usage = entities.map { entity ->
-                        val domain = entity.domain
-                        val displayName = com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
-                        val pkgName = com.etrisad.zenith.data.website.WebsiteRepository.createPackageName(domain)
-                        AppUsageInfo(
-                            packageName = pkgName,
-                            appName = displayName,
-                            totalTimeVisible = entity.usageTimeMillis,
-                            hasDatabaseRecord = true,
-                            isLive = false
-                        )
-                    }.sortedByDescending { it.totalTimeVisible }
-                    _uiState.update { it.copy(websiteUsage = usage) }
-                }
+            }
         }
     }
 
@@ -770,10 +819,53 @@ class HomeViewModel(
         val previousJob = refreshJob
         refreshJob = viewModelScope.launch(Dispatchers.Default) {
             previousJob?.cancel()
-            previousJob?.join()
+            // join() rethrows the victim's CancellationException into the joiner,
+            // killing every refresh that supersedes a still-running one. Swallow it:
+            // the mutex below is the real serializer.
+            try {
+                previousJob?.join()
+            } catch (_: kotlinx.coroutines.CancellationException) {
+            }
             refreshMutex.withLock {
                 performUsageStatsRefresh(showLoading)
             }
+        }
+    }
+
+    /**
+     * One-shot Room reads used when the observer snapshots are still empty.
+     * On a closed-pool IllegalStateException (DB was closed under us by
+     * backup/restore) rebinds to a fresh instance and retries once, so a
+     * single bad state can't blind the UI until process restart.
+     */
+    private suspend fun loadRecentUsageFallback(days: Int): List<DailyUsageEntity> {
+        return try {
+            withContext(Dispatchers.IO) { shieldRepository.getRecentUsage(days).first() }
+        } catch (e: IllegalStateException) {
+            rebindDatabaseHandles("recentUsageFallback")
+            withContext(Dispatchers.IO) { shieldRepository.getRecentUsage(days).first() }
+        }
+    }
+
+    private suspend fun loadGlobalUsageFallback(days: Int): List<DailyUsageEntity> {
+        return try {
+            withContext(Dispatchers.IO) { shieldRepository.getLastNDaysGlobalUsage(days).first() }
+        } catch (e: IllegalStateException) {
+            rebindDatabaseHandles("globalUsageFallback")
+            withContext(Dispatchers.IO) { shieldRepository.getLastNDaysGlobalUsage(days).first() }
+        }
+    }
+
+    private suspend fun rebindDatabaseHandles(reason: String) {
+        try {
+            shieldRepository.rebindDatabase(
+                com.etrisad.zenith.data.local.database.ZenithDatabase.getDatabase(context)
+            )
+            android.util.Log.d("ZenithDB", "DB_REBOUND[$reason]: handles re-pointed, dbOpen=${shieldRepository.isDatabaseOpen()}")
+            DbLogBuffer.d("ZenithDB", "DB_REBOUND[$reason]: handles re-pointed, dbOpen=${shieldRepository.isDatabaseOpen()}")
+        } catch (e: Exception) {
+            android.util.Log.e("ZenithDB", "DB_REBIND_FAILED[$reason]: ${e::class.simpleName}: ${e.message}")
+            DbLogBuffer.e("ZenithDB", "DB_REBIND_FAILED[$reason]: ${e::class.simpleName}: ${e.message}")
         }
     }
 
@@ -788,28 +880,24 @@ class HomeViewModel(
             android.util.Log.w("ZenithDB", "REFRESH[$refreshId]: allHistory EMPTY, falling back to direct Room query")
             DbLogBuffer.w("ZenithDB", "REFRESH[$refreshId]: allHistory EMPTY, falling back to direct Room query")
             try {
-                allHistory = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    shieldRepository.getRecentUsage(30).first()
-                }
+                allHistory = loadRecentUsageFallback(30)
                 android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: FALLBACK allHistory loaded ${allHistory.size} records")
                 DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: FALLBACK allHistory loaded ${allHistory.size} records")
             } catch (e: Exception) {
-                android.util.Log.e("ZenithDB", "REFRESH[$refreshId]: FALLBACK allHistory failed: ${e::class.simpleName}: ${e.message}")
-                DbLogBuffer.e("ZenithDB", "REFRESH[$refreshId]: FALLBACK allHistory failed: ${e::class.simpleName}: ${e.message}")
+                android.util.Log.e("ZenithDB", "REFRESH[$refreshId]: FALLBACK allHistory failed: ${e::class.simpleName}: ${e.message} dbOpen=${shieldRepository.isDatabaseOpen()}")
+                DbLogBuffer.e("ZenithDB", "REFRESH[$refreshId]: FALLBACK allHistory failed: ${e::class.simpleName}: ${e.message} dbOpen=${shieldRepository.isDatabaseOpen()}")
             }
         }
         if (globalHistory.isEmpty()) {
             android.util.Log.w("ZenithDB", "REFRESH[$refreshId]: globalHistory EMPTY, falling back to direct Room query")
             DbLogBuffer.w("ZenithDB", "REFRESH[$refreshId]: globalHistory EMPTY, falling back to direct Room query")
             try {
-                globalHistory = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    shieldRepository.getLastNDaysGlobalUsage(60).first()
-                }
+                globalHistory = loadGlobalUsageFallback(60)
                 android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: FALLBACK globalHistory loaded ${globalHistory.size} records")
                 DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: FALLBACK globalHistory loaded ${globalHistory.size} records")
             } catch (e: Exception) {
-                android.util.Log.e("ZenithDB", "REFRESH[$refreshId]: FALLBACK globalHistory failed: ${e::class.simpleName}: ${e.message}")
-                DbLogBuffer.e("ZenithDB", "REFRESH[$refreshId]: FALLBACK globalHistory failed: ${e::class.simpleName}: ${e.message}")
+                android.util.Log.e("ZenithDB", "REFRESH[$refreshId]: FALLBACK globalHistory failed: ${e::class.simpleName}: ${e.message} dbOpen=${shieldRepository.isDatabaseOpen()}")
+                DbLogBuffer.e("ZenithDB", "REFRESH[$refreshId]: FALLBACK globalHistory failed: ${e::class.simpleName}: ${e.message} dbOpen=${shieldRepository.isDatabaseOpen()}")
             }
         }
 
@@ -1647,9 +1735,12 @@ class HomeViewModel(
                         }
                     }
                     val remainingToTarget = (currentTargetMinutes * 60 * 1000L - _uiState.value.totalScreenTime).coerceAtLeast(0L)
+                    // Clamped to >= 5s: with no target set (0) the old 2s floor ran
+                    // a full DB+system refresh forever, amplifying every refresh
+                    // race and draining battery.
                     val interval = when {
-                        remainingToTarget < 30_000L -> 2000L
-                        remainingToTarget < 300_000L -> 5000L
+                        remainingToTarget < 30_000L -> 5000L
+                        remainingToTarget < 300_000L -> 8000L
                         else -> 15000L
                     }
                     delay(interval)
