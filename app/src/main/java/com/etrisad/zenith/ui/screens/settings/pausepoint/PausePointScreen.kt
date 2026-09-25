@@ -16,29 +16,144 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.ui.components.ZenithButton
+import com.etrisad.zenith.ui.components.ZenithButtonSize
+import com.etrisad.zenith.ui.components.ZenithButtonType
 import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
 import com.etrisad.zenith.ui.screens.settings.PreferenceCategory
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PausePointScreen(
     preferences: UserPreferences,
     innerPadding: PaddingValues,
     preferencesRepository: UserPreferencesRepository,
-    onTaskTypeClick: (PausePointTaskType) -> Unit = {}
+    onTaskTypeClick: (PausePointTaskType) -> Unit = {},
+    onBack: () -> Unit = {},
+    backInterceptor: MutableState<() -> Boolean> = remember { mutableStateOf({ false }) }
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val isSingleType = preferences.pausePointTaskTypes.size == 1
+    var showExitWarning by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    fun hideWarningSheet(afterHide: () -> Unit = {}) {
+        coroutineScope.launch {
+            sheetState.hide()
+            showExitWarning = false
+            afterHide()
+        }
+    }
+
+    val tryInterceptBack: () -> Boolean = {
+        if (isSingleType && !showExitWarning) {
+            showExitWarning = true
+            true
+        } else {
+            false
+        }
+    }
+    val currentTryInterceptBack by rememberUpdatedState(tryInterceptBack)
+    LaunchedEffect(Unit) {
+        backInterceptor.value = { currentTryInterceptBack() }
+    }
+    DisposableEffect(Unit) {
+        onDispose { backInterceptor.value = { false } }
+    }
+
+    BackHandler(enabled = isSingleType && !showExitWarning) {
+        showExitWarning = true
+    }
+
+    if (showExitWarning) {
+        val onlyTypeName = preferences.pausePointTaskTypes.firstOrNull()?.displayName ?: "Unknown"
+        ModalBottomSheet(
+            onDismissRequest = { hideWarningSheet() },
+            sheetState = sheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Surface(
+                    modifier = Modifier.size(64.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.errorContainer
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Outlined.WarningAmber,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "Only one task type?",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "\u201C$onlyTypeName\u201D is your only enabled type — " +
+                        "that can make Pause Point too hard if something unexpected happens, " +
+                        "like a lost tag, a missing code, or a failing sensor. " +
+                        "Add one more type as a backup plan before leaving.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                ZenithButton(
+                    onClick = { hideWarningSheet() },
+                    text = "Add another type",
+                    type = ZenithButtonType.Filled,
+                    size = ZenithButtonSize.ExtraLarge,
+                    fillMaxWidth = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                ZenithButton(
+                    onClick = { hideWarningSheet { onBack() } },
+                    text = "Leave anyway",
+                    type = ZenithButtonType.Text,
+                    contentColor = MaterialTheme.colorScheme.error,
+                    size = ZenithButtonSize.ExtraLarge,
+                    fillMaxWidth = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
 
     Column(
         modifier = Modifier

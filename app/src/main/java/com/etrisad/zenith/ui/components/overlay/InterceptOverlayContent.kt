@@ -1,4 +1,4 @@
-package com.etrisad.zenith.ui.components.overlay
+﻿package com.etrisad.zenith.ui.components.overlay
 
 import android.Manifest
 import android.content.Intent
@@ -1076,4 +1076,3 @@ private fun PausePointTestResultContent(
         }
     }
 }
-

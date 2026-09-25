@@ -20,8 +20,6 @@ object FeatureInfoRegistry {
         route == Screen.Profile.route -> profile
         route == Screen.Achievements.route -> achievements
         route == Screen.Level.route -> level
-        route == Screen.PausePointQr.route -> pausePointQr
-        route == Screen.PausePointNfc.route -> pausePointNfc
         route?.startsWith("pause_point_type") == true -> pausePointType
         route == Screen.OverlayAppearance.route -> overlayAppearance
         route == Screen.GSFlexCustomizer.route -> gsFlexCustomizer
@@ -352,46 +350,6 @@ object FeatureInfoRegistry {
         )
     )
 
-    private val pausePointQr = FeatureInfo(
-        title = "QR Codes",
-        summary = "Register the physical QR codes accepted by the Pause Point QR-scan task.",
-        sections = listOf(
-            FeatureInfoSections.whatItDoes(
-                "Scans and saves QR codes that Pause Point will later demand when you try to unblock an app.",
-                "Any saved code satisfies the task — so put them somewhere getting up matters."
-            ),
-            FeatureInfoSections.whatYoullSee(
-                "A live camera scanner preview (with permission fallback) and a 'Code saved!' banner.",
-                "A Saved Codes list where each entry can be copied or deleted."
-            ),
-            FeatureInfoSections.tips(
-                "Print codes and stick them far from your desk — fridge, another room — to add real friction.",
-                "Keep at least one spare code registered in case one gets lost.",
-                "Codes are stored locally; delete ones you no longer use."
-            )
-        )
-    )
-
-    private val pausePointNfc = FeatureInfo(
-        title = "NFC Tags",
-        summary = "Register the physical NFC tags accepted by the Pause Point NFC-scan task.",
-        sections = listOf(
-            FeatureInfoSections.whatItDoes(
-                "Scans and saves NFC tag IDs that Pause Point will later demand when you try to unblock an app.",
-                "Any saved tag satisfies the task — so put them somewhere getting up matters."
-            ),
-            FeatureInfoSections.whatYoullSee(
-                "An NFC status card (with enable/scan toggle and last-read tag ID) and a manual tag-ID entry.",
-                "A Saved Tags list where each entry can be copied or deleted."
-            ),
-            FeatureInfoSections.tips(
-                "Stick tags far from your desk — fridge, another room — to add real friction.",
-                "Keep at least one spare tag registered in case one gets lost.",
-                "Tag IDs are stored locally; delete ones you no longer use."
-            )
-        )
-    )
-
     private val pausePointType = FeatureInfo(
         title = "Pause Point Task",
         summary = "Tune exactly how each Pause Point task behaves so the difficulty matches your intent.",
@@ -402,11 +360,13 @@ object FeatureInfoRegistry {
             ),
             FeatureInfoSections.whatYoullSee(
                 "A header card describing the task type.",
-                "Per-type controls — e.g. wait duration, breathing rounds, steps, grid size, math range, counting target, or the typing-text pool."
+                "Per-type controls — e.g. wait duration, breathing rounds, steps, grid size, math range, counting target, or the typing-text pool.",
+                "QR Scan and NFC Scan register their codes and tags right here on this screen."
             ),
             FeatureInfoSections.tips(
                 "Changes save instantly and apply to the next generated pause task.",
-                "QR Scan links to the Saved QR Codes screen; NFC Scan links to the Saved NFC Tags screen; Choose App uses your goal apps automatically.",
+                "If you enable QR scanning, register codes first — otherwise the task cannot be satisfied. Same for NFC tags.",
+                "Choose App uses your goal apps automatically.",
                 "Defaults match the original values, so untouched tasks behave exactly as before."
             )
         )

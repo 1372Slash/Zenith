@@ -1,15 +1,20 @@
 package com.etrisad.zenith.ui.screens.settings.pausepoint
 
 import android.provider.Settings
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -18,12 +23,22 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.QrCode2
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -31,28 +46,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.etrisad.zenith.BuildConfig
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
-import com.etrisad.zenith.service.InterceptOverlayManager
-import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
 import com.etrisad.zenith.ui.components.qr.QrScanner
 import com.etrisad.zenith.ui.screens.settings.PreferenceCategory
 import android.content.Intent
 import android.net.Uri
-import android.widget.Toast
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun PausePointQrSettingsScreen(
+fun PausePointQrManagerContent(
     preferences: UserPreferences,
-    innerPadding: PaddingValues,
-    preferencesRepository: UserPreferencesRepository
+    preferencesRepository: UserPreferencesRepository,
+    modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -89,216 +100,109 @@ fun PausePointQrSettingsScreen(
         coroutineScope.launch { preferencesRepository.setPausePointQrCodes(codes) }
     }
 
-    val launchTest: () -> Unit = {
-        if (Settings.canDrawOverlays(context)) {
-            val manager = InterceptOverlayManager(context.applicationContext, preferencesRepository)
-            manager.showOverlay(
-                packageName = context.packageName,
-                appName = "Zenith",
-                shield = null,
-                totalUsageToday = 0,
-                totalGlobalUsageToday = 0,
-                delayDurationSeconds = 0,
-                forcedTaskType = PausePointTaskType.QR_SCAN,
-                onAllowUse = { _, _ -> },
-                onCloseApp = {},
-                onGoalDismiss = {}
-            )
-        } else {
-            Toast.makeText(context, "Allow display over other apps to test", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(
-            top = innerPadding.calculateTopPadding() + 16.dp,
-            bottom = innerPadding.calculateBottomPadding() + 32.dp
-        ),
+    Column(
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        item {
-            QrTypeHeader(codeCount = codes.size)
-            if (BuildConfig.DEBUG) {
-                Spacer(modifier = Modifier.height(16.dp))
-                PausePointTestButton(onClick = launchTest)
-            }
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-
-        item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(24.dp))
-            ) {
-                if (cameraPermissionState.status.isGranted) {
-                    QrScanner(
-                        onQrDetected = { addCode(it) },
-                        permissionGranted = true,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                MaterialTheme.colorScheme.surfaceContainerHigh,
-                                RoundedCornerShape(24.dp)
-                            ),
-                        contentAlignment = Alignment.Center
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(24.dp))
+        ) {
+            if (cameraPermissionState.status.isGranted) {
+                QrScanner(
+                    onQrDetected = { addCode(it) },
+                    permissionGranted = true,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            MaterialTheme.colorScheme.surfaceContainerHigh,
+                            RoundedCornerShape(24.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(24.dp)
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.padding(24.dp)
-                        ) {
-                            Text(
-                                text = "Camera permission required",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                textAlign = TextAlign.Center
-                            )
-                            Text(
-                                text = if (cameraPermanentlyDenied)
-                                    "Camera access was denied. Enable it in system Settings to scan QR codes."
-                                else
-                                    "Grant camera access to scan QR codes.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
-                            Button(onClick = onCameraButtonClick) {
-                                Text(if (cameraPermanentlyDenied) "Open Settings" else "Grant Permission")
-                            }
+                        Text(
+                            text = "Camera permission required",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = if (cameraPermanentlyDenied)
+                                "Camera access was denied. Enable it in system Settings to scan QR codes."
+                            else
+                                "Grant camera access to scan QR codes.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        Button(onClick = onCameraButtonClick) {
+                            Text(if (cameraPermanentlyDenied) "Open Settings" else "Grant Permission")
                         }
                     }
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (justAdded != null) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Code saved!",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        if (justAdded != null) {
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .animateContentSize(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.CheckCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Code saved!",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-        }
-
-        item {
-            PreferenceCategory(title = "Saved Codes (${codes.size})")
-        }
+        PreferenceCategory(title = "Saved Codes (${codes.size})")
 
         if (codes.isEmpty()) {
-            item {
-                EmptyCodesCard()
-            }
+            EmptyCodesCard()
         } else {
-            itemsIndexed(codes, key = { _, it -> it }) { index, code ->
+            codes.forEachIndexed { index, code ->
                 QrCodeRow(
                     index = index,
                     total = codes.size,
                     code = code,
-                    onRemove = { removeCode(code) },
-                    modifier = Modifier.animateItem(
-                        fadeInSpec = spring(stiffness = Spring.StiffnessLow),
-                        fadeOutSpec = spring(stiffness = Spring.StiffnessLow),
-                        placementSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow)
-                    )
+                    onRemove = { removeCode(code) }
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun QrTypeHeader(codeCount: Int) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(80.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.QrCodeScanner,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.size(40.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "QR Scan",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-
-        Text(
-            text = "Scan a QR code that matches one of your saved codes to continue.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-
-        Surface(
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-            shape = CircleShape,
-            modifier = Modifier.padding(top = 8.dp)
-        ) {
-            Text(
-                text = when {
-                    codeCount == 0 -> "No codes saved"
-                    codeCount == 1 -> "1 code saved"
-                    else -> "$codeCount codes saved"
-                },
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
-            )
         }
     }
 }

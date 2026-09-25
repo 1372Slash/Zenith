@@ -1,25 +1,16 @@
 package com.etrisad.zenith.ui.screens.settings.pausepoint
 
-import android.provider.Settings
-import android.widget.Toast
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -39,6 +30,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,10 +47,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.etrisad.zenith.BuildConfig
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
-import com.etrisad.zenith.service.InterceptOverlayManager
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithButtonType
@@ -67,16 +57,15 @@ import com.etrisad.zenith.ui.components.nfc.isNfcEnabled
 import com.etrisad.zenith.ui.components.nfc.isNfcSupported
 import com.etrisad.zenith.ui.components.nfc.normalizeNfcTagId
 import com.etrisad.zenith.ui.components.nfc.openNfcSettings
-import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
 import com.etrisad.zenith.ui.screens.settings.PreferenceCategory
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun PausePointNfcSettingsScreen(
+fun PausePointNfcManagerContent(
     preferences: UserPreferences,
-    innerPadding: PaddingValues,
-    preferencesRepository: UserPreferencesRepository
+    preferencesRepository: UserPreferencesRepository,
+    modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -91,10 +80,10 @@ fun PausePointNfcSettingsScreen(
 
     val supported = remember { isNfcSupported(context) }
     var nfcOn by remember { mutableStateOf(isNfcEnabled(context)) }
-    androidx.compose.runtime.LaunchedEffect(Unit) {
+    LaunchedEffect(Unit) {
         while (true) {
             nfcOn = isNfcEnabled(context)
-            kotlinx.coroutines.delay(1000)
+            delay(1000)
         }
     }
     val enabled = nfcOn
@@ -134,223 +123,114 @@ fun PausePointNfcSettingsScreen(
         if (justAdded == tag) justAdded = null
     }
 
-    val launchTest: () -> Unit = {
-        if (Settings.canDrawOverlays(context)) {
-            val manager = InterceptOverlayManager(context.applicationContext, preferencesRepository)
-            manager.showOverlay(
-                packageName = context.packageName,
-                appName = "Zenith",
-                shield = null,
-                totalUsageToday = 0,
-                totalGlobalUsageToday = 0,
-                delayDurationSeconds = 0,
-                forcedTaskType = PausePointTaskType.NFC_SCAN,
-                onAllowUse = { _, _ -> },
-                onCloseApp = {},
-                onGoalDismiss = {}
-            )
-        } else {
-            Toast.makeText(context, "Allow display over other apps to test", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(
-            top = innerPadding.calculateTopPadding() + 16.dp,
-            bottom = innerPadding.calculateBottomPadding() + 32.dp
-        ),
+    Column(
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        item {
-            NfcTypeHeader(tagCount = tags.size)
-            if (BuildConfig.DEBUG) {
-                Spacer(modifier = Modifier.height(16.dp))
-                PausePointTestButton(onClick = launchTest)
-            }
-            Spacer(modifier = Modifier.height(24.dp))
-        }
+        NfcStatusCard(
+            supported = supported,
+            enabled = enabled,
+            scanningEnabled = scanningEnabled,
+            onScanningChange = { scanningEnabled = it },
+            lastScanned = lastScanned,
+            scanError = scanError,
+            onOpenSettings = { openNfcSettings(context) }
+        )
+        Spacer(modifier = Modifier.height(16.dp))
 
-        item {
-            NfcStatusCard(
-                supported = supported,
-                enabled = enabled,
-                scanningEnabled = scanningEnabled,
-                onScanningChange = { scanningEnabled = it },
-                lastScanned = lastScanned,
-                scanError = scanError,
-                onOpenSettings = { openNfcSettings(context) }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             )
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = "Add tag manually",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
                 )
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text(
-                        text = "Add tag manually",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                Text(
+                    text = "Paste a tag ID (e.g. 04A13B8C5D80) if you already know it.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = manualInput,
+                    onValueChange = { manualInput = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Tag ID") },
+                    placeholder = { Text("e.g. 04A13B8C5D80") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        unfocusedBorderColor = Color.Transparent,
+                        focusedBorderColor = Color.Transparent
                     )
-                    Text(
-                        text = "Paste a tag ID (e.g. 04A13B8C5D80) if you already know it.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = manualInput,
-                        onValueChange = { manualInput = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Tag ID") },
-                        placeholder = { Text("e.g. 04A13B8C5D80") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            unfocusedBorderColor = Color.Transparent,
-                            focusedBorderColor = Color.Transparent
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    ZenithButton(
-                        onClick = addManual,
-                        text = "Add Tag",
-                        icon = Icons.Outlined.TouchApp,
-                        type = ZenithButtonType.Filled,
-                        size = ZenithButtonSize.Large,
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = normalizeNfcTagId(manualInput).isNotEmpty()
-                    )
-                }
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                ZenithButton(
+                    onClick = addManual,
+                    text = "Add Tag",
+                    icon = Icons.Outlined.TouchApp,
+                    type = ZenithButtonType.Filled,
+                    size = ZenithButtonSize.Large,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = normalizeNfcTagId(manualInput).isNotEmpty()
+                )
             }
-            Spacer(modifier = Modifier.height(16.dp))
         }
+        Spacer(modifier = Modifier.height(16.dp))
 
         if (justAdded != null) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.CheckCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Tag saved!",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Outlined.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Tag saved!",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
-                Spacer(modifier = Modifier.height(16.dp))
             }
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
-        item {
-            PreferenceCategory(title = "Saved Tags (${tags.size})")
-        }
+        PreferenceCategory(title = "Saved Tags (${tags.size})")
 
         if (tags.isEmpty()) {
-            item {
-                EmptyNfcCard()
-            }
+            EmptyNfcCard()
         } else {
-            itemsIndexed(tags, key = { _, it -> it }) { index, tag ->
+            tags.forEachIndexed { index, tag ->
                 NfcTagRow(
                     index = index,
                     total = tags.size,
                     tag = tag,
-                    onRemove = { removeTag(tag) },
-                    modifier = Modifier.animateItem(
-                        fadeInSpec = spring(stiffness = Spring.StiffnessLow),
-                        fadeOutSpec = spring(stiffness = Spring.StiffnessLow),
-                        placementSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow)
-                    )
+                    onRemove = { removeTag(tag) }
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun NfcTypeHeader(tagCount: Int) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(80.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Nfc,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.size(40.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "NFC Scan",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-
-        Text(
-            text = "Register your NFC tags here. Tap one of them to pass the Pause Point.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-
-        androidx.compose.material3.Surface(
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-            shape = CircleShape,
-            modifier = Modifier.padding(top = 8.dp)
-        ) {
-            Text(
-                text = when {
-                    tagCount == 0 -> "No tags saved"
-                    tagCount == 1 -> "1 tag saved"
-                    else -> "$tagCount tags saved"
-                },
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
-            )
         }
     }
 }

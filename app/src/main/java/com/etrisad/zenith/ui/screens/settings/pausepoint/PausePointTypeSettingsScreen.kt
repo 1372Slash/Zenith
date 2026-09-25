@@ -16,9 +16,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Nfc
-import androidx.compose.material.icons.outlined.QrCode2
-import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -47,9 +44,7 @@ fun PausePointTypeSettingsScreen(
     taskType: PausePointTaskType,
     preferences: UserPreferences,
     innerPadding: PaddingValues,
-    preferencesRepository: UserPreferencesRepository,
-    onOpenQrSettings: () -> Unit = {},
-    onOpenNfcSettings: () -> Unit = {}
+    preferencesRepository: UserPreferencesRepository
 ) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -101,17 +96,17 @@ fun PausePointTypeSettingsScreen(
         when {
             taskType == PausePointTaskType.QR_SCAN -> {
                 item {
-                    QrCodeConfigCard(
-                        savedCount = preferences.pausePointQrCodes.size,
-                        onOpenQrSettings = onOpenQrSettings
+                    PausePointQrManagerContent(
+                        preferences = preferences,
+                        preferencesRepository = preferencesRepository
                     )
                 }
             }
             taskType == PausePointTaskType.NFC_SCAN -> {
                 item {
-                    NfcTagConfigCard(
-                        savedCount = preferences.pausePointNfcTagIds.size,
-                        onOpenNfcSettings = onOpenNfcSettings
+                    PausePointNfcManagerContent(
+                        preferences = preferences,
+                        preferencesRepository = preferencesRepository
                     )
                 }
             }
@@ -646,116 +641,6 @@ private fun variantSummary(taskType: PausePointTaskType, variant: PausePointVari
         if (variant.label.isNotBlank()) "${variant.target} ${variant.label}" else "Count to ${variant.target}"
     PausePointTaskType.TYPING -> "\u201C${variant.text}\u201D"
     else -> "Default"
-}
-
-@Composable
-private fun QrCodeConfigCard(
-    savedCount: Int,
-    onOpenQrSettings: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Outlined.QrCode2,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Saved QR Codes",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = when {
-                    savedCount == 0 -> "No codes saved yet — add one to enable this task."
-                    savedCount == 1 -> "1 code saved — any of them passes."
-                    else -> "$savedCount codes saved — any of them passes."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            ZenithButton(
-                onClick = onOpenQrSettings,
-                modifier = Modifier.fillMaxWidth(),
-                text = if (savedCount == 0) "Add QR Codes" else "Manage QR Codes",
-                icon = Icons.Outlined.QrCodeScanner,
-                type = if (savedCount == 0) ZenithButtonType.Filled else ZenithButtonType.Tonal,
-                size = ZenithButtonSize.Large
-            )
-        }
-    }
-}
-
-@Composable
-private fun NfcTagConfigCard(
-    savedCount: Int,
-    onOpenNfcSettings: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Outlined.Nfc,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Saved NFC Tags",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = when {
-                    savedCount == 0 -> "No tags saved yet — add one to enable this task."
-                    savedCount == 1 -> "1 tag saved — any of them passes."
-                    else -> "$savedCount tags saved — any of them passes."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            ZenithButton(
-                onClick = onOpenNfcSettings,
-                modifier = Modifier.fillMaxWidth(),
-                text = if (savedCount == 0) "Add NFC Tags" else "Manage NFC Tags",
-                icon = Icons.Outlined.Nfc,
-                type = if (savedCount == 0) ZenithButtonType.Filled else ZenithButtonType.Tonal,
-                size = ZenithButtonSize.Large
-            )
-        }
-    }
 }
 
 @Composable

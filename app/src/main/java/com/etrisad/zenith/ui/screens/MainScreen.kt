@@ -107,8 +107,6 @@ import com.etrisad.zenith.ui.screens.profile.tierIconsForLevel
 import com.etrisad.zenith.ui.screens.settings.EyeCareScreen
 import com.etrisad.zenith.ui.screens.settings.LockdownSettings
 import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointScreen
-import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointQrSettingsScreen
-import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointNfcSettingsScreen
 import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointTypeSettingsScreen
 import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
 import com.etrisad.zenith.ui.screens.settings.SettingsScreen
@@ -233,8 +231,6 @@ fun MainScreen(
                 currentRoute == Screen.Achievements.route ||
                 currentRoute == Screen.Level.route ||
                 currentRoute == Screen.PausePoint.route ||
-                currentRoute == Screen.PausePointQr.route ||
-                currentRoute == Screen.PausePointNfc.route ||
                 currentRoute?.startsWith("pause_point_type") == true ||
                 currentRoute == Screen.DatabaseDebug.route ||
                 currentRoute == Screen.DataRepairment.route ||
@@ -280,6 +276,7 @@ fun MainScreen(
     val scope = rememberCoroutineScope()
     var showPauseSheet by remember { mutableStateOf(false) }
     val performanceBackInterceptor = remember { mutableStateOf<() -> Boolean>({ false }) }
+    val pausePointBackInterceptor = remember { mutableStateOf<() -> Boolean>({ false }) }
 
     var showBatchDeleteSheet by remember { mutableStateOf(false) }
     var showBatchPauseSheet by remember { mutableStateOf(false) }
@@ -464,8 +461,6 @@ fun MainScreen(
                     currentRoute != Screen.Achievements.route &&
                     currentRoute != Screen.Level.route &&
                     currentRoute != Screen.PausePoint.route &&
-                    currentRoute != Screen.PausePointQr.route &&
-                    currentRoute != Screen.PausePointNfc.route &&
                     currentRoute?.startsWith("pause_point_type") == false &&
                     currentRoute != Screen.DatabaseDebug.route &&
                     currentRoute != Screen.DataRepairment.route &&
@@ -530,8 +525,13 @@ fun MainScreen(
                     pausePointTypeName = navBackStackEntry?.arguments?.getString("type")
                         ?.let { runCatching { PausePointTaskType.valueOf(it).displayName }.getOrNull() },
                     onBack = {
-                        val intercepted = currentRoute?.startsWith("settings_category") == true &&
-                            performanceBackInterceptor.value()
+                        val intercepted = when {
+                            currentRoute?.startsWith("settings_category") == true ->
+                                performanceBackInterceptor.value()
+                            currentRoute == Screen.PausePoint.route ->
+                                pausePointBackInterceptor.value()
+                            else -> false
+                        }
                         if (!intercepted) navController.popBackStack()
                     },
                     showInfoButton = preferences.headerInfoButtonEnabled && FeatureInfoRegistry.infoFor(
@@ -894,8 +894,6 @@ fun MainScreen(
                                     targetRoute == Screen.Achievements.route ||
                             targetRoute == Screen.Level.route ||
                                     targetRoute == Screen.PausePoint.route ||
-                                    targetRoute == Screen.PausePointQr.route ||
-                                    targetRoute == Screen.PausePointNfc.route ||
                                     targetRoute?.startsWith("pause_point_type") == true ||
                                     targetRoute == Screen.DatabaseDebug.route ||
                                     targetRoute == Screen.DataRepairment.route ||
@@ -917,8 +915,6 @@ fun MainScreen(
                                     initialRoute == Screen.Achievements.route ||
                             initialRoute == Screen.Level.route ||
                                     initialRoute == Screen.PausePoint.route ||
-                                    initialRoute == Screen.PausePointQr.route ||
-                                    initialRoute == Screen.PausePointNfc.route ||
                                     initialRoute?.startsWith("pause_point_type") == true ||
                                     initialRoute == Screen.DatabaseDebug.route ||
                                     initialRoute == Screen.DataRepairment.route ||
@@ -972,8 +968,6 @@ fun MainScreen(
                                     targetRoute == Screen.Achievements.route ||
                             targetRoute == Screen.Level.route ||
                                     targetRoute == Screen.PausePoint.route ||
-                                    targetRoute == Screen.PausePointQr.route ||
-                                    targetRoute == Screen.PausePointNfc.route ||
                                     targetRoute?.startsWith("pause_point_type") == true ||
                                     targetRoute == Screen.DatabaseDebug.route ||
                                     targetRoute == Screen.DataRepairment.route ||
@@ -996,8 +990,6 @@ fun MainScreen(
                                     initialRoute == Screen.Achievements.route ||
                             initialRoute == Screen.Level.route ||
                                     initialRoute == Screen.PausePoint.route ||
-                                    initialRoute == Screen.PausePointQr.route ||
-                                    initialRoute == Screen.PausePointNfc.route ||
                                     initialRoute?.startsWith("pause_point_type") == true ||
                                     initialRoute == Screen.DatabaseDebug.route ||
                                     initialRoute == Screen.DataRepairment.route ||
@@ -1194,21 +1186,9 @@ fun MainScreen(
                             preferencesRepository = userPreferencesRepository,
                             onTaskTypeClick = { taskType ->
                                 navController.navigate(Screen.PausePointTypeSettings.createRoute(taskType.name))
-                            }
-                        )
-                    }
-                    composable(Screen.PausePointQr.route) {
-                        PausePointQrSettingsScreen(
-                            preferences = preferences,
-                            innerPadding = innerPadding,
-                            preferencesRepository = userPreferencesRepository
-                        )
-                    }
-                    composable(Screen.PausePointNfc.route) {
-                        PausePointNfcSettingsScreen(
-                            preferences = preferences,
-                            innerPadding = innerPadding,
-                            preferencesRepository = userPreferencesRepository
+                            },
+                            onBack = { navController.popBackStack() },
+                            backInterceptor = pausePointBackInterceptor
                         )
                     }
                     composable(
@@ -1226,13 +1206,7 @@ fun MainScreen(
                                 taskType = taskType,
                                 preferences = preferences,
                                 innerPadding = innerPadding,
-                                preferencesRepository = userPreferencesRepository,
-                                onOpenQrSettings = {
-                                    navController.navigate(Screen.PausePointQr.route)
-                                },
-                                onOpenNfcSettings = {
-                                    navController.navigate(Screen.PausePointNfc.route)
-                                }
+                                preferencesRepository = userPreferencesRepository
                             )
                         } else {
                             LaunchedEffect(Unit) { navController.popBackStack() }
@@ -1346,8 +1320,6 @@ fun MainScreen(
                             currentRoute != Screen.Achievements.route &&
                     currentRoute != Screen.Level.route &&
                             currentRoute != Screen.PausePoint.route &&
-                            currentRoute != Screen.PausePointQr.route &&
-                            currentRoute != Screen.PausePointNfc.route &&
                             currentRoute?.startsWith("pause_point_type") == false &&
                             currentRoute?.startsWith("settings_category") == false &&
                             currentRoute?.startsWith("app_detail") == false

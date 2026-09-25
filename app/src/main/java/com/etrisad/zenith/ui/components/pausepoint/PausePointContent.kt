@@ -560,10 +560,7 @@ private fun NfcScanTask(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Text(
-                    text = if (onNfcScanRequested != null)
-                        "Tap to open the scanner — this sheet slides away while you scan, then returns"
-                    else
-                        "Tap to open the scanner, then hold a registered tag near your phone",
+                    text = "Tap to open the scanner, then hold a registered tag near your phone",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center

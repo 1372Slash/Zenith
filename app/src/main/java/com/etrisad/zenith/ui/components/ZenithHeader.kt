@@ -59,7 +59,6 @@ fun ZenithHeader(
         currentRoute == Screen.Alarm.route ||
         currentRoute == Screen.Pomodoro.route ||
         currentRoute == Screen.PausePoint.route ||
-        currentRoute == Screen.PausePointQr.route ||
         currentRoute?.startsWith("pause_point_type") == true ||
         currentRoute?.startsWith("settings_category") == true ||
         currentRoute?.startsWith("app_detail") == true ||
@@ -152,7 +151,6 @@ fun ZenithHeader(
                 currentRoute == Screen.Alarm.route -> "Alarm"
                 currentRoute == Screen.Pomodoro.route -> "Pomodoro"
                 currentRoute == Screen.PausePoint.route -> "Pause Point"
-                currentRoute == Screen.PausePointQr.route -> "QR Codes"
         currentRoute == Screen.Profile.route -> "Profile"
         currentRoute == Screen.Achievements.route -> "Achievements"
         currentRoute == Screen.Level.route -> "Level"
