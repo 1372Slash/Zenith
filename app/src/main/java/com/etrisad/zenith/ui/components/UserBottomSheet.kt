@@ -201,7 +201,7 @@ fun StreakCard(
                             text = "$currentStreak",
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                            color = MaterialTheme.colorScheme.onTertiary
                         )
                     }
                 }
