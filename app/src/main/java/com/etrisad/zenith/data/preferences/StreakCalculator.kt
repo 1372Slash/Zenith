@@ -42,38 +42,199 @@ class StreakCalculator(
         lastSavedGlobalStreak = Triple(current, best, timestamp)
     }
 
+    /**
+     * System total for one day, or null when the OS has no trustworthy data.
+     * Null/empty stats (permission freshly granted after reinstall, OEM
+     * pruning, transient boot state) must NEVER be read as "0 usage", because
+     * 0 is always a success for SHIELD-type streaks and would fabricate a
+     * phantom streak of up to 14 days out of thin air.
+     */
     private fun fetchSystemTotalUsageForDate(
         usm: UsageStatsManager,
         startTime: Long,
         launcherApps: Set<String>,
         excludePackages: Set<String>
-    ): Long {
+    ): Long? {
         val stats = try {
             usm.queryAndAggregateUsageStats(startTime, startTime + 86400000L)
         } catch (e: Exception) {
             null
-        }
+        } ?: return null
+        if (stats.isEmpty()) return null
         var total = 0L
-        stats?.forEach { (pkg, stat) ->
+        var seen = false
+        stats.forEach { (pkg, stat) ->
             if (pkg in launcherApps && pkg !in excludePackages) {
                 total += stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+                seen = true
             }
         }
-        return total
+        // No tracked package reported anything: indistinguishable from pruned
+        // data, so report unknown instead of a fake 0-success.
+        return if (seen) total else null
     }
 
+    /**
+     * System usage of one app for one day, or null when the OS reports no
+     * entry. A missing entry is NOT proof of zero usage (pruned history,
+     * permission gap), so callers must treat null as unknown and stop
+     * counting — never as an automatic success.
+     */
     private fun fetchSystemAppUsageForDate(
         usm: UsageStatsManager,
         packageName: String,
         startTime: Long
-    ): Long {
+    ): Long? {
         val stats = try {
             usm.queryAndAggregateUsageStats(startTime, startTime + 86400000L)
         } catch (e: Exception) {
             null
-        }
-        val stat = stats?.get(packageName) ?: return 0L
+        } ?: return null
+        val stat = stats[packageName] ?: return null
         return stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
+    }
+
+    /**
+     * Absolute creation-day bound ("yyyy-MM-dd"). Never null, never in the
+     * future. Shields created before the timeAdded column existed (or restored
+     * from backups without it) have timeAdded == 0 — those fall back to the
+     * last streak update, otherwise to today so such a shield can only ever
+     * count today. Every streak loop must break at this bound: days before the
+     * shield existed must never count, no matter what the DB or the OS
+     * usage history claims.
+     */
+    private fun creationDateStr(
+        timeAdded: Long,
+        lastStreakUpdateTimestamp: Long,
+        dateFormat: SimpleDateFormat,
+        todayStr: String
+    ): String {
+        val anchor = when {
+            timeAdded > 0L -> timeAdded
+            lastStreakUpdateTimestamp > 0L -> lastStreakUpdateTimestamp
+            else -> return todayStr
+        }
+        val s = try {
+            dateFormat.format(Date(anchor))
+        } catch (_: Exception) {
+            return todayStr
+        }
+        // Clamp future-dated anchors (clock changes, restore anomalies).
+        return if (s > todayStr) todayStr else s
+    }
+
+    /**
+     * Resolves verified usage of one app for one past day.
+     * Returns null when there is NO trustworthy evidence either way:
+     * - no Zenith row for the package that day, AND
+     * - no TOTAL row proving the tracker even ran that day, AND
+     * - (optionally) no OS entry for the package.
+     * Callers must treat null as "unknown" and stop the streak run — a missing
+     * row alone is not proof of zero usage (fresh install, permission gap,
+     * pruned DB), and assuming success is exactly what fabricated streaks.
+     * The one safe inference: when the tracker provably ran (TOTAL row
+     * exists) but recorded nothing for this package, SHIELD usage was 0.
+     * For GOAL the same 0 is returned and the type comparison fails it, since
+     * a goal needs affirmative usage to count.
+     */
+    private suspend fun resolvePastDayUsage(
+        pkg: String,
+        dStr: String,
+        history: Map<String, Long>,
+        totalCoveredDates: Set<String>,
+        webHistory: Map<String, Long>?,
+        usm: UsageStatsManager,
+        dayStartMillis: Long,
+        allowSystemFallback: Boolean
+    ): Long? {
+        history[dStr]?.let { return it }
+        webHistory?.get(dStr)?.let { return it }
+        if (dStr in totalCoveredDates) return 0L
+        if (!allowSystemFallback) return null
+        return withContext(Dispatchers.IO) {
+            fetchSystemAppUsageForDate(usm, pkg, dayStartMillis)
+        }
+    }
+
+    /**
+     * Resolves a verified week total for weekly shields, or null when any day
+     * of the week is unknown (see [resolvePastDayUsage]). A partially unknown
+     * week must break the run instead of being counted as a success week.
+     */
+    private suspend fun resolvePastWeekUsage(
+        pkg: String,
+        weekStartMillis: Long,
+        dateFormat: SimpleDateFormat,
+        history: Map<String, Long>,
+        totalCoveredDates: Set<String>,
+        webHistory: Map<String, Long>?,
+        usm: UsageStatsManager,
+        allowSystemFallback: Boolean
+    ): Long? {
+        var total = 0L
+        val cal = Calendar.getInstance()
+        for (d in 0 until 7) {
+            cal.timeInMillis = weekStartMillis + d * 86400000L
+            val dayStart = cal.timeInMillis
+            val dStr = dateFormat.format(cal.time)
+            val dayUsage = resolvePastDayUsage(
+                pkg, dStr, history, totalCoveredDates, webHistory,
+                usm, dayStart, allowSystemFallback
+            ) ?: return null
+            total += dayUsage
+        }
+        return total
+    }
+
+    /** Max daily streak physically possible: active days in [creation, today]. */
+    private fun maxPossibleDailyStreak(
+        creationStr: String,
+        todayStr: String,
+        activeDays: Set<Int>,
+        dateFormat: SimpleDateFormat
+    ): Int {
+        return try {
+            var count = 0
+            val cal = Calendar.getInstance()
+            cal.time = dateFormat.parse(creationStr) ?: return 0
+            val end = dateFormat.parse(todayStr) ?: return 0
+            var guard = 0
+            while (!cal.time.after(end) && guard++ < 3700) {
+                if (cal.get(Calendar.DAY_OF_WEEK) in activeDays) count++
+                cal.add(Calendar.DAY_OF_YEAR, 1)
+            }
+            count
+        } catch (_: Exception) {
+            0
+        }
+    }
+
+    /** Max weekly streak physically possible: week-starts in [creation, today]. */
+    private fun maxPossibleWeeklyStreak(
+        creationStr: String,
+        todayStr: String,
+        dateFormat: SimpleDateFormat
+    ): Int {
+        return try {
+            val start = dateFormat.parse(creationStr) ?: return 0
+            val end = dateFormat.parse(todayStr) ?: return 0
+            val cal = Calendar.getInstance().apply {
+                time = start
+                firstDayOfWeek = Calendar.MONDAY
+                set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            }
+            var count = 0
+            var guard = 0
+            while (!cal.time.after(end) && guard++ < 600) {
+                count++
+                cal.add(Calendar.DAY_OF_YEAR, 7)
+            }
+            count.coerceAtLeast(1)
+        } catch (_: Exception) {
+            1
+        }
     }
 
     suspend fun refreshGlobalStreak(shieldRepository: ShieldRepository): Pair<Int, Int> {
@@ -85,10 +246,14 @@ class StreakCalculator(
         }
 
         shieldRepository.isShieldsLoaded.first { it }
-        val dbUsage = shieldRepository.getAllUsage().first()
+        // Wide enough that TOTAL coverage, not the query cap, decides how far
+        // back a streak can be verified (~400 days of TOTAL rows).
+        val dbUsage = shieldRepository.getAllUsage(10000).first()
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val now = System.currentTimeMillis()
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        // DB date keys are locale-independent; getDefault() can emit non-Latin
+        // digits on some locales and silently break Room date matching.
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
         val (launcherApps, launcherPackage) = withContext(Dispatchers.IO) {
             try {
@@ -113,21 +278,26 @@ class StreakCalculator(
         }
 
         val globalHistory = dbUsage.filter { it.packageName == "TOTAL" }
+        val globalHistoryMap = globalHistory.associate { it.date to it.usageTimeMillis }
         val oldestHistoryDate = globalHistory.map { it.date }.minOrNull()
+        val todayStr = dateFormat.format(Date(todayStart))
 
+        // Pure recompute from verified history: every past day needs a TOTAL
+        // row (tracker ran) or an OS entry within the 14-day retention window.
+        // Unknown days STOP the run — they are never assumed to be successes.
+        // This also makes the streak self-healing: a previously inflated value
+        // is corrected downward on the next refresh instead of being ratcheted
+        // upward forever by max(stored).
         var pastStreak = 0
-        var foundDefiniteFailure = false
         val c = Calendar.getInstance()
-        val globalStreakLoopLimit = (prefs.globalCurrentStreak + 30).coerceAtMost(90)
+        val globalStreakLoopLimit = 730
         for (i in 1..globalStreakLoopLimit) {
             c.timeInMillis = todayStart; c.add(Calendar.DAY_OF_YEAR, -i)
             val dStr = dateFormat.format(c.time)
-            var usage = globalHistory.find { it.date == dStr }?.usageTimeMillis
+            var usage = globalHistoryMap[dStr]
 
             if (usage == null) {
-                if (oldestHistoryDate != null && dStr >= oldestHistoryDate) {
-                    usage = 0L
-                } else if (i <= 14) {
+                if (i <= 14) {
                     usage = withContext(Dispatchers.IO) {
                         fetchSystemTotalUsageForDate(usageStatsManager, c.timeInMillis, launcherApps, excludePackages)
                     }
@@ -136,46 +306,53 @@ class StreakCalculator(
 
             if (usage != null) {
                 if (usage <= targetMillis) pastStreak++
-                else { foundDefiniteFailure = true; break }
+                else break
             } else break
         }
 
-        val lastUpdateDayStart = DateTimeUtils.getDayStartTime(prefs.globalLastStreakUpdateTimestamp, prefs.dayStartHour, prefs.dayStartMinute)
-        val yesterdayStart = DateTimeUtils.getDayStartTime(todayStart - 1, prefs.dayStartHour, prefs.dayStartMinute)
-        val isLastUpdateYesterday = lastUpdateDayStart == yesterdayStart
-        val isLastUpdateToday = lastUpdateDayStart == todayStart
-
         val isSuccessToday = totalToday <= targetMillis
-        val liveStreak = if (isSuccessToday) {
-            if (!foundDefiniteFailure && (isLastUpdateYesterday || isLastUpdateToday)) {
-                maxOf(pastStreak + 1, prefs.globalCurrentStreak + (if (isLastUpdateYesterday) 1 else 0))
-            } else {
-                pastStreak + 1
-            }
-        } else 0
+        val liveStreak = if (isSuccessToday) pastStreak + 1 else 0
 
-        var bestStreak = prefs.globalBestStreak
+        // Best is recomputed from 0 over verified history so an inflated best
+        // heals itself. Unknown days reset the running best-run (they cannot
+        // prove an unbroken run) but do not abort the whole scan.
+        var bestStreak = 0
         var tempStreak = 0
-        val todayStr = dateFormat.format(Date(todayStart))
         val startDateStr = oldestHistoryDate ?: todayStr
-        val calendarForBest = Calendar.getInstance()
         try {
-            val startD = dateFormat.parse(startDateStr) ?: Date()
-            calendarForBest.time = startD
-            val todayDate = dateFormat.parse(todayStr) ?: Date()
+            // Walk back from today so every day carries its day-start millis
+            // for the OS fallback window.
+            val days = ArrayDeque<Pair<String, Long>>()
+            val back = Calendar.getInstance()
+            back.timeInMillis = todayStart
+            var guard = 0
+            while (guard++ < 3700) {
+                val dStr = dateFormat.format(back.time)
+                days.addFirst(dStr to back.timeInMillis)
+                if (dStr <= startDateStr) break
+                back.add(Calendar.DAY_OF_YEAR, -1)
+            }
+            for ((dStr, dayStartMillis) in days) {
+                val usage: Long? = if (dStr == todayStr) totalToday
+                else globalHistoryMap[dStr]
+                    ?: if (dayStartMillis >= todayStart - 14L * 86400000L) {
+                        withContext(Dispatchers.IO) {
+                            fetchSystemTotalUsageForDate(
+                                usageStatsManager, dayStartMillis, launcherApps, excludePackages
+                            )
+                        }
+                    } else null
 
-            while (!calendarForBest.time.after(todayDate)) {
-                val dStr = dateFormat.format(calendarForBest.time)
-                val usage = if (dStr == todayStr) totalToday else globalHistory.find { it.date == dStr }?.usageTimeMillis
-
-                val effectiveUsage = usage ?: 0L
-                if (effectiveUsage <= targetMillis) {
-                    tempStreak++
-                    bestStreak = maxOf(bestStreak, tempStreak)
+                if (usage != null) {
+                    if (usage <= targetMillis) {
+                        tempStreak++
+                        bestStreak = maxOf(bestStreak, tempStreak)
+                    } else {
+                        tempStreak = 0
+                    }
                 } else {
                     tempStreak = 0
                 }
-                calendarForBest.add(Calendar.DAY_OF_YEAR, 1)
             }
         } catch (_: Exception) {}
 
@@ -188,10 +365,16 @@ class StreakCalculator(
         val prefs = userPreferencesFlow.first()
         shieldRepository.isShieldsLoaded.first { it }
         val shields = shieldRepository.allShields.first().filter { !it.isWebsite }
-        val allUsage = shieldRepository.getAllUsage().first().groupBy { it.packageName }
+        val allUsage = shieldRepository.getAllUsage(10000).first()
+        val usageByPackage = allUsage.groupBy { it.packageName }
+            .mapValues { (_, rows) -> rows.associate { it.date to it.usageTimeMillis } }
+        val totalCoveredDates = allUsage
+            .filter { it.packageName == "TOTAL" }
+            .map { it.date }.toSet()
         val now = System.currentTimeMillis()
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val todayStr = dateFormat.format(Date(now))
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val todayStart = DateTimeUtils.getDayStartTime(now, prefs.dayStartHour, prefs.dayStartMinute)
+        val todayStr = dateFormat.format(Date(todayStart))
 
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val todayUsageMap = withContext(Dispatchers.IO) {
@@ -200,14 +383,10 @@ class StreakCalculator(
 
         shields.forEach { shield ->
             val pkg = shield.packageName
-            val history = allUsage[pkg] ?: emptyList()
-            val oldestHistoryDate = history.map { it.date }.minOrNull()
-            // Streaks must only count days since the shield was created. Usage
-            // rows for the package can predate the shield (general tracking),
-            // and missing SHIELD days count as success — without this bound a
-            // brand-new shield inherits a phantom streak (e.g. jumps to 5/15
-            // the day after creation). Mirrors refreshWebStreaks.
-            val timeAddedDateStr = if (shield.timeAdded > 0L) dateFormat.format(Date(shield.timeAdded)) else null
+            val history = usageByPackage[pkg] ?: emptyMap()
+            // Absolute creation bound (never null): days before the shield
+            // existed can never count, regardless of DB/OS history.
+            val creationStr = creationDateStr(shield.timeAdded, shield.lastStreakUpdateTimestamp, dateFormat, todayStr)
             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
             val isWeekly = shield.limitPeriod == LimitPeriod.WEEKLY
 
@@ -223,15 +402,14 @@ class StreakCalculator(
                 dailyTodayUsage
             }
 
+            // Pure recompute from verified history: unknown days stop the run,
+            // they are never assumed to be successes. Streaks are idempotent
+            // (re-running refresh changes nothing) and self-healing (an
+            // inflated stored value is corrected downward).
             var pastStreak = 0
-            var foundDefiniteFailure = false
-            val todayStart = DateTimeUtils.getDayStartTime(now, prefs.dayStartHour, prefs.dayStartMinute)
-
             val todayCal = Calendar.getInstance()
             todayCal.timeInMillis = todayStart
             val isTodayActive = todayCal.get(Calendar.DAY_OF_WEEK) in shield.activeDays
-
-            val shieldStreakLimit = (shield.currentStreak + 30).coerceAtMost(90)
 
             if (isWeekly) {
                 val weekCal = Calendar.getInstance().apply {
@@ -240,57 +418,36 @@ class StreakCalculator(
                     set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
                     set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
                 }
-                for (i in 1..shieldStreakLimit) {
+                for (i in 1..105) {
                     weekCal.add(Calendar.DAY_OF_YEAR, -7)
-                    if (shield.lastStreakUpdateTimestamp == 0L && shield.currentStreak == 0) break
                     val weekStartStr = dateFormat.format(weekCal.time)
-                    if (timeAddedDateStr != null && weekStartStr < timeAddedDateStr) break
-                    val weekEnd = Calendar.getInstance().apply { timeInMillis = weekCal.timeInMillis; add(Calendar.DAY_OF_YEAR, 6) }
-                    val weekEndStr = dateFormat.format(weekEnd.time)
-                    var weekTotal = history.filter { it.date >= weekStartStr && it.date <= weekEndStr }.sumOf { it.usageTimeMillis }
+                    if (weekStartStr < creationStr) break
+                    val weekTotal = resolvePastWeekUsage(
+                        pkg, weekCal.timeInMillis, dateFormat, history,
+                        totalCoveredDates, null, usageStatsManager, i <= 2
+                    )
 
-                    if (weekTotal == 0L && oldestHistoryDate != null && weekStartStr >= oldestHistoryDate) {
-                        if (shield.type == FocusType.SHIELD) weekTotal = 0L else { foundDefiniteFailure = true; break }
-                    } else if (weekTotal == 0L && i <= 2) {
-                        var sysTotal = 0L
-                        val sysCal = Calendar.getInstance().apply { timeInMillis = weekCal.timeInMillis }
-                        for (d in 0 until 7) {
-                            val dayUsage = withContext(Dispatchers.IO) {
-                                fetchSystemAppUsageForDate(usageStatsManager, pkg, sysCal.timeInMillis)
-                            }
-                            if (dayUsage != null) sysTotal += dayUsage
-                            sysCal.add(Calendar.DAY_OF_YEAR, 1)
-                        }
-                        if (sysTotal > 0) weekTotal = sysTotal
-                    }
-
-                    val success = if (shield.type == FocusType.GOAL) weekTotal >= limitMillis else weekTotal <= limitMillis
-                    if (success) pastStreak++ else { foundDefiniteFailure = true; break }
+                    if (weekTotal != null) {
+                        val success = if (shield.type == FocusType.GOAL) weekTotal >= limitMillis else weekTotal <= limitMillis
+                        if (success) pastStreak++ else break
+                    } else break
                 }
             } else {
                 val c = Calendar.getInstance()
-                for (i in 1..shieldStreakLimit) {
+                for (i in 1..730) {
                     c.timeInMillis = todayStart; c.add(Calendar.DAY_OF_YEAR, -i)
-                    if (shield.lastStreakUpdateTimestamp == 0L && shield.currentStreak == 0) break
                     val dayOfWeek = c.get(Calendar.DAY_OF_WEEK)
                     if (dayOfWeek !in shield.activeDays) continue
                     val dStr = dateFormat.format(c.time)
-                    if (timeAddedDateStr != null && dStr < timeAddedDateStr) break
-                    var usage = history.find { it.date == dStr }?.usageTimeMillis
-
-                    if (usage == null) {
-                        if (oldestHistoryDate != null && dStr >= oldestHistoryDate) {
-                            if (shield.type == FocusType.SHIELD) usage = 0L else break
-                        } else if (i <= 14) {
-                            usage = withContext(Dispatchers.IO) {
-                                fetchSystemAppUsageForDate(usageStatsManager, pkg, c.timeInMillis)
-                            }
-                        }
-                    }
+                    if (dStr < creationStr) break
+                    val usage = resolvePastDayUsage(
+                        pkg, dStr, history, totalCoveredDates, null,
+                        usageStatsManager, c.timeInMillis, i <= 14
+                    )
 
                     if (usage != null) {
                         val success = if (shield.type == FocusType.GOAL) usage >= limitMillis else usage <= limitMillis
-                        if (success) pastStreak++ else { foundDefiniteFailure = true; break }
+                        if (success) pastStreak++ else break
                     } else break
                 }
             }
@@ -307,39 +464,25 @@ class StreakCalculator(
                     set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
 
-                val lastUpdateMonday = Calendar.getInstance().apply {
-                    timeInMillis = shield.lastStreakUpdateTimestamp
-                    firstDayOfWeek = Calendar.MONDAY
-                    set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
-                    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-
-                val isLastUpdateThisWeek = lastUpdateMonday == thisMonday
-                val isLastUpdateLastWeek = lastUpdateMonday == thisMonday - 7L * 24 * 60 * 60 * 1000L
-
-                val currentStreak = if (!isTodayActive) {
+                // No max(stored) ratchet: current is purely past + today, so an
+                // inflated value corrects itself on the next refresh.
+                val rawCurrent = if (!isTodayActive) {
                     pastStreak
                 } else if (shield.type == FocusType.GOAL) {
-                    if (isSuccessToday) {
-                        if (isLastUpdateLastWeek || isLastUpdateThisWeek) {
-                            maxOf(pastStreak + 1, shield.currentStreak + (if (isLastUpdateLastWeek) 1 else 0))
-                        } else pastStreak + 1
-                    } else pastStreak
+                    if (isSuccessToday) pastStreak + 1 else pastStreak
                 } else {
-                    if (isSuccessToday) {
-                        if (isLastUpdateLastWeek || isLastUpdateThisWeek) {
-                            maxOf(pastStreak + 1, shield.currentStreak + (if (isLastUpdateLastWeek) 1 else 0))
-                        } else pastStreak + 1
-                    } else 0
+                    if (isSuccessToday) pastStreak + 1 else 0
                 }
+                val currentStreak = rawCurrent.coerceAtMost(
+                    maxPossibleWeeklyStreak(creationStr, todayStr, dateFormat)
+                )
 
                 // Recompute best from bounded history starting at 0 (not from the
                 // stored value) so a previously inflated best self-heals.
                 var bestStreak = 0
                 var tempStreak = 0
                 try {
-                    val startDateStr = timeAddedDateStr ?: (oldestHistoryDate ?: todayStr)
-                    val startD = dateFormat.parse(startDateStr) ?: Date()
+                    val startD = dateFormat.parse(creationStr) ?: Date()
                     val todayDate = dateFormat.parse(todayStr) ?: Date()
 
                     val bestWeekCal = Calendar.getInstance().apply {
@@ -348,22 +491,29 @@ class StreakCalculator(
                         set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
                     }
 
-                    while (!bestWeekCal.time.after(todayDate)) {
+                    var bestGuard = 0
+                    while (!bestWeekCal.time.after(todayDate) && bestGuard++ < 160) {
                         val weekStartStr = dateFormat.format(bestWeekCal.time)
-                        val weekEndBest = Calendar.getInstance().apply { timeInMillis = bestWeekCal.timeInMillis; add(Calendar.DAY_OF_YEAR, 6) }
-                        val weekEndStr = dateFormat.format(weekEndBest.time)
 
-                        val weekTotal = if (weekStartStr == dateFormat.format(thisMonday)) {
+                        val weekTotal: Long? = if (weekStartStr == dateFormat.format(thisMonday)) {
                             todayUsage
                         } else {
-                            history.filter { it.date >= weekStartStr && it.date <= weekEndStr }.sumOf { it.usageTimeMillis }
+                            resolvePastWeekUsage(
+                                pkg, bestWeekCal.timeInMillis, dateFormat, history,
+                                totalCoveredDates, null, usageStatsManager, false
+                            )
                         }
 
-                        val success = if (shield.type == FocusType.GOAL) weekTotal >= limitMillis else weekTotal <= limitMillis
-                        if (success) {
-                            tempStreak++
-                            bestStreak = maxOf(bestStreak, tempStreak)
+                        if (weekTotal != null) {
+                            val success = if (shield.type == FocusType.GOAL) weekTotal >= limitMillis else weekTotal <= limitMillis
+                            if (success) {
+                                tempStreak++
+                                bestStreak = maxOf(bestStreak, tempStreak)
+                            } else {
+                                tempStreak = 0
+                            }
                         } else {
+                            // Unknown week cannot prove an unbroken run.
                             tempStreak = 0
                         }
                         bestWeekCal.add(Calendar.DAY_OF_YEAR, 7)
@@ -374,51 +524,44 @@ class StreakCalculator(
                     currentStreak = currentStreak,
                     bestStreak = maxOf(bestStreak, currentStreak),
                     remainingTimeMillis = (limitMillis - todayUsage).coerceAtLeast(0L),
-                    lastStreakUpdateTimestamp = if (isTodayActive && isSuccessToday && (shield.type == FocusType.GOAL || todayUsage > 0)) now else shield.lastStreakUpdateTimestamp
+                    lastStreakUpdateTimestamp = if (isTodayActive && isSuccessToday) now else shield.lastStreakUpdateTimestamp
                 ))
             } else {
-                val lastUpdateDayStart = DateTimeUtils.getDayStartTime(shield.lastStreakUpdateTimestamp, prefs.dayStartHour, prefs.dayStartMinute)
-                val yesterdayStart = DateTimeUtils.getDayStartTime(todayStart - 1, prefs.dayStartHour, prefs.dayStartMinute)
-                val isLastUpdateYesterday = lastUpdateDayStart == yesterdayStart
-                val isLastUpdateToday = lastUpdateDayStart == todayStart
-
-                val currentStreak = if (!isTodayActive) {
+                // Pure recompute: no continuity ratchet on the stored value.
+                val rawCurrent = if (!isTodayActive) {
                     pastStreak
                 } else if (shield.type == FocusType.GOAL) {
-                    if (isSuccessToday) {
-                        if (isLastUpdateYesterday || isLastUpdateToday) {
-                            maxOf(pastStreak + 1, shield.currentStreak + (if (isLastUpdateYesterday) 1 else 0))
-                        } else pastStreak + 1
-                    } else pastStreak
+                    if (isSuccessToday) pastStreak + 1 else pastStreak
                 } else {
-                    if (isSuccessToday) {
-                        if (isLastUpdateYesterday || isLastUpdateToday) {
-                            maxOf(pastStreak + 1, shield.currentStreak + (if (isLastUpdateYesterday) 1 else 0))
-                        } else pastStreak + 1
-                    } else 0
+                    if (isSuccessToday) pastStreak + 1 else 0
                 }
+                val currentStreak = rawCurrent.coerceAtMost(
+                    maxPossibleDailyStreak(creationStr, todayStr, shield.activeDays, dateFormat)
+                )
 
-                // Recompute best from bounded history starting at 0 (not from the
-                // stored value) so a previously inflated best self-heals.
+                // Best recomputed from 0 over verified evidence so an inflated
+                // best self-heals. Unknown days reset the running best-run.
                 var bestStreak = 0
                 var tempStreak = 0
                 val calendarForBest = Calendar.getInstance()
                 try {
-                    val startDateStr = timeAddedDateStr ?: (oldestHistoryDate ?: todayStr)
-                    val startD = dateFormat.parse(startDateStr) ?: Date()
+                    val startD = dateFormat.parse(creationStr) ?: Date()
                     calendarForBest.time = startD
                     val todayDate = dateFormat.parse(todayStr) ?: Date()
 
-                    while (!calendarForBest.time.after(todayDate)) {
+                    var bestGuard = 0
+                    while (!calendarForBest.time.after(todayDate) && bestGuard++ < 3700) {
                         val dayOfWeek = calendarForBest.get(Calendar.DAY_OF_WEEK)
                         if (dayOfWeek !in shield.activeDays) {
                             calendarForBest.add(Calendar.DAY_OF_YEAR, 1)
                             continue
                         }
                         val dStr = dateFormat.format(calendarForBest.time)
-                        val usage = if (dStr == todayStr) todayUsage else history.find { it.date == dStr }?.usageTimeMillis
-
-                        val effectiveUsage = if (usage == null && shield.type == FocusType.SHIELD) 0L else usage
+                        val effectiveUsage: Long? = if (dStr == todayStr) todayUsage else resolvePastDayUsage(
+                            pkg, dStr, history, totalCoveredDates, null,
+                            usageStatsManager, calendarForBest.timeInMillis,
+                            (todayStart - calendarForBest.timeInMillis) <= 14L * 86400000L
+                        )
                         if (effectiveUsage != null) {
                             val success = if (shield.type == FocusType.GOAL) effectiveUsage >= limitMillis else effectiveUsage <= limitMillis
                             if (success) {
@@ -438,7 +581,7 @@ class StreakCalculator(
                     currentStreak = currentStreak,
                     bestStreak = maxOf(bestStreak, currentStreak),
                     remainingTimeMillis = (limitMillis - todayUsage).coerceAtLeast(0L),
-                    lastStreakUpdateTimestamp = if (isTodayActive && isSuccessToday && (shield.type == FocusType.GOAL || todayUsage > 0)) now else shield.lastStreakUpdateTimestamp
+                    lastStreakUpdateTimestamp = if (isTodayActive && isSuccessToday) now else shield.lastStreakUpdateTimestamp
                 ))
             }
         }
@@ -448,35 +591,48 @@ class StreakCalculator(
         val prefs = userPreferencesFlow.first()
         shieldRepository.isShieldsLoaded.first { it }
         val shields = shieldRepository.allShields.first().filter { it.isWebsite }
-        val allUsage = shieldRepository.getAllUsage().first().groupBy { it.packageName }
+        val allUsage = shieldRepository.getAllUsage(10000).first()
+        val usageByPackage = allUsage.groupBy { it.packageName }
+            .mapValues { (_, rows) -> rows.associate { it.date to it.usageTimeMillis } }
+        val totalCoveredDates = allUsage
+            .filter { it.packageName == "TOTAL" }
+            .map { it.date }.toSet()
         val now = System.currentTimeMillis()
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val todayStr = dateFormat.format(Date(now))
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val todayStart = DateTimeUtils.getDayStartTime(now, prefs.dayStartHour, prefs.dayStartMinute)
+        val todayStr = dateFormat.format(Date(todayStart))
 
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val todayUsageMap = withContext(Dispatchers.IO) {
-            com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager, dayStartHour = prefs.dayStartHour, dayStartMinute = prefs.dayStartMinute).appUsageMap
-        }
 
         shields.forEach { shield ->
             val pkg = shield.packageName
-            val history = allUsage[pkg] ?: emptyList()
-            val oldestHistoryDate = history.map { it.date }.minOrNull()
+            val history = usageByPackage[pkg] ?: emptyMap()
+            // Absolute creation bound (never null, never future).
+            val creationStr = creationDateStr(shield.timeAdded, shield.lastStreakUpdateTimestamp, dateFormat, todayStr)
             val limitMillis = shield.timeLimitMinutes * 60 * 1000L
             val isWeekly = shield.limitPeriod == LimitPeriod.WEEKLY
-            val timeAddedDateStr = dateFormat.format(Date(shield.timeAdded))
 
             if (limitMillis <= 0 && shield.type == FocusType.SHIELD) {
                 shieldRepository.updateShield(shield.copy(currentStreak = 0, bestStreak = 0))
                 return@forEach
             }
 
-            val dailyTodayUsage = if (timeAddedDateStr != null) {
-                val domain = WebsiteRepository.extractDomainFromPackageName(pkg)
-                shieldRepository.getWebsiteUsage(todayStr, domain)?.usageTimeMillis ?: 0L
-            } else {
-                todayUsageMap[pkg] ?: 0L
+            // Website past-day evidence lives in the website_usage table, so
+            // preload it once per shield instead of querying per day.
+            val domain = WebsiteRepository.extractDomainFromPackageName(pkg)
+            val webHistory = try {
+                shieldRepository.getWebsiteUsageForDomain(domain).first()
+                    .associate { it.date to it.usageTimeMillis }
+            } catch (_: Exception) {
+                emptyMap()
             }
+
+            // Website rows are keyed by wall-clock date while streak days use
+            // the day-start boundary, so check both keys for today.
+            val wallClockTodayStr = dateFormat.format(Date(now))
+            val dailyTodayUsage = webHistory[todayStr]
+                ?: webHistory[wallClockTodayStr]
+                ?: 0L
             val todayUsage = if (isWeekly) {
                 shieldRepository.getWeeklyUsageLive(pkg, dailyTodayUsage)
             } else {
@@ -484,14 +640,10 @@ class StreakCalculator(
             }
 
             var pastStreak = 0
-            var foundDefiniteFailure = false
-            val todayStart = DateTimeUtils.getDayStartTime(now, prefs.dayStartHour, prefs.dayStartMinute)
 
             val todayCal = Calendar.getInstance()
             todayCal.timeInMillis = todayStart
             val isTodayActive = todayCal.get(Calendar.DAY_OF_WEEK) in shield.activeDays
-
-            val shieldStreakLimit = (shield.currentStreak + 30).coerceAtMost(90)
 
             if (isWeekly) {
                 val weekCal = Calendar.getInstance().apply {
@@ -500,64 +652,44 @@ class StreakCalculator(
                     set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
                     set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
                 }
-                for (i in 1..shieldStreakLimit) {
+                for (i in 1..105) {
                     weekCal.add(Calendar.DAY_OF_YEAR, -7)
-                    if (shield.lastStreakUpdateTimestamp == 0L && shield.currentStreak == 0) break
                     val weekStartStr = dateFormat.format(weekCal.time)
-                    if (timeAddedDateStr != null && weekStartStr.compareTo(timeAddedDateStr) < 0) break
-                    val weekEnd = Calendar.getInstance().apply { timeInMillis = weekCal.timeInMillis; add(Calendar.DAY_OF_YEAR, 6) }
-                    val weekEndStr = dateFormat.format(weekEnd.time)
-                    var weekTotal = history.filter { it.date >= weekStartStr && it.date <= weekEndStr }.sumOf { it.usageTimeMillis }
+                    if (weekStartStr < creationStr) break
+                    val weekTotal = resolvePastWeekUsage(
+                        pkg, weekCal.timeInMillis, dateFormat, history,
+                        totalCoveredDates, webHistory, usageStatsManager, false
+                    )
 
-                    if (weekTotal == 0L && oldestHistoryDate != null && weekStartStr >= oldestHistoryDate) {
-                        if (shield.type == FocusType.SHIELD) weekTotal = 0L else { foundDefiniteFailure = true; break }
-                    } else if (weekTotal == 0L && i <= 2) {
-                        var sysTotal = 0L
-                        val sysCal = Calendar.getInstance().apply { timeInMillis = weekCal.timeInMillis }
-                        for (d in 0 until 7) {
-                            val dayUsage = withContext(Dispatchers.IO) {
-                                fetchSystemAppUsageForDate(usageStatsManager, pkg, sysCal.timeInMillis)
-                            }
-                            if (dayUsage != null) sysTotal += dayUsage
-                            sysCal.add(Calendar.DAY_OF_YEAR, 1)
-                        }
-                        if (sysTotal > 0) weekTotal = sysTotal
-                    }
-
-                    val success = if (shield.type == FocusType.GOAL) weekTotal >= limitMillis else weekTotal <= limitMillis
-                    if (success) pastStreak++ else { foundDefiniteFailure = true; break }
+                    if (weekTotal != null) {
+                        val success = if (shield.type == FocusType.GOAL) weekTotal >= limitMillis else weekTotal <= limitMillis
+                        if (success) pastStreak++ else break
+                    } else break
                 }
             } else {
                 val c = Calendar.getInstance()
-                for (i in 1..shieldStreakLimit) {
+                for (i in 1..730) {
                     c.timeInMillis = todayStart; c.add(Calendar.DAY_OF_YEAR, -i)
-                    if (shield.lastStreakUpdateTimestamp == 0L && shield.currentStreak == 0) break
                     val dayOfWeek = c.get(Calendar.DAY_OF_WEEK)
                     if (dayOfWeek !in shield.activeDays) continue
                     val dStr = dateFormat.format(c.time)
-                    if (timeAddedDateStr != null && dStr.compareTo(timeAddedDateStr) < 0) break
-                    var usage = history.find { it.date == dStr }?.usageTimeMillis
-
-                    if (usage == null) {
-                        if (oldestHistoryDate != null && dStr >= oldestHistoryDate) {
-                            if (shield.type == FocusType.SHIELD) usage = 0L else break
-                        } else if (i <= 14) {
-                            usage = withContext(Dispatchers.IO) {
-                                fetchSystemAppUsageForDate(usageStatsManager, pkg, c.timeInMillis)
-                            }
-                        }
-                    }
+                    if (dStr < creationStr) break
+                    val usage = resolvePastDayUsage(
+                        pkg, dStr, history, totalCoveredDates, webHistory,
+                        usageStatsManager, c.timeInMillis, false
+                    )
 
                     if (usage != null) {
                         val success = if (shield.type == FocusType.GOAL) usage >= limitMillis else usage <= limitMillis
-                        if (success) pastStreak++ else { foundDefiniteFailure = true; break }
+                        if (success) pastStreak++ else break
                     } else break
                 }
             }
 
             val isSuccessToday = if (!isTodayActive) {
                 false
-            } else if (timeAddedDateStr == todayStr && todayUsage == 0L) {
+            } else if (creationStr == todayStr && todayUsage == 0L) {
+                // Creation day with no visit yet: not a success, not a failure.
                 false
             } else if (shield.type == FocusType.GOAL) todayUsage >= limitMillis else todayUsage <= limitMillis
 
@@ -569,37 +701,24 @@ class StreakCalculator(
                     set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
 
-                val lastUpdateMonday = Calendar.getInstance().apply {
-                    timeInMillis = shield.lastStreakUpdateTimestamp
-                    firstDayOfWeek = Calendar.MONDAY
-                    set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
-                    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-
-                val isLastUpdateThisWeek = lastUpdateMonday == thisMonday
-                val isLastUpdateLastWeek = lastUpdateMonday == thisMonday - 7L * 24 * 60 * 60 * 1000L
-
-                val currentStreak = if (!isTodayActive) {
+                val rawCurrent = if (!isTodayActive) {
                     pastStreak
                 } else if (shield.type == FocusType.GOAL) {
-                    if (isSuccessToday) {
-                        if (isLastUpdateLastWeek || isLastUpdateThisWeek) {
-                            maxOf(pastStreak + 1, shield.currentStreak + (if (isLastUpdateLastWeek) 1 else 0))
-                        } else pastStreak + 1
-                    } else pastStreak
+                    if (isSuccessToday) pastStreak + 1 else pastStreak
                 } else {
-                    if (isSuccessToday) {
-                        if (isLastUpdateLastWeek || isLastUpdateThisWeek) {
-                            maxOf(pastStreak + 1, shield.currentStreak + (if (isLastUpdateLastWeek) 1 else 0))
-                        } else pastStreak + 1
-                    } else 0
+                    if (isSuccessToday) pastStreak + 1 else 0
                 }
+                val currentStreak = rawCurrent.coerceAtMost(
+                    maxPossibleWeeklyStreak(creationStr, todayStr, dateFormat)
+                )
 
-                var bestStreak = shield.bestStreak
+                // Best recomputed from 0 over verified evidence (previously it
+                // started from the stored value, so an inflated best could
+                // never heal).
+                var bestStreak = 0
                 var tempStreak = 0
                 try {
-                    val startDateStr = if (timeAddedDateStr != null) timeAddedDateStr else (oldestHistoryDate ?: todayStr)
-                    val startD = dateFormat.parse(startDateStr) ?: Date()
+                    val startD = dateFormat.parse(creationStr) ?: Date()
                     val todayDate = dateFormat.parse(todayStr) ?: Date()
 
                     val bestWeekCal = Calendar.getInstance().apply {
@@ -608,21 +727,27 @@ class StreakCalculator(
                         set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
                     }
 
-                    while (!bestWeekCal.time.after(todayDate)) {
+                    var bestGuard = 0
+                    while (!bestWeekCal.time.after(todayDate) && bestGuard++ < 160) {
                         val weekStartStr = dateFormat.format(bestWeekCal.time)
-                        val weekEndBest = Calendar.getInstance().apply { timeInMillis = bestWeekCal.timeInMillis; add(Calendar.DAY_OF_YEAR, 6) }
-                        val weekEndStr = dateFormat.format(weekEndBest.time)
 
-                        val weekTotal = if (weekStartStr == dateFormat.format(thisMonday)) {
+                        val weekTotal: Long? = if (weekStartStr == dateFormat.format(thisMonday)) {
                             todayUsage
                         } else {
-                            history.filter { it.date >= weekStartStr && it.date <= weekEndStr }.sumOf { it.usageTimeMillis }
+                            resolvePastWeekUsage(
+                                pkg, bestWeekCal.timeInMillis, dateFormat, history,
+                                totalCoveredDates, webHistory, usageStatsManager, false
+                            )
                         }
 
-                        val success = if (shield.type == FocusType.GOAL) weekTotal >= limitMillis else weekTotal <= limitMillis
-                        if (success) {
-                            tempStreak++
-                            bestStreak = maxOf(bestStreak, tempStreak)
+                        if (weekTotal != null) {
+                            val success = if (shield.type == FocusType.GOAL) weekTotal >= limitMillis else weekTotal <= limitMillis
+                            if (success) {
+                                tempStreak++
+                                bestStreak = maxOf(bestStreak, tempStreak)
+                            } else {
+                                tempStreak = 0
+                            }
                         } else {
                             tempStreak = 0
                         }
@@ -634,49 +759,40 @@ class StreakCalculator(
                     currentStreak = currentStreak,
                     bestStreak = maxOf(bestStreak, currentStreak),
                     remainingTimeMillis = (limitMillis - todayUsage).coerceAtLeast(0L),
-                    lastStreakUpdateTimestamp = if (isTodayActive && isSuccessToday && (shield.type == FocusType.GOAL || todayUsage > 0)) now else shield.lastStreakUpdateTimestamp
+                    lastStreakUpdateTimestamp = if (isTodayActive && isSuccessToday) now else shield.lastStreakUpdateTimestamp
                 ))
             } else {
-                val lastUpdateDayStart = DateTimeUtils.getDayStartTime(shield.lastStreakUpdateTimestamp, prefs.dayStartHour, prefs.dayStartMinute)
-                val yesterdayStart = DateTimeUtils.getDayStartTime(todayStart - 1, prefs.dayStartHour, prefs.dayStartMinute)
-                val isLastUpdateYesterday = lastUpdateDayStart == yesterdayStart
-                val isLastUpdateToday = lastUpdateDayStart == todayStart
-
-                val currentStreak = if (!isTodayActive) {
+                val rawCurrent = if (!isTodayActive) {
                     pastStreak
                 } else if (shield.type == FocusType.GOAL) {
-                    if (isSuccessToday) {
-                        if (isLastUpdateYesterday || isLastUpdateToday) {
-                            maxOf(pastStreak + 1, shield.currentStreak + (if (isLastUpdateYesterday) 1 else 0))
-                        } else pastStreak + 1
-                    } else pastStreak
+                    if (isSuccessToday) pastStreak + 1 else pastStreak
                 } else {
-                    if (isSuccessToday) {
-                        if (isLastUpdateYesterday || isLastUpdateToday) {
-                            maxOf(pastStreak + 1, shield.currentStreak + (if (isLastUpdateYesterday) 1 else 0))
-                        } else pastStreak + 1
-                    } else 0
+                    if (isSuccessToday) pastStreak + 1 else 0
                 }
+                val currentStreak = rawCurrent.coerceAtMost(
+                    maxPossibleDailyStreak(creationStr, todayStr, shield.activeDays, dateFormat)
+                )
 
-                var bestStreak = shield.bestStreak
+                var bestStreak = 0
                 var tempStreak = 0
                 val calendarForBest = Calendar.getInstance()
                 try {
-                    val startDateStr = if (timeAddedDateStr != null) timeAddedDateStr else (oldestHistoryDate ?: todayStr)
-                    val startD = dateFormat.parse(startDateStr) ?: Date()
+                    val startD = dateFormat.parse(creationStr) ?: Date()
                     calendarForBest.time = startD
                     val todayDate = dateFormat.parse(todayStr) ?: Date()
 
-                    while (!calendarForBest.time.after(todayDate)) {
+                    var bestGuard = 0
+                    while (!calendarForBest.time.after(todayDate) && bestGuard++ < 3700) {
                         val dayOfWeek = calendarForBest.get(Calendar.DAY_OF_WEEK)
                         if (dayOfWeek !in shield.activeDays) {
                             calendarForBest.add(Calendar.DAY_OF_YEAR, 1)
                             continue
                         }
                         val dStr = dateFormat.format(calendarForBest.time)
-                        val usage = if (dStr == todayStr) todayUsage else history.find { it.date == dStr }?.usageTimeMillis
-
-                        val effectiveUsage = if (usage == null && shield.type == FocusType.SHIELD) 0L else usage
+                        val effectiveUsage: Long? = if (dStr == todayStr) todayUsage else resolvePastDayUsage(
+                            pkg, dStr, history, totalCoveredDates, webHistory,
+                            usageStatsManager, calendarForBest.timeInMillis, false
+                        )
                         if (effectiveUsage != null) {
                             val success = if (shield.type == FocusType.GOAL) effectiveUsage >= limitMillis else effectiveUsage <= limitMillis
                             if (success) {
@@ -696,7 +812,7 @@ class StreakCalculator(
                     currentStreak = currentStreak,
                     bestStreak = maxOf(bestStreak, currentStreak),
                     remainingTimeMillis = (limitMillis - todayUsage).coerceAtLeast(0L),
-                    lastStreakUpdateTimestamp = if (isTodayActive && isSuccessToday && (shield.type == FocusType.GOAL || todayUsage > 0)) now else shield.lastStreakUpdateTimestamp
+                    lastStreakUpdateTimestamp = if (isTodayActive && isSuccessToday) now else shield.lastStreakUpdateTimestamp
                 ))
             }
         }
@@ -707,135 +823,15 @@ class StreakCalculator(
         refreshWebStreaks(shieldRepository)
     }
 
+    /**
+     * Manual "verify and restore" action from developer settings. This now
+     * simply forces the same pure recompute as the automatic refresh: every
+     * value written is backed by verified evidence (DB rows within the shield
+     * lifetime, or OS entries inside the retention window), so running it can
+     * never fabricate a streak — it only re-verifies and heals the state.
+     */
     suspend fun runManualStreakRecovery(shieldRepository: ShieldRepository) {
-        val prefs = userPreferencesFlow.first()
-        val targetMillis = prefs.screenTimeTargetMinutes * 60 * 1000L
-        val dbUsage = shieldRepository.getAllUsage().first()
-        val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val todayStart = DateTimeUtils.getDayStartTime(System.currentTimeMillis(), prefs.dayStartHour, prefs.dayStartMinute)
-        if (targetMillis > 0) {
-            val (launcherApps, launcherPackage) = withContext(Dispatchers.IO) {
-                try {
-                    val pm = context.packageManager
-                    val apps = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0).map { it.activityInfo.packageName }.toSet()
-                    val lPkg = pm.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
-                    apps to lPkg
-                } catch (_: Exception) { emptySet<String>() to null }
-            }
-        val excludePackages = setOfNotNull(context.packageName, launcherPackage) + prefs.excludedFromTrackingPackages
-
-            val globalHistory = dbUsage.filter { it.packageName == "TOTAL" }
-            val oldestHistoryDate = globalHistory.map { it.date }.minOrNull()
-            var pastStreak = 0
-            val recoveryGlobalLimit = (prefs.globalCurrentStreak + 30).coerceAtMost(90)
-            for (i in 1..recoveryGlobalLimit) {
-                val c = Calendar.getInstance().apply { timeInMillis = todayStart; add(Calendar.DAY_OF_YEAR, -i) }
-                val dStr = dateFormat.format(c.time)
-                var usage = globalHistory.find { it.date == dStr }?.usageTimeMillis
-                if (usage == null) {
-                    if (oldestHistoryDate != null && dStr >= oldestHistoryDate) {
-                        usage = 0L
-                    } else if (i <= 14) {
-                        usage = withContext(Dispatchers.IO) {
-                            fetchSystemTotalUsageForDate(usageStatsManager, c.timeInMillis, launcherApps, excludePackages)
-                        }
-                    }
-                }
-
-                if (usage != null) {
-                    if (usage <= targetMillis) pastStreak++ else break
-                } else break
-            }
-
-            val (totalToday, stats) = withContext(Dispatchers.IO) {
-                val stats = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager, dayStartHour = prefs.dayStartHour, dayStartMinute = prefs.dayStartMinute).appUsageMap
-                var total = 0L
-                stats.forEach { (pkg, time) -> if (pkg !in excludePackages && pkg in launcherApps) total += time }
-                total to stats
-            }
-
-            val isSuccessToday = totalToday <= targetMillis
-            if (isSuccessToday && (pastStreak + 1) < prefs.globalBestStreak) {
-                var provenDays = 1
-                for (j in 1..3) {
-                    val cal = Calendar.getInstance().apply { timeInMillis = todayStart; add(Calendar.DAY_OF_YEAR, -j) }
-                    val u = globalHistory.find { it.date == dateFormat.format(cal.time) }?.usageTimeMillis
-                        ?: withContext(Dispatchers.IO) {
-                            fetchSystemTotalUsageForDate(usageStatsManager, cal.timeInMillis, launcherApps, excludePackages)
-                        }
-                    if (u <= targetMillis) provenDays++ else break
-                }
-                if (provenDays >= 3) {
-                    updateGlobalStreak(maxOf(pastStreak + 1, prefs.globalBestStreak), prefs.globalBestStreak, System.currentTimeMillis())
-                }
-            }
-        }
-        val shields = shieldRepository.allShields.first()
-        val allUsage = dbUsage.groupBy { it.packageName }
-        val todayUsageMap = withContext(Dispatchers.IO) {
-            com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager, dayStartHour = prefs.dayStartHour, dayStartMinute = prefs.dayStartMinute).appUsageMap
-        }
-
-        shields.forEach { shield ->
-            val pkg = shield.packageName
-            val history = allUsage[pkg] ?: emptyList()
-            val oldestHistoryDate = history.map { it.date }.minOrNull()
-            // Same creation-date bound as refreshAppStreaks: never count days
-            // before the shield existed.
-            val timeAddedDateStr = if (shield.timeAdded > 0L) dateFormat.format(Date(shield.timeAdded)) else null
-            val limitMillis = shield.timeLimitMinutes * 60 * 1000L
-            if (limitMillis <= 0 && shield.type == FocusType.SHIELD) return@forEach
-
-            var pastStreak = 0
-            val recoveryShieldLimit = (shield.currentStreak + 30).coerceAtMost(90)
-            for (i in 1..recoveryShieldLimit) {
-                val c = Calendar.getInstance().apply { timeInMillis = todayStart; add(Calendar.DAY_OF_YEAR, -i) }
-                if (shield.lastStreakUpdateTimestamp == 0L && shield.currentStreak == 0) break
-                val dayOfWeek = c.get(Calendar.DAY_OF_WEEK)
-                if (dayOfWeek !in shield.activeDays) continue
-                val dStr = dateFormat.format(c.time)
-                if (timeAddedDateStr != null && dStr < timeAddedDateStr) break
-                var usage = history.find { it.date == dStr }?.usageTimeMillis
-                if (usage == null) {
-                    if (oldestHistoryDate != null && dStr >= oldestHistoryDate) {
-                        if (shield.type == FocusType.SHIELD) usage = 0L else break
-                    } else if (i <= 14) {
-                        usage = withContext(Dispatchers.IO) {
-                            fetchSystemAppUsageForDate(usageStatsManager, pkg, c.timeInMillis)
-                        }
-                    }
-                }
-
-                if (usage != null) {
-                    val success = if (shield.type == FocusType.GOAL) usage >= limitMillis else usage <= limitMillis
-                    if (success) pastStreak++ else break
-                } else break
-            }
-
-            val todayCal = Calendar.getInstance().apply { timeInMillis = todayStart }
-            val isTodayActive = todayCal.get(Calendar.DAY_OF_WEEK) in shield.activeDays
-            val todayUsage = todayUsageMap[pkg] ?: 0L
-            val isSuccessToday = if (!isTodayActive) false else if (shield.type == FocusType.GOAL) todayUsage >= limitMillis else todayUsage <= limitMillis
-            val currentStreak = if (!isTodayActive) pastStreak else if (shield.type == FocusType.GOAL) (if (isSuccessToday) pastStreak + 1 else pastStreak) else (if (isSuccessToday) pastStreak + 1 else 0)
-
-            if (isSuccessToday && currentStreak < shield.bestStreak) {
-                var provenDays = 1
-                for (j in 1..3) {
-                    val cal = Calendar.getInstance().apply { timeInMillis = todayStart; add(Calendar.DAY_OF_YEAR, -j) }
-                    val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
-                    if (dayOfWeek !in shield.activeDays) continue
-                    val u = history.find { it.date == dateFormat.format(cal.time) }?.usageTimeMillis
-                        ?: withContext(Dispatchers.IO) {
-                            fetchSystemAppUsageForDate(usageStatsManager, pkg, cal.timeInMillis)
-                        }
-                    val success = if (shield.type == FocusType.GOAL) u >= limitMillis else u <= limitMillis
-                    if (success) provenDays++ else break
-                }
-                if (provenDays >= 3) {
-                    shieldRepository.updateShield(shield.copy(currentStreak = maxOf(currentStreak, shield.bestStreak)))
-                }
-            }
-        }
+        refreshGlobalStreak(shieldRepository)
+        refreshAllAppStreaks(shieldRepository)
     }
 }

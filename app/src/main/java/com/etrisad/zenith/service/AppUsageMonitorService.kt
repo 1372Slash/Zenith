@@ -390,10 +390,11 @@ class AppUsageMonitorService : Service() {
     private fun onMidnightReset() {
         serviceScope.launch {
             com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
+            // updateStreaks() already refreshes global + app + web (+ bedtime);
+            // do NOT call the individual refreshes again here — each refresh
+            // re-queries UsageStats and rewrites shields, doubling the cost
+            // and re-triggering every DB observer for no reason.
             updateStreaks()
-            preferencesRepository.refreshGlobalStreak(shieldRepository)
-            preferencesRepository.refreshAppStreaks(shieldRepository)
-            preferencesRepository.refreshWebStreaks(shieldRepository)
             shieldRepository.resetDailyRemainingTimes()
             checkWeeklyReset()
             SharedMonitoringState.notifiedGoals.clear()
