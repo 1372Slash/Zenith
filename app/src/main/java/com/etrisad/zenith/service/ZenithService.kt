@@ -319,7 +319,7 @@ class ZenithService : AccessibilityService() {
             val pkg = queryCurrentForegroundApp()
             if (pkg != null && pkg != packageName && lastForegroundApp == null) {
                 if (SharedMonitoringState.isFinancialApp(pkg)) {
-                    Log.d("ZenithAS", "Financial app already in foreground ($pkg) - skipping initial detection")
+                    Log.d("ZenithAS", "Financial app already in foreground ($pkg), skipping initial detection")
                     return@launch
                 }
                 lastForegroundApp = pkg
@@ -333,7 +333,7 @@ class ZenithService : AccessibilityService() {
                 }
                 if (windowPkg != null && windowPkg != packageName && !shouldBypassBlocking(windowPkg)) {
                     if (SharedMonitoringState.isFinancialApp(windowPkg)) {
-                        Log.d("ZenithAS", "Financial app already in foreground ($windowPkg) - skipping initial detection")
+                        Log.d("ZenithAS", "Financial app already in foreground ($windowPkg), skipping initial detection")
                         return@launch
                     }
                     lastForegroundApp = windowPkg
@@ -413,7 +413,7 @@ class ZenithService : AccessibilityService() {
         if (isKeyboardApp(packageName)) return
 
         if (SharedMonitoringState.isFinancialApp(packageName)) {
-            Log.d("ZenithAS", "Financial app detected ($packageName) - skipping accessibility events to avoid detection")
+            Log.d("ZenithAS", "Financial app detected ($packageName), skipping accessibility events to avoid detection")
             val now = System.currentTimeMillis()
             val lastNotified = lastBankingNotificationTime[packageName] ?: 0L
             if (now - lastNotified > 15000) {

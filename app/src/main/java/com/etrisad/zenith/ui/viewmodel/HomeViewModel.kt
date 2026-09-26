@@ -645,8 +645,8 @@ class HomeViewModel(
                     throw e
                 } catch (e: Exception) {
                     observerAttempt++
-                    android.util.Log.e("ZenithDB", "DATA_OBSERVER_DIED[$observerAttempt]: ${e::class.simpleName}: ${e.message} dbOpen=${shieldRepository.isDatabaseOpen()} - rebinding and retrying")
-                    DbLogBuffer.e("ZenithDB", "DATA_OBSERVER_DIED[$observerAttempt]: ${e::class.simpleName}: ${e.message} dbOpen=${shieldRepository.isDatabaseOpen()} - rebinding and retrying")
+                    android.util.Log.e("ZenithDB", "DATA_OBSERVER_DIED[$observerAttempt]: ${e::class.simpleName}: ${e.message} dbOpen=${shieldRepository.isDatabaseOpen()}, rebinding and retrying")
+                    DbLogBuffer.e("ZenithDB", "DATA_OBSERVER_DIED[$observerAttempt]: ${e::class.simpleName}: ${e.message} dbOpen=${shieldRepository.isDatabaseOpen()}, rebinding and retrying")
                     try {
                         shieldRepository.rebindDatabase(
                             com.etrisad.zenith.data.local.database.ZenithDatabase.getDatabase(context)
@@ -695,8 +695,8 @@ class HomeViewModel(
                     throw e
                 } catch (e: Exception) {
                     attempt++
-                    android.util.Log.e("ZenithDB", "WEBSITE_OBSERVER_DIED[$attempt]: ${e::class.simpleName}: ${e.message} - rebinding and retrying")
-                    DbLogBuffer.e("ZenithDB", "WEBSITE_OBSERVER_DIED[$attempt]: ${e::class.simpleName}: ${e.message} - rebinding and retrying")
+                    android.util.Log.e("ZenithDB", "WEBSITE_OBSERVER_DIED[$attempt]: ${e::class.simpleName}: ${e.message}, rebinding and retrying")
+                    DbLogBuffer.e("ZenithDB", "WEBSITE_OBSERVER_DIED[$attempt]: ${e::class.simpleName}: ${e.message}, rebinding and retrying")
                     rebindDatabaseHandles("websiteObserver")
                     delay(5000)
                 }

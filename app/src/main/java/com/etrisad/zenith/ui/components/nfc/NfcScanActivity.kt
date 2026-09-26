@@ -301,7 +301,7 @@ class NfcScanActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         val normalized = normalizeNfcTagId(id)
         if (normalized.isEmpty()) return
         runOnUiThread {
-            // Any tag tap counts as activity - restart the kick timer.
+            // Any tag tap counts as activity, restart the kick timer.
             restartKickTimer()
             lastScannedId.value = normalized
             val matches = acceptAny || expectedIds.isEmpty() || normalized in expectedIds
@@ -315,7 +315,7 @@ class NfcScanActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                     setResult(RESULT_OK, data)
                 }
             } else {
-                lastError.value = "Wrong tag ($normalized) - use one of your registered tags"
+                lastError.value = "Wrong tag ($normalized), use one of your registered tags"
             }
         }
     }

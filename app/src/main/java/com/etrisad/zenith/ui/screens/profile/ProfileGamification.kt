@@ -190,13 +190,13 @@ fun xpToNextLevel(xpTotal: Long): Long =
 
 /**
  * Level milestone titles. Owned automatically once the level is reached,
- * equipped manually - shown under the profile name and on the share card.
+ * equipped manually, shown under the profile name and on the share card.
  */
 data class LevelTitle(val id: String, val name: String, val requiredLevel: Int)
 
 /**
  * Level milestone avatar borders. Owned automatically once the level is
- * reached, equipped manually - drawn as a ring around the profile avatar.
+ * reached, equipped manually, drawn as a ring around the profile avatar.
  */
 /**
  * Special animated effect for pinnacle rings. NONE is static, SPIN slowly

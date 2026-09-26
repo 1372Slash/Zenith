@@ -395,7 +395,7 @@ fun DeveloperSettings(
                             )
 
                             Text(
-                                text = "Content B - Shield",
+                                text = "Content B, Shield",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )
@@ -414,7 +414,7 @@ fun DeveloperSettings(
                             )
 
                             Text(
-                                text = "Content A - Pause Point",
+                                text = "Content A, Pause Point",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )

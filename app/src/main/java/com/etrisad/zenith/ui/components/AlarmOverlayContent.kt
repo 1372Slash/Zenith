@@ -525,7 +525,7 @@ private fun WakeUpAppBottomSheet(
                 ZenithButton(
                     onClick = { scope.launch { sheetState.hide(); onDone() } },
                     modifier = Modifier.fillMaxWidth(),
-                    text = "Done - I'm Awake!",
+                    text = "Done, I'm Awake!",
                     type = ZenithButtonType.Filled,
                     size = ZenithButtonSize.ExtraLarge,
                     fillMaxWidth = true

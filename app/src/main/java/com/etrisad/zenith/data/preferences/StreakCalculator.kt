@@ -70,7 +70,7 @@ class StreakCalculator(
      * System usage of one app for one day, or null when the OS reports no
      * entry. A missing entry is NOT proof of zero usage (pruned history,
      * permission gap), so callers must treat null as unknown and stop
-     * counting - never as an automatic success.
+     * counting, never as an automatic success.
      */
     private fun fetchSystemAppUsageForDate(
         usm: UsageStatsManager,
@@ -89,7 +89,7 @@ class StreakCalculator(
     /**
      * Absolute creation-day bound ("yyyy-MM-dd"). Never null, never in the
      * future. Shields created before the timeAdded column existed (or restored
-     * from backups without it) have timeAdded == 0 - those fall back to the
+     * from backups without it) have timeAdded == 0, those fall back to the
      * last streak update, otherwise to today so such a shield can only ever
      * count today. Every streak loop must break at this bound: days before the
      * shield existed must never count, no matter what the DB or the OS
@@ -121,7 +121,7 @@ class StreakCalculator(
      * - no Zenith row for the package that day, AND
      * - no TOTAL row proving the tracker even ran that day, AND
      * - (optionally) no OS entry for the package.
-     * Callers must treat null as "unknown" and stop the streak run - a missing
+     * Callers must treat null as "unknown" and stop the streak run, a missing
      * row alone is not proof of zero usage (fresh install, permission gap,
      * pruned DB), and assuming success is exactly what fabricated streaks.
      * The one safe inference: when the tracker provably ran (TOTAL row
@@ -276,7 +276,7 @@ class StreakCalculator(
 
         // Pure recompute from verified history: every past day needs a TOTAL
         // row (tracker ran) or an OS entry within the 14-day retention window.
-        // Unknown days STOP the run - they are never assumed to be successes.
+        // Unknown days STOP the run, they are never assumed to be successes.
         // This also makes the streak self-healing: a previously inflated value
         // is corrected downward on the next refresh instead of being ratcheted
         // upward forever by max(stored).
@@ -820,7 +820,7 @@ class StreakCalculator(
      * simply forces the same pure recompute as the automatic refresh: every
      * value written is backed by verified evidence (DB rows within the shield
      * lifetime, or OS entries inside the retention window), so running it can
-     * never fabricate a streak - it only re-verifies and heals the state.
+     * never fabricate a streak, it only re-verifies and heals the state.
      */
     suspend fun runManualStreakRecovery(shieldRepository: ShieldRepository) {
         refreshGlobalStreak(shieldRepository)

@@ -251,7 +251,7 @@ class ProfileViewModel(
                 // Day-gated counters for day-based achievements (historian,
                 // weekend_warrior, night_owl_lite, early_bird). Each id
                 // increments at most once per calendar day, and only when
-                // that day's condition holds - cold starts never inflate them.
+                // that day's condition holds, cold starts never inflate them.
                 val trackedDates = try {
                     shieldRepository.getAllTrackedDates().toSet()
                 } catch (_: Exception) { emptySet() }
@@ -648,7 +648,7 @@ class ProfileViewModel(
         return try {
             val prefsSnapshot = userPreferencesRepository.userPreferencesFlow.first()
             val rawBefore = prefsSnapshot.achievementHistory
-            // Per-tier banner keys already shown - never enqueue the same one again.
+            // Per-tier banner keys already shown, never enqueue the same one again.
             val seen = decodeSeen(prefsSnapshot.achievementBannersSeen).toMutableSet()
             var seenChanged = false
             // First run seeds the baseline silently so existing progress
