@@ -31,11 +31,6 @@ class ZenithHeartbeatReceiver : BroadcastReceiver() {
                 }
                 
 try {
-// Foreground start (not startService): with the screen off the process is
-// often dead, and startService() from background then throws
-// IllegalStateException - silently killing heartbeat, refresh and
-// screen-off goal chains. onCreate() promotes to foreground
-// unconditionally via startForegroundSafely(), so this is safe.
 context.startForegroundService(monitorIntent)
 } catch (e: Exception) {
 android.util.Log.w("ZenithHeartbeat", "Failed to start service: ${e.message}")

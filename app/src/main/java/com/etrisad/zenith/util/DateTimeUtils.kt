@@ -6,10 +6,6 @@ import java.util.Date
 import java.util.Locale
 
 object DateTimeUtils {
-
-    // DB date keys must be locale-independent ("yyyy-MM-dd" digits). Some
-    // locales use non-Latin digits or alternate calendars, which would break
-    // string comparison in Room queries and silently return empty results.
     private val dateFormatTL = object : ThreadLocal<SimpleDateFormat>() {
         override fun initialValue() = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     }

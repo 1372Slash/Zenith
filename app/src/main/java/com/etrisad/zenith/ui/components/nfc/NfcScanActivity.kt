@@ -68,9 +68,6 @@ class NfcScanActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-
-        // System Back must also drop the whole scanner task, otherwise the
-        // user would land on Zenith instead of the previously opened app.
         onBackPressedDispatcher.addCallback(
             this,
             object : androidx.activity.OnBackPressedCallback(true) {
@@ -124,9 +121,6 @@ class NfcScanActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                 LaunchedEffect(success) {
                     if (success != null) {
                         delay(700)
-                        // Remove the whole scanner task so the system returns to
-                        // the app that was in front before (the one Shield blocks),
-                        // not to Zenith's own task.
                         finishAndRemoveTask()
                     }
                 }
@@ -269,12 +263,6 @@ class NfcScanActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         } catch (_: Exception) {}
         super.onPause()
     }
-
-    /**
-     * Same spirit as the overlay's auto-kick close button: if the user does
-     * not tap any tag soon, kick them to the launcher instead of letting
-     * them idle on the scanner.
-     */
     private fun restartKickTimer() {
         kickJob?.cancel()
         kickProgress.value = 0f
@@ -313,7 +301,7 @@ class NfcScanActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         val normalized = normalizeNfcTagId(id)
         if (normalized.isEmpty()) return
         runOnUiThread {
-            // Any tag tap counts as activity — restart the kick timer.
+            // Any tag tap counts as activity - restart the kick timer.
             restartKickTimer()
             lastScannedId.value = normalized
             val matches = acceptAny || expectedIds.isEmpty() || normalized in expectedIds
@@ -327,7 +315,7 @@ class NfcScanActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                     setResult(RESULT_OK, data)
                 }
             } else {
-                lastError.value = "Wrong tag ($normalized) — use one of your registered tags"
+                lastError.value = "Wrong tag ($normalized) - use one of your registered tags"
             }
         }
     }

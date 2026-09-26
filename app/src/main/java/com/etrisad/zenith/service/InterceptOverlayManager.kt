@@ -112,12 +112,6 @@ class InterceptOverlayManager(
         @Volatile
         var activeInstance: InterceptOverlayManager? = null
             private set
-
-        /**
-         * Pause task kept across a temporary overlay hide while the user scans
-         * an NFC tag in NfcScanActivity. The overlay is hidden (not destroyed —
-         * the flow continues) and re-shown with the same task afterwards.
-         */
         @Volatile
         var retainedPauseTask: com.etrisad.zenith.ui.components.pausepoint.PausePointTask? = null
         @Volatile

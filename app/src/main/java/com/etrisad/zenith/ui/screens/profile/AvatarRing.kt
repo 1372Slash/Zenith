@@ -20,12 +20,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.Dp
-
-/**
- * Avatar ring with optional pinnacle effects. NONE draws a plain ring,
- * SPIN slowly rotates the sweep gradient around the ring, SHINE sweeps a
- * highlight arc over a solid ring. A null border falls back to [fallback].
- */
 fun Modifier.avatarRing(
     border: AvatarBorder?,
     width: Dp,

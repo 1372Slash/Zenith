@@ -23,9 +23,6 @@ class Converters {
     fun toIntSet(data: String): Set<Int> {
         if (data.isBlank()) return setOf(1, 2, 3, 4, 5, 6, 7)
         val parsed = data.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
-        // Never return empty for a corrupt row: a corrupt activeDays must not
-        // wipe the Flow (which would freeze shields/schedules UI). Fall back
-        // to all-days so the row stays visible and editable.
         return parsed.ifEmpty { setOf(1, 2, 3, 4, 5, 6, 7) }
     }
 

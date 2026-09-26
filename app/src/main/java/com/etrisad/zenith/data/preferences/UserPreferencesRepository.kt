@@ -812,14 +812,6 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             preferences[PreferencesKeys.USER_XP_HISTORY] = lines.take(30).joinToString("\n")
         }
     }
-
-    /**
-     * Isolated debug override for the lifetime XP total (developer
-     * settings). The pre-debug value is frozen as the base: level and
-     * rewards follow the override, but XP achievements keep computing
-     * from the base so debugging never pollutes the real collection.
-     * Setting twice without clearing keeps the original base.
-     */
     suspend fun setUserXpTotal(xp: Long) {
         context.runtimeDataStore.edit { preferences ->
             if ((preferences[RuntimeKeys.USER_XP_DEBUG_BASE] ?: -1L) < 0L) {

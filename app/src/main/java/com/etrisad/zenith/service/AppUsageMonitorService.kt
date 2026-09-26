@@ -231,9 +231,6 @@ class AppUsageMonitorService : Service() {
                 if (!isScreenOn) {
                     Log.d("Zenith_SCREEN", "SCREEN_OFF_GOAL_CHECK: running checkGoalReminders()")
                     serviceScope.launch {
-                        // After a process restart the in-memory shield cache is
-                        // empty and checkGoalReminders() would silently return;
-                        // load it first so a revived process still fires.
                         ensureGoalCacheLoaded()
                         checkGoalReminders()
                         scheduleScreenOffGoalAlarm()
@@ -390,10 +387,6 @@ class AppUsageMonitorService : Service() {
     private fun onMidnightReset() {
         serviceScope.launch {
             com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
-            // updateStreaks() already refreshes global + app + web (+ bedtime);
-            // do NOT call the individual refreshes again here — each refresh
-            // re-queries UsageStats and rewrites shields, doubling the cost
-            // and re-triggering every DB observer for no reason.
             updateStreaks()
             shieldRepository.resetDailyRemainingTimes()
             checkWeeklyReset()
@@ -512,13 +505,6 @@ class AppUsageMonitorService : Service() {
     }
 
     private var lastGoalReminderCheckTime = 0L
-
-    /**
-     * Loads shields into the in-memory cache when it is empty (fresh process
-     * after a screen-off revival). Without this, checkGoalReminders() sees an
-     * empty goalShieldsCache and returns silently, and the reschedule gate in
-     * scheduleScreenOffGoalAlarm() stops the whole screen-off chain.
-     */
     private suspend fun ensureGoalCacheLoaded() {
         if (SharedMonitoringState.goalShieldsCache.isNotEmpty()) return
         try {

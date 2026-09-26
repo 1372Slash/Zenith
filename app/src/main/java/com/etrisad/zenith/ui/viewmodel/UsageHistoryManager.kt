@@ -113,7 +113,6 @@ class UsageHistoryManager(
     }
 
     companion object {
-        // DB date keys must be locale-independent, see DateTimeUtils.
         private val dateFormatTL = object : ThreadLocal<SimpleDateFormat>() {
             override fun initialValue() = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         }
@@ -518,8 +517,6 @@ class UsageHistoryManager(
             if (todayTotal > 0) {
                 todayLiveRecords.add(UsageRecord.Live("TOTAL", todayTotal))
             }
-            // A transient empty system query must not wipe the last known-good
-            // fallback: keep the previous entry so history/repair still work.
             if (todayLiveRecords.isNotEmpty()) {
                 listOf(todayStr to todayLiveRecords)
             } else {
@@ -543,8 +540,6 @@ class UsageHistoryManager(
             val (launcherApps, launcherPackage) = getLauncherInfo()
             val excludePackages = setOfNotNull(context.packageName, launcherPackage) + com.etrisad.zenith.service.SharedMonitoringState.excludedFromTrackingPackages
             val results = fetchFallbackForDays(1..7, usm, launcherApps, excludePackages, now)
-            // Preserve last known-good entries: a transient empty query for a
-            // day must not erase its previous fallback (all-zero history UI).
             _globalFallbackMap.update { current -> current + results.toMap().filterValues { it.isNotEmpty() } }
         } finally {
             isUpdatingFullHistory = false

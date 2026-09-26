@@ -227,12 +227,6 @@ fun InterceptOverlayContent(
     }
 
     val onNfcScanRequested: (PausePointTask.NfcScan) -> Unit = { nfcTask ->
-        // The overlay window sits above every activity window, so the scanner
-        // could never be seen while the overlay is up. Keep the same task,
-        // slide the sheet down first, then hide the overlay (not destroyed —
-        // the flow continues) and open the scanner. The monitor re-shows the
-        // overlay when the scanner closes. If the user is kicked to the
-        // launcher instead, nothing is re-shown.
         InterceptOverlayManager.retainedPauseTask = nfcTask
         InterceptOverlayManager.retainedPauseTaskForPackage = packageName
         showSheet = false

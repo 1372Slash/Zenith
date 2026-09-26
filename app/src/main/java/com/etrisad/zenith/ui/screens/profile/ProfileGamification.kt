@@ -84,8 +84,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-
-/** Base XP cost of the first level-up (Level 1 -> 2), kept flat-compatible. */
 const val PROFILE_XP_BASE = 500
 /**
  * Gentle exponential curve exponent. Each level costs more than the last,
@@ -192,13 +190,13 @@ fun xpToNextLevel(xpTotal: Long): Long =
 
 /**
  * Level milestone titles. Owned automatically once the level is reached,
- * equipped manually — shown under the profile name and on the share card.
+ * equipped manually - shown under the profile name and on the share card.
  */
 data class LevelTitle(val id: String, val name: String, val requiredLevel: Int)
 
 /**
  * Level milestone avatar borders. Owned automatically once the level is
- * reached, equipped manually — drawn as a ring around the profile avatar.
+ * reached, equipped manually - drawn as a ring around the profile avatar.
  */
 /**
  * Special animated effect for pinnacle rings. NONE is static, SPIN slowly

@@ -49,9 +49,6 @@ class ShieldRepository(
 
     private val _isShieldsLoaded = MutableStateFlow(false)
     val isShieldsLoaded: Flow<Boolean> = _isShieldsLoaded.asStateFlow()
-
-    // Getter (not a one-time val): after rebindDatabase() this must serve the
-    // new DAO handles, otherwise collectors stay blind on a closed instance.
     val allSchedules: Flow<List<ScheduleEntity>> get() = scheduleDao.getAllSchedules()
 
     private var collectorJob: kotlinx.coroutines.Job? = null
@@ -75,14 +72,6 @@ class ShieldRepository(
             }
         }
     }
-
-    /**
-     * Re-points every DAO handle at a freshly opened database instance.
-     * Needed after ZenithDatabase.closeDatabase() (backup/restore): the old
-     * handles are bound to a closed connection pool, so every Flow/suspend
-     * query on them fails silently and the UI goes permanently all-zero until
-     * the process restarts. Callers should then re-collect their streams.
-     */
     fun rebindDatabase(db: ZenithDatabase) {
         database = db
         shieldDao = db.shieldDao()

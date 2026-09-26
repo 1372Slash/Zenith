@@ -319,7 +319,7 @@ class ZenithService : AccessibilityService() {
             val pkg = queryCurrentForegroundApp()
             if (pkg != null && pkg != packageName && lastForegroundApp == null) {
                 if (SharedMonitoringState.isFinancialApp(pkg)) {
-                    Log.d("ZenithAS", "Financial app already in foreground ($pkg) — skipping initial detection")
+                    Log.d("ZenithAS", "Financial app already in foreground ($pkg) - skipping initial detection")
                     return@launch
                 }
                 lastForegroundApp = pkg
@@ -333,7 +333,7 @@ class ZenithService : AccessibilityService() {
                 }
                 if (windowPkg != null && windowPkg != packageName && !shouldBypassBlocking(windowPkg)) {
                     if (SharedMonitoringState.isFinancialApp(windowPkg)) {
-                        Log.d("ZenithAS", "Financial app already in foreground ($windowPkg) — skipping initial detection")
+                        Log.d("ZenithAS", "Financial app already in foreground ($windowPkg) - skipping initial detection")
                         return@launch
                     }
                     lastForegroundApp = windowPkg
@@ -413,7 +413,7 @@ class ZenithService : AccessibilityService() {
         if (isKeyboardApp(packageName)) return
 
         if (SharedMonitoringState.isFinancialApp(packageName)) {
-            Log.d("ZenithAS", "Financial app detected ($packageName) — skipping accessibility events to avoid detection")
+            Log.d("ZenithAS", "Financial app detected ($packageName) - skipping accessibility events to avoid detection")
             val now = System.currentTimeMillis()
             val lastNotified = lastBankingNotificationTime[packageName] ?: 0L
             if (now - lastNotified > 15000) {
@@ -1504,8 +1504,6 @@ class ZenithService : AccessibilityService() {
             val current = notificationManager.currentInterruptionFilter
             if (dnd) {
                 if (!dndSetByApp) {
-                    // Remember what was active before WE touch it - it could
-                    // be the user's own manual DND.
                     dndPreviousFilter = current
                     dndSetByApp = true
                 }
@@ -1514,10 +1512,6 @@ class ZenithService : AccessibilityService() {
                 }
             } else if (dndSetByApp) {
                 dndSetByApp = false
-                // Only undo what WE enabled. If the filter is no longer the
-                // one we set, the user changed DND themselves meanwhile, so
-                // leave their choice untouched. Otherwise restore exactly what
-                // was active before bedtime took over (not hardcoded ALL).
                 if (current == NotificationManager.INTERRUPTION_FILTER_PRIORITY) {
                     notificationManager.setInterruptionFilter(
                         dndPreviousFilter ?: NotificationManager.INTERRUPTION_FILTER_ALL
@@ -1525,8 +1519,6 @@ class ZenithService : AccessibilityService() {
                 }
                 dndPreviousFilter = null
             }
-            // NOTE: when bedtime DND is off and we never enabled it, a manual
-            // DND (meeting mode etc.) is left completely untouched.
         } catch (e: Exception) {
             e.printStackTrace()
         }

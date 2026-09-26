@@ -1325,7 +1325,7 @@ fun LimitReachedContent(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "You used all your bonus uses for today.\nProgress: $percentage% — keep going to unlock more!",
+                        text = "You used all your bonus uses for today.\nProgress: $percentage% - keep going to unlock more!",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center

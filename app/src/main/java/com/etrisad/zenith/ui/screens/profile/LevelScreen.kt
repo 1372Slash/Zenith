@@ -51,11 +51,6 @@ import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.focus.PreferenceCategory
 import kotlinx.coroutines.launch
-
-/**
- * Group-strip corner shapes mirroring AchievementSquareCard: the equipped
- * card pops out fully rounded, the rest fuse into one strip.
- */
 private fun rewardGroupShape(index: Int, total: Int, highlighted: Boolean) = when {
     highlighted || total == 1 -> RoundedCornerShape(24.dp)
     index == 0 -> RoundedCornerShape(

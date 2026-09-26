@@ -433,8 +433,6 @@ abstract class ZenithDatabase : RoomDatabase() {
 
 
         fun closeDatabase() {
-            // Visibility: any close orphans in-process DAO/Flow handles until
-            // rebind/restart, so every close must leave a trace in the DB log.
             try {
                 DbLogBuffer.w("ZenithDB", "DB_CLOSED: database instance closed (callers must rebind or restart)")
             } catch (_: Exception) {}

@@ -29,7 +29,6 @@ class UsageSyncManager(
     }
 
     private val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-    // DB date keys must be locale-independent, see DateTimeUtils.
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
     private data class UsageChunk(val packageName: String, var duration: Long)
@@ -359,11 +358,6 @@ class UsageSyncManager(
             val appTotals = hourlyData.filter { it.packageName != "TOTAL" }
                 .groupBy { it.packageName }
                 .mapValues { it.value.sumOf { h -> h.usageTimeMillis } }
-
-            // Hourly snapshots can be partial (pruned hours, transient empty
-            // event queries). Never let a partial snapshot shrink or wipe
-            // already-stored daily data: skip when there is nothing new and
-            // always merge monotonically below.
             if (appTotals.isEmpty()) return@forEach
 
             var totalTime = appTotals.values.sum()
@@ -384,9 +378,6 @@ class UsageSyncManager(
             var goalTime = 0L
             val allPackages = (appTotals.keys + existingDailyMap.keys)
                 .filter { it !in setOf("TOTAL", "SHIELD_TOTAL", "GOAL_TOTAL", "OTHER_TOTAL") }
-
-            // Monotonic merge: keep the max of hourly-derived and stored values
-            // so a partial hourly snapshot can never zero-out stored usage.
             val pkgFinals = mutableMapOf<String, Long>()
             allPackages.forEach { pkg ->
                 val newTime = (appTotals[pkg] ?: 0L).coerceAtMost(timeSinceMidnight)
@@ -402,8 +393,6 @@ class UsageSyncManager(
 
             allPackages.forEach { pkg ->
                 val finalPkgTime = pkgFinals[pkg] ?: return@forEach
-                // Only write rows that actually changed to avoid useless
-                // REPLACE churn (each write re-triggers every DB observer).
                 if (finalPkgTime != (existingDailyMap[pkg]?.usageTimeMillis ?: 0L)) {
                     dailyEntities.add(
                         com.etrisad.zenith.data.local.entity.DailyUsageEntity(
@@ -420,9 +409,6 @@ class UsageSyncManager(
             val finalShieldTotal = shieldTime.coerceAtMost(finalTotal)
             val finalGoalTotal = goalTime.coerceAtMost(finalTotal)
             val otherTime = (finalTotal - (finalShieldTotal + finalGoalTotal)).coerceAtMost(finalTotal).coerceAtLeast(0L)
-
-            // Only persist totals that actually changed; unconditional REPLACEs
-            // re-trigger every DB observer and can flash the UI.
             if (finalTotal != existingTotal) {
                 dailyEntities.add(com.etrisad.zenith.data.local.entity.DailyUsageEntity(id = existingDailyMap["TOTAL"]?.id ?: 0, date = date, packageName = "TOTAL", usageTimeMillis = finalTotal, lastUpdated = now))
             }

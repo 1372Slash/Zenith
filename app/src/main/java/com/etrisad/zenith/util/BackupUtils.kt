@@ -48,11 +48,6 @@ object BackupUtils {
             val dbWal = File("${dbFile.path}-wal")
             val dbShm = File("${dbFile.path}-shm")
             val prefsFile = File(context.filesDir, "datastore/$PREFS_FILE_NAME")
-
-            // NEVER close the database for backup: closeDatabase() orphans every
-            // DAO/Flow held by the live process (repository, services, viewmodels)
-            // and blinds the UI with all-zero data until the next app restart.
-            // Instead checkpoint WAL into the main file so it is self-contained.
             try {
                 ZenithDatabase.getDatabase(context).openHelper.writableDatabase
                     .execSQL("PRAGMA wal_checkpoint(TRUNCATE)")

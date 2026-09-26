@@ -433,9 +433,6 @@ class FocusViewModel(
     }
 
     fun selectAppForFocus(app: AppInfo?, type: FocusType) {
-        // Sync the picker type immediately so FAB -> picker -> onAppSelected
-        // can never read a stale selectedFocusType (race that saved Shield
-        // as Goal and vice versa).
         if (app == null) {
             _uiState.update {
                 it.copy(
@@ -444,8 +441,6 @@ class FocusViewModel(
                     isSettingsSheetOpen = false,
                     selectedAppUsageToday = 0L,
                     selectedWebsiteUrl = null,
-                    // Fresh picker: stale query from a previous search would
-                    // filter everything out and look like "cannot add".
                     searchQuery = "",
                     websiteSearchQuery = "",
                     websiteSuggestions = emptyList(),
@@ -456,10 +451,6 @@ class FocusViewModel(
             }
             return
         }
-        // Open the settings sheet instantly with a placeholder usage, then
-        // refresh the real usage async. Previously the sheet only opened
-        // AFTER the UsageStats query, so a slow/denied query left the user
-        // staring at a closed picker with no feedback (looked blocked).
         _uiState.update {
             it.copy(
                 selectedAppForFocus = app,
@@ -488,8 +479,6 @@ class FocusViewModel(
             selectedAppsForSchedule = if (resetSelection) emptySet() else _uiState.value.selectedAppsForSchedule,
             isSettingsSheetOpen = false,
             editingSchedule = if (resetSelection) null else _uiState.value.editingSchedule,
-            // Stale app-search query carried from the shield/goal picker
-            // would filter the schedule picker to empty (looks blocked).
             searchQuery = "",
             websiteSearchQuery = "",
             websiteSuggestions = emptyList(),

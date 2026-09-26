@@ -72,7 +72,6 @@ fun TopSheet(
                 slide.snapTo(0f)
                 slide.animateTo(
                     1f,
-                    // House bottom-sheet feel: plain spring, no bounce.
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioNoBouncy,
                         stiffness = Spring.StiffnessMediumLow

@@ -319,7 +319,7 @@ private fun WalkTask(
         )
 
         Text(
-            text = if (sensorAvailable) "Walk naturally — your steps are counted by the accelerometer"
+            text = if (sensorAvailable) "Walk naturally - your steps are counted by the accelerometer"
             else "Your device has no accelerometer. Tap to count instead.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -408,7 +408,7 @@ private fun QrScanTask(
 
         if (showError) {
             Text(
-                text = "Wrong code — scan one of your saved QR codes",
+                text = "Wrong code - scan one of your saved QR codes",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
                 textAlign = TextAlign.Center
@@ -458,8 +458,6 @@ private fun NfcScanTask(
     LaunchedEffect(lastScan) {
         val scan = lastScan ?: return@LaunchedEffect
         if (handledTimestamp == scan.timestamp) return@LaunchedEffect
-        // Ignore scans from long ago (e.g. a previous overlay session) so the
-        // task can never auto-complete the moment it appears.
         if (System.currentTimeMillis() - scan.timestamp > NFC_SCAN_FRESHNESS_MS) return@LaunchedEffect
         handledTimestamp = scan.timestamp
         onUserActivity()
@@ -529,7 +527,7 @@ private fun NfcScanTask(
             else -> {
                 if (normalizedValid.isNotEmpty() && !task.acceptAny) {
                     Text(
-                        text = "${normalizedValid.size} registered tag${if (normalizedValid.size == 1) "" else "s"} — any of them passes",
+                        text = "${normalizedValid.size} registered tag${if (normalizedValid.size == 1) "" else "s"} - any of them passes",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
@@ -570,8 +568,8 @@ private fun NfcScanTask(
 
         if (showError) {
             Text(
-                text = if (wrongTagId != null) "Wrong tag ($wrongTagId) — use one of your registered tags"
-                else "Wrong tag — use one of your registered tags",
+                text = if (wrongTagId != null) "Wrong tag ($wrongTagId) - use one of your registered tags"
+                else "Wrong tag - use one of your registered tags",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
                 textAlign = TextAlign.Center
@@ -742,7 +740,7 @@ private fun SwitchTask(
     ) {
         if (timeoutSeconds != null) {
             Text(
-                text = if (timedOut) "Time's up — sequence resets, try again!" else "Time remaining: ${timeLeft}s",
+                text = if (timedOut) "Time's up - sequence resets, try again!" else "Time remaining: ${timeLeft}s",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Black,
                 color = if (timedOut || timeLeft <= 5) MaterialTheme.colorScheme.error
@@ -890,7 +888,7 @@ private fun CountingTask(
 
             if (cooling) {
                 Text(
-                    text = "Too fast — wait out the penalty",
+                    text = "Too fast - wait out the penalty",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     textAlign = TextAlign.Center

@@ -704,12 +704,6 @@ private fun buildCalWeeks(days: List<Long>, monthPattern: String = "MMM yyyy"): 
     }
 }
 
-
-/**
- * Grouped first/mid/last shape with animated corners, so expanding or
- * collapsing the day list morphs each card instead of snapping it.
- * Same per-corner animateDpAsState precedent as ActiveItemCard/AlarmScreen.
- */
 @Composable
 private fun longTermAppRowShape(index: Int, total: Int): RoundedCornerShape {
     val isSingle = total == 1

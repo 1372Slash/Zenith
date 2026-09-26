@@ -129,12 +129,6 @@ private suspend fun deleteProfileImage(context: Context, fileName: String) =
         } catch (_: Exception) {
         }
     }
-
-/**
- * Copies a gallery pick into app-internal storage so the photo survives
- * permission loss, reboot, and gallery moves. Returns the absolute path,
- * or null when the copy fails (caller keeps the old image).
- */
 private suspend fun persistPickedImage(
     context: Context,
     uri: Uri,

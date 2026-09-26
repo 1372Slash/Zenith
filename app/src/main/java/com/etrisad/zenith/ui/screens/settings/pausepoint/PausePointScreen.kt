@@ -120,7 +120,7 @@ fun PausePointScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "\u201C$onlyTypeName\u201D is your only enabled type — " +
+                    text = "\u201C$onlyTypeName\u201D is your only enabled type - " +
                         "that can make Pause Point too hard if something unexpected happens, " +
                         "like a lost tag, a missing code, or a failing sensor. " +
                         "Add one more type as a backup plan before leaving.",
