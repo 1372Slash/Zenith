@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Camera
 import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.Warning
@@ -113,7 +114,8 @@ fun SnapshotSection(
     startIndex: Int = 0,
     totalCount: Int = 2,
     olderStampLoader: (suspend (chunkOffset: Int) -> List<AppUsageInfo>)? = null,
-    loaderKey: Any? = null
+    loaderKey: Any? = null,
+    onAddShield: ((packageName: String, appName: String) -> Unit)? = null
 ) {
     var olderStampWeeks by remember(loaderKey) { mutableStateOf(listOf<List<AppUsageInfo>>()) }
     var loadingOlder by remember(loaderKey) { mutableStateOf(false) }
@@ -193,7 +195,8 @@ fun SnapshotSection(
             stamps = allStamps,
             currentPage = pagerState.currentPage,
             getAppType = getAppType,
-            shape = getLocalGroupShape(startIndex + 1)
+            shape = getLocalGroupShape(startIndex + 1),
+            onAddShield = onAddShield
         )
     }
 }
@@ -204,7 +207,8 @@ fun SnapshotInsightCard(
     currentPage: Int,
     getAppType: (String) -> FocusType?,
     shape: androidx.compose.ui.graphics.Shape,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    onAddShield: ((packageName: String, appName: String) -> Unit)? = null
 ) {
     val pageData = remember(stamps, currentPage) {
         stamps.chunked(7).getOrNull(currentPage) ?: emptyList()
@@ -293,7 +297,8 @@ fun SnapshotInsightCard(
                         .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) + 
                                      slideOutVertically(animationSpec = spring(stiffness = Spring.StiffnessLow)) { -it / 2 })
                 },
-                label = "InsightMessage"
+                label = "InsightMessage",
+                modifier = Modifier.weight(1f)
             ) { msg ->
                 Text(
                     text = msg,
@@ -301,6 +306,32 @@ fun SnapshotInsightCard(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            // Quick action: open the shield sheet for the app that dominates
+            // this week's snapshot. Only on warnings (intense SHIELD or an
+            // unshielded attention-grabber), never on GOAL praise or empty data.
+            val showAddShield = onAddShield != null &&
+                dominantApp != null && dominantType != FocusType.GOAL
+            AnimatedVisibility(visible = showAddShield) {
+                Row {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    FilledTonalIconButton(
+                        onClick = {
+                            dominantApp?.let { onAddShield?.invoke(it.packageName, it.appName) }
+                        },
+                        modifier = Modifier.size(40.dp),
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = animatedAccentColor.copy(alpha = 0.15f),
+                            contentColor = animatedAccentColor
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Add,
+                            contentDescription = "Shield this app",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
             }
         }
     }

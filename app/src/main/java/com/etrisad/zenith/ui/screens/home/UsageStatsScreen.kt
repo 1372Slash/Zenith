@@ -58,7 +58,11 @@ import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithContainedLoadingIndicator
 import com.etrisad.zenith.ui.components.ZenithToggleButtonGroup
 import com.etrisad.zenith.ui.components.ZenithToggleOption
+import com.etrisad.zenith.ui.viewmodel.AppInfo
 import com.etrisad.zenith.ui.viewmodel.AppUsageInfo
+import com.etrisad.zenith.ui.viewmodel.FocusViewModel
+import com.etrisad.zenith.ui.components.focus.ShieldSettingsBottomSheet
+import com.etrisad.zenith.ui.components.focus.GoalSettingsBottomSheet
 import com.etrisad.zenith.ui.viewmodel.DailyUsage
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
 import com.etrisad.zenith.ui.viewmodel.HourlySortType
@@ -80,6 +84,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 @Composable
 fun UsageStatsScreen(
     viewModel: HomeViewModel,
+    focusViewModel: FocusViewModel,
     userPreferencesRepository: com.etrisad.zenith.data.preferences.UserPreferencesRepository,
     innerPadding: PaddingValues,
     showDatabaseIndicator: Boolean,
@@ -635,7 +640,13 @@ fun UsageStatsScreen(
                     startIndex = 0,
                     totalCount = 5,
                     olderStampLoader = viewModel::getSnapshotWeekStamps,
-                    loaderKey = "global"
+                    loaderKey = "global",
+                    onAddShield = { packageName, appName ->
+                        focusViewModel.selectAppForFocus(
+                            AppInfo(packageName = packageName, appName = appName),
+                            FocusType.SHIELD
+                        )
+                    }
                 )
                 Spacer(modifier = Modifier.height(4.dp))
             }
@@ -981,7 +992,72 @@ fun UsageStatsScreen(
             }
         }
     }
+
+    SnapshotShieldSheets(focusViewModel = focusViewModel)
 }
+}
+
+@Composable
+private fun SnapshotShieldSheets(focusViewModel: FocusViewModel) {
+    val focusUiState by focusViewModel.uiState.collectAsState()
+    if (focusUiState.isSettingsSheetOpen && focusUiState.selectedAppForFocus != null) {
+        val appInfo = focusUiState.selectedAppForFocus!!
+        val existingShield = (focusUiState.activeShields + focusUiState.activeGoals)
+            .find { it.packageName == appInfo.packageName }
+
+        if (focusUiState.selectedFocusType == FocusType.GOAL) {
+            GoalSettingsBottomSheet(
+                appInfo = appInfo,
+                usageToday = focusUiState.selectedAppUsageToday,
+                existingShield = existingShield,
+                onDismiss = { focusViewModel.closeSettingsSheet() },
+                onSave = { limit, reminders, goalReminder, isCaller, isSound, soundUri, period, isHudEnabled ->
+                    focusViewModel.saveFocus(
+                        packageName = appInfo.packageName,
+                        appName = appInfo.appName,
+                        timeLimitMinutes = limit,
+                        maxEmergencyUses = 3,
+                        isRemindersEnabled = reminders,
+                        isStrictModeEnabled = false,
+                        isAutoQuitEnabled = false,
+                        maxUsesPerPeriod = 5,
+                        refreshPeriodMinutes = 60,
+                        goalReminderPeriodMinutes = goalReminder,
+                        isDelayAppEnabled = false,
+                        isGoalCallerEnabled = isCaller,
+                        isGoalCallerSoundEnabled = isSound,
+                        goalCallerSoundUri = soundUri,
+                        limitPeriod = period,
+                        isHUDEnabled = isHudEnabled
+                    )
+                }
+            )
+        } else {
+            ShieldSettingsBottomSheet(
+                appInfo = appInfo,
+                usageToday = focusUiState.selectedAppUsageToday,
+                existingShield = existingShield,
+                onDismiss = { focusViewModel.closeSettingsSheet() },
+                onSave = { limit, emergency, reminders, strict, autoQuit, maxUses, refresh, delayApp, period, days ->
+                    focusViewModel.saveFocus(
+                        packageName = appInfo.packageName,
+                        appName = appInfo.appName,
+                        timeLimitMinutes = limit,
+                        maxEmergencyUses = emergency,
+                        isRemindersEnabled = reminders,
+                        isStrictModeEnabled = strict,
+                        isAutoQuitEnabled = autoQuit,
+                        maxUsesPerPeriod = maxUses,
+                        refreshPeriodMinutes = refresh,
+                        goalReminderPeriodMinutes = 120,
+                        isDelayAppEnabled = delayApp,
+                        limitPeriod = period,
+                        activeDays = days
+                    )
+                }
+            )
+        }
+    }
 }
 
 @Composable
