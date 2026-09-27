@@ -841,15 +841,20 @@ class ZenithService : AccessibilityService() {
                     lastKickTime = System.currentTimeMillis()
                     lastKickedPackage = currentPkg
                     goToHomeScreen()
+                    // Allowed session expired via autoQuit kick: HUD must die here
+                    // or its frozen secondsLeft reappears on re-entry next to overlay.
+                    sessionUsageOverlayManager.hideHUD(currentPkg)
                     if (s.isDelayAppEnabled) {
                         val updated = s.copy(lastDelayStartTimestamp = 0L)
                         shieldRepository.updateShield(updated)
                         currentShieldCache = updated
                     }
                 } else if (!InterceptOverlayManager.isShowing) {
+                    sessionUsageOverlayManager.hideHUD(currentPkg)
                     checkIfAppIsShielded(currentPkg)
                 }
             } else if (!InterceptOverlayManager.isShowing) {
+                sessionUsageOverlayManager.hideHUD(currentPkg)
                 checkIfAppIsShielded(currentPkg)
             }
         } else {
@@ -868,7 +873,9 @@ class ZenithService : AccessibilityService() {
                                     lastKickTime = System.currentTimeMillis()
                                     lastKickedPackage = currentPkg
                                     goToHomeScreen()
+                                    sessionUsageOverlayManager.hideHUD(currentPkg)
                                 } else if (!InterceptOverlayManager.isShowing) {
+                                    sessionUsageOverlayManager.hideHUD(currentPkg)
                                     checkIfAppIsShielded(currentPkg)
                                 }
                             } else if (!InterceptOverlayManager.isShowing) {

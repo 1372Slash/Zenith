@@ -1299,7 +1299,11 @@ class AppUsageMonitorService : Service() {
                         lastKickedPackage = currentApp
                         goToHomeScreen()
                         allowedApps.remove(currentApp)
+                        // Allowed session over: drop HUD now, otherwise its coarse
+                        // timer freezes a stale secondsLeft that resurrects on re-entry.
+                        sessionUsageOverlayManager.hideHUD(currentApp)
                     } else if (!InterceptOverlayManager.isShowing) {
+                        if (isAllowedExpired) sessionUsageOverlayManager.hideHUD(currentApp)
                         checkIfAppIsShielded(currentApp)
                     }
                     lastForegroundApp = currentApp
@@ -1322,6 +1326,7 @@ class AppUsageMonitorService : Service() {
                             lastKickedPackage = wsPkg
                             goToHomeScreen()
                             allowedApps.remove(wsPkg)
+                            sessionUsageOverlayManager.hideHUD(wsPkg)
                         }
                     }
                 }
@@ -1435,6 +1440,9 @@ class AppUsageMonitorService : Service() {
                             lastKickedPackage = currentApp
                             goToHomeScreen()
                             allowedApps.remove(currentApp)
+                            // Allowed session expired via autoQuit kick: HUD must die
+                            // here or its frozen secondsLeft reappears on re-entry.
+                            sessionUsageOverlayManager.hideHUD(currentApp)
                             if (sh.isDelayAppEnabled) {
                                 serviceScope.launch {
                                     shieldRepository.updateShield(sh.copy(lastDelayStartTimestamp = 0L))
@@ -1443,11 +1451,13 @@ class AppUsageMonitorService : Service() {
                             }
                         } else {
                             allowedApps.remove(currentApp)
+                            sessionUsageOverlayManager.hideHUD(currentApp)
                             checkIfAppIsShielded(currentApp)
                         }
                     } else {
                         if (allowedUntilVal != null && allowedUntilVal > 0) {
                             allowedApps.remove(currentApp)
+                            sessionUsageOverlayManager.hideHUD(currentApp)
                         }
                         checkIfAppIsShielded(currentApp)
                     }
