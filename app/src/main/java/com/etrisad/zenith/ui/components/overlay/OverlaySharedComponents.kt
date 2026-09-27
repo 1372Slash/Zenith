@@ -315,7 +315,7 @@ fun OverlayDragHandleWithIndicators(
                     if (showUses) {
                         ZenithButton(
                             onClick = { },
-                            text = "${maxUses - currentUses}/$maxUses",
+                            text = "$currentUses/$maxUses",
                             icon = Icons.Outlined.Timer,
                             type = ZenithButtonType.Tonal,
                             size = ZenithButtonSize.Small,
@@ -405,7 +405,7 @@ fun OverlayDragHandleWithIndicators(
             } else if (hasUses) {
                 ZenithButton(
                     onClick = { },
-                    text = "${maxUses - currentUses}/$maxUses",
+                    text = "$currentUses/$maxUses",
                     icon = Icons.Outlined.Timer,
                     type = ZenithButtonType.Tonal,
                     size = ZenithButtonSize.Small,
