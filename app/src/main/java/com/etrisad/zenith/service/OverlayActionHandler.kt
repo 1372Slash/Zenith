@@ -401,7 +401,8 @@ class OverlayActionHandler(
                     Log.d("Zenith_BT", "Timer EXIT: website changed for $packageName (active=$activeDomain)")
                     allowedApps.remove(packageName)
                     // Session ended: ensure stale HUD cannot be resurrected on re-entry.
-                    sessionUsageOverlayManager.hideHUD(packageName)
+                    // Silent: this path had no overlay follow-up before, keep it that way.
+                    sessionUsageOverlayManager.hideHUD(packageName, invokeOnSessionEnd = false)
                     return@Runnable
                 }
                 if (fg == null || !WebsiteRepository.isKnownBrowser(fg)) {
@@ -431,7 +432,8 @@ class OverlayActionHandler(
             if (shield == null) {
                 Log.d("Zenith_BT", "Timer EXIT: shield not found for $packageName")
                 // No shield to re-block, but the allowed session is over: drop stale HUD.
-                sessionUsageOverlayManager.hideHUD(packageName)
+                // Silent: preserve the old early-return behavior (no extra callbacks).
+                sessionUsageOverlayManager.hideHUD(packageName, invokeOnSessionEnd = false)
                 return@Runnable
             }
             Log.d("Zenith_BT", "Timer EXECUTING action for $packageName (autoQuit=${shield.isAutoQuitEnabled})")
@@ -440,7 +442,8 @@ class OverlayActionHandler(
             // (e.g. 30s left). If we don't hide it now, going to home cancels the HUD
             // timer via updateForegroundApp() and freezes that stale value; on re-entry
             // the stale HUD is resurrected next to the correctly reshown block overlay.
-            sessionUsageOverlayManager.hideHUD(packageName)
+            // Silent: goToHomeScreen()/showShieldOverlay below is the follow-up.
+            sessionUsageOverlayManager.hideHUD(packageName, invokeOnSessionEnd = false)
             if (shield.isAutoQuitEnabled) {
                 goToHomeScreen()
             } else {

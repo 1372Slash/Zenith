@@ -512,9 +512,9 @@ class SessionUsageOverlayManager(
         }
     }
 
-    fun hideHUD(packageName: String? = null) {
+    fun hideHUD(packageName: String? = null, invokeOnSessionEnd: Boolean = true) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
-            mainHandler.post { hideHUD(packageName) }
+            mainHandler.post { hideHUD(packageName, invokeOnSessionEnd) }
             return
         }
         synchronized(activeSessions) {
@@ -527,7 +527,13 @@ class SessionUsageOverlayManager(
                     if (session.isGoal && session.secondsElapsedState.intValue >= session.totalSeconds) {
                         com.etrisad.zenith.service.SharedMonitoringState.notifiedGoals.add(session.packageName)
                     }
-                    session.onSessionEnd()
+                    // Expiry-driven kills already perform their own follow-up
+                    // (goHome/showOverlay/checkShield), so the callback must be
+                    // skippable: firing it would double-remove allowedApps, write a
+                    // spurious lastSessionEndTimestamp and race an extra overlay show.
+                    if (invokeOnSessionEnd) {
+                        session.onSessionEnd()
+                    }
                     iterator.remove()
                     if (packageName != null) break
                 }
