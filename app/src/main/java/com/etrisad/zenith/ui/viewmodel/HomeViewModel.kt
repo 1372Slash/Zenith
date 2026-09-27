@@ -1552,8 +1552,22 @@ class HomeViewModel(
                     combine(shieldRepository.getLastNDaysUsageForPackage(packageName, 21), shieldRepository.getShieldByPackageNameFlow(packageName), userPreferencesRepository.userPreferencesFlow) { historyDB, shield, prefs ->
                         try {
                             val detailed = withContext(Dispatchers.IO) { kotlinx.coroutines.withTimeoutOrNull(5000) { ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute) } }
-                            val todayU = detailed?.appUsageMap?.get(packageName) ?: 0L; val sessions = detailed?.sessionCounts?.get(packageName) ?: 0
-                            val hourlyU = MutableList(24) { detailed?.hourlyUsageMap?.get(it)?.get(packageName) ?: 0L }; val peakH = hourlyU.indices.maxByOrNull { hourlyU[it] } ?: -1
+                            // Cold full-day system parses can exceed the 5s timeout (detailed==null).
+                            // Fall back to the DB-synced hourly/daily rows so the card still
+                            // shows data instead of disappearing (hourlyUsage.all==0 hides it).
+                            // The realtime refresher overwrites with live system data afterwards.
+                            val todayStrForDetail = dateFormat.format(Date())
+                            val dbFallbackHourly = if (detailed == null) {
+                                withContext(Dispatchers.IO) { shieldRepository.getHourlyUsageForDateSync(todayStrForDetail) }
+                                    .filter { it.packageName == packageName }
+                            } else null
+                            val todayU = detailed?.appUsageMap?.get(packageName)
+                                ?: historyDB.find { it.date == todayStrForDetail }?.usageTimeMillis ?: 0L
+                            val sessions = detailed?.sessionCounts?.get(packageName) ?: 0
+                            val hourlyU = MutableList(24) { h ->
+                                detailed?.hourlyUsageMap?.get(h)?.get(packageName)
+                                    ?: dbFallbackHourly?.find { it.hour == h }?.usageTimeMillis ?: 0L
+                            }; val peakH = hourlyU.indices.maxByOrNull { hourlyU[it] } ?: -1
                             val yesterdayStr = dateFormat.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }.time)
                             val yesterdayU = historyDB.find { it.date == yesterdayStr }?.usageTimeMillis ?: if (prefs.preferSystemUsageHistory) detailFallbackMap[yesterdayStr] ?: 0L else 0L
                             val history = (0 until 21).map { i -> val dStart = usageHistoryManager.getMidnight(i); val dStr = dateFormat.format(Date(dStart)); val dbE = historyDB.find { it.date == dStr }; val dTotal = if (i == 0) todayU else dbE?.usageTimeMillis ?: if (prefs.preferSystemUsageHistory) detailFallbackMap[dStr] ?: 0L else 0L; DailyUsage(dStart, dTotal, dbE != null, detailFallbackMap[dStr] != null, i == 0) }

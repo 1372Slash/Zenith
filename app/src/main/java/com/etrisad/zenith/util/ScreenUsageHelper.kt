@@ -91,7 +91,14 @@ object ScreenUsageHelper {
                     val time = event.timeStamp.coerceAtMost(endQuery)
                     if (time < lastParsedTimestamp) continue
 
-                    processEvent(event, pkg, time, todayStart, endQuery, zoneId, includeHourly)
+                    // Always accumulate hourly buckets, even when the caller only
+                    // asked for totals. The parser is incremental: events consumed
+                    // by an includeHourly=false fetch are never revisited, so gating
+                    // accumulation on the flag permanently loses hourly attribution
+                    // for those segments (AppDetail hourly chart ends up empty /
+                    // under-reported). includeHourly now only gates whether the
+                    // hourly map is included in the returned result.
+                    processEvent(event, pkg, time, todayStart, endQuery, zoneId, true)
                     lastParsedTimestamp = time
                 }
                 lastParsedTimestamp = maxOf(lastParsedTimestamp, endQuery)
