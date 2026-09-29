@@ -885,6 +885,59 @@ private fun AlarmSettingsSheetContent(
                                                 width = 130.dp
                                             )
                                         }
+
+                                        Spacer(modifier = Modifier.height(12.dp))
+
+                                        // Tanpa Usage Access, verifikasi app stuck di 0 selamanya.
+                                        // Ingatkan di sini (saat setting), bukan saat alarm berbunyi.
+                                        val hasUsageAccessForWakeUp = remember(useCertainAppEnabled) {
+                                            hasWakeUpUsageAccess(context)
+                                        }
+                                        if (useCertainAppEnabled && !hasUsageAccessForWakeUp) {
+                                            Surface(
+                                                shape = RoundedCornerShape(16.dp),
+                                                color = MaterialTheme.colorScheme.errorContainer,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Column(modifier = Modifier.padding(12.dp)) {
+                                                    Text(
+                                                        text = "Butuh izin Usage Access",
+                                                        style = MaterialTheme.typography.titleSmall,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                                    )
+                                                    Text(
+                                                        text = "Tanpa izin ini alarm tidak bisa memverifikasi pemakaian aplikasi.",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                                    )
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    ZenithButton(
+                                                        onClick = {
+                                                            try {
+                                                                context.startActivity(
+                                                                    android.content.Intent(
+                                                                        android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS
+                                                                    )
+                                                                )
+                                                            } catch (_: Exception) { }
+                                                        },
+                                                        text = "Beri Izin",
+                                                        type = ZenithButtonType.Outlined,
+                                                        size = ZenithButtonSize.Small,
+                                                        fillMaxWidth = true
+                                                    )
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                        }
+                                        if (useCertainAppEnabled && wakeUpAppPackageNames.isEmpty()) {
+                                            Text(
+                                                text = "Pilih minimal 1 aplikasi, atau fitur ini tidak aktif saat disimpan.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1757,7 +1810,7 @@ private fun AlarmSettingsSheetContent(
                                     ttsRepeatCount,
                                     ttsIntervalSeconds,
                                     preventVolumeDrop,
-                                    if (useCertainAppEnabled) wakeUpAppPackageNames else emptyList(),
+                                    if (useCertainAppEnabled && wakeUpAppPackageNames.isNotEmpty()) wakeUpAppPackageNames else emptyList(),
                                     wakeUpAppDurationSeconds
                                 )
                                 android.util.Log.d("AlarmPerf", "onSave callback took ${System.currentTimeMillis() - tSaveStart}ms")
@@ -1886,4 +1939,16 @@ private fun AnimatedSwitch(
             disabledUncheckedTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
         )
     )
+}
+
+private fun hasWakeUpUsageAccess(context: android.content.Context): Boolean {
+    return try {
+        val appOps = context.getSystemService(android.content.Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+        appOps.unsafeCheckOpNoThrow(
+            android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+            android.os.Process.myUid(), context.packageName
+        ) == android.app.AppOpsManager.MODE_ALLOWED
+    } catch (_: Exception) {
+        true
+    }
 }

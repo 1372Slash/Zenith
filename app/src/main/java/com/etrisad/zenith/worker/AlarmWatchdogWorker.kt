@@ -36,6 +36,14 @@ class AlarmWatchdogWorker(
             if (enabledAlarms.isEmpty()) return Result.success()
 
             val now = System.currentTimeMillis()
+            // Kalau user baru saja dismiss (<15 mnt), itu BUKAN missed — jangan spam.
+            // Dulu watchdog hanya cek isShowing sehingga alarm yang sudah didismiss
+            // normal tetap dituduh "Missed" di tiap run 15-menitan.
+            val lastDismiss = AlarmBroadcastReceiver.lastDismissAt(applicationContext)
+            if (lastDismiss > 0L && now - lastDismiss < 15 * 60 * 1000L) {
+                Log.d("AlarmWatchdog", "skip: dismissed recently (${now - lastDismiss}ms ago)")
+                return Result.success()
+            }
             for (alarm in enabledAlarms) {
                 val parts = alarm.timeString.split(":")
                 val hour = parts.getOrNull(0)?.toIntOrNull() ?: continue
@@ -52,8 +60,19 @@ class AlarmWatchdogWorker(
 
                 if (now > alarmTriggerMs && now < alarmTriggerMs + windowMs) {
                     if (!AlarmOverlayActivity.isShowing) {
+                        // Cek state per-alarm juga: kalau baru fire/dismiss, lewati.
+                        val prefs = applicationContext.getSharedPreferences(
+                            "zenith_alarm_smart_state", Context.MODE_PRIVATE
+                        )
+                        val lastFire = prefs.getLong("last_fire_${alarm.timeString}", 0L)
+                        val lastDismissPerAlarm = prefs.getLong("last_dismiss_${alarm.timeString}", 0L)
+                        val lastHandled = maxOf(lastFire, lastDismissPerAlarm)
+                        if (lastHandled > 0L && now - lastHandled < windowMs) {
+                            Log.d("AlarmWatchdog", "skip missed ${alarm.timeString}: handled ${now - lastHandled}ms ago")
+                            continue
+                        }
                         Log.w("AlarmWatchdog", "Missed alarm ${alarm.timeString}, firing now")
-                        fireMissedAlarmNotification(alarm.timeString)
+                        fireMissedAlarmNotification(alarm.timeString, alarm.id)
                     }
                 }
             }
@@ -64,7 +83,7 @@ class AlarmWatchdogWorker(
         }
     }
 
-    private fun fireMissedAlarmNotification(alarmTime: String) {
+    private fun fireMissedAlarmNotification(alarmTime: String, alarmId: Long = 0L) {
         try {
             val channelId = "zenith_alarm_channel"
             val manager = applicationContext.getSystemService(NotificationManager::class.java)
@@ -80,10 +99,13 @@ class AlarmWatchdogWorker(
 
             val activityIntent = Intent(applicationContext, AlarmOverlayActivity::class.java).apply {
                 putExtra(AlarmOverlayActivity.EXTRA_ALARM_TIME, alarmTime)
+                if (alarmId > 0L) putExtra(AlarmBroadcastReceiver.EXTRA_ALARM_ID, alarmId)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             }
+            val requestCode = 30000 + ((alarmTime.hashCode() and 0x7fffffff) % 10000) +
+                (((alarmId % 1000L + 1000L) % 1000L).toInt())
             val pendingIntent = PendingIntent.getActivity(
-                applicationContext, 0, activityIntent,
+                applicationContext, requestCode, activityIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
@@ -95,6 +117,9 @@ class AlarmWatchdogWorker(
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setFullScreenIntent(pendingIntent, true)
                 .setAutoCancel(true)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                builder.setTimeoutAfter(60_000L)
+            }
 
             manager.notify(2003, builder.build())
             Log.d("AlarmWatchdog", "Posted missed-alarm notification for $alarmTime")
@@ -107,12 +132,11 @@ class AlarmWatchdogWorker(
         private const val UNIQUE_WORK_NAME = "AlarmWatchdogWorker"
 
         fun enqueue(context: Context) {
+            // Tanpa RequiresBatteryNotLow: watchdog alarm harus jalan justru saat
+            // baterai rendah (momen kritis alarm). Dulu constraint ini membuat
+            // watchdog mati total saat baterai low.
             val request = PeriodicWorkRequestBuilder<AlarmWatchdogWorker>(
                 15, TimeUnit.MINUTES
-            ).setConstraints(
-                androidx.work.Constraints.Builder()
-                    .setRequiresBatteryNotLow(true)
-                    .build()
             ).build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(

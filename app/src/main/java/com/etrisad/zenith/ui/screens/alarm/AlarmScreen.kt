@@ -133,6 +133,16 @@ fun AlarmScreen(
 
     fun deleteSelected() {
         scope.launch {
+            // Batalkan PendingIntent + notif per alarm SEBELUM hapus dari repo.
+            // Dulu id-specific exact alarm tidak ikut tersapu (cancel-all hanya sapu
+            // legacy) sehingga alarm yang dihapus masih bisa berbunyi (ghost firing)
+            // dan notif reminder-nya basi menumpuk.
+            val targets = alarmList.filter { it.id in selectedAlarmIds }
+            targets.forEach { target ->
+                try {
+                    AlarmBroadcastReceiver.cancelAlarm(context, target.timeString, target.id)
+                } catch (_: Exception) { }
+            }
             selectedAlarmIds.forEach { id ->
                 preferencesRepository.deleteAlarm(id)
             }
@@ -566,6 +576,9 @@ fun AlarmScreen(
                     pendingSwipeDelete = null
                     if (target != null) {
                         scope.launch {
+                            try {
+                                AlarmBroadcastReceiver.cancelAlarm(context, target.timeString, target.id)
+                            } catch (_: Exception) { }
                             preferencesRepository.deleteAlarm(target.id)
                             scope.launch(Dispatchers.IO) {
                                 rescheduleAlarms(context, preferencesRepository, prefs.alarmMasterEnabled)
@@ -947,6 +960,11 @@ private suspend fun rescheduleAlarms(
     for (alarm in alarms) {
         AlarmBroadcastReceiver.cancelAlarm(context, alarm.timeString, alarm.id)
     }
+    // Sapu juga notif basi (reminder/complete/firing) setiap reschedule agar shade
+    // tidak menumpuk setelah alarm dimatikan/diubah.
+    try {
+        AlarmBroadcastReceiver.cancelAllAlarmNotifications(context)
+    } catch (_: Exception) { }
     android.util.Log.d("AlarmPerf", "rescheduleAlarms: cancelAlarm took ${System.currentTimeMillis() - tCancel}ms")
 
     if (masterEnabled) {

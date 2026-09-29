@@ -60,7 +60,14 @@ class AlarmPlaybackService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val newAlarmTime = intent?.getStringExtra(EXTRA_ALARM_TIME) ?: alarmTime
+        // START_STICKY dulu menyebabkan service yang di-kill sistem restart dengan
+        // intent=null lalu memutar suara alarm basi tanpa overlay. Sekarang NOT_STICKY
+        // + guard null-intent agar tidak ada replay hantu.
+        if (intent == null) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        val newAlarmTime = intent.getStringExtra(EXTRA_ALARM_TIME) ?: alarmTime
         alarmTime = newAlarmTime
 
         startForeground(NOTIFICATION_ID, buildForegroundNotification(alarmTime))
@@ -80,7 +87,7 @@ class AlarmPlaybackService : Service() {
         }
         playAlarmSound()
 
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun buildForegroundNotification(alarmTime: String): android.app.Notification {

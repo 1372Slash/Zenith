@@ -54,7 +54,9 @@ fun AlarmOverlayContent(
     wakeUpAccumulatedSeconds: Int = 0,
     wakeUpComplete: Boolean = false,
     onWakeUpAppOpened: (String) -> Unit = {},
-    onWakeUpDismiss: () -> Unit = {}
+    onWakeUpDismiss: () -> Unit = {},
+    wakeUpNeedsPermission: Boolean = false,
+    onOpenUsageSettings: () -> Unit = {}
 ) {
     var showMathChallenge by remember { mutableStateOf(false) }
     var mathUserAnswer by remember { mutableStateOf("") }
@@ -88,7 +90,15 @@ fun AlarmOverlayContent(
         val answer = mathUserAnswer.toIntOrNull()
         if (answer == mathA + mathB) {
             mathCorrect = true
-            onDismiss()
+            // Math + wake-up app bisa aktif bersamaan. Dulu solve math langsung
+            // dismiss dan melewati verifikasi app sepenuhnya. Sekarang lanjutkan
+            // ke wake-up sheet bila verifikasi app masih belum lengkap.
+            if (wakeUpAppPackageNames.isNotEmpty() && !wakeUpComplete) {
+                showMathChallenge = false
+                showWakeUpSheet = true
+            } else {
+                onDismiss()
+            }
         } else {
             mathError = true
         }
@@ -379,7 +389,9 @@ fun AlarmOverlayContent(
                     showWakeUpSheet = false
                     onWakeUpDismiss()
                 },
-                onBackToAlarm = { showWakeUpSheet = false }
+                onBackToAlarm = { showWakeUpSheet = false },
+                needsPermission = wakeUpNeedsPermission,
+                onOpenUsageSettings = onOpenUsageSettings
             )
         }
     }
@@ -394,7 +406,9 @@ private fun WakeUpAppBottomSheet(
     isComplete: Boolean,
     onOpenApp: (String) -> Unit,
     onDone: () -> Unit,
-    onBackToAlarm: () -> Unit
+    onBackToAlarm: () -> Unit,
+    needsPermission: Boolean = false,
+    onOpenUsageSettings: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -441,6 +455,38 @@ private fun WakeUpAppBottomSheet(
             )
 
             Spacer(modifier = Modifier.height(24.dp))
+
+            if (needsPermission && !isComplete) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Butuh izin Usage Access",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Zenith tidak bisa menghitung durasi pemakaian tanpa izin ini. Progress akan stuck di 0.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        ZenithButton(
+                            onClick = onOpenUsageSettings,
+                            text = "Buka Pengaturan",
+                            type = ZenithButtonType.Filled,
+                            size = ZenithButtonSize.Medium,
+                            fillMaxWidth = true
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
             if (!isComplete) {
                 LinearProgressIndicator(

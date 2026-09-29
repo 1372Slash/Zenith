@@ -69,6 +69,7 @@ class AlarmOverlayActivity : ComponentActivity() {
     private var wakeUpStartTime by mutableLongStateOf(0L)
     private var wakeUpAccumulatedSeconds by mutableIntStateOf(0)
     private var wakeUpComplete by mutableStateOf(false)
+    private var wakeUpNeedsPermission by mutableStateOf(false)
     private var wakeUpJob: kotlinx.coroutines.Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -115,8 +116,12 @@ class AlarmOverlayActivity : ComponentActivity() {
                         .find { it.timeString == alarmTime }
                 }
 
+                // Hanya paket yang masih terinstal + bisa dibuka yang dihitung.
+                // Dulu paket yang di-uninstall ikut tersimpan sehingga progress
+                // stuck selamanya (soft-lock saat alarm berbunyi).
                 val wakeUpAppPackageNames = remember(currentAlarm) {
-                    currentAlarm?.wakeUpAppPackageNames ?: emptyList()
+                    val raw = currentAlarm?.wakeUpAppPackageNames ?: emptyList()
+                    filterLaunchablePackages(raw)
                 }
 
                 val wakeUpAppNames = remember(wakeUpAppPackageNames) {
@@ -129,14 +134,27 @@ class AlarmOverlayActivity : ComponentActivity() {
                     }
                 }
 
-                val wakeUpAppDurationSeconds = remember(currentAlarm) {
-                    currentAlarm?.wakeUpAppDurationSeconds ?: 120
+                val wakeUpAppDurationSeconds = remember(currentAlarm, wakeUpAppPackageNames) {
+                    if (wakeUpAppPackageNames.isEmpty()) 0
+                    else (currentAlarm?.wakeUpAppDurationSeconds ?: 120).coerceIn(5, 600)
                 }
 
                 val darkTheme = when (userPreferences.themeConfig) {
                     ThemeConfig.FOLLOW_SYSTEM -> isSystemInDarkTheme()
                     ThemeConfig.LIGHT -> false
                     ThemeConfig.DARK -> true
+                }
+
+                // Wake-up verification harus mulai menghitung sejak overlay tampil,
+                // bukan hanya setelah user menekan tombol di sheet. Dulu tracking baru
+                // jalan kalau dibuka via tombol, sehingga pemakaian via launcher tidak kehitung.
+                androidx.compose.runtime.LaunchedEffect(wakeUpAppPackageNames, alarmTime) {
+                    wakeUpNeedsPermission = wakeUpAppPackageNames.isNotEmpty() && !hasUsageAccess()
+                    if (wakeUpAppPackageNames.isNotEmpty() && !wakeUpTrackingActive && !wakeUpComplete) {
+                        wakeUpStartTime = System.currentTimeMillis()
+                        wakeUpTrackingActive = true
+                        startWakeUpTracking(wakeUpAppPackageNames, wakeUpAppDurationSeconds)
+                    }
                 }
 
                 ZenithTheme(
@@ -154,7 +172,7 @@ class AlarmOverlayActivity : ComponentActivity() {
                             dismissWithAutoRepeat()
                         },
                         onStopAlarm = {
-                            dismissWithAutoRepeat()
+                            stopAlarmPermanently()
                         },
                         onSnooze = {
                             snooze()
@@ -172,12 +190,24 @@ class AlarmOverlayActivity : ComponentActivity() {
                             handleWakeUpAppOpened(pkg, wakeUpAppPackageNames, wakeUpAppDurationSeconds)
                         },
                         onWakeUpDismiss = {
-                            stopWakeUpTracking()
-                            stopAlarmAndFinish()
+                            dismissAfterWakeUpVerified()
+                        },
+                        wakeUpNeedsPermission = wakeUpNeedsPermission,
+                        onOpenUsageSettings = {
+                            openUsageAccessSettings()
                         }
                     )
                 }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // User bisa grant Usage Access dari sheet lalu kembali: segarkan flag
+        // agar warning hilang dan tracking yang sudah jalan mulai menghitung.
+        if (wakeUpNeedsPermission && hasUsageAccess()) {
+            wakeUpNeedsPermission = false
         }
     }
 
@@ -200,6 +230,7 @@ class AlarmOverlayActivity : ComponentActivity() {
 
     private fun dismissWithAutoRepeat() {
         Log.d("ZenithAlarm", "dismissWithAutoRepeat: alarmTime=$alarmTime")
+        val dismissAt = System.currentTimeMillis()
         lifecycleScope.launch(Dispatchers.IO) {
             val userPreferencesRepository = (application as ZenithApplication).userPreferencesRepository
             val prefs = userPreferencesRepository.userPreferencesFlow.first()
@@ -208,25 +239,120 @@ class AlarmOverlayActivity : ComponentActivity() {
             val currentAlarm = alarms.find {
                 it.timeString == alarmTime
             }
+            val alarmId = currentAlarm?.id ?: 0L
 
             val autoRepeat = currentAlarm?.autoRepeatEnabled ?: prefs.alarmAutoRepeatEnabled
             val isOnce = currentAlarm?.days?.isEmpty() ?: true
-            Log.d("ZenithAlarm", "dismissWithAutoRepeat: autoRepeat=$autoRepeat isOnce=$isOnce")
+            val isRecurring = !isOnce
+            Log.d("ZenithAlarm", "dismissWithAutoRepeat: autoRepeat=$autoRepeat isOnce=$isOnce alarmId=$alarmId")
 
-            AlarmBroadcastReceiver.cancelReTrigger(this@AlarmOverlayActivity, alarmTime)
+            AlarmBroadcastReceiver.recordAlarmDismiss(this@AlarmOverlayActivity, alarmTime)
+            AlarmBroadcastReceiver.cancelFiringNotification(this@AlarmOverlayActivity)
+            AlarmBroadcastReceiver.cancelReTrigger(this@AlarmOverlayActivity, alarmTime, alarmId)
+
+            // Alarm berulang WAJIB dijadwalkan ulang setiap habis bunyi (one-shot exact).
+            // Dulu ini hanya terjadi bila autoRepeat=true, sehingga alarm berulang
+            // non-smart hanya berbunyi sekali lalu mati selamanya.
+            if (isRecurring && currentAlarm != null) {
+                AlarmBroadcastReceiver.scheduleAlarm(
+                    this@AlarmOverlayActivity, currentAlarm.timeString, currentAlarm.days, currentAlarm.id
+                )
+            }
 
             if (autoRepeat) {
-                Log.d("ZenithAlarm", "dismissWithAutoRepeat: scheduling usage check + tomorrow's alarm")
-                AlarmBroadcastReceiver.scheduleUsageCheck(this@AlarmOverlayActivity, alarmTime, isOnce)
-                val nextAlarmTime = if (currentAlarm != null) currentAlarm.timeString else alarmTime
-                val nextDays = currentAlarm?.days ?: emptySet()
-                AlarmBroadcastReceiver.scheduleAlarm(this@AlarmOverlayActivity, nextAlarmTime, nextDays)
-                AlarmBroadcastReceiver.showAutoRepeatReminderNotification(this@AlarmOverlayActivity, alarmTime)
+                Log.d("ZenithAlarm", "dismissWithAutoRepeat: scheduling usage check")
+                AlarmBroadcastReceiver.scheduleUsageCheck(
+                    this@AlarmOverlayActivity, alarmTime, isOnce, 0, alarmId, dismissAt
+                )
+                AlarmBroadcastReceiver.showAutoRepeatReminderNotification(
+                    this@AlarmOverlayActivity, alarmTime, alarmId
+                )
             } else {
-                Log.d("ZenithAlarm", "dismissWithAutoRepeat: autoRepeat disabled")
+                Log.d("ZenithAlarm", "dismissWithAutoRepeat: autoRepeat disabled, clearing stale smart state")
+                AlarmBroadcastReceiver.cancelUsageCheck(this@AlarmOverlayActivity, alarmTime, alarmId)
+                AlarmBroadcastReceiver.cancelSmartWakeReminder(this@AlarmOverlayActivity)
+                if (isOnce && currentAlarm != null) {
+                    // Once tanpa smart-repeat: matikan agar tidak nyangkut enabled tanpa jadwal.
+                    try {
+                        userPreferencesRepository.updateAlarm(currentAlarm.copy(enabled = false))
+                    } catch (_: Exception) { }
+                    AlarmBroadcastReceiver.cancelAlarm(this@AlarmOverlayActivity, alarmTime, alarmId)
+                }
             }
 
             withContext(Dispatchers.Main) {
+                stopAlarmAndFinish()
+            }
+        }
+    }
+
+    /**
+     * Tombol "Stop Alarm": hentikan TOTAL, jangan pasang smart-repeat.
+     * Dulu kedua tombol ("Stop" dan "I'm Awake!") memanggil fungsi yang sama
+     * sehingga tidak ada cara mematikan alarm tanpa memicu pengulangan + notif.
+     */
+    private fun stopAlarmPermanently() {
+        Log.d("ZenithAlarm", "stopAlarmPermanently: alarmTime=$alarmTime")
+        lifecycleScope.launch(Dispatchers.IO) {
+            val userPreferencesRepository = (application as ZenithApplication).userPreferencesRepository
+            val prefs = userPreferencesRepository.userPreferencesFlow.first()
+            val alarms = userPreferencesRepository.parseAlarms(prefs.alarmsJson)
+            val currentAlarm = alarms.find { it.timeString == alarmTime }
+            val alarmId = currentAlarm?.id ?: 0L
+            val isOnce = currentAlarm?.days?.isEmpty() ?: true
+
+            AlarmBroadcastReceiver.recordAlarmDismiss(this@AlarmOverlayActivity, alarmTime)
+            AlarmBroadcastReceiver.cancelSmartChain(this@AlarmOverlayActivity, alarmTime, alarmId)
+
+            if (!isOnce && currentAlarm != null) {
+                AlarmBroadcastReceiver.scheduleAlarm(
+                    this@AlarmOverlayActivity, currentAlarm.timeString, currentAlarm.days, currentAlarm.id
+                )
+            } else if (isOnce && currentAlarm != null) {
+                try {
+                    userPreferencesRepository.updateAlarm(currentAlarm.copy(enabled = false))
+                } catch (_: Exception) { }
+                AlarmBroadcastReceiver.cancelAlarm(this@AlarmOverlayActivity, alarmTime, alarmId)
+            }
+
+            withContext(Dispatchers.Main) {
+                stopAlarmAndFinish()
+            }
+        }
+    }
+
+    /**
+     * Wake-up verification selesai = user terbukti bangun, jadi tidak perlu
+     * smart-repeat. Dulu jalur ini hanya stop tanpa reschedule sehingga alarm
+     * berulang berikutnya hilang.
+     */
+    private fun dismissAfterWakeUpVerified() {
+        Log.d("ZenithAlarm", "dismissAfterWakeUpVerified: alarmTime=$alarmTime")
+        lifecycleScope.launch(Dispatchers.IO) {
+            val userPreferencesRepository = (application as ZenithApplication).userPreferencesRepository
+            val alarms = userPreferencesRepository.parseAlarms(
+                userPreferencesRepository.userPreferencesFlow.first().alarmsJson
+            )
+            val currentAlarm = alarms.find { it.timeString == alarmTime }
+            val alarmId = currentAlarm?.id ?: 0L
+            val isOnce = currentAlarm?.days?.isEmpty() ?: true
+
+            AlarmBroadcastReceiver.recordAlarmDismiss(this@AlarmOverlayActivity, alarmTime)
+            AlarmBroadcastReceiver.cancelSmartChain(this@AlarmOverlayActivity, alarmTime, alarmId)
+
+            if (!isOnce && currentAlarm != null) {
+                AlarmBroadcastReceiver.scheduleAlarm(
+                    this@AlarmOverlayActivity, currentAlarm.timeString, currentAlarm.days, currentAlarm.id
+                )
+            } else if (isOnce && currentAlarm != null) {
+                try {
+                    userPreferencesRepository.updateAlarm(currentAlarm.copy(enabled = false))
+                } catch (_: Exception) { }
+                AlarmBroadcastReceiver.cancelAlarm(this@AlarmOverlayActivity, alarmTime, alarmId)
+            }
+
+            withContext(Dispatchers.Main) {
+                stopWakeUpTracking()
                 stopAlarmAndFinish()
             }
         }
@@ -240,10 +366,11 @@ class AlarmOverlayActivity : ComponentActivity() {
                 val prefs = userPreferencesRepository.userPreferencesFlow.first()
                 val alarms = userPreferencesRepository.parseAlarms(prefs.alarmsJson)
                 val alarm = alarms.find { it.timeString == alarmTime }
+                val alarmId = alarm?.id ?: 0L
                 val snoozeDuration = alarm?.snoozeDurationMinutes ?: 5
                 val snoozeMax = alarm?.snoozeMaxCount ?: 3
 
-                AlarmBroadcastReceiver.cancelReTrigger(this@AlarmOverlayActivity, alarmTime)
+                AlarmBroadcastReceiver.recordAlarmDismiss(this@AlarmOverlayActivity, alarmTime)
 
                 if (snoozeMax == Int.MAX_VALUE || snoozeCount < snoozeMax) {
                     Log.d("ZenithAlarm", "snooze: scheduling snooze alarm duration=$snoozeDuration min")
@@ -251,8 +378,12 @@ class AlarmOverlayActivity : ComponentActivity() {
                         this@AlarmOverlayActivity,
                         alarmTime,
                         snoozeDuration,
-                        snoozeCount + 1
+                        snoozeCount + 1,
+                        alarmId
                     )
+                } else {
+                    // Kuota snooze habis: jangan gantung; kembalikan ke smart chain biasa.
+                    AlarmBroadcastReceiver.cancelSmartChain(this@AlarmOverlayActivity, alarmTime, alarmId)
                 }
             } catch (_: Exception) { }
 
@@ -288,15 +419,21 @@ class AlarmOverlayActivity : ComponentActivity() {
         isAlarmActive = false
         wakeLockRenewalJob?.cancel()
         wakeLockRenewalJob = null
+        try {
+            AlarmBroadcastReceiver.cancelFiringNotification(this)
+        } catch (_: Exception) { }
         if (bound) {
             playbackService?.stopPlayback()
             try { unbindService(connection) } catch (_: Exception) {}
             bound = false
         } else {
             playbackService?.stopPlayback()
+            // Service mungkin belum sempat bind (mis. overlay dibuka via notif);
+            // pastikan suara berhenti dengan stopService eksplisit.
+            try { stopService(Intent(this, AlarmPlaybackService::class.java)) } catch (_: Exception) { }
         }
         if (wakeLock?.isHeld == true) {
-            wakeLock?.release()
+            try { wakeLock?.release() } catch (_: Exception) { }
         }
         wakeLock = null
         finishAndRemoveTask()
@@ -320,15 +457,73 @@ class AlarmOverlayActivity : ComponentActivity() {
         wakeLock = null
     }
 
+    private fun hasUsageAccess(): Boolean {
+        return try {
+            val appOps = getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+            val mode = appOps.unsafeCheckOpNoThrow(
+                android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(), packageName
+            )
+            mode == android.app.AppOpsManager.MODE_ALLOWED
+        } catch (_: Exception) {
+            true
+        }
+    }
+
+    private fun openUsageAccessSettings() {
+        try {
+            startActivity(Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            })
+        } catch (_: Exception) {
+            try {
+                startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
+            } catch (_: Exception) { }
+        }
+    }
+
+    private fun filterLaunchablePackages(packages: List<String>): List<String> {
+        if (packages.isEmpty()) return emptyList()
+        return packages.filter { pkg ->
+            try {
+                packageManager.getApplicationInfo(pkg, 0)
+                packageManager.getLaunchIntentForPackage(pkg) != null
+            } catch (_: Exception) {
+                Log.w("ZenithAlarm", "Wake-up app $pkg tidak valid/terinstal, dilewati")
+                false
+            }
+        }
+    }
+
     private fun handleWakeUpAppOpened(packageName: String, appPackages: List<String>, durationSeconds: Int) {
-        val intent = packageManager.getLaunchIntentForPackage(packageName)
+        val intent = try {
+            packageManager.getLaunchIntentForPackage(packageName)
+        } catch (_: Exception) { null }
         if (intent != null) {
             if (!wakeUpTrackingActive) {
                 wakeUpStartTime = System.currentTimeMillis()
                 wakeUpTrackingActive = true
                 startWakeUpTracking(appPackages, durationSeconds)
             }
-            startActivity(intent)
+            try {
+                startActivity(intent)
+            } catch (e: Exception) {
+                Log.w("ZenithAlarm", "Gagal membuka $packageName: ${e.message}")
+                android.widget.Toast.makeText(this, "Tidak dapat membuka aplikasi", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            // Paket hilang di antara setting dan firing: jangan diam; arahkan ke
+            // info aplikasi agar user paham, bukan tombol mati.
+            Log.w("ZenithAlarm", "Wake-up app $packageName tidak bisa dibuka")
+            android.widget.Toast.makeText(this, "Aplikasi tidak dapat dibuka", android.widget.Toast.LENGTH_SHORT).show()
+            try {
+                startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = android.net.Uri.parse("package:$packageName")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
+            } catch (_: Exception) { }
         }
     }
 
@@ -351,10 +546,22 @@ class AlarmOverlayActivity : ComponentActivity() {
                     ?.wakeUpAppDurationSeconds ?: 120
             } catch (_: Exception) { 120 }
         }
+        if (packages.isEmpty() || duration <= 0) {
+            // Konfigurasi tidak valid (mis. semua app di-uninstall): jangan gate.
+            withContextForMainSync {
+                wakeUpComplete = true
+                wakeUpTrackingActive = false
+            }
+            return
+        }
         wakeUpJob?.cancel()
         wakeUpJob = lifecycleScope.launch(Dispatchers.IO) {
             while (true) {
                 delay(3000)
+                if (!hasUsageAccess()) {
+                    withContext(Dispatchers.Main) { wakeUpNeedsPermission = true }
+                    continue
+                }
                 val accumulated = getAccumulatedForegroundMs(
                     packages.toSet(),
                     wakeUpStartTime
@@ -364,11 +571,21 @@ class AlarmOverlayActivity : ComponentActivity() {
                     if (wakeUpAccumulatedSeconds >= duration) {
                         wakeUpComplete = true
                         wakeUpTrackingActive = false
+                        wakeUpNeedsPermission = false
                         wakeUpJob?.cancel()
                         return@withContext
                     }
                 }
             }
+        }
+    }
+
+    private fun withContextForMainSync(block: () -> Unit) {
+        // Dipanggil dari LaunchedEffect (Main) maupun IO; tulis state di Main.
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            block()
+        } else {
+            lifecycleScope.launch(Dispatchers.Main) { block() }
         }
     }
 
@@ -394,12 +611,15 @@ class AlarmOverlayActivity : ComponentActivity() {
                 when (event.eventType) {
                     UsageEvents.Event.MOVE_TO_FOREGROUND,
                     UsageEvents.Event.ACTIVITY_RESUMED -> {
-                        activeStart[event.packageName] = event.timeStamp
+                        if (!activeStart.containsKey(event.packageName)) {
+                            activeStart[event.packageName] = event.timeStamp
+                        }
                     }
                     UsageEvents.Event.MOVE_TO_BACKGROUND,
-                    UsageEvents.Event.ACTIVITY_PAUSED -> {
+                    UsageEvents.Event.ACTIVITY_PAUSED,
+                    UsageEvents.Event.ACTIVITY_STOPPED -> {
                         val start = activeStart.remove(event.packageName) ?: continue
-                        total += event.timeStamp - start
+                        total += (event.timeStamp - start).coerceAtLeast(0L)
                     }
                 }
             }
