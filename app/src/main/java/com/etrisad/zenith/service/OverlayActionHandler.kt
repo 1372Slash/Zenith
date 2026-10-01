@@ -57,6 +57,24 @@ class OverlayActionHandler(
         private const val WEBSITE_DISMISS_GRACE_MS = 60_000L
     }
 
+    // Single synchronous truth for shield objects: Room write is async and each
+    // service keeps its own currentShieldCache, so without this the OTHER
+    // detector (polling vs accessibility) shows stale currentPeriodUses on the
+    // next overlay open (e.g. 2/2, then 1/2, then 2/2). Publish here so both
+    // services and the overlay trigger read the fresh value immediately.
+    private fun publishShieldUpdate(
+        updated: ShieldEntity?,
+        updateShieldCache: (ShieldEntity?) -> Unit
+    ) {
+        try {
+            if (updated != null && !WebsiteRepository.isWebsitePackageName(updated.packageName)) {
+                SharedMonitoringState.allShieldsCache =
+                    SharedMonitoringState.allShieldsCache + (updated.packageName to updated)
+            }
+        } catch (_: Exception) {}
+        updateShieldCache(updated)
+    }
+
     fun cancelPendingTimers() {
         Log.d("Zenith_SCREEN", "OverlayActionHandler: cancelling ${allowedSessionHandlers.size} pending timers")
         allowedSessionHandlers.values.forEach { mainHandler.removeCallbacks(it) }
@@ -328,7 +346,7 @@ class OverlayActionHandler(
                         )
                     }
                     shieldRepository.updateShield(updatedShield)
-                    updateShieldCache(updatedShield)
+                    publishShieldUpdate(updatedShield, updateShieldCache)
                 }
             }
 
@@ -696,7 +714,7 @@ class OverlayActionHandler(
             if (s != null && s.isDelayAppEnabled) {
                 val updated = s.copy(lastDelayStartTimestamp = 0L, lastSessionEndTimestamp = 0L)
                 shieldRepository.updateShield(updated)
-                updateShieldCache(updated)
+                publishShieldUpdate(updated, updateShieldCache)
             }
         }
         if (WebsiteRepository.isWebsitePackageName(targetPackageName)) {

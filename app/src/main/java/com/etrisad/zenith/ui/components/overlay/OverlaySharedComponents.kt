@@ -316,13 +316,14 @@ fun OverlayDragHandleWithIndicators(
     ) {
         Box(modifier = Modifier.weight(1f)) {
             val hasUses = currentUses != null && maxUses != null
-            // Standar tunggal: uses pill selalu tampil sebagai used/total (bertambah).
+            // Standar tunggal: pill tampil sebagai SISA/MAX (menurun),
+            // selaras dengan fill progress ((max - current) / max).
             // Bonus incentive tetap ditampilkan di sheet content, bukan bergantian di drag handle
             // agar tidak flicker antara "bertambah" dan "berkurang".
             if (hasUses) {
                 ZenithButton(
                     onClick = { },
-                    text = "$currentUses/$maxUses",
+                    text = "${(maxUses - currentUses).coerceAtLeast(0)}/$maxUses",
                     icon = Icons.Outlined.Timer,
                     type = ZenithButtonType.Tonal,
                     size = ZenithButtonSize.Small,

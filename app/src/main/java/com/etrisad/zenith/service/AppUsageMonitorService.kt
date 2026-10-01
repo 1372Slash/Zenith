@@ -1904,11 +1904,15 @@ class AppUsageMonitorService : Service() {
         if (!isWebsite && actualTargetPackage != currentForeground && actualTargetPackage != lastForegroundApp) return
         if (isWebsite && currentForeground != null && !WebsiteRepository.isKnownBrowser(currentForeground)) return
 
-        var shield = if (currentShieldCache?.packageName == actualTargetPackage) {
-            currentShieldCache
-        } else {
-            SharedMonitoringState.allShieldsCache[actualTargetPackage]
-        }
+        // Prefer the shared map: handleAllowUse publishes every increment there
+        // synchronously, while currentShieldCache may belong to the other
+        // detector path and lag behind (stale 1/2 vs fresh 2/2 flicker).
+        var shield = SharedMonitoringState.allShieldsCache[actualTargetPackage]
+            ?: if (currentShieldCache?.packageName == actualTargetPackage) {
+                currentShieldCache
+            } else {
+                null
+            }
 
         if (shield != null && isWebsite && actualTargetPackage.startsWith("zenith-web:")) {
             val websiteAllowedUntil = allowedApps[actualTargetPackage] ?: 0L

@@ -1070,7 +1070,11 @@ class ZenithService : AccessibilityService() {
                 return
             }
 
-            var shield = currentShieldCache?.takeIf { it.packageName == actualTargetPackage } ?: SharedMonitoringState.allShieldsCache[actualTargetPackage]
+            // Prefer the shared map: handleAllowUse publishes every increment there
+            // synchronously, while currentShieldCache may belong to the other
+            // detector path and lag behind (stale 1/2 vs fresh 2/2 flicker).
+            var shield = SharedMonitoringState.allShieldsCache[actualTargetPackage]
+                ?: currentShieldCache?.takeIf { it.packageName == actualTargetPackage }
 
             if (shield != null && isWebsite && actualTargetPackage.startsWith("zenith-web:")) {
                 val websiteAllowedUntil = allowedApps[actualTargetPackage] ?: 0L

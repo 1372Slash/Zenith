@@ -328,10 +328,23 @@ fun ShieldOverlaySheetContent(
         currentShield != null && (System.currentTimeMillis() - currentShield.lastPeriodResetTimestamp > currentShield.refreshPeriodMinutes * 60 * 1000L)
     }
 
-    val currentUses = remember(currentShield, isPeriodExpired) {
-        if (isPeriodExpired) 0 else (currentShield?.currentPeriodUses ?: 0)
+    // Agree with the drag-handle pill: live Room Flow can lag behind a
+    // just-committed Allow (same overlay session). Within one period DB uses
+    // only move up, so take the max; on period change trust live.
+    val currentUses = remember(currentShield, isPeriodExpired, shield) {
+        val liveUses = if (isPeriodExpired) 0 else (currentShield?.currentPeriodUses ?: 0)
+        val snapUses = shield?.let {
+            effectivePeriodUses(it.currentPeriodUses, it.lastPeriodResetTimestamp, it.refreshPeriodMinutes)
+        } ?: 0
+        if (currentShield != null && shield != null &&
+            currentShield.lastPeriodResetTimestamp == shield.lastPeriodResetTimestamp
+        ) {
+            maxOf(liveUses, snapUses)
+        } else {
+            liveUses
+        }
     }
-    val maxUses = currentShield?.maxUsesPerPeriod ?: 5
+    val maxUses = currentShield?.maxUsesPerPeriod ?: shield?.maxUsesPerPeriod ?: 5
     val isUsesExceeded = remember(currentUses, maxUses, isIncentiveBlocked) { isIncentiveBlocked || currentUses >= maxUses }
     val isTimeLimitReached = remember(currentTotalUsageToday, currentShield) {
         currentShield != null && currentShield.timeLimitMinutes > 0 && currentTotalUsageToday >= (currentShield.timeLimitMinutes * 60 * 1000L)
@@ -789,7 +802,7 @@ fun LandscapeInterceptLayout(
                     ) {
                         ZenithButton(
                             onClick = { },
-                            text = "$currentUses/$maxUses",
+                            text = "${(maxUses - currentUses).coerceAtLeast(0)}/$maxUses",
                             icon = Icons.Outlined.Timer,
                             type = ZenithButtonType.Tonal,
                             size = ZenithButtonSize.Small,
