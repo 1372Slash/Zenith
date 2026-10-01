@@ -90,6 +90,7 @@ fun PomodoroPuzzleContent(
     val currentOnGoalDismiss by rememberUpdatedState(onGoalDismiss)
     val currentOnComplete by rememberUpdatedState(onComplete)
     val currentOnCloseApp by rememberUpdatedState(onCloseApp)
+    val scope = rememberCoroutineScope()
 
     val dragUses = if (shield?.type == FocusType.SHIELD) effectivePeriodUses(
         currentPeriodUses = shield.currentPeriodUses,
@@ -111,7 +112,10 @@ fun PomodoroPuzzleContent(
         dragHandleEmergencyCount = dragEmergency,
         onCloseApp = {
             showContent = false
-            currentOnCloseApp()
+            scope.launch {
+                delay(300)
+                currentOnCloseApp()
+            }
         }
     ) { key ->
         if (key == "puzzle") {
@@ -121,7 +125,10 @@ fun PomodoroPuzzleContent(
                 onComplete = { showingAfterContent = true },
                 onCloseApp = {
                     showContent = false
-                    currentOnCloseApp()
+                    scope.launch {
+                        delay(300)
+                        currentOnCloseApp()
+                    }
                 }
             )
         } else {
@@ -136,11 +143,17 @@ fun PomodoroPuzzleContent(
                         userPreferences = userPreferences,
                         onAllowUse = { minutes ->
                             showContent = false
-                            currentOnAllowUse(minutes, false)
+                            scope.launch {
+                                delay(300)
+                                currentOnAllowUse(minutes, false)
+                            }
                         },
                         onCloseApp = {
                             showContent = false
-                            currentOnCloseApp()
+                            scope.launch {
+                                delay(300)
+                                currentOnCloseApp()
+                            }
                         }
                     )
                 }
@@ -154,26 +167,38 @@ fun PomodoroPuzzleContent(
                         userPreferences = userPreferences,
                         onGoalDismiss = {
                             showContent = false
-                            currentOnGoalDismiss()
+                            scope.launch {
+                                delay(300)
+                                currentOnGoalDismiss()
+                            }
                         },
                         onCloseApp = {
                             showContent = false
-                            currentOnCloseApp()
+                            scope.launch {
+                                delay(300)
+                                currentOnCloseApp()
+                            }
                         }
                     )
                 }
                 PomodoroAfterType.BREAK_STARTED -> {
-                    BreakStartedContent {
-                        showContent = false
+                BreakStartedContent {
+                    showContent = false
+                    scope.launch {
+                        delay(300)
                         currentOnComplete()
                     }
+                }
                 }
                 PomodoroAfterType.BLOCKED -> {
                     BlockedAfterContent(
                         appName = appName,
                         onCloseApp = {
                             showContent = false
-                            currentOnCloseApp()
+                            scope.launch {
+                                delay(300)
+                                currentOnCloseApp()
+                            }
                         }
                     )
                 }

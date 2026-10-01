@@ -363,7 +363,10 @@ fun InterceptOverlayContent(
                     onConsumeBonusUse = onConsumeBonusUse,
                     onAllowUse = { minutes, emergency ->
                         showSheet = false
-                        currentOnAllowUse(minutes, emergency)
+                        scope.launch {
+                            delay(300)
+                            currentOnAllowUse(minutes, emergency)
+                        }
                     },
                     onCloseApp = closeOverlay
                 )
@@ -572,7 +575,10 @@ fun ScheduleOverlayContent(
                     isLandscape = isLandscape,
                     onAllowUse = { minutes, emergency ->
                         showSheet = false
-                        currentOnAllowUse(minutes, emergency)
+                        scope.launch {
+                            delay(300)
+                            currentOnAllowUse(minutes, emergency)
+                        }
                     },
                     onCloseApp = closeOverlay
                 )
