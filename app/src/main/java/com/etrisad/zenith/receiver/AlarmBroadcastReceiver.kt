@@ -63,9 +63,18 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 val attempt = intent.getIntExtra(EXTRA_RETRIGGER_COUNT, 0)
                 val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, 0L)
                 val dismissAt = intent.getLongExtra(EXTRA_DISMISS_AT, 0L)
-                val recentUsage = hasRecentUsage(context, dismissAt)
-                Log.d("AlarmReceiver", "ACTION_CHECK_USAGE: alarmTime=$alarmTime, recentUsage=$recentUsage, isOnce=$isOnce attempt=$attempt alarmId=$alarmId dismissAt=$dismissAt")
-                if (!recentUsage) {
+                // Overlay lain sedang tampil (mis. alarm lain berbunyi) = user jelas
+                // sedang berinteraksi dengan HP -> anggap bangun, jangan mengulang.
+                if (AlarmOverlayActivity.isShowing) {
+                    Log.d("AlarmReceiver", "ACTION_CHECK_USAGE: overlay showing, assuming awake")
+                    cancelSmartWakeReminder(context)
+                    sendAutoRepeatCompleteNotification(context, alarmTime)
+                    if (isOnce) disableAlarm(context, alarmTime)
+                    return
+                }
+                val awake = isUserAwake(context, dismissAt)
+                Log.d("AlarmReceiver", "ACTION_CHECK_USAGE: alarmTime=$alarmTime, awake=$awake, isOnce=$isOnce attempt=$attempt alarmId=$alarmId dismissAt=$dismissAt")
+                if (!awake) {
                     scheduleReTrigger(context, alarmTime, attempt, alarmId)
                     // Biarkan reminder yang dipasang saat dismiss tetap hidup sampai
                     // re-trigger berikutnya berbunyi (lalu di-cancel di onReceive).
@@ -172,43 +181,73 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
     }
 
     /**
-     * Smart-wake check yang diperbaiki.
+     * Smart-wake check: "apakah user benar-benar memakai HP setelah dismiss?"
      *
-     * Masalah lama:
-     * - Window selalu [now-60s, now] dihitung saat CHECK_USAGE berjalan, bukan sejak
-     *   user men-dismiss. Event SystemUI/keyguard/launcher saat dismiss ikut kehitung.
-     * - Cukup SATU event MOVE_TO_FOREGROUND apa pun (termasuk SystemUI) langsung
-     *   dianggap "sudah memakai HP" -> false positive, alarm tidak mengulang padahal
-     *   HP ditaruh lagi.
-     * - Launcher justru di-skip -> false negative kalau user cuma buka home.
+     * Pelajaran dari dua iterasi sebelumnya:
+     * - v1 (satu event apa pun = bangun): SystemUI/keyguard saat dismiss ikut
+     *   kehitung -> false positive.
+     * - v2 (total durasi foreground >= 15s = bangun): launcher yang ditinggal
+     *   tampil setelah overlay ditutup ikut kehitung ekornya sampai 60s -> SELALU
+     *   dianggap bangun -> repeat TIDAK PERNAH bunyi. Durasi presence != interaksi.
      *
-     * Perbaikan:
-     * - Window dijangkar ke [dismissAt, now] (dismissAt dikirim via intent).
-     * - Menghitung TOTAL durasi foreground aplikasi non-sistem, bukan cuma ada/tidak.
-     *   Butuh >= MIN_AWAKE_FOREGROUND_MS (15 detik) agar dianggap benar-benar bangun.
-     *   Sekali buka-tutup SystemUI/keyguard (<2 detik) tidak cukup.
-     * - Launcher DIHITUNG sebagai pemakaian (user membuka home = bangun).
-     *   Yang dikecualikan hanya: paket sendiri, SystemUI, framework android, dan
-     *   mesin TTS (TTS Zenith bisa memicu event TTS engine).
-     * - Kalau izin PACKAGE_USAGE_STATS belum diberikan, fail-safe = anggap bangun
-     *   (hentikan pengulangan) supaya tidak spam 12x dan user tidak terjebak.
+     * v3 (sekarang), berlapis:
+     * 1. Layar mati -> tidur -> ULANGI. (Ditaruh, screen timeout.)
+     * 2. Keyguard terkunci -> tidur -> ULANGI. (Tombol power / kembali tidur.)
+     * 3. Layar nyala + tidak terkunci -> butuh bukti INTERAKSI nyata setelah
+     *    grace 5s (transisi tutup-overlay diabaikan):
+     *    - ada app non-launcher yang dibuka, ATAU
+     *    - ada app non-launcher yang menetap >= 20s (mis. sedang baca sebelum
+     *      alarm bunyi dan lanjut), ATAU
+     *    - launcher masuk foreground >= 2x (navigasi/home bolak-balik).
+     *    Duduk diam di home screen dengan layar menyala TIDAK dihitung memakai.
+     * - Tanpa izin PACKAGE_USAGE_STATS: fail-safe = anggap bangun (setop repeat,
+     *   hindari spam 12x).
      */
     internal fun hasRecentUsage(context: Context, dismissAtMs: Long): Boolean {
-        return hasRecentUsageInternal(context, dismissAtMs, MIN_AWAKE_FOREGROUND_MS)
+        return isUserAwake(context, dismissAtMs)
     }
 
-    internal fun hasRecentUsageInternal(context: Context, dismissAtMs: Long, minForegroundMs: Long): Boolean {
+    internal fun isUserAwake(context: Context, dismissAtMs: Long): Boolean {
         try {
             if (!hasUsageStatsPermission(context)) {
-                Log.w("AlarmReceiver", "hasRecentUsage: no usage-stats permission, assuming awake (stop repeat to avoid spam)")
+                Log.w("AlarmReceiver", "isUserAwake: no usage-stats permission, assuming awake (stop repeat to avoid spam)")
                 return true
             }
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            if (!powerManager.isInteractive) {
+                Log.d("AlarmReceiver", "isUserAwake: screen off -> asleep, will repeat")
+                return false
+            }
+            val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+            if (keyguardManager.isKeyguardLocked) {
+                Log.d("AlarmReceiver", "isUserAwake: keyguard locked -> asleep, will repeat")
+                return false
+            }
+            return hasGenuineInteraction(context, dismissAtMs)
+        } catch (e: SecurityException) {
+            Log.w("AlarmReceiver", "isUserAwake permission denied: ${e.message}, assuming awake")
+            return true
+        } catch (e: Exception) {
+            Log.w("AlarmReceiver", "isUserAwake check failed: ${e.message}, assuming awake to avoid repeat-spam")
+            return true
+        }
+    }
+
+    internal fun hasGenuineInteraction(context: Context, dismissAtMs: Long): Boolean {
+        try {
             val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val now = System.currentTimeMillis()
             // Jangkar ke momen dismiss; fallback 60s ke belakang untuk intent lama.
             val since = if (dismissAtMs > 0L) dismissAtMs.coerceAtMost(now) else now - 60_000L
+            // Grace: abaikan transisi tutup-overlay (~launcher muncul) sesaat setelah dismiss.
+            val windowStart = since + USAGE_GRACE_MS
+            if (windowStart >= now) return false
             val events = usm.queryEvents(since, now)
             val ownPackage = context.packageName
+            val launcherPackage = try {
+                val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                context.packageManager.resolveActivity(homeIntent, 0)?.activityInfo?.packageName
+            } catch (_: Exception) { null }
             val ttsEnginePackage = try {
                 val ttsIntent = Intent(android.speech.tts.TextToSpeech.Engine.ACTION_CHECK_TTS_DATA)
                 context.packageManager.resolveActivity(ttsIntent, 0)?.activityInfo?.packageName
@@ -216,8 +255,8 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             val ignored = setOfNotNull(ownPackage, "com.android.systemui", "android", ttsEnginePackage)
 
             val activeStart = mutableMapOf<String, Long>()
-            var totalForegroundMs = 0L
-            var countedPackages = mutableSetOf<String>()
+            val entersAfterGrace = mutableMapOf<String, Int>()
+            val foregroundInWindow = mutableMapOf<String, Long>()
             while (events.hasNextEvent()) {
                 val event = UsageEvents.Event()
                 events.getNextEvent(event)
@@ -225,40 +264,62 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 when (event.eventType) {
                     UsageEvents.Event.MOVE_TO_FOREGROUND,
                     UsageEvents.Event.ACTIVITY_RESUMED -> {
-                        // Hanya catat start pertama per paket agar pasangan akurat.
                         if (!activeStart.containsKey(event.packageName)) {
                             activeStart[event.packageName] = event.timeStamp
+                        }
+                        if (event.timeStamp >= windowStart) {
+                            entersAfterGrace[event.packageName] =
+                                (entersAfterGrace[event.packageName] ?: 0) + 1
                         }
                     }
                     UsageEvents.Event.MOVE_TO_BACKGROUND,
                     UsageEvents.Event.ACTIVITY_PAUSED,
                     UsageEvents.Event.ACTIVITY_STOPPED -> {
                         val start = activeStart.remove(event.packageName) ?: continue
-                        val dur = (event.timeStamp - start).coerceAtLeast(0L)
-                        // Abaikan blip <1 detik (transisi SystemUI/keyguard).
-                        if (dur >= 1_000L) {
-                            totalForegroundMs += dur
-                            countedPackages.add(event.packageName)
+                        val overlapStart = maxOf(start, windowStart)
+                        val dur = (event.timeStamp - overlapStart).coerceAtLeast(0L)
+                        if (dur > 0L) {
+                            foregroundInWindow[event.packageName] =
+                                (foregroundInWindow[event.packageName] ?: 0L) + dur
                         }
                     }
                 }
             }
-            // Aplikasi yang masih foreground saat check berjalan.
+            // Ekor sesi yang masih foreground saat check berjalan (dipotong window).
             for ((pkg, start) in activeStart) {
-                val dur = (now - start).coerceAtLeast(0L)
-                if (dur >= 1_000L) {
-                    totalForegroundMs += dur
-                    countedPackages.add(pkg)
+                val overlapStart = maxOf(start, windowStart)
+                val dur = (now - overlapStart).coerceAtLeast(0L)
+                if (dur > 0L) {
+                    foregroundInWindow[pkg] = (foregroundInWindow[pkg] ?: 0L) + dur
                 }
             }
-            val awake = totalForegroundMs >= minForegroundMs
-            Log.d("AlarmReceiver", "hasRecentUsage: window=[$since, $now] total=${totalForegroundMs}ms min=${minForegroundMs}ms awake=$awake pkgs=$countedPackages")
-            return awake
-        } catch (e: SecurityException) {
-            Log.w("AlarmReceiver", "hasRecentUsage permission denied: ${e.message}, assuming awake")
-            return true
+
+            // Aturan 1: app non-launcher dibuka setelah grace = interaksi nyata.
+            for ((pkg, enters) in entersAfterGrace) {
+                if (enters >= 1 && pkg != launcherPackage) {
+                    Log.d("AlarmReceiver", "hasGenuineInteraction: $pkg opened after dismiss -> awake")
+                    return true
+                }
+            }
+            // Aturan 2: app non-launcher menetap lama (sudah dibuka sebelum alarm,
+            // user lanjut memakai) = masih memakai.
+            for ((pkg, total) in foregroundInWindow) {
+                if (pkg != launcherPackage && total >= MIN_SUSTAINED_FOREGROUND_MS) {
+                    Log.d("AlarmReceiver", "hasGenuineInteraction: $pkg sustained ${total}ms -> awake")
+                    return true
+                }
+            }
+            // Aturan 3: navigasi via launcher bolak-balik = memakai (sekali masuk
+            // saja bisa jadi cuma transisi tutup-overlay yang telat).
+            val launcherEnters = launcherPackage?.let { entersAfterGrace[it] ?: 0 } ?: 0
+            if (launcherEnters >= 2) {
+                Log.d("AlarmReceiver", "hasGenuineInteraction: launcher x$launcherEnters -> awake")
+                return true
+            }
+            Log.d("AlarmReceiver", "hasGenuineInteraction: window=[$windowStart, $now] enters=$entersAfterGrace sustained=$foregroundInWindow -> asleep")
+            return false
         } catch (e: Exception) {
-            Log.w("AlarmReceiver", "hasRecentUsage check failed: ${e.message}, assuming awake to avoid repeat-spam")
+            Log.w("AlarmReceiver", "hasGenuineInteraction failed: ${e.message}, assuming awake to avoid repeat-spam")
             return true
         }
     }
@@ -307,8 +368,10 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         const val CHANNEL_ID_FIRING = "zenith_alarm_channel"
         const val CHANNEL_ID_INFO = "zenith_alarm_info_channel"
 
-        // Ambang "benar-benar memakai HP": total foreground >= 15 detik sejak dismiss.
-        internal const val MIN_AWAKE_FOREGROUND_MS = 15_000L
+        // Grace: abaikan transisi tutup-overlay sesaat setelah dismiss.
+        internal const val USAGE_GRACE_MS = 5_000L
+        // App non-launcher yang menetap selama ini dianggap masih dipakai.
+        internal const val MIN_SUSTAINED_FOREGROUND_MS = 20_000L
         private const val STATE_PREFS = "zenith_alarm_smart_state"
         private const val KEY_LAST_DISMISS_AT = "last_dismiss_at"
 
@@ -550,13 +613,16 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            val triggerAtMillis = System.currentTimeMillis() + (snoozeDurationMinutes * 60_000L)
-            setExactAlarm(context, triggerAtMillis, pendingIntent)
+            // PENTING: bersihkan dulu, BARU jadwalkan. cancelReTrigger menyapu
+            // kode snooze 0..50 — kalau urutannya dibalik, snooze yang baru
+            // dipasang langsung ikut ter-cancel dan TIDAK PERNAH bunyi.
             // Snooze menggantikan smart-repeat: bersihkan rantai + reminder basi.
             cancelReTrigger(context, alarmTime, alarmId)
             cancelUsageCheck(context, alarmTime, alarmId)
             cancelSmartWakeReminder(context)
             cancelFiringNotification(context)
+            val triggerAtMillis = System.currentTimeMillis() + (snoozeDurationMinutes * 60_000L)
+            setExactAlarm(context, triggerAtMillis, pendingIntent)
         }
 
         @JvmOverloads

@@ -171,8 +171,12 @@ class AlarmOverlayActivity : ComponentActivity() {
                         onDismiss = {
                             dismissWithAutoRepeat()
                         },
+                        // SENGAJA sama dengan onDismiss: user setengah sadar asal pencet
+                        // tombol tercepat (biasanya Stop merah). Kalau Stop mematikan
+                        // total, smart-repeat tidak pernah jalan dan app yang disalahkan.
+                        // Smart yang memutuskan: dipakai -> setop, ditaruh -> ulangi.
                         onStopAlarm = {
-                            stopAlarmPermanently()
+                            dismissWithAutoRepeat()
                         },
                         onSnooze = {
                             snooze()
@@ -278,41 +282,6 @@ class AlarmOverlayActivity : ComponentActivity() {
                     } catch (_: Exception) { }
                     AlarmBroadcastReceiver.cancelAlarm(this@AlarmOverlayActivity, alarmTime, alarmId)
                 }
-            }
-
-            withContext(Dispatchers.Main) {
-                stopAlarmAndFinish()
-            }
-        }
-    }
-
-    /**
-     * Tombol "Stop Alarm": hentikan TOTAL, jangan pasang smart-repeat.
-     * Dulu kedua tombol ("Stop" dan "I'm Awake!") memanggil fungsi yang sama
-     * sehingga tidak ada cara mematikan alarm tanpa memicu pengulangan + notif.
-     */
-    private fun stopAlarmPermanently() {
-        Log.d("ZenithAlarm", "stopAlarmPermanently: alarmTime=$alarmTime")
-        lifecycleScope.launch(Dispatchers.IO) {
-            val userPreferencesRepository = (application as ZenithApplication).userPreferencesRepository
-            val prefs = userPreferencesRepository.userPreferencesFlow.first()
-            val alarms = userPreferencesRepository.parseAlarms(prefs.alarmsJson)
-            val currentAlarm = alarms.find { it.timeString == alarmTime }
-            val alarmId = currentAlarm?.id ?: 0L
-            val isOnce = currentAlarm?.days?.isEmpty() ?: true
-
-            AlarmBroadcastReceiver.recordAlarmDismiss(this@AlarmOverlayActivity, alarmTime)
-            AlarmBroadcastReceiver.cancelSmartChain(this@AlarmOverlayActivity, alarmTime, alarmId)
-
-            if (!isOnce && currentAlarm != null) {
-                AlarmBroadcastReceiver.scheduleAlarm(
-                    this@AlarmOverlayActivity, currentAlarm.timeString, currentAlarm.days, currentAlarm.id
-                )
-            } else if (isOnce && currentAlarm != null) {
-                try {
-                    userPreferencesRepository.updateAlarm(currentAlarm.copy(enabled = false))
-                } catch (_: Exception) { }
-                AlarmBroadcastReceiver.cancelAlarm(this@AlarmOverlayActivity, alarmTime, alarmId)
             }
 
             withContext(Dispatchers.Main) {
