@@ -166,6 +166,7 @@ fun PausePointScreen(
             )
     ) {
         PreferenceCategory(title = "Task Type")
+        val toastContext = androidx.compose.ui.platform.LocalContext.current
 
         PausePointTaskType.entries.forEachIndexed { index, taskType ->
             val shape = when (index) {
@@ -175,12 +176,29 @@ fun PausePointScreen(
             }
             val checked = taskType in preferences.pausePointTaskTypes
             val onCheckedChange: (Boolean) -> Unit = { isNowChecked ->
-                val updated = if (isNowChecked) {
-                    preferences.pausePointTaskTypes + taskType
+                if (isNowChecked) {
+                    val blockReason = when (taskType) {
+                        com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType.QR_SCAN ->
+                            if (preferences.pausePointQrCodes.none { it.trim().isNotEmpty() })
+                                "Register a QR code first" else null
+                        com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType.NFC_SCAN ->
+                            if (preferences.pausePointNfcTagIds.none {
+                                    com.etrisad.zenith.ui.components.pausepoint.PausePointEngine.normalizeNfcId(it).isNotEmpty()
+                                }
+                            ) "Register an NFC tag first" else null
+                        else -> null
+                    }
+                    if (blockReason != null) {
+                        android.widget.Toast.makeText(toastContext, blockReason, android.widget.Toast.LENGTH_SHORT).show()
+                        onTaskTypeClick(taskType)
+                    } else {
+                        val updated = preferences.pausePointTaskTypes + taskType
+                        coroutineScope.launch { preferencesRepository.setPausePointTaskTypes(updated) }
+                    }
                 } else {
-                    preferences.pausePointTaskTypes - taskType
+                    val updated = preferences.pausePointTaskTypes - taskType
+                    coroutineScope.launch { preferencesRepository.setPausePointTaskTypes(updated) }
                 }
-                coroutineScope.launch { preferencesRepository.setPausePointTaskTypes(updated) }
             }
 
             SettingsToggleWithNavigation(

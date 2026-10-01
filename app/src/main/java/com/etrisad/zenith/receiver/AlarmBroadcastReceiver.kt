@@ -356,10 +356,13 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         const val EXTRA_IS_SNOOZE = "extra_is_snooze"
 
         // Satu ID per jenis notif -> tidak menumpuk, tiap jenis saling menggantikan.
+        // 2001 firing dipakai alarm utama; test-goal pakai 2005 agar tidak saling bunuh.
+        // Goal-caller normal pakai 2000, dibatalkan AppGoalOverlayActivity.cancel(2000).
         const val NOTIFICATION_ID_FIRING = 2001
         const val NOTIFICATION_ID_COMPLETE = 2002
         const val NOTIFICATION_ID_MISSED = 2003
         const val NOTIFICATION_ID_SMART_WAKE_REMINDER = 2004
+        const val NOTIFICATION_ID_TEST_GOAL = 2005
 
         // Channel dipisah: firing/missed = HIGH (boleh bunyi + full-screen),
         // info (reminder/complete) = LOW (silent, tidak heads-up, tidak ramai).
@@ -732,6 +735,15 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         private fun setExactAlarm(context: Context, triggerAtMillis: Long, pendingIntent: PendingIntent) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                try {
+                    if (!alarmManager.canScheduleExactAlarms()) {
+                        Log.w("AlarmReceiver", "Exact alarm not granted, using inexact fallback")
+                        alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+                        return
+                    }
+                } catch (_: Exception) {}
+            }
             try {
                 alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
             } catch (e2: Exception) {

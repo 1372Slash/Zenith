@@ -239,6 +239,15 @@ object PausePointDefaults {
 
 object PausePointEngine {
 
+    fun normalizeNfcId(raw: String): String =
+        raw.trim().uppercase().replace(":", "").replace(" ", "").replace("-", "")
+
+    fun hasUsableQrCodes(qrCodes: List<String>): Boolean =
+        qrCodes.any { it.trim().isNotEmpty() }
+
+    fun hasUsableNfcTags(nfcTagIds: List<String>): Boolean =
+        nfcTagIds.any { normalizeNfcId(it).isNotEmpty() }
+
     private fun pickVariant(variants: List<PausePointVariant>, fallback: List<PausePointVariant>): PausePointVariant {
         val pool = variants.ifEmpty { fallback }
         return if (pool.isNotEmpty()) pool.random() else PausePointVariant()
@@ -252,8 +261,8 @@ object PausePointEngine {
         cameraGranted: Boolean = true,
         nfcAvailable: Boolean = true
     ): Boolean = when (type) {
-        PausePointTaskType.QR_SCAN -> qrCodes.isNotEmpty() && cameraGranted
-        PausePointTaskType.NFC_SCAN -> nfcTagIds.isNotEmpty() && nfcAvailable
+        PausePointTaskType.QR_SCAN -> hasUsableQrCodes(qrCodes) && cameraGranted
+        PausePointTaskType.NFC_SCAN -> hasUsableNfcTags(nfcTagIds) && nfcAvailable
         PausePointTaskType.CHOOSE_APP -> goalPackageNames.isNotEmpty()
         else -> true
     }
@@ -292,8 +301,8 @@ object PausePointEngine {
         val filteredTypes = enabledTypes
             .filter { type ->
                 when (type) {
-                    PausePointTaskType.QR_SCAN -> qrCodes.isNotEmpty() && cameraGranted
-                    PausePointTaskType.NFC_SCAN -> nfcTagIds.isNotEmpty() && nfcAvailable
+                    PausePointTaskType.QR_SCAN -> hasUsableQrCodes(qrCodes) && cameraGranted
+                    PausePointTaskType.NFC_SCAN -> hasUsableNfcTags(nfcTagIds) && nfcAvailable
                     PausePointTaskType.CHOOSE_APP -> goalPackageNames.isNotEmpty()
                     else -> true
                 }
@@ -358,7 +367,7 @@ object PausePointEngine {
                         suggestedAppName = goalAppNames[randomGoal] ?: "a productive app"
                     )
                 } else {
-                    PausePointTask.Counting(targetNumber = 10, label = "deep breaths")
+                    PausePointTask.Waiting()
                 }
             }
         }

@@ -130,6 +130,38 @@ fun PermissionBottomSheet(
             if (!isGranted) cameraAsked = true
         }
     )
+    var calendarAsked by remember { mutableStateOf(false) }
+    val calendarPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            hasCalendar = isGranted
+            if (!isGranted) calendarAsked = true
+        }
+    )
+    fun openCalendarPermission() {
+        val permanentlyDenied = !hasCalendar && calendarAsked &&
+            (context as? Activity)?.let {
+                !ActivityCompat.shouldShowRequestPermissionRationale(it, android.Manifest.permission.READ_CALENDAR)
+            } == true
+        if (permanentlyDenied) {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", context.packageName, null)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } else {
+            try {
+                calendarAsked = true
+                calendarPermissionLauncher.launch(android.Manifest.permission.READ_CALENDAR)
+            } catch (_: Exception) {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            }
+        }
+    }
     val cameraPermanentlyDenied = !hasCamera && cameraAsked &&
         (context as? Activity)?.let {
             !ActivityCompat.shouldShowRequestPermissionRationale(it, android.Manifest.permission.CAMERA)
@@ -368,13 +400,7 @@ fun PermissionBottomSheet(
                         title = "Calendar Access",
                         description = "Show current calendar event during app delay",
                         isGranted = hasCalendar,
-                        onClick = {
-                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                data = Uri.fromParts("package", context.packageName, null)
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            context.startActivity(intent)
-                        },
+                        onClick = { openCalendarPermission() },
                         icon = Icons.Outlined.CalendarMonth,
                         position = GroupPosition.Middle,
                         isInsideCollapse = true

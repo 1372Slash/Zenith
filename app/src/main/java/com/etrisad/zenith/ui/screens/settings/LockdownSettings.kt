@@ -95,10 +95,15 @@ fun LockdownSettings(
             }
 
             if (preferences.lockdownEnabled) {
+                val toastContext = androidx.compose.ui.platform.LocalContext.current
+                val inLockdownNow = remember(preferences, currentTime) {
+                    preferences.isInLockdown()
+                }
                 LockdownStatus(
                     startTimeStr = preferences.lockdownStartTime,
                     endTimeStr = preferences.lockdownEndTime,
-                    currentTime = currentTime
+                    currentTime = currentTime,
+                    selectedDays = preferences.lockdownDays
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -106,8 +111,28 @@ fun LockdownSettings(
                 TimeSelectionRow(
                     startTime = preferences.lockdownStartTime,
                     endTime = preferences.lockdownEndTime,
-                    onStartTimeClick = { showStartTimePicker = true },
-                    onEndTimeClick = { showEndTimePicker = true }
+                    onStartTimeClick = {
+                        if (inLockdownNow) {
+                            android.widget.Toast.makeText(
+                                toastContext,
+                                "Cannot change time during lockdown",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            showStartTimePicker = true
+                        }
+                    },
+                    onEndTimeClick = {
+                        if (inLockdownNow) {
+                            android.widget.Toast.makeText(
+                                toastContext,
+                                "Cannot change time during lockdown",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            showEndTimePicker = true
+                        }
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -115,8 +140,16 @@ fun LockdownSettings(
                 DaysSelectionCard(
                     selectedDays = preferences.lockdownDays,
                     onDaysChange = { days ->
-                        coroutineScope.launch {
-                            preferencesRepository.setLockdownDays(days)
+                        if (inLockdownNow) {
+                            android.widget.Toast.makeText(
+                                toastContext,
+                                "Cannot change days during lockdown",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            coroutineScope.launch {
+                                preferencesRepository.setLockdownDays(days)
+                            }
                         }
                     },
                     containerColor = containerColor,
@@ -302,15 +335,35 @@ fun LockdownToggleCard(enabled: Boolean, onToggle: (Boolean) -> Unit) {
 fun LockdownStatus(
     startTimeStr: String,
     endTimeStr: String,
-    currentTime: LocalTime
+    currentTime: LocalTime,
+    selectedDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7)
 ) {
     val startTime = try { LocalTime.parse(startTimeStr) } catch (_: Exception) { LocalTime.of(22, 0) }
     val endTime = try { LocalTime.parse(endTimeStr) } catch (_: Exception) { LocalTime.of(7, 0) }
 
-    val isLockdown = if (endTime.isAfter(startTime)) {
+    val todayCalDay = remember(currentTime) {
+        java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK)
+    }
+    val yesterdayCalDay = remember(currentTime) {
+        val c = java.util.Calendar.getInstance()
+        c.add(java.util.Calendar.DATE, -1)
+        c.get(java.util.Calendar.DAY_OF_WEEK)
+    }
+    val inTimeWindow = if (endTime.isAfter(startTime)) {
         currentTime.isAfter(startTime) && currentTime.isBefore(endTime)
     } else {
         currentTime.isAfter(startTime) || currentTime.isBefore(endTime)
+    }
+    val isLockdown = if (endTime.isAfter(startTime)) {
+        todayCalDay in selectedDays && inTimeWindow
+    } else {
+        if (currentTime.isAfter(startTime)) {
+            todayCalDay in selectedDays
+        } else if (currentTime.isBefore(endTime)) {
+            yesterdayCalDay in selectedDays
+        } else {
+            false
+        }
     }
 
     val (label, remainingText, progressValue) = remember(currentTime, startTime, endTime, isLockdown) {

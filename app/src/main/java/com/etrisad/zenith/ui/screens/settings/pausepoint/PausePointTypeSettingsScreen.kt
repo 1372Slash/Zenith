@@ -97,7 +97,15 @@ fun PausePointTypeSettingsScreen(
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         item {
-            PausePointTypeHeader(taskType, variantCount = variants.size)
+            val headerCount = when (taskType) {
+                PausePointTaskType.QR_SCAN -> preferences.pausePointQrCodes.count { it.trim().isNotEmpty() }
+                PausePointTaskType.NFC_SCAN -> preferences.pausePointNfcTagIds.count {
+                    com.etrisad.zenith.ui.components.pausepoint.PausePointEngine.normalizeNfcId(it).isNotEmpty()
+                }
+                PausePointTaskType.CHOOSE_APP -> -1
+                else -> variants.size
+            }
+            PausePointTypeHeader(taskType, variantCount = headerCount)
             if (BuildConfig.DEBUG) {
                 Spacer(modifier = Modifier.height(16.dp))
                 PausePointTestButton(onClick = launchTest)
@@ -249,6 +257,11 @@ private fun PausePointTypeHeader(taskType: PausePointTaskType, variantCount: Int
         ) {
             Text(
                 text = when {
+                    variantCount < 0 -> "Uses goal apps automatically"
+                    taskType == com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType.QR_SCAN ->
+                        if (variantCount == 1) "1 saved code" else "$variantCount saved codes"
+                    taskType == com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType.NFC_SCAN ->
+                        if (variantCount == 1) "1 saved tag" else "$variantCount saved tags"
                     variantCount == 0 -> "Default value"
                     variantCount == 1 -> "1 sub task • picked randomly"
                     else -> "$variantCount sub tasks • picked randomly"

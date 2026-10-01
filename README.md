@@ -76,7 +76,11 @@
 - **Delay App**: Configurable delay timer before reopening protected apps to break automatic habits.
 - **Mindful Gateway**: Proactively interrupt all non-whitelisted apps with a mindful pause to prevent mindless scrolling.
 - **Bedtime Mode**: Automate your digital detox with customizable schedules, Wind Down notifications, and automatic Do Not Disturb.
-- **Focus Sessions / Smart Schedules**: Time-based app blocking with BLOCK and ALLOW modes, plus notification interception.
+- **Focus Sessions / Smart Schedules**: Time-based app blocking with BLOCK and ALLOW modes, plus notification interception (BLOCK schedules).
+- **Pomodoro**: Focus/break cycles with presets, pause/resume, session history and stats.
+- **Lockdown**: Restrict adding/editing/deleting shields, goals and schedules during set hours and days.
+- **Pause Point**: Mindful tasks before opening apps — waiting, breathing, walk, QR/NFC scan, number slide, switch, math, counting, typing, goal-app choice.
+- **Heatmap & History**: Long-term weekly/monthly/yearly summaries, per-app breakdown, week detail with delta, unlimited swipe-back history.
 - **Website Tracking & Shielding**: Track time spent on specific websites and apply shields to domains across 12+ browsers.
 - **Alarm System**: Multi-alarm with custom sounds, TTS, math challenge mode, gradual volume, and wake-up app launching.
 - **Eye Care**: 20-20-20 rule reminders with configurable work/rest durations.
@@ -86,6 +90,7 @@
 - **Early Kick**: Optional reminders or early ejection to help you transition out of apps before your limit expires.
 - **Interactive Widgets**: Keep track of your app streaks and daily focus progress with Material 3 Expressive home screen widgets.
 - **Streak System**: Track global, per-app, per-website, and bedtime streaks with recovery mechanisms.
+- **Level & Achievements**: XP, progressive avatar borders/titles, tiered achievements with global unlock banners.
 - **Notification Insights**: Daily focus recaps, weekly trend comparisons, and milestone celebrations.
 - **Backup & Restore**: Securely save your settings and schedules with automated periodic backups or manual exports.
 - **Expressive Design**: Fully compliant with Material Design 3 Expressive guidelines, featuring fluid motion, adaptive typography (GSFlex), and floating navigation components.
@@ -122,8 +127,7 @@ Without these, Zenith won't be able to track your usage or help you stay mindful
 
 1. **Usage Stats (`PACKAGE_USAGE_STATS`)**: This lets Zenith see how much time you spend in your apps so it can help you stick to your limits.
 2. **System Overlay (`SYSTEM_ALERT_WINDOW`)**: This allows Zenith to show a "Shield" or a timer over other apps when you've reached your limit or need a mindful pause.
-   - **Note for Android Go users**: Some Android Go devices do not allow granting this permission through settings. You may need to grant it via ADB:
-     `adb shell pm grant com.etrisad.zenith android.permission.SYSTEM_ALERT_WINDOW`
+   - **Note for Android Go users**: Some Android Go devices do not allow granting this permission through settings. Grant it from Settings > Apps > Zenith > Display over other apps (`Settings.ACTION_MANAGE_OVERLAY_PERMISSION`).
 3. **App List (`QUERY_ALL_PACKAGES`)**: Zenith needs this to show you a list of your apps so you can choose which ones you want to track or block.
 4. **Notifications (`POST_NOTIFICATIONS`)**: Used to send you goal reminders and keep you updated on your focus progress throughout the day.
 5. **Do Not Disturb (`ACCESS_NOTIFICATION_POLICY`)**: This allows Bedtime Mode to automatically silence your phone so you can get a better night's sleep.

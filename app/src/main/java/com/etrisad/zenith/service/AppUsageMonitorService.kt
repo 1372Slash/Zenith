@@ -91,8 +91,6 @@ class AppUsageMonitorService : Service() {
     private var lastCheckedDayDate: LocalDate? = null
     private var lastCheckedDayStart: Long = 0L
 
-    private var dndSetByApp = false
-    private var dndPreviousFilter: Int? = null
     private var lastCheckedDayTimestamp = 0L
     @Volatile
     private var isScreenOn = true
@@ -247,7 +245,7 @@ class AppUsageMonitorService : Service() {
                         action = "com.etrisad.zenith.action.TEST_GOAL_CALLER_FIRE"
                     }
                     val pendingIntent = PendingIntent.getBroadcast(
-                        this, 1003, alarmIntent,
+                        this, 9003, alarmIntent,
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
                     alarmManager.setAndAllowWhileIdle(
@@ -255,7 +253,7 @@ class AppUsageMonitorService : Service() {
                         System.currentTimeMillis() + 10 * 60 * 1000L,
                         pendingIntent
                     )
-                    Toast.makeText(this, "Test goal caller will fire in 10 minutes", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Test goal caller in 10 min", Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
                     Log.e("Zenith", "Failed to schedule test goal caller", e)
                 }
@@ -349,7 +347,7 @@ class AppUsageMonitorService : Service() {
             action = "com.etrisad.zenith.action.HEARTBEAT"
         }
         val pendingIntent = PendingIntent.getBroadcast(
-            this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            this, 9000, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val triggerAt = System.currentTimeMillis() + 2 * 60 * 60 * 1000L
         alarmManager.setWindow(android.app.AlarmManager.RTC, triggerAt, 15 * 60 * 1000L, pendingIntent)
@@ -363,7 +361,7 @@ class AppUsageMonitorService : Service() {
             action = "com.etrisad.zenith.action.SCREEN_OFF_GOAL_CHECK"
         }
         val pendingIntent = PendingIntent.getBroadcast(
-            this, 1001, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            this, 9001, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val interval = 15 * 60 * 1000L
         alarmManager.setAndAllowWhileIdle(
@@ -379,7 +377,7 @@ class AppUsageMonitorService : Service() {
             action = "com.etrisad.zenith.action.SCREEN_OFF_GOAL_CHECK"
         }
         val pendingIntent = PendingIntent.getBroadcast(
-            this, 1001, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            this, 9001, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         alarmManager.cancel(pendingIntent)
     }
@@ -653,10 +651,10 @@ class AppUsageMonitorService : Service() {
                     AppGoalOverlayActivity.EXTRA_PACKAGE_NAMES,
                     ArrayList(goals.map { it.packageName })
                 )
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             }
             val pendingIntent = PendingIntent.getActivity(
-                this, 0, intent,
+                this, 9100, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
@@ -684,7 +682,7 @@ class AppUsageMonitorService : Service() {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                 }
                 val wakePendingIntent = PendingIntent.getActivity(
-                    this, 1002, directIntent,
+                    this, 9101, directIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
                 val alarmManager = getSystemService(android.content.Context.ALARM_SERVICE) as AlarmManager
@@ -741,10 +739,10 @@ class AppUsageMonitorService : Service() {
                 AppGoalOverlayActivity.EXTRA_PACKAGE_NAMES,
                 arrayListOf(testPackageName)
             )
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
         }
         val pendingIntent = PendingIntent.getActivity(
-            this, 2000, intent,
+            this, 9102, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -761,7 +759,7 @@ class AppUsageMonitorService : Service() {
             builder.setTimeoutAfter(5000L)
         }
 
-        manager.notify(2001, builder.build())
+        manager.notify(2005, builder.build())
 
         if (!isScreenOn) {
             val directIntent = Intent(this, AppGoalOverlayActivity::class.java).apply {
@@ -772,7 +770,7 @@ class AppUsageMonitorService : Service() {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             }
             val wakePendingIntent = PendingIntent.getActivity(
-                this, 1004, directIntent,
+                this, 9103, directIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             val alarmManager = getSystemService(android.content.Context.ALARM_SERVICE) as AlarmManager
@@ -2271,37 +2269,7 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun updateDndAndWindDown(dnd: Boolean, windDown: Boolean) {
-        if (!notificationManager.isNotificationPolicyAccessGranted) return
-        try {
-            val current = notificationManager.currentInterruptionFilter
-            if (dnd) {
-                if (!dndSetByApp) {
-                    // Remember what was active before WE touch it - it could
-                    // be the user's own manual DND.
-                    dndPreviousFilter = current
-                    dndSetByApp = true
-                }
-                if (current != NotificationManager.INTERRUPTION_FILTER_PRIORITY) {
-                    notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
-                }
-            } else if (dndSetByApp) {
-                dndSetByApp = false
-                // Only undo what WE enabled. If the filter is no longer the
-                // one we set, the user changed DND themselves meanwhile, so
-                // leave their choice untouched. Otherwise restore exactly what
-                // was active before bedtime took over (not hardcoded ALL).
-                if (current == NotificationManager.INTERRUPTION_FILTER_PRIORITY) {
-                    notificationManager.setInterruptionFilter(
-                        dndPreviousFilter ?: NotificationManager.INTERRUPTION_FILTER_ALL
-                    )
-                }
-                dndPreviousFilter = null
-            }
-            // NOTE: when bedtime DND is off and we never enabled it, a manual
-            // DND (meeting mode etc.) is left completely untouched.
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        DndStateManager.applyBedtimeDnd(this, notificationManager, dnd)
     }
 
     private fun updateGracePeriodStatus(prefs: UserPreferences) {
@@ -2582,6 +2550,6 @@ class AppUsageMonitorService : Service() {
         private const val NOTIFICATION_ID = 101
         private const val NOTIFICATION_UPDATE_INTERVAL = 60000L
         private const val BEDTIME_CHANNEL_ID = "zenith_bedtime_channel"
-        private const val WIND_DOWN_NOTIFICATION_ID = 2001
+        private const val WIND_DOWN_NOTIFICATION_ID = 2006
     }
 }

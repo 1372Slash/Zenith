@@ -1970,16 +1970,24 @@ data class UserPreferences(
         if (!lockdownEnabled) return false
         val cal = Calendar.getInstance()
         val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
-        if (dayOfWeek !in lockdownDays) return false
         val nowMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
         val startParts = lockdownStartTime.split(":")
         val endParts = lockdownEndTime.split(":")
         val startMinutes = try { startParts[0].toInt() * 60 + startParts[1].toInt() } catch (_: Exception) { 22 * 60 }
         val endMinutes = try { endParts[0].toInt() * 60 + endParts[1].toInt() } catch (_: Exception) { 7 * 60 }
         return if (endMinutes > startMinutes) {
+            if (dayOfWeek !in lockdownDays) return false
             nowMinutes in startMinutes until endMinutes
         } else {
-            nowMinutes >= startMinutes || nowMinutes < endMinutes
+            if (nowMinutes >= startMinutes) {
+                dayOfWeek in lockdownDays
+            } else if (nowMinutes < endMinutes) {
+                val yesterday = cal.clone() as Calendar
+                yesterday.add(Calendar.DATE, -1)
+                yesterday.get(Calendar.DAY_OF_WEEK) in lockdownDays
+            } else {
+                false
+            }
         }
     }
 

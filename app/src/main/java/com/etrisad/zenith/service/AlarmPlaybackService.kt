@@ -143,18 +143,23 @@ class AlarmPlaybackService : Service() {
 
                 Log.d("AlarmPlayback", "playAlarmSound: alarmTime=$alarmTime gradualVolume=$gradualVolume gradualVolumeDuration=${gradualVolumeDuration}s alarmVolume=$alarmVolumeLevel vibrate=$vibrateEnabled ttsTalkAfter=${ttsTalkAfter}s ttsRepeat=$ttsRepeat")
 
-                if (!prefs.alarmSoundEnabled) return@launch
+                val soundOff = !prefs.alarmSoundEnabled || currentAlarm?.soundEnabled == false
+                val ttsEnabled = currentAlarm?.ttsEnabled ?: false
+                val ttsPhrase = currentAlarm?.ttsCustomPhrase
+                val ttsLanguage = currentAlarm?.ttsLanguage
+                if (soundOff) {
+                    withContext(Dispatchers.Main) {
+                        if (vibrateEnabled) startVibration()
+                        if (ttsEnabled) speakAlarmTime(ttsPhrase, ttsLanguage, talkAfterSeconds = ttsTalkAfter, repeatCount = ttsRepeat, intervalSeconds = ttsInterval)
+                    }
+                    return@launch
+                }
 
                 val soundUri = when {
-                    currentAlarm?.soundEnabled == false -> return@launch
                     currentAlarm?.soundUri != null -> currentAlarm.soundUri!!.toUri()
                     prefs.alarmSoundUri != null -> prefs.alarmSoundUri!!.toUri()
                     else -> android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM)
                 }
-
-                val ttsEnabled = currentAlarm?.ttsEnabled ?: false
-                val ttsPhrase = currentAlarm?.ttsCustomPhrase
-                val ttsLanguage = currentAlarm?.ttsLanguage
 
                 withContext(Dispatchers.Main) {
                     try {

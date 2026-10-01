@@ -1288,13 +1288,13 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
     // Fun single-tier
     AchievementDef(
         id = "midnight_oil", title = "Midnight Oil",
-        desc = "Burn after 23:00", icon = Icons.Outlined.DarkMode,
+        desc = "Active after midnight (00:00-04:00)", icon = Icons.Outlined.DarkMode,
         category = AchievementCategory.EXPLORER,
         thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Spotted once"))
     ),
     AchievementDef(
         id = "sunrise_club", title = "Sunrise Club",
-        desc = "Up before the world at 05:00", icon = Icons.Outlined.LightMode,
+        desc = "Up early (05:00-07:00)", icon = Icons.Outlined.LightMode,
         category = AchievementCategory.EXPLORER,
         thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Spotted once"))
     ),

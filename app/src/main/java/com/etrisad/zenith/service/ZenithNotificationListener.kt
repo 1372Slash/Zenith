@@ -82,14 +82,18 @@ class ZenithNotificationListener : NotificationListenerService() {
 
             for (schedule in activeSchedules) {
                 if (!schedule.interceptNotifications || schedule.mode != ScheduleMode.BLOCK) continue
+                val todayCalDay = try {
+                    java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK)
+                } catch (_: Exception) { -1 }
+                if (todayCalDay != -1 && todayCalDay !in schedule.activeDays) continue
 
                 val startTime = try { LocalTime.parse(schedule.startTime, timeFormatter) } catch (e: Exception) { null } ?: continue
                 val endTime = try { LocalTime.parse(schedule.endTime, timeFormatter) } catch (e: Exception) { null } ?: continue
 
                 val isCurrentlyActive = if (startTime.isBefore(endTime)) {
-                    currentTime.isAfter(startTime) && currentTime.isBefore(endTime)
+                    !currentTime.isBefore(startTime) && currentTime.isBefore(endTime)
                 } else {
-                    currentTime.isAfter(startTime) || currentTime.isBefore(endTime)
+                    !currentTime.isBefore(startTime) || currentTime.isBefore(endTime)
                 }
 
                 if (isCurrentlyActive && schedule.packageNames.contains(sbn.packageName)) {

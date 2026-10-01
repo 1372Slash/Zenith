@@ -91,7 +91,11 @@ fun PomodoroPuzzleContent(
     val currentOnComplete by rememberUpdatedState(onComplete)
     val currentOnCloseApp by rememberUpdatedState(onCloseApp)
 
-    val dragUses = if (shield?.type == FocusType.SHIELD) shield.currentPeriodUses else null
+    val dragUses = if (shield?.type == FocusType.SHIELD) effectivePeriodUses(
+        currentPeriodUses = shield.currentPeriodUses,
+        lastPeriodResetTimestamp = shield.lastPeriodResetTimestamp,
+        refreshPeriodMinutes = shield.refreshPeriodMinutes
+    ) else null
     val dragMaxUses = if (shield?.type == FocusType.SHIELD) shield.maxUsesPerPeriod else null
     val dragEmergency = if (shield?.type == FocusType.SHIELD) shield.emergencyUseCount else null
 
@@ -506,7 +510,7 @@ private fun BlockedAfterContent(appName: String, onCloseApp: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "$appName is blocked during your Deep Focus session.",
+            "$appName is blocked during your Pomodoro session.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp)

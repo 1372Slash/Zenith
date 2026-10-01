@@ -22,7 +22,7 @@ object AlarmTasksSchedulingHelper {
         }
 
         val pendingIntent = PendingIntent.getBroadcast(
-            context, 101, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            context, 9104, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager

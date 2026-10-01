@@ -1476,6 +1476,9 @@ fun MainScreen(
                     profileViewModel = profileViewModel,
                     navController = navController,
                     onOpenCenter = { showNotifCenter = true },
+                    onOpenAchievement = { defId ->
+                        navController.navigate(Screen.Achievements.createRoute(defId))
+                    },
                     modifier = Modifier.align(Alignment.TopCenter)
                 )
             }

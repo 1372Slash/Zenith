@@ -114,7 +114,11 @@ fun ShieldOverlay(
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    val dragUses = if (shield?.type == FocusType.SHIELD) shield.currentPeriodUses else null
+    val dragUses = if (shield?.type == FocusType.SHIELD) effectivePeriodUses(
+        currentPeriodUses = shield.currentPeriodUses,
+        lastPeriodResetTimestamp = shield.lastPeriodResetTimestamp,
+        refreshPeriodMinutes = shield.refreshPeriodMinutes
+    ) else null
     val dragMaxUses = if (shield?.type == FocusType.SHIELD) shield.maxUsesPerPeriod else null
     val dragEmergency = if (shield?.type == FocusType.SHIELD) shield.emergencyUseCount else null
 

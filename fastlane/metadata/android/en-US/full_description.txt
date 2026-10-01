@@ -11,8 +11,10 @@ Zenith is fully free and open-source. You can find the source code and report bu
     - Goal Pursuit: Targets for your productive applications
 - Comprehensive Tracking:
     - Session HUD: Floating overlay with real-time session countdown
-    - Detailed Usage Stats: Visualize your daily and weekly digital habits
+    - Detailed Usage Stats: Visualize your daily and weekly digital habits, long-term heatmap and history
     - Smart Schedules: Automate your focus periods
+    - Pomodoro, Lockdown, Pause Point, Bedtime, Grace Period, Eye Care, Website shielding
+    - Profile: Levels, achievements, streaks, widgets, backup and alarms
 - Built-in Mindfulness:
     - Emergency Use: Restricted access quota for critical moments
     - Privacy First: Operates locally with required permissions for core functionality

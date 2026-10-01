@@ -41,6 +41,14 @@ class GracePeriodViewModel(
 
     fun setGracePeriodEnabled(enabled: Boolean) {
         viewModelScope.launch {
+            if (!enabled) {
+                val prefs = userPreferences.value
+                val remaining = userPreferencesRepository.getGracePeriodCooldownRemaining(prefs)
+                if (remaining > 0L) {
+                    _editError.value = "Grace period can only be edited once per week. ${getCooldownText(prefs)}"
+                    return@launch
+                }
+            }
             userPreferencesRepository.setGracePeriodEnabled(enabled)
         }
     }

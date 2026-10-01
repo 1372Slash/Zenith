@@ -64,8 +64,6 @@ class ZenithService : AccessibilityService() {
 
     private var lastKickTime = 0L
     private var lastKickedPackage: String? = null
-    private var dndSetByApp = false
-    private var dndPreviousFilter: Int? = null
 
     private var monitoringJob: kotlinx.coroutines.Job? = null
     private var bypassCheckRunnable: Runnable? = null
@@ -86,7 +84,7 @@ class ZenithService : AccessibilityService() {
         var lastEventTime = 0L
         private var instance: ZenithService? = null
         const val BEDTIME_CHANNEL_ID = "zenith_bedtime_channel"
-        const val WIND_DOWN_NOTIFICATION_ID = 2001
+        const val WIND_DOWN_NOTIFICATION_ID = 2006
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -1507,29 +1505,7 @@ class ZenithService : AccessibilityService() {
     }
 
     private fun updateDndAndWindDown(dnd: Boolean, windDown: Boolean) {
-        if (!notificationManager.isNotificationPolicyAccessGranted) return
-        try {
-            val current = notificationManager.currentInterruptionFilter
-            if (dnd) {
-                if (!dndSetByApp) {
-                    dndPreviousFilter = current
-                    dndSetByApp = true
-                }
-                if (current != NotificationManager.INTERRUPTION_FILTER_PRIORITY) {
-                    notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
-                }
-            } else if (dndSetByApp) {
-                dndSetByApp = false
-                if (current == NotificationManager.INTERRUPTION_FILTER_PRIORITY) {
-                    notificationManager.setInterruptionFilter(
-                        dndPreviousFilter ?: NotificationManager.INTERRUPTION_FILTER_ALL
-                    )
-                }
-                dndPreviousFilter = null
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        DndStateManager.applyBedtimeDnd(this, notificationManager, dnd)
     }
 
     private fun checkSchedules(packageName: String): Boolean {

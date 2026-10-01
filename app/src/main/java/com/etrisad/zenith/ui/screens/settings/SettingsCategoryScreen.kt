@@ -383,7 +383,7 @@ fun SettingsCategoryScreen(
                                     action = "com.etrisad.zenith.action.TEST_GOAL_CALLER_FIRE"
                                 }
                                 val pendingIntent = android.app.PendingIntent.getBroadcast(
-                                    context, 1003, alarmIntent,
+                                    context, 9003, alarmIntent,
                                     android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
                                 )
                                 alarmManager.setAndAllowWhileIdle(

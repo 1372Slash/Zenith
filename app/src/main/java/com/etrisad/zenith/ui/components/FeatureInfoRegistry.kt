@@ -181,7 +181,7 @@ object FeatureInfoRegistry {
                 "An info card explaining the override behavior."
             ),
             FeatureInfoSections.tips(
-                "Plan a realistic window (e.g. lunch break) rather than toggling impulsively, disabling mid-session requires the 10-lever confirmation.",
+                "Plan a realistic window (max 2 hours, edits limited to once per week) rather than toggling impulsively; disabling mid-session requires the 10-lever confirmation.",
                 "Wrap-around times are supported, so windows can span midnight.",
                 "Combine with Lockdown if you want editing protected while grace period is off."
             )
@@ -243,7 +243,7 @@ object FeatureInfoRegistry {
             ),
             FeatureInfoSections.tips(
                 "Set lockdown for your most impulsive hours (e.g. late night).",
-                "Turning it on is easy on purpose; escaping takes 10 levers within 10 seconds.",
+                "Turning it on is easy on purpose; disabling takes 10 levers within 10 seconds, and time/days cannot be changed while active.",
                 "Combine with Grace Period so breaks stay planned, not improvised."
             )
         )
@@ -263,9 +263,9 @@ object FeatureInfoRegistry {
                 "Named presets you can save, load, and delete (e.g. 'Work', 'Study')."
             ),
             FeatureInfoSections.tips(
-                "Emptying the allowed-apps selection means every app is blocked during sessions.",
+                "Emptying the allowed-apps selection means every non-system app is blocked during sessions.",
                 "Ending a session early requires the 10-lever confirmation, commit before you start.",
-                "Try 'Pauseable Session' if you need legit interruptions without losing progress."
+                "Pause keeps app blocking on but lets notifications through; break has a 30 min cooldown."
             )
         )
     )
@@ -279,13 +279,13 @@ object FeatureInfoRegistry {
                 "You choose which task types may appear from the toggles below."
             ),
             FeatureInfoSections.whatYoullSee(
-                "Task type cards with individual switches (e.g. typing, QR scan).",
-                "For QR scan: how many codes are saved and a shortcut to Manage QR Codes.",
+                "Task type cards with individual switches (waiting, breathing, walk, QR/NFC scan, number slide, switch, math, counting, typing, goal-app choice).",
+                "For QR/NFC scan: how many codes/tags are saved and a shortcut to the QR/NFC setup screens.",
                 "The header switch quickly enables/disables the whole feature."
             ),
             FeatureInfoSections.tips(
                 "Enable multiple task types so the challenge stays unpredictable.",
-                "If you enable QR scanning, register codes first, otherwise the task cannot be satisfied.",
+                "If you enable QR/NFC scanning, register codes/tags first, otherwise the task cannot be satisfied.",
                 "Fewer enabled types = faster unblock, more types = stronger friction."
             )
         )
