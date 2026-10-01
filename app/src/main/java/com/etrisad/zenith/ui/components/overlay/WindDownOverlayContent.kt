@@ -76,7 +76,7 @@ fun WindDownOverlayContent(
                 delay(16)
             }
             showContent = false
-            delay(400)
+            delay(300)
             onCloseApp()
         } else {
             autoKickProgress.snapTo(0f)
@@ -125,14 +125,14 @@ fun WindDownOverlayContent(
                 delay(16)
             }
             showContent = false
-            delay(400)
+            delay(300)
             onCloseApp()
         }
     }
 
     val backgroundAlphaState = animateFloatAsState(
         targetValue = if (showContent) 0.6f else 0f,
-        animationSpec = tween(durationMillis = 400),
+        animationSpec = tween(durationMillis = 250, delayMillis = 120),
         label = "backgroundAlpha"
     )
 
@@ -153,7 +153,7 @@ fun WindDownOverlayContent(
         onCloseApp = {
             scope.launch {
                 showContent = false
-                delay(400)
+                delay(300)
                 onCloseApp()
             }
         }
@@ -172,14 +172,14 @@ fun WindDownOverlayContent(
                 onAllowUse = { minutes ->
                     scope.launch {
                         showContent = false
-                        delay(400)
+                        delay(300)
                         onAllowUse(minutes)
                     }
                 },
                 onCloseApp = {
                     scope.launch {
                         showContent = false
-                        delay(400)
+                        delay(300)
                         onCloseApp()
                     }
                 },
@@ -200,14 +200,14 @@ fun WindDownOverlayContent(
                 onAllowUse = { minutes ->
                     scope.launch {
                         showContent = false
-                        delay(400)
+                        delay(300)
                         onAllowUse(minutes)
                     }
                 },
                 onCloseApp = {
                     scope.launch {
                         showContent = false
-                        delay(400)
+                        delay(300)
                         onCloseApp()
                     }
                 },

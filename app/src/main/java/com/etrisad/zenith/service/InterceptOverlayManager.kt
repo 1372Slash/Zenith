@@ -124,7 +124,7 @@ class InterceptOverlayManager(
         fun hideActiveOverlayForNfcScan(): Boolean {
             val manager = activeInstance ?: return false
             if (!isShowing) return false
-            manager.hideOverlay()
+            manager.hideOverlay(animated = false)
             return true
         }
 
@@ -272,7 +272,7 @@ class InterceptOverlayManager(
                 return
             }
             
-            if (isShowing || overlayView != null) hideOverlay()
+            if (isShowing || overlayView != null) hideOverlay(animated = false)
             
             isShowing = true
             currentPackage = packageName
@@ -354,7 +354,7 @@ class InterceptOverlayManager(
                 return
             }
             
-            if (isShowing || overlayView != null) hideOverlay()
+            if (isShowing || overlayView != null) hideOverlay(animated = false)
             
             isShowing = true
             currentPackage = packageName
@@ -422,7 +422,7 @@ class InterceptOverlayManager(
                 return
             }
 
-            if (isShowing || overlayView != null) hideOverlay()
+            if (isShowing || overlayView != null) hideOverlay(animated = false)
 
             isShowing = true
             currentPackage = context.packageName
@@ -495,7 +495,7 @@ class InterceptOverlayManager(
                 return
             }
 
-            if (isShowing || overlayView != null) hideOverlay()
+            if (isShowing || overlayView != null) hideOverlay(animated = false)
 
             isShowing = true
             currentPackage = packageName
@@ -713,7 +713,7 @@ class InterceptOverlayManager(
         hideOverlay()
     }
 
-    fun hideOverlay() {
+    fun hideOverlay(animated: Boolean = true) {
         val viewToRemove: ComposeView?
         val lOwnerToDestroy: MyLifecycleOwner?
         val vStoreToClear: ViewModelStore?
@@ -748,12 +748,44 @@ class InterceptOverlayManager(
 
         if (Looper.myLooper() != Looper.getMainLooper()) {
             mainHandler.post {
-                removeOverlayViewImmediate(viewToRemove, lOwnerToDestroy, vStoreToClear)
+                if (animated) animateOutAndRemove(viewToRemove, lOwnerToDestroy, vStoreToClear)
+                else removeOverlayViewImmediate(viewToRemove, lOwnerToDestroy, vStoreToClear)
             }
             return
         }
 
-        removeOverlayViewImmediate(viewToRemove, lOwnerToDestroy, vStoreToClear)
+        if (animated) animateOutAndRemove(viewToRemove, lOwnerToDestroy, vStoreToClear)
+        else removeOverlayViewImmediate(viewToRemove, lOwnerToDestroy, vStoreToClear)
+    }
+
+    // Fade-only: sheet meluncur via exit-animation konten, scrim memudar via
+    // backgroundAlpha konten + fade ini. TIDAK slide whole-view agar scrim
+    // tidak ikut turun. withLayer agar tidak lag.
+    private fun animateOutAndRemove(
+        view: ComposeView,
+        lOwner: MyLifecycleOwner?,
+        vStore: ViewModelStore?
+    ) {
+        try {
+            view.animate()
+                .alpha(0f)
+                .setDuration(150)
+                .setInterpolator(android.view.animation.AccelerateInterpolator(1.2f))
+                .withLayer()
+                .withEndAction {
+                    removeOverlayViewImmediate(view, lOwner, vStore)
+                }
+                .start()
+            mainHandler.postDelayed({
+                try {
+                    if (view.parent != null) {
+                        removeOverlayViewImmediate(view, lOwner, vStore)
+                    }
+                } catch (_: Exception) {}
+            }, 600)
+        } catch (_: Exception) {
+            removeOverlayViewImmediate(view, lOwner, vStore)
+        }
     }
 
     private fun removeOverlayViewImmediate(
@@ -940,7 +972,7 @@ class InterceptOverlayManager(
                 return
             }
 
-            if (isShowing || overlayView != null) hideOverlay()
+            if (isShowing || overlayView != null) hideOverlay(animated = false)
 
             isShowing = true
             currentPackage = packageName
@@ -1005,7 +1037,7 @@ class InterceptOverlayManager(
     }
 
     fun destroy() {
-        hideOverlay()
+        hideOverlay(animated = false)
         managerScope.cancel()
         synchronized(this) {
             if (activeInstance === this) activeInstance = null

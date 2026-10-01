@@ -207,7 +207,7 @@ fun InterceptOverlayContent(
     var showSheet by remember { mutableStateOf(false) }
     val backgroundAlpha by animateFloatAsState(
         targetValue = if (showSheet) 0.6f else 0f,
-        animationSpec = tween(durationMillis = 400),
+        animationSpec = tween(durationMillis = 250, delayMillis = 120),
         label = "backgroundAlpha"
     )
 
@@ -221,7 +221,7 @@ fun InterceptOverlayContent(
     val closeOverlay: () -> Unit = {
         scope.launch {
             showSheet = false
-            delay(400)
+            delay(300)
             currentOnCloseApp()
         }
     }
@@ -481,7 +481,7 @@ fun ScheduleOverlayContent(
     var showSheet by remember { mutableStateOf(false) }
     val backgroundAlpha by animateFloatAsState(
         targetValue = if (showSheet) 0.6f else 0f,
-        animationSpec = tween(durationMillis = 400),
+        animationSpec = tween(durationMillis = 250, delayMillis = 120),
         label = "backgroundAlpha"
     )
 
@@ -495,7 +495,7 @@ fun ScheduleOverlayContent(
     val closeOverlay: () -> Unit = {
         scope.launch {
             showSheet = false
-            delay(400)
+            delay(300)
             currentOnCloseApp()
         }
     }

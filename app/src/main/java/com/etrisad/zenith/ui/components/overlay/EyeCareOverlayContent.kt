@@ -46,7 +46,7 @@ fun EyeCareOverlayContent(
         if (remainingSeconds <= 0) {
             delay(300)
             showContent = false
-            delay(400)
+            delay(300)
             onRestComplete()
             return@LaunchedEffect
         }
@@ -62,7 +62,7 @@ fun EyeCareOverlayContent(
         onCloseApp = {
             scope.launch {
                 showContent = false
-                delay(400)
+                delay(300)
                 onRestComplete()
             }
         }
