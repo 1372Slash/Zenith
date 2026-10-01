@@ -42,6 +42,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.ui.components.nfc.isNfcEnabled
+import com.etrisad.zenith.ui.components.nfc.isNfcSupported
+import com.etrisad.zenith.ui.components.nfc.openNfcSettings
 import com.etrisad.zenith.service.AppUsageMonitorService
 import com.etrisad.zenith.service.SharedMonitoringState
 import com.etrisad.zenith.util.canScheduleExactAlarms
@@ -82,6 +85,8 @@ fun PermissionBottomSheet(
     var hasNotificationPolicy by remember { mutableStateOf((context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted) }
     var hasNotificationListener by remember { mutableStateOf(isNotificationListenerEnabled(context)) }
     var hasCalendar by remember { mutableStateOf(hasCalendarPermission(context)) }
+    var hasNfcSupport by remember { mutableStateOf(isNfcSupported(context)) }
+    var hasNfcEnabled by remember { mutableStateOf(isNfcEnabled(context)) }
     var hasCamera by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) ==
@@ -176,6 +181,8 @@ fun PermissionBottomSheet(
                 hasNotificationPolicy = (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted
                 hasNotificationListener = isNotificationListenerEnabled(context)
                 hasCalendar = hasCalendarPermission(context)
+                hasNfcSupport = isNfcSupported(context)
+                hasNfcEnabled = isNfcEnabled(context)
                 hasCamera = ContextCompat.checkSelfPermission(
                     context,
                     android.Manifest.permission.CAMERA
@@ -382,6 +389,20 @@ fun PermissionBottomSheet(
                         isGranted = hasCamera,
                         onClick = { openCameraPermission() },
                         icon = Icons.Outlined.QrCodeScanner,
+                        position = GroupPosition.Middle,
+                        isInsideCollapse = true
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    PermissionItemRow(
+                        title = "NFC",
+                        description = when {
+                            !hasNfcSupport -> "Not supported on this device"
+                            hasNfcEnabled -> "Ready for NFC tag scan tasks"
+                            else -> "Turn on NFC for tag scan tasks"
+                        },
+                        isGranted = !hasNfcSupport || hasNfcEnabled,
+                        onClick = { if (hasNfcSupport) openNfcSettings(context) },
+                        icon = Icons.Outlined.Nfc,
                         position = GroupPosition.Bottom,
                         isInsideCollapse = true
                     )
