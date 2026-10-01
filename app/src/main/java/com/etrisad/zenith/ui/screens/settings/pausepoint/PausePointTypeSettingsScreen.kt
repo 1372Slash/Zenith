@@ -2,8 +2,16 @@ package com.etrisad.zenith.ui.screens.settings.pausepoint
 
 import android.provider.Settings
 import android.widget.Toast
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -13,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.Info
@@ -34,6 +43,9 @@ import com.etrisad.zenith.service.InterceptOverlayManager
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithButtonType
+import com.etrisad.zenith.ui.components.ZenithButtonWeighted
+import com.etrisad.zenith.ui.components.ZenithGroupedButton
+import com.etrisad.zenith.ui.components.pausepoint.MathOperator
 import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
 import com.etrisad.zenith.ui.components.pausepoint.PausePointVariant
 import kotlinx.coroutines.launch
@@ -171,6 +183,7 @@ private fun PausePointVariant.composesKey(): String =
         append(levers).append(';')
         append(maxOperand).append(';')
         append(target).append(';')
+        append(MathOperator.normalize(mathOperator)).append(';')
         append(label.length).append(':').append(label).append(';')
         append(text.length).append(':').append(text)
     }
@@ -371,6 +384,7 @@ private fun AddVariantEditor(
     var text by remember(taskType) { mutableStateOf("") }
     var switchTimeEnabled by remember(taskType) { mutableStateOf(false) }
     var switchTimeValue by remember(taskType) { mutableFloatStateOf(15f) }
+    var mathOperator by remember(taskType) { mutableStateOf(MathOperator.ADD) }
 
     val canAdd = when (taskType) {
         PausePointTaskType.TYPING -> text.isNotBlank()
@@ -470,7 +484,47 @@ private fun AddVariantEditor(
                         }
                         Switch(
                             checked = switchTimeEnabled,
-                            onCheckedChange = { switchTimeEnabled = it }
+                            onCheckedChange = { switchTimeEnabled = it },
+                            thumbContent = {
+                                val thumbSize by animateDpAsState(
+                                    targetValue = if (switchTimeEnabled) 28.dp else 24.dp,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMediumLow
+                                    ),
+                                    label = "thumb_size"
+                                )
+
+                                val iconColor by animateColorAsState(
+                                    targetValue = if (switchTimeEnabled) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                                    label = "switch_icon_color"
+                                )
+
+                                Box(
+                                    modifier = Modifier.size(thumbSize),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    AnimatedContent(
+                                        targetState = switchTimeEnabled,
+                                        transitionSpec = {
+                                            (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                    scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
+                                                .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                        scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
+                                        },
+                                        label = "switch_icon_anim"
+                                    ) { isChecked ->
+                                        Icon(
+                                            imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
+                                            tint = iconColor
+                                        )
+                                    }
+                                }
+                            }
                         )
                     }
                     if (switchTimeEnabled) {
@@ -485,14 +539,27 @@ private fun AddVariantEditor(
                         )
                     }
                 }
-                PausePointTaskType.MATH -> EditorSlider(
-                    title = "Max Operand",
-                    value = sliderValue,
-                    valueRange = 1f..100f,
-                    steps = 98,
-                    unit = "",
-                    onValueChange = { sliderValue = it }
-                )
+                PausePointTaskType.MATH -> {
+                    MathOperatorSelector(
+                        selected = mathOperator,
+                        onSelect = {
+                            mathOperator = it
+                            // Suggest gentler defaults for × / ÷ so sub-tasks stay solvable.
+                            if (it == MathOperator.MULTIPLY || it == MathOperator.DIVIDE) {
+                                if (sliderValue > 12f) sliderValue = 12f
+                            }
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    EditorSlider(
+                        title = "Max Operand",
+                        value = sliderValue,
+                        valueRange = 1f..100f,
+                        steps = 98,
+                        unit = "",
+                        onValueChange = { sliderValue = it }
+                    )
+                }
                 PausePointTaskType.COUNTING -> {
                     EditorSlider(
                         title = "Target Number",
@@ -553,7 +620,10 @@ private fun AddVariantEditor(
                                 levers = sliderValue.toInt(),
                                 seconds = if (switchTimeEnabled) switchTimeValue.toInt() else 0
                             )
-                            PausePointTaskType.MATH -> PausePointVariant(maxOperand = sliderValue.toInt())
+                            PausePointTaskType.MATH -> PausePointVariant(
+                                maxOperand = sliderValue.toInt(),
+                                mathOperator = mathOperator.symbol
+                            )
                             PausePointTaskType.COUNTING -> PausePointVariant(target = sliderValue.toInt(), label = label.trim())
                             PausePointTaskType.TYPING -> PausePointVariant(text = text.trim())
                             else -> PausePointVariant()
@@ -568,6 +638,46 @@ private fun AddVariantEditor(
                 size = ZenithButtonSize.Large,
                 enabled = canAdd
             )
+        }
+    }
+}
+
+@Composable
+private fun MathOperatorSelector(
+    selected: MathOperator,
+    onSelect: (MathOperator) -> Unit
+) {
+    Column {
+        Text(
+            text = "Operator",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        ZenithGroupedButton(size = ZenithButtonSize.Small) {
+            val ops = MathOperator.entries
+            ops.forEachIndexed { index, op ->
+                val isSelected = op == selected
+                val shape = when (index) {
+                    0 -> RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp, topEnd = 8.dp, bottomEnd = 8.dp)
+                    ops.lastIndex -> RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp, topStart = 8.dp, bottomStart = 8.dp)
+                    else -> RoundedCornerShape(8.dp)
+                }
+                ZenithButtonWeighted(
+                    onClick = { onSelect(op) },
+                    text = op.displaySymbol,
+                    type = ZenithButtonType.Filled,
+                    containerColor = if (isSelected) null else MaterialTheme.colorScheme.surfaceContainerHighest,
+                    contentColor = if (isSelected) null else MaterialTheme.colorScheme.primary,
+                    size = ZenithButtonSize.Small,
+                    selected = isSelected,
+                    shape = shape,
+                    isFirst = index == 0,
+                    isLast = index == ops.lastIndex,
+                    contentScaleEnabled = false
+                )
+            }
         }
     }
 }
@@ -611,7 +721,7 @@ private fun addEditorHint(taskType: PausePointTaskType): String = when (taskType
     PausePointTaskType.WALK -> "Pick a step count to add to the rotation"
     PausePointTaskType.NUMBER_SLIDE -> "Pick a grid size to add to the rotation"
     PausePointTaskType.SWITCH -> "Pick a lever count and an optional time limit"
-    PausePointTaskType.MATH -> "Pick a difficulty to add to the rotation"
+    PausePointTaskType.MATH -> "Pick an operator (+ − × ÷) and max operand for a new sub task"
     PausePointTaskType.COUNTING -> "Give it a name (like push-ups) or leave it plain"
     PausePointTaskType.TYPING -> "Write your own sentence to type"
     else -> ""
@@ -636,7 +746,10 @@ private fun variantSummary(taskType: PausePointTaskType, variant: PausePointVari
     PausePointTaskType.SWITCH ->
         if (variant.seconds > 0) "${variant.levers} lever puzzle • ${variant.seconds}s limit"
         else "${variant.levers} lever puzzle"
-    PausePointTaskType.MATH -> "Max operand ${variant.maxOperand}"
+    PausePointTaskType.MATH -> {
+        val op = MathOperator.fromSymbol(variant.mathOperator)
+        "${op.displaySymbol} • Max ${variant.maxOperand}"
+    }
     PausePointTaskType.COUNTING ->
         if (variant.label.isNotBlank()) "${variant.target} ${variant.label}" else "Count to ${variant.target}"
     PausePointTaskType.TYPING -> "\u201C${variant.text}\u201D"

@@ -91,7 +91,8 @@ sealed class PausePointTask {
     }
 
     data class Math(
-        val maxOperand: Int = 20
+        val maxOperand: Int = 20,
+        val operator: MathOperator = MathOperator.ADD
     ) : PausePointTask() {
         override val type get() = PausePointTaskType.MATH
         override val instruction get() = "Solve the math problem to continue"
@@ -134,6 +135,36 @@ sealed class PausePointTask {
     }
 }
 
+enum class MathOperator(val symbol: String, val displaySymbol: String) {
+    ADD("+", "+"),
+    SUBTRACT("-", "−"),
+    MULTIPLY("*", "×"),
+    DIVIDE(":", "÷");
+
+    fun apply(a: Int, b: Int): Int = when (this) {
+        ADD -> a + b
+        SUBTRACT -> a - b
+        MULTIPLY -> a * b
+        DIVIDE -> if (b != 0) a / b else 0
+    }
+
+    companion object {
+        fun fromSymbol(raw: String?): MathOperator {
+            if (raw.isNullOrBlank()) return ADD
+            val s = raw.trim()
+            return when (s) {
+                "+", "＋" -> ADD
+                "-", "−", "–", "—" -> SUBTRACT
+                "*", "x", "X", "×", "✕", "·" -> MULTIPLY
+                "/", ":", "÷", "／" -> DIVIDE
+                else -> ADD
+            }
+        }
+
+        fun normalize(raw: String?): String = fromSymbol(raw).symbol
+    }
+}
+
 data class PausePointVariant(
     val label: String = "",
     val text: String = "",
@@ -143,8 +174,13 @@ data class PausePointVariant(
     val size: Int = 0,
     val levers: Int = 0,
     val maxOperand: Int = 0,
-    val target: Int = 0
-)
+    val target: Int = 0,
+    // Math operator sub-task: "+", "-", "*", ":" (normalized, see MathOperator).
+    // Default "+" keeps legacy variants (penjumlahan) working.
+    val mathOperator: String = "+"
+) {
+    val resolvedMathOperator: MathOperator get() = MathOperator.fromSymbol(mathOperator)
+}
 
 data class PausePointConfig(
     val waitingVariants: List<PausePointVariant> = PausePointDefaults.waitingVariants,
@@ -177,7 +213,12 @@ object PausePointDefaults {
     val walkVariants = listOf(PausePointVariant(steps = 10))
     val numberSlideVariants = listOf(PausePointVariant(size = 3))
     val switchVariants = listOf(PausePointVariant(levers = 4))
-    val mathVariants = listOf(PausePointVariant(maxOperand = 20))
+    val mathVariants = listOf(
+        PausePointVariant(maxOperand = 20, mathOperator = "+"),
+        PausePointVariant(maxOperand = 20, mathOperator = "-"),
+        PausePointVariant(maxOperand = 12, mathOperator = "*"),
+        PausePointVariant(maxOperand = 12, mathOperator = ":")
+    )
     val countingVariants = listOf(PausePointVariant(target = 15))
     val typingVariants = PausePointTask.sentencePool.map { PausePointVariant(text = it) }
 
@@ -289,9 +330,13 @@ object PausePointEngine {
                     timeoutSeconds = v.seconds.takeIf { it > 0 }
                 )
             }
-            PausePointTaskType.MATH -> PausePointTask.Math(
-                maxOperand = pickVariant(config.mathVariants, PausePointDefaults.mathVariants).maxOperand.coerceAtLeast(1)
-            )
+            PausePointTaskType.MATH -> {
+                val v = pickVariant(config.mathVariants, PausePointDefaults.mathVariants)
+                PausePointTask.Math(
+                    maxOperand = v.maxOperand.coerceAtLeast(1),
+                    operator = MathOperator.fromSymbol(v.mathOperator)
+                )
+            }
             PausePointTaskType.COUNTING -> {
                 val v = pickVariant(config.countingVariants, PausePointDefaults.countingVariants)
                 PausePointTask.Counting(

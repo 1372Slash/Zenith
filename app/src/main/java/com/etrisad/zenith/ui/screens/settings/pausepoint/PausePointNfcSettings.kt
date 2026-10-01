@@ -1,5 +1,15 @@
 package com.etrisad.zenith.ui.screens.settings.pausepoint
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +24,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
@@ -319,7 +331,50 @@ private fun NfcStatusCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Switch(checked = scanningEnabled, onCheckedChange = onScanningChange)
+                    Switch(
+                        checked = scanningEnabled,
+                        onCheckedChange = onScanningChange,
+                        thumbContent = {
+                            val thumbSize by animateDpAsState(
+                                targetValue = if (scanningEnabled) 28.dp else 24.dp,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMediumLow
+                                ),
+                                label = "thumb_size"
+                            )
+
+                            val iconColor by animateColorAsState(
+                                targetValue = if (scanningEnabled) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                                label = "switch_icon_color"
+                            )
+
+                            Box(
+                                modifier = Modifier.size(thumbSize),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AnimatedContent(
+                                    targetState = scanningEnabled,
+                                    transitionSpec = {
+                                        (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
+                                            .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                    scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
+                                    },
+                                    label = "switch_icon_anim"
+                                ) { isChecked ->
+                                    Icon(
+                                        imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
+                                        tint = iconColor
+                                    )
+                                }
+                            }
+                        }
+                    )
                 }
             }
             if (lastScanned != null) {

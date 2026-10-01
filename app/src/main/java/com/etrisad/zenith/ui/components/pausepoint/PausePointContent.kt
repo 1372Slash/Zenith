@@ -1020,10 +1020,14 @@ private fun MathTask(
     onUserActivity: () -> Unit,
     onKeyboardFocusChange: (Boolean) -> Unit
 ) {
-    val a = remember { Random.nextInt(1, task.maxOperand + 1) }
-    val b = remember { Random.nextInt(1, task.maxOperand + 1) }
-    var answer by remember { mutableStateOf("") }
-    val isCorrect = answer.toIntOrNull() == a + b
+    val problem = remember(task.maxOperand, task.operator) {
+        generateMathProblem(task.maxOperand.coerceAtLeast(1), task.operator)
+    }
+    val a = problem.first
+    val b = problem.second
+    val correctAnswer = problem.third
+    var answer by remember(task.maxOperand, task.operator) { mutableStateOf("") }
+    val isCorrect = answer.toIntOrNull() == correctAnswer
     val focusRequester = remember { FocusRequester() }
     var fieldFocused by remember { mutableStateOf(false) }
     val windowFocused = LocalWindowInfo.current.isWindowFocused
@@ -1058,7 +1062,7 @@ private fun MathTask(
         ) {
             OperandCard(a)
             Text(
-                text = "+",
+                text = task.operator.displaySymbol,
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Black,
                 color = MaterialTheme.colorScheme.onSurface
@@ -1116,20 +1120,56 @@ private fun MathTask(
     }
 }
 
+private fun generateMathProblem(maxOperand: Int, operator: MathOperator): Triple<Int, Int, Int> {
+    val max = maxOperand.coerceAtLeast(1)
+    return when (operator) {
+        MathOperator.ADD -> {
+            val a = Random.nextInt(1, max + 1)
+            val b = Random.nextInt(1, max + 1)
+            Triple(a, b, a + b)
+        }
+        MathOperator.SUBTRACT -> {
+            var a = Random.nextInt(1, max + 1)
+            var b = Random.nextInt(1, max + 1)
+            if (b > a) {
+                val tmp = a
+                a = b
+                b = tmp
+            }
+            Triple(a, b, a - b)
+        }
+        MathOperator.MULTIPLY -> {
+            val a = Random.nextInt(1, max + 1)
+            val b = Random.nextInt(1, max + 1)
+            Triple(a, b, a * b)
+        }
+        MathOperator.DIVIDE -> {
+            // Ensure integer result: pick divisor + quotient, derive dividend.
+            val divisor = Random.nextInt(1, max + 1)
+            val quotient = Random.nextInt(1, max + 1)
+            val dividend = divisor * quotient
+            Triple(dividend, divisor, quotient)
+        }
+    }
+}
+
 @Composable
 private fun OperandCard(value: Int) {
     Box(
         modifier = Modifier
-            .size(width = 64.dp, height = 56.dp)
+            .widthIn(min = 64.dp)
+            .height(56.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = "$value",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Black,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1
         )
     }
 }
