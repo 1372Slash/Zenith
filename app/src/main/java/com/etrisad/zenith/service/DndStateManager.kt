@@ -2,6 +2,7 @@ package com.etrisad.zenith.service
 
 import android.app.NotificationManager
 import android.content.Context
+import java.util.Calendar
 
 object DndStateManager {
     private const val PREFS = "zenith_dnd_state"
@@ -43,10 +44,21 @@ object DndStateManager {
     }
 
     @Synchronized
+    private fun releaseOwnership(context: Context) {
+        owned = false
+        previous = null
+        persist(context)
+    }
+
+    @Synchronized
     fun applyBedtimeDnd(context: Context, nm: NotificationManager, wantDnd: Boolean) {
-        load(context.applicationContext)
+        val appContext = context.applicationContext
+        load(appContext)
         try {
-            if (!nm.isNotificationPolicyAccessGranted) return
+            if (!nm.isNotificationPolicyAccessGranted) {
+                if (owned == true) releaseOwnership(appContext)
+                return
+            }
             val current = try {
                 nm.currentInterruptionFilter
             } catch (_: Exception) {
@@ -55,9 +67,7 @@ object DndStateManager {
             if (wantDnd) {
                 if (owned == true) {
                     if (current != NotificationManager.INTERRUPTION_FILTER_PRIORITY) {
-                        try {
-                            nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
-                        } catch (_: Exception) {}
+                        releaseOwnership(appContext)
                     }
                     return
                 }
@@ -66,7 +76,7 @@ object DndStateManager {
                 }
                 previous = current
                 owned = true
-                persist(context.applicationContext)
+                persist(appContext)
                 try {
                     nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
                 } catch (_: Exception) {}
@@ -74,12 +84,85 @@ object DndStateManager {
                 owned = false
                 val toRestore = previous ?: NotificationManager.INTERRUPTION_FILTER_ALL
                 previous = null
-                persist(context.applicationContext)
+                persist(appContext)
                 if (current == NotificationManager.INTERRUPTION_FILTER_PRIORITY) {
                     try {
                         nm.setInterruptionFilter(toRestore)
                     } catch (_: Exception) {}
                 }
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun isBedtimeDndActiveNow(
+        bedtimeEnabled: Boolean,
+        bedtimeDndEnabled: Boolean,
+        startTime: String,
+        endTime: String,
+        days: Set<Int>,
+        nowMillis: Long = System.currentTimeMillis()
+    ): Boolean {
+        if (!bedtimeEnabled || !bedtimeDndEnabled) return false
+        return try {
+            val cal = Calendar.getInstance()
+            cal.timeInMillis = nowMillis
+            val day = cal.get(Calendar.DAY_OF_WEEK)
+            val nowMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+            val sp = startTime.split(":")
+            val ep = endTime.split(":")
+            val startMinutes = sp[0].toInt() * 60 + sp[1].toInt()
+            val endMinutes = ep[0].toInt() * 60 + ep[1].toInt()
+            if (endMinutes > startMinutes) {
+                day in days && nowMinutes in startMinutes until endMinutes
+            } else {
+                if (nowMinutes >= startMinutes) {
+                    day in days
+                } else if (nowMinutes < endMinutes) {
+                    cal.add(Calendar.DATE, -1)
+                    cal.get(Calendar.DAY_OF_WEEK) in days
+                } else {
+                    false
+                }
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    @Synchronized
+    fun reconcileWithPrefs(
+        context: Context,
+        bedtimeEnabled: Boolean,
+        bedtimeDndEnabled: Boolean,
+        startTime: String,
+        endTime: String,
+        days: Set<Int>
+    ) {
+        val appContext = context.applicationContext
+        load(appContext)
+        if (owned != true) return
+        try {
+            val nm = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            if (nm == null || !nm.isNotificationPolicyAccessGranted) {
+                releaseOwnership(appContext)
+                return
+            }
+            if (isBedtimeDndActiveNow(bedtimeEnabled, bedtimeDndEnabled, startTime, endTime, days)) {
+                return
+            }
+            val current = try {
+                nm.currentInterruptionFilter
+            } catch (_: Exception) {
+                return
+            }
+            owned = false
+            val toRestore = previous ?: NotificationManager.INTERRUPTION_FILTER_ALL
+            previous = null
+            persist(appContext)
+            if (current == NotificationManager.INTERRUPTION_FILTER_PRIORITY) {
+                try {
+                    nm.setInterruptionFilter(toRestore)
+                } catch (_: Exception) {}
             }
         } catch (_: Exception) {}
     }

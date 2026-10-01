@@ -21,6 +21,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class ZenithApplication : Application(), ImageLoaderFactory {
@@ -88,6 +89,20 @@ class ZenithApplication : Application(), ImageLoaderFactory {
         applicationScope.launch {
             try {
                 userPreferencesRepository.migrateAlarmIdsIfNeeded()
+            } catch (_: Exception) {}
+        }
+
+        applicationScope.launch {
+            try {
+                val prefs = userPreferencesRepository.userPreferencesFlow.first()
+                com.etrisad.zenith.service.DndStateManager.reconcileWithPrefs(
+                    this@ZenithApplication,
+                    prefs.bedtimeEnabled,
+                    prefs.bedtimeDndEnabled,
+                    prefs.bedtimeStartTime,
+                    prefs.bedtimeEndTime,
+                    prefs.bedtimeDays
+                )
             } catch (_: Exception) {}
         }
 

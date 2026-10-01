@@ -47,6 +47,16 @@ class BootCompletedReceiver : BroadcastReceiver() {
                     com.etrisad.zenith.worker.AlarmWatchdogWorker.enqueue(context)
                 } catch (_: Exception) {}
                 try {
+                    com.etrisad.zenith.service.DndStateManager.reconcileWithPrefs(
+                        context,
+                        prefs.bedtimeEnabled,
+                        prefs.bedtimeDndEnabled,
+                        prefs.bedtimeStartTime,
+                        prefs.bedtimeEndTime,
+                        prefs.bedtimeDays
+                    )
+                } catch (_: Exception) {}
+                try {
                     com.etrisad.zenith.ui.widget.GlobalStreakWidget().updateAll(context)
                     com.etrisad.zenith.ui.widget.AppStreakWidget().updateAll(context)
                     com.etrisad.zenith.ui.widget.TotalScreenTimeWidget().updateAll(context)
