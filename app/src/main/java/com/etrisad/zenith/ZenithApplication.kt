@@ -79,11 +79,26 @@ class ZenithApplication : Application(), ImageLoaderFactory {
         lastUiMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         if (!workersEnqueued) {
             workersEnqueued = true
-            com.etrisad.zenith.service.UsageSyncWorker.enqueue(this)
-            com.etrisad.zenith.worker.StreakRefreshWorker.enqueue(this)
-            com.etrisad.zenith.worker.NotificationInsightsWorker.scheduleDailyRecap(this)
-            com.etrisad.zenith.worker.NotificationInsightsWorker.scheduleWeeklyInsight(this)
-            com.etrisad.zenith.worker.AlarmWatchdogWorker.enqueue(this)
+            // Battery: gate periodic workers by prefs instead of always-on.
+            applicationScope.launch {
+                try {
+                    val prefs = userPreferencesRepository.userPreferencesFlow.first()
+                    com.etrisad.zenith.service.UsageSyncWorker.enqueue(this@ZenithApplication)
+                    com.etrisad.zenith.worker.StreakRefreshWorker.enqueue(this@ZenithApplication)
+                    if (prefs.dailyRecapEnabled) {
+                        com.etrisad.zenith.worker.NotificationInsightsWorker.scheduleDailyRecap(this@ZenithApplication)
+                    }
+                    if (prefs.weeklyInsightEnabled) {
+                        com.etrisad.zenith.worker.NotificationInsightsWorker.scheduleWeeklyInsight(this@ZenithApplication)
+                    }
+                    if (prefs.alarmMasterEnabled) {
+                        com.etrisad.zenith.worker.AlarmWatchdogWorker.enqueue(this@ZenithApplication)
+                    }
+                } catch (_: Exception) {
+                    // Fallback: keep essential sync alive if prefs read fails.
+                    try { com.etrisad.zenith.service.UsageSyncWorker.enqueue(this@ZenithApplication) } catch (_: Exception) {}
+                }
+            }
         }
 
         applicationScope.launch {
@@ -145,6 +160,11 @@ class ZenithApplication : Application(), ImageLoaderFactory {
         super.onTrimMemory(level)
         if (level >= TRIM_MEMORY_MODERATE) {
             coil.Coil.imageLoader(this).memoryCache?.clear()
+            try { TotalScreenTimeWidget.clearCache() } catch (_: Exception) {}
+            try { RemainingTargetWidget.clearCache() } catch (_: Exception) {}
+            try { PhoneFreeTimeWidget.clearCache() } catch (_: Exception) {}
+            try { GlobalStreakWidget.clearCache() } catch (_: Exception) {}
+            try { AppStreakWidget.clearCache() } catch (_: Exception) {}
         }
     }
 

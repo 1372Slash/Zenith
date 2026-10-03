@@ -59,8 +59,10 @@ fun QrScanner(
     val lastReportedTime = remember { AtomicReference(0L) }
     var bindError by remember { mutableStateOf<String?>(null) }
 
-    DisposableEffect(lifecycleOwner, permissionGranted) {
-        if (permissionGranted) {
+    // Battery: when inactive, do not bind camera preview at all.
+    // Previously preview kept streaming even with active=false (only decode skipped).
+    DisposableEffect(lifecycleOwner, permissionGranted, active) {
+        if (permissionGranted && active) {
             val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor()
             val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
             val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -155,7 +157,7 @@ fun QrScanner(
     }
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        if (permissionGranted) {
+        if (permissionGranted && active) {
             AndroidView(
                 factory = { previewView },
                 modifier = Modifier.fillMaxSize()

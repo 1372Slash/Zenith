@@ -112,7 +112,8 @@ fun BedtimeOverlayContent(
             val formattedTime = if (h > 0) "${h}h ${m}m" else "${m}m"
             
             value = Triple(progress, formattedTime, userPreferences.bedtimeEndTime)
-            delay(30000)
+            // Battery: Calendar-only calc, 60s is enough (was 30s).
+            delay(60_000L)
         }
     }
 

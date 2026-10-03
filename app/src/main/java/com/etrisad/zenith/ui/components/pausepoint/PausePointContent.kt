@@ -449,9 +449,10 @@ private fun NfcScanTask(
     }
 
     LaunchedEffect(Unit) {
+        // Battery: NFC toggle rarely changes; 3s is enough (was 1s).
         while (true) {
             nfcEnabled = isNfcEnabled(context)
-            delay(1000)
+            delay(3000)
         }
     }
 

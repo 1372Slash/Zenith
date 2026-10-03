@@ -91,7 +91,9 @@ class ZenithService : AccessibilityService() {
         if (intent?.action == "com.etrisad.zenith.action.REFRESH_DATA") {
             refreshService()
         }
-        return START_STICKY
+        // Battery: accessibility service is restarted by the system itself.
+        // START_NOT_STICKY avoids an extra resurrection when started via startService().
+        return START_NOT_STICKY
     }
 
     private fun refreshService() {
@@ -347,8 +349,17 @@ class ZenithService : AccessibilityService() {
     private fun startEventDrivenMonitoring() {
         monitoringJob = serviceScope.launch {
             while (true) {
-                delay(2_500L)
-                if (!AppStateHolder.isScreenOn.value) continue
+                // Battery: adaptive interval + screen-off backoff.
+                // Screen-off must sleep, not spin with `continue`.
+                if (!AppStateHolder.isScreenOn.value) {
+                    delay(30_000L)
+                    continue
+                }
+                val cfgDelay = try {
+                    SharedMonitoringState.performanceConfig.a11yActiveDelay
+                } catch (_: Exception) { 2_500L }
+                // Clamp to 2.5s..15s so MAX_RESPONSIVENESS cannot spin faster.
+                delay(cfgDelay.coerceIn(2_500L, 15_000L))
                 try {
                     val realPkg = queryCurrentForegroundApp()
                     if (realPkg != null && realPkg != lastForegroundApp && !InterceptOverlayManager.isSystemUiPackage(realPkg) && !isKeyboardApp(realPkg)) {
@@ -539,6 +550,10 @@ class ZenithService : AccessibilityService() {
     private fun startUrlPolling(browserPackage: String) {
         urlPollJob?.cancel()
         urlPollJob = serviceScope.launch(Dispatchers.IO) {
+            // Battery: cap URL polling to 10 minutes max per browser session.
+            // Previously `while(true)` polled 2x/sec for hours if browser stayed open.
+            val pollStart = System.currentTimeMillis()
+            val maxPollMs = 10 * 60 * 1000L
             try {
                 val firstDomain = websiteUrlTracker.extractFromActiveWindow(browserPackage)
                 if (firstDomain != null) {
@@ -557,8 +572,9 @@ class ZenithService : AccessibilityService() {
                         }
                     }
                 }
-                while (true) {
-                    delay(500)
+                while (System.currentTimeMillis() - pollStart < maxPollMs) {
+                    delay(2000)
+                    if (!AppStateHolder.isScreenOn.value) break
                     val d = websiteUrlTracker.extractFromActiveWindow(browserPackage)
                     if (d != null && d != WebsiteStateHolder.currentWebsiteDomain.value) {
                         withContext(Dispatchers.Main) {

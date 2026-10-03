@@ -66,7 +66,8 @@ class BedtimeViewModel(
         loadBedtimeHistory()
         viewModelScope.launch {
             userPreferences
-                .debounce(500)
+                // Battery: was 500ms — every prefs emit triggered full sync + 21-day Room reads.
+                .debounce(2000)
                 .collectLatest {
                     loadHourlyUsage()
                     loadBedtimeHistory()

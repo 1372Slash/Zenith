@@ -167,7 +167,10 @@ fun ScheduleOverlaySheetContent(
         val dayStartMinute = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartMinute
         var lastOfDay = 0L
         var cachedOfDay = 0L
+        val pollStart = System.currentTimeMillis()
         while (true) {
+            // Battery: cap overlay polling to 10 min max per overlay instance.
+            if (System.currentTimeMillis() - pollStart > 10 * 60 * 1000L) break
             val now = System.currentTimeMillis()
             if (now - lastOfDay > 60000) {
                 cachedOfDay = DateTimeUtils.getDayStartTime(now, dayStartHour, dayStartMinute)

@@ -741,13 +741,16 @@ fun CurrentEventPill(
     val eventProgress = remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(currentEvent) {
+        // Battery: was 100ms (10Hz) for a slow calendar progress bar. 1s is enough.
         while (true) {
             val now = System.currentTimeMillis()
             val duration = currentEvent.eventEndMillis - currentEvent.eventStartMillis
             eventProgress.floatValue = if (duration > 0) {
                 ((now - currentEvent.eventStartMillis).toFloat() / duration).coerceIn(0f, 1f)
             } else 0f
-            delay(100)
+            // Auto-stop when event ends to avoid infinite ticker.
+            if (now >= currentEvent.eventEndMillis) break
+            delay(1000)
         }
     }
 

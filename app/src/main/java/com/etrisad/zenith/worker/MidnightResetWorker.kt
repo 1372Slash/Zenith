@@ -22,14 +22,23 @@ class MidnightResetWorker(context: Context, params: WorkerParameters) : Coroutin
         val prefsRepo = UserPreferencesRepository(applicationContext)
         val prefs = prefsRepo.userPreferencesFlow.first()
 
-        val serviceIntent = Intent(applicationContext, com.etrisad.zenith.service.AppUsageMonitorService::class.java).apply {
-            action = ACTION_MIDNIGHT_RESET_SERVICE
+        // Battery: only wake the monitor service when there is real work.
+        // Previously midnight always forced a foreground start + reschedule.
+        val needsService = prefs.alarmMasterEnabled || prefs.bedtimeEnabled ||
+            prefs.eyeCareEnabled || prefs.usageGlimpseEnabled || prefs.pomodoroEnabled
+        if (needsService) {
+            val serviceIntent = Intent(applicationContext, com.etrisad.zenith.service.AppUsageMonitorService::class.java).apply {
+                action = ACTION_MIDNIGHT_RESET_SERVICE
+            }
+            try {
+                applicationContext.startForegroundService(serviceIntent)
+            } catch (_: Exception) {}
         }
-        try {
-            applicationContext.startForegroundService(serviceIntent)
-        } catch (_: Exception) {}
 
-        AlarmTasksSchedulingHelper.scheduleMidnightResetTask(applicationContext, prefs.dayStartHour, prefs.dayStartMinute)
+        // Only keep the daily chain alive when needed; otherwise let it die.
+        if (needsService) {
+            AlarmTasksSchedulingHelper.scheduleMidnightResetTask(applicationContext, prefs.dayStartHour, prefs.dayStartMinute)
+        }
         
         GlobalStreakWidget().updateAll(applicationContext)
         AppStreakWidget().updateAll(applicationContext)

@@ -53,7 +53,10 @@ class RemainingTargetWidget : GlanceAppWidget() {
     override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
 
     companion object {
-        private val bitmapCache = mutableMapOf<String, Bitmap>()
+        // Memory: bounded LRU (was unbounded mutableMapOf = leak per icon/shape).
+        private val bitmapCache = android.util.LruCache<String, Bitmap>(20)
+        @Volatile private var lastProvideMs = 0L
+        fun clearCache() { try { bitmapCache.evictAll() } catch (_: Exception) {} }
     }
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
@@ -218,7 +221,7 @@ class RemainingTargetWidget : GlanceAppWidget() {
     private fun createShapeBitmap(context: Context, sizeDp: Int, shape: RoundedPolygon, alpha: Int = 255): Bitmap {
         val uiMode = context.resources.configuration.uiMode
         val key = "remaining_${sizeDp}_${shape.hashCode()}_$uiMode"
-        bitmapCache[key]?.let { if (!it.isRecycled) return it }
+        bitmapCache.get(key)?.let { if (!it.isRecycled) return it }
         val density = context.resources.displayMetrics.density
         val sizePx = (sizeDp * density).toInt().coerceAtLeast(1)
         val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
@@ -228,7 +231,7 @@ class RemainingTargetWidget : GlanceAppWidget() {
         path.transform(matrix)
         val paint = Paint().apply { color = Color.WHITE; this.alpha = alpha; isAntiAlias = true; isFilterBitmap = true; style = Paint.Style.FILL }
         canvas.drawPath(path, paint)
-        bitmapCache[key] = bitmap
+        bitmapCache.put(key, bitmap)
         return bitmap
     }
 }

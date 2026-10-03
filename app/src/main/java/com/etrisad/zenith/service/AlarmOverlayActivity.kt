@@ -55,6 +55,7 @@ class AlarmOverlayActivity : ComponentActivity() {
 
     private var wakeLock: PowerManager.WakeLock? = null
     private var wakeLockRenewalJob: kotlinx.coroutines.Job? = null
+    private var autoDismissJob: kotlinx.coroutines.Job? = null
 
     @Volatile
     private var isAlarmActive = false
@@ -103,6 +104,16 @@ class AlarmOverlayActivity : ComponentActivity() {
         )
         wakeLock?.acquire(10 * 60 * 1000L)
         startWakeLockRenewal()
+        // Battery: auto-dismiss after 10 min so WakeLock + screen-on + playback
+        // cannot run forever when user leaves the phone.
+        autoDismissJob?.cancel()
+        autoDismissJob = lifecycleScope.launch {
+            delay(ALARM_AUTO_DISMISS_MS)
+            if (isAlarmActive) {
+                Log.w("ZenithAlarm", "Auto-dismissing alarm after 10min timeout")
+                stopAlarmAndFinish()
+            }
+        }
 
         setContent {
             key(restartKey) {
@@ -386,6 +397,8 @@ class AlarmOverlayActivity : ComponentActivity() {
 
     private fun stopAlarmAndFinish() {
         isAlarmActive = false
+        autoDismissJob?.cancel()
+        autoDismissJob = null
         wakeLockRenewalJob?.cancel()
         wakeLockRenewalJob = null
         try {
@@ -607,6 +620,7 @@ class AlarmOverlayActivity : ComponentActivity() {
         const val EXTRA_SNOOZE_COUNT = "extra_snooze_count"
         const val EXTRA_TEST_MATH_CHALLENGE = "extra_test_math_challenge"
         const val EXTRA_TEST_GRADUAL_VOLUME = "extra_test_gradual_volume"
+        const val ALARM_AUTO_DISMISS_MS = 10 * 60 * 1000L
 
         @Volatile
         var isShowing = false

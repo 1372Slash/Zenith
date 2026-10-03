@@ -199,6 +199,9 @@ class AppUsageMonitorService : Service() {
                     usageGlimpseJob?.cancel()
                     scheduleScreenOffGoalAlarm()
                     Log.w("ZenithAUMS", "SCREEN OFF: monitoring cancelled")
+                    // Battery: if nothing needs background work, let the service die
+                    // instead of keeping heartbeat/monitor alive.
+                    stopSelfIfIdle()
                 }
                     android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED -> {
                         AppStateHolder.isPowerSaveMode.value = powerManager.isPowerSaveMode
@@ -263,7 +266,35 @@ class AppUsageMonitorService : Service() {
                 serviceScope.launch { sendTestGoalCallerNotification() }
             }
         }
-        return START_STICKY
+        // Battery: only request restart when there is real monitoring work.
+        // Idle service (no shields/schedules/bedtime/pomodoro/glimpse/eyeCare/goals)
+        // must not be resurrected by the system.
+        return if (hasActiveMonitoringWork()) START_STICKY else START_NOT_STICKY
+    }
+
+    private fun hasActiveMonitoringWork(): Boolean {
+        val prefs = SharedMonitoringState.currentPreferences
+        if (SharedMonitoringState.allShieldsCache.isNotEmpty()) return true
+        if (SharedMonitoringState.activeSchedules.isNotEmpty()) return true
+        if (SharedMonitoringState.goalShieldsCache.any { it.isGoalCallerEnabled }) return true
+        if (SharedMonitoringState.isPomodoroActive) return true
+        if (prefs != null) {
+            if (prefs.bedtimeEnabled) return true
+            if (prefs.eyeCareEnabled) return true
+            if (prefs.usageGlimpseEnabled) return true
+            if (prefs.alarmMasterEnabled) return true
+            if (prefs.pomodoroEnabled &&
+                prefs.pomodoroSessionEndTimestamp > System.currentTimeMillis()
+            ) return true
+        }
+        return false
+    }
+
+    private fun stopSelfIfIdle() {
+        if (!hasActiveMonitoringWork() && !isScreenOn) {
+            try { cancelHeartbeatAlarm() } catch (_: Exception) {}
+            try { stopSelf() } catch (_: Exception) {}
+        }
     }
 
     private fun refreshData() {
@@ -342,6 +373,11 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun scheduleHeartbeatAlarm() {
+        // Battery: heartbeat chain must not run forever when idle.
+        if (!hasActiveMonitoringWork()) {
+            cancelHeartbeatAlarm()
+            return
+        }
         val alarmManager = getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
         val intent = Intent(this, ZenithHeartbeatReceiver::class.java).apply {
             action = "com.etrisad.zenith.action.HEARTBEAT"
@@ -351,6 +387,19 @@ class AppUsageMonitorService : Service() {
         )
         val triggerAt = System.currentTimeMillis() + 2 * 60 * 60 * 1000L
         alarmManager.setWindow(android.app.AlarmManager.RTC, triggerAt, 15 * 60 * 1000L, pendingIntent)
+    }
+
+    private fun cancelHeartbeatAlarm() {
+        try {
+            val alarmManager = getSystemService(android.content.Context.ALARM_SERVICE) as android.app.AlarmManager
+            val intent = Intent(this, ZenithHeartbeatReceiver::class.java).apply {
+                action = "com.etrisad.zenith.action.HEARTBEAT"
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                this, 9000, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            alarmManager.cancel(pendingIntent)
+        } catch (_: Exception) {}
     }
 
     private fun scheduleScreenOffGoalAlarm() {
@@ -987,6 +1036,15 @@ class AppUsageMonitorService : Service() {
                 } catch (t: Throwable) {
                     if (t is kotlinx.coroutines.CancellationException) throw t
                     logError(t)
+                }
+
+                // Battery: idle expiry — if no shields/schedules/goals/bedtime/pomodoro
+                // for 30 min, stop looping and let the service die.
+                val idleMinutes = (System.currentTimeMillis() - startTime) / 60_000L
+                if (idleMinutes >= 30 && !hasActiveMonitoringWork()) {
+                    cancelHeartbeatAlarm()
+                    try { stopSelf() } catch (_: Exception) {}
+                    break
                 }
 
                 delay(computeMonitoringDelay())

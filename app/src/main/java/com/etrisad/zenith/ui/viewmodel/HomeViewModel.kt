@@ -627,7 +627,7 @@ class HomeViewModel(
                         globalUsageFlow(),
                         prefsFlow
                     ) { usage, global, prefs -> buildObserverSnapshot(usage, global, prefs) }
-                        .debounce(2000).collect { forceUpdate ->
+                        .debounce(5000).distinctUntilChanged().collect { forceUpdate ->
                             try {
                                 refreshMutex.withLock {
                                     if (forceUpdate) _uiState.update { it.copy(isLoading = true) }
@@ -1715,7 +1715,8 @@ class HomeViewModel(
             while (true) {
                 try {
                     if (!isActive) {
-                        delay(5000)
+                        // Battery: background/inactive must sleep 30s, not 5s.
+                        delay(30_000L)
                         continue
                     }
                     cal.timeInMillis = System.currentTimeMillis()
@@ -1747,13 +1748,12 @@ class HomeViewModel(
                         }
                     }
                     val remainingToTarget = (currentTargetMinutes * 60 * 1000L - _uiState.value.totalScreenTime).coerceAtLeast(0L)
-                    // Clamped to >= 5s: with no target set (0) the old 2s floor ran
-                    // a full DB+system refresh forever, amplifying every refresh
-                    // race and draining battery.
+                    // Battery: throttled 15s/30s/60s (was 5s/8s/15s). Each tick does
+                    // full UsageStats parse + Room reads, so 5s interval = drain.
                     val interval = when {
-                        remainingToTarget < 30_000L -> 5000L
-                        remainingToTarget < 300_000L -> 8000L
-                        else -> 15000L
+                        remainingToTarget < 30_000L -> 15_000L
+                        remainingToTarget < 300_000L -> 30_000L
+                        else -> 60_000L
                     }
                     delay(interval)
                 } catch (e: kotlinx.coroutines.CancellationException) {

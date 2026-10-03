@@ -113,11 +113,26 @@ class PomodoroViewModel(
     private var timerJob: Job? = null
     private var suppressFocusRecord = false
 
+    override fun onCleared() {
+        timerJob?.cancel()
+        timerJob = null
+        super.onCleared()
+    }
+
     private fun startTimer() {
         if (timerJob?.isActive == true) return
         timerJob = viewModelScope.launch {
             while (true) {
                 kotlinx.coroutines.delay(1000)
+                // Battery: pause must not freeze the ticker forever.
+                // Auto-end session if paused longer than 30 minutes.
+                if (SharedMonitoringState.isPomodoroPaused &&
+                    System.currentTimeMillis() - SharedMonitoringState.pomodoroPauseTimestamp > 30 * 60 * 1000L
+                ) {
+                    endSession()
+                    timerJob = null
+                    return@launch
+                }
                 val now = System.currentTimeMillis()
                 val state = _uiState.value
                 val isActive = state.sessionEndTimestamp > now

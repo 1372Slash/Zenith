@@ -232,7 +232,8 @@ class FocusViewModel(
         viewModelScope.launch {
             while (true) {
                 if (!isActive) {
-                    delay(5000)
+                    // Battery: inactive must sleep 60s, not 5s.
+                    delay(60_000L)
                     continue
                 }
                 updateShieldedLists(allShields)

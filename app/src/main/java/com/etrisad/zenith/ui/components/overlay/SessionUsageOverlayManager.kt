@@ -444,7 +444,14 @@ class SessionUsageOverlayManager(
         session.timerJob?.cancel()
         session.timerJob = managerScope.launch {
             var lastUpdateMillis = System.currentTimeMillis()
+            // Battery: hard cap 12h per HUD session so a stuck session cannot tick forever.
+            val timerStart = System.currentTimeMillis()
+            val maxTimerMs = 12 * 60 * 60 * 1000L
             while (true) {
+                if (System.currentTimeMillis() - timerStart > maxTimerMs) {
+                    hideHUD(session.packageName)
+                    break
+                }
                 if (!session.isGoal && session.secondsLeftState.intValue <= 0) break
                 if (session.isGoal && session.secondsElapsedState.intValue >= session.totalSeconds) break
 

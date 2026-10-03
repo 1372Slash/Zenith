@@ -38,7 +38,10 @@ class GlobalStreakWidget : GlanceAppWidget() {
     override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
 
     companion object {
-        private val bitmapCache = mutableMapOf<String, Bitmap>()
+        // Memory: bounded LRU (was unbounded mutableMapOf = leak per icon/shape).
+        private val bitmapCache = android.util.LruCache<String, Bitmap>(20)
+        @Volatile private var lastProvideMs = 0L
+        fun clearCache() { try { bitmapCache.evictAll() } catch (_: Exception) {} }
     }
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
@@ -87,7 +90,7 @@ class GlobalStreakWidget : GlanceAppWidget() {
     ): Bitmap {
         val uiMode = context.resources.configuration.uiMode
         val cacheKey = "shape_${sizeDp}_${shape.hashCode()}_$uiMode"
-        bitmapCache[cacheKey]?.let { if (!it.isRecycled) return it }
+        bitmapCache.get(cacheKey)?.let { if (!it.isRecycled) return it }
 
         val density = context.resources.displayMetrics.density
         val sizePx = (sizeDp * density).toInt().coerceAtLeast(1)
@@ -107,7 +110,7 @@ class GlobalStreakWidget : GlanceAppWidget() {
         }
         canvas.drawPath(path, paint)
         
-        bitmapCache[cacheKey] = bitmap
+        bitmapCache.put(cacheKey, bitmap)
         return bitmap
     }
 

@@ -36,32 +36,50 @@ class BootCompletedReceiver : BroadcastReceiver() {
                 } else {
                     Log.d("BootReceiver", "Master switch OFF - skipping alarm reschedule after boot/update")
                 }
+                // Battery: only schedule/enqueue what is actually enabled.
+                // Previously midnight + watchdog 15min + all widgets ran on every boot/time-change.
+                val hasWidgets = try {
+                    androidx.glance.appwidget.GlanceAppWidgetManager(context)
+                        .getGlanceIds(com.etrisad.zenith.ui.widget.TotalScreenTimeWidget::class.java).isNotEmpty() ||
+                    androidx.glance.appwidget.GlanceAppWidgetManager(context)
+                        .getGlanceIds(com.etrisad.zenith.ui.widget.GlobalStreakWidget::class.java).isNotEmpty()
+                } catch (_: Exception) { false }
                 try {
-                    com.etrisad.zenith.util.AlarmTasksSchedulingHelper.scheduleMidnightResetTask(
-                        context,
-                        prefs.dayStartHour,
-                        prefs.dayStartMinute
-                    )
+                    if (prefs.alarmMasterEnabled || prefs.bedtimeEnabled) {
+                        com.etrisad.zenith.util.AlarmTasksSchedulingHelper.scheduleMidnightResetTask(
+                            context,
+                            prefs.dayStartHour,
+                            prefs.dayStartMinute
+                        )
+                    }
                 } catch (_: Exception) {}
                 try {
-                    com.etrisad.zenith.worker.AlarmWatchdogWorker.enqueue(context)
+                    if (prefs.alarmMasterEnabled) {
+                        com.etrisad.zenith.worker.AlarmWatchdogWorker.enqueue(context)
+                    } else {
+                        com.etrisad.zenith.worker.AlarmWatchdogWorker.cancel(context)
+                    }
                 } catch (_: Exception) {}
                 try {
-                    com.etrisad.zenith.service.DndStateManager.reconcileWithPrefs(
-                        context,
-                        prefs.bedtimeEnabled,
-                        prefs.bedtimeDndEnabled,
-                        prefs.bedtimeStartTime,
-                        prefs.bedtimeEndTime,
-                        prefs.bedtimeDays
-                    )
+                    if (prefs.bedtimeEnabled && prefs.bedtimeDndEnabled) {
+                        com.etrisad.zenith.service.DndStateManager.reconcileWithPrefs(
+                            context,
+                            prefs.bedtimeEnabled,
+                            prefs.bedtimeDndEnabled,
+                            prefs.bedtimeStartTime,
+                            prefs.bedtimeEndTime,
+                            prefs.bedtimeDays
+                        )
+                    }
                 } catch (_: Exception) {}
                 try {
-                    com.etrisad.zenith.ui.widget.GlobalStreakWidget().updateAll(context)
-                    com.etrisad.zenith.ui.widget.AppStreakWidget().updateAll(context)
-                    com.etrisad.zenith.ui.widget.TotalScreenTimeWidget().updateAll(context)
-                    com.etrisad.zenith.ui.widget.RemainingTargetWidget().updateAll(context)
-                    com.etrisad.zenith.ui.widget.PhoneFreeTimeWidget().updateAll(context)
+                    if (hasWidgets) {
+                        com.etrisad.zenith.ui.widget.GlobalStreakWidget().updateAll(context)
+                        com.etrisad.zenith.ui.widget.AppStreakWidget().updateAll(context)
+                        com.etrisad.zenith.ui.widget.TotalScreenTimeWidget().updateAll(context)
+                        com.etrisad.zenith.ui.widget.RemainingTargetWidget().updateAll(context)
+                        com.etrisad.zenith.ui.widget.PhoneFreeTimeWidget().updateAll(context)
+                    }
                 } catch (_: Exception) {}
             } catch (e: Exception) {
                 Log.e("BootReceiver", "Failed to reschedule alarms: ${e.message}", e)
