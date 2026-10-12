@@ -18,7 +18,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.preferences.ThemeConfig
@@ -70,16 +69,11 @@ fun InterceptBottomSheet(
 
         when {
             paletteId == "dynamic" -> {
-                val hsv = FloatArray(3)
-                android.graphics.Color.colorToHSV(currentScheme.primary.toArgb(), hsv)
-                val hue = hsv[0]
-                val tintSurface = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isDark) 0.28f else 0.08f, if (isDark) 0.12f else 0.97f)))
-                currentScheme.copy(
-                    surface = tintSurface,
-                    surfaceContainer = tintSurface,
-                    surfaceContainerLow = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isDark) 0.18f else 0.04f, if (isDark) 0.16f else 0.96f))),
-                    surfaceContainerHigh = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isDark) 0.38f else 0.12f, if (isDark) 0.24f else 0.9f)))
-                )
+                // Samakan dengan palette lain agar hierarki kontras flat berlaku juga
+                // untuk warna sistem (Material You). Seed = primary sistem sehingga
+                // ungu sistem tidak lagi menyatu (sheet 0.95 vs tombol 0.87 light,
+                // sheet 0.17 vs tombol 0.33 dark).
+                generateDynamicColorScheme(currentScheme.primary, isDark, currentScheme, isForPreview = false)
             }
             paletteId == "custom" -> {
                 val customSeed = Color(android.graphics.Color.HSVToColor(floatArrayOf(customHue, 0.6f, 0.55f)))

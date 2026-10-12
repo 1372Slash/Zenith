@@ -109,33 +109,41 @@ fun generateDynamicColorScheme(seed: Color, isDark: Boolean, currentScheme: Colo
         if (isDark) {
             if (isForPreview) 0.88f else 0.65f
         } else {
-            if (isForPreview) 0.75f else 0.45f
+            // Diturunkan 0.45 -> 0.40 agar spinner/angka waiting tetap terbaca
+            // di atas tombol disabled yang terang (flat, tanpa outline).
+            if (isForPreview) 0.75f else 0.40f
         }
     }
     val tertiaryHue = if (isMonochrome) hue else (hue + 60f) % 360f
     val tertiarySat = if (isMonochrome) 0f else (sat * 0.4f).coerceIn(0.1f, 0.4f)
     val tertiary = Color(android.graphics.Color.HSVToColor(floatArrayOf(tertiaryHue, tertiarySat, tertiaryV)))
 
-    val surfaceV = if (isDark) 0.12f else if (isForPreview) 0.98f else 0.97f
-    val surfaceSat = if (isMonochrome) 0f else if (isDark) (sat * 0.45f).coerceIn(0.12f, 0.32f) else if (isForPreview) (sat * 0.05f).coerceAtMost(0.04f) else (sat * 0.12f).coerceIn(0.02f, 0.08f)
+    // Hierarki flat (tanpa outline) agar tidak menyatu seperti bug ungu:
+    // light: surface (1.00, paling putih) > sheet/surfaceContainer (0.95)
+    //        > disabled/surfaceVariant (0.90) > enabled/secondaryContainer (0.87).
+    // dark:  surface (0.12) < sheet (0.17) < disabled (0.22) < enabled (0.33).
+    // Delta sheet vs enabled light >= 0.08, dark >= 0.16.
+    val surfaceV = if (isDark) 0.12f else if (isForPreview) 0.98f else 1.0f
+    val surfaceSat = if (isMonochrome) 0f else if (isDark) (sat * 0.45f).coerceIn(0.12f, 0.32f) else if (isForPreview) (sat * 0.05f).coerceAtMost(0.04f) else (sat * 0.05f).coerceAtMost(0.04f)
     val surface = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, surfaceSat, surfaceV)))
-    
+
     val surfaceContainerLowest = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isMonochrome) 0f else sat * 0.08f, if (isDark) 0.07f else 1.0f)))
     val surfaceContainerLow = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isMonochrome) 0f else sat * 0.18f, if (isDark) 0.15f else 0.96f)))
     val surfaceContainer = if (isForPreview) {
         Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isMonochrome) 0f else sat * 0.25f, if (isDark) 0.18f else 0.94f)))
     } else {
-        surface 
+        // Sheet dipisah dari surface agar tidak menyatu (dulu = surface).
+        Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isMonochrome) 0f else (sat * 0.20f).coerceIn(0.05f, 0.16f), if (isDark) 0.17f else 0.95f)))
     }
-    val surfaceContainerHigh = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isMonochrome) 0f else sat * 0.35f, if (isDark) 0.24f else 0.9f)))
+    val surfaceContainerHigh = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isMonochrome) 0f else (sat * 0.40f).coerceIn(0.12f, 0.30f), if (isDark) 0.24f else 0.88f)))
     val surfaceContainerHighest = surfaceContainerHigh.copy(alpha = 0.9f)
 
-    val secondaryContainerV = if (isDark) 0.25f else 0.92f
-    val secondaryContainerSat = if (isMonochrome) 0f else (sat * 0.3f).coerceIn(0.1f, 0.25f)
+    val secondaryContainerV = if (isDark) 0.33f else 0.87f
+    val secondaryContainerSat = if (isMonochrome) 0f else (sat * 0.45f).coerceIn(0.18f, 0.35f)
     val secondaryContainer = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, secondaryContainerSat, secondaryContainerV)))
 
-    val tertiaryContainerV = if (isDark) 0.25f else 0.92f
-    val tertiaryContainerSat = if (isMonochrome) 0f else (tertiarySat * 0.6f).coerceIn(0.1f, 0.25f)
+    val tertiaryContainerV = if (isDark) 0.33f else 0.87f
+    val tertiaryContainerSat = if (isMonochrome) 0f else (tertiarySat * 0.8f).coerceIn(0.16f, 0.32f)
     val tertiaryContainer = Color(android.graphics.Color.HSVToColor(floatArrayOf(tertiaryHue, tertiaryContainerSat, tertiaryContainerV)))
 
     val outlineVariantHue = (hue + 30f) % 360f
@@ -143,8 +151,8 @@ fun generateDynamicColorScheme(seed: Color, isDark: Boolean, currentScheme: Colo
     val outlineVariantV = if (isDark) 0.35f else 0.85f
     val outlineVariantColor = Color(android.graphics.Color.HSVToColor(floatArrayOf(outlineVariantHue, outlineVariantSat, outlineVariantV)))
 
-    val surfaceVariantSat = if (isMonochrome) 0f else (sat * 0.3f).coerceIn(0.08f, 0.18f)
-    val surfaceVariantV = if (isDark) 0.18f else 0.94f
+    val surfaceVariantSat = if (isMonochrome) 0f else (sat * 0.35f).coerceIn(0.10f, 0.22f)
+    val surfaceVariantV = if (isDark) 0.22f else 0.90f
     val surfaceVariantColor = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, surfaceVariantSat, surfaceVariantV)))
 
     return currentScheme.copy(
@@ -156,12 +164,13 @@ fun generateDynamicColorScheme(seed: Color, isDark: Boolean, currentScheme: Colo
         secondary = secondary,
         onSecondary = if (isDark) Color.Black else Color.White,
         secondaryContainer = if (isForPreview) secondary.copy(alpha = if (isDark) 0.25f else 0.2f) else secondaryContainer,
-        onSecondaryContainer = if (isForPreview) secondary else (if (isDark) secondary else Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, (secondaryContainerSat * 2f).coerceAtMost(0.8f), 0.3f)))),
-        
+        // Teks di atas tombol enabled digelapkan (V 0.30 -> 0.22, S min 0.40)
+        // agar kontras >= 4.5:1 di atas secondaryContainer baru yang lebih gelap.
+        onSecondaryContainer = if (isForPreview) secondary else (if (isDark) secondary else Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, (secondaryContainerSat * 2f).coerceIn(0.40f, 0.85f), 0.22f)))),
         tertiary = tertiary,
         onTertiary = if (isDark) Color.Black else Color.White,
         tertiaryContainer = if (isForPreview) tertiary.copy(alpha = if (isDark) 0.25f else 0.14f) else tertiaryContainer,
-        onTertiaryContainer = if (isForPreview) tertiary else (if (isDark) tertiary else Color(android.graphics.Color.HSVToColor(floatArrayOf(tertiaryHue, (tertiaryContainerSat * 2f).coerceAtMost(0.8f), 0.3f)))),
+        onTertiaryContainer = if (isForPreview) tertiary else (if (isDark) tertiary else Color(android.graphics.Color.HSVToColor(floatArrayOf(tertiaryHue, (tertiaryContainerSat * 2f).coerceIn(0.40f, 0.85f), 0.22f)))),
 
         surface = surface,
         onSurface = if (isDark) Color.White else Color.Black,
@@ -456,7 +465,9 @@ fun TotalUsagePill(totalGlobalUsageToday: Long, userPrefs: UserPreferences, modi
                 bottomEnd = cornerRadiusLarge
             )
         ) {
-            val separatorColor = MaterialTheme.colorScheme.surface
+            // Putih penuh agar garis pemisah tetap terlihat di atas primary/tertiary
+            // untuk semua seed (ungu, mint, dll). Tetap flat, bukan outline tombol.
+            val separatorColor = MaterialTheme.colorScheme.surfaceContainerLowest
             Box(
                 modifier = Modifier.drawBehind {
                     val progressWidth = size.width * fillRatio.coerceIn(0f, 1f)

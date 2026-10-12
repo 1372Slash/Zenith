@@ -33,7 +33,6 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -88,16 +87,9 @@ fun OverlayAppearanceScreen(
     val paletteScheme = remember(selectedPalette, isDark, baseScheme, customSeed) {
         when {
             selectedPalette.isDynamic -> {
-                val hsv = FloatArray(3)
-                android.graphics.Color.colorToHSV(baseScheme.primary.toArgb(), hsv)
-                val hue = hsv[0]
-                val tintSurface = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isDark) 0.28f else 0.08f, if (isDark) 0.12f else 0.97f)))
-                baseScheme.copy(
-                    surface = tintSurface,
-                    surfaceContainer = tintSurface,
-                    surfaceContainerLow = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isDark) 0.18f else 0.04f, if (isDark) 0.16f else 0.96f))),
-                    surfaceContainerHigh = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isDark) 0.38f else 0.12f, if (isDark) 0.24f else 0.9f)))
-                )
+                // Preview disamakan dengan overlay asli: pakai hierarki flat yang sama
+                // agar warna Dynamic (termasuk ungu) tidak menyatu di preview.
+                generateDynamicColorScheme(baseScheme.primary, isDark, baseScheme, isForPreview = false)
             }
             selectedPalette.id == "custom" -> generateDynamicColorScheme(customSeed, isDark, baseScheme, isForPreview = false)
             else -> generateDynamicColorScheme(selectedPalette.seed, isDark, baseScheme, isForPreview = false)
