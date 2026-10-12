@@ -83,6 +83,22 @@ class AlarmOverlayActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // Harus paling awal, sebelum start service/bind: overlay tampil DI ATAS
+        // lockscreen tanpa meminta unlock. SENGAJA tidak memanggil
+        // requestDismissKeyguard di sini — di HP dengan PIN/pola/sandi itu justru
+        // menaruh prompt kredensial sistem DI DEPAN overlay alarm, dan setelah
+        // unlock overlay tidak otomatis ke depan (user harus buka via
+        // recent-apps/notifikasi). Unlock hanya diminta saat user eksplisit
+        // membuka app lain (lihat requestUnlockForExternalLaunch).
+        setShowWhenLocked(true)
+        setTurnScreenOn(true)
+        @Suppress("DEPRECATION")
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+        )
+
         Log.d("ZenithAlarm", "AlarmOverlayActivity.onCreate STARTED")
         isShowing = true
         isAlarmActive = true
@@ -99,16 +115,12 @@ class AlarmOverlayActivity : ComponentActivity() {
         else AlarmPlaybackService.start(this, alarmTime)
         bindService(Intent(this, AlarmPlaybackService::class.java), connection, Context.BIND_AUTO_CREATE)
 
-        setShowWhenLocked(true)
-        setTurnScreenOn(true)
-        val keyguardManager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
-        keyguardManager.requestDismissKeyguard(this, null)
-
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        @Suppress("DEPRECATION")
         wakeLock = powerManager.newWakeLock(
-            PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+            PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
+                PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                PowerManager.ON_AFTER_RELEASE,
             "Zenith:AlarmWakeLock"
         )
         wakeLock?.acquire(10 * 60 * 1000L)
@@ -264,6 +276,11 @@ class AlarmOverlayActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         val newAlarmTime = intent.getStringExtra(EXTRA_ALARM_TIME) ?: return
+
+        // Re-fire saat instance sudah ada (mis. via full-screen intent kedua):
+        // pastikan tetap di atas lockscreen.
+        setShowWhenLocked(true)
+        setTurnScreenOn(true)
 
         if (newAlarmTime != alarmTime) {
             stopWakeUpTracking()
@@ -438,8 +455,11 @@ class AlarmOverlayActivity : ComponentActivity() {
                     }
                 }
                 val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+                @Suppress("DEPRECATION")
                 wakeLock = powerManager.newWakeLock(
-                    PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
+                        PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                        PowerManager.ON_AFTER_RELEASE,
                     "Zenith:AlarmWakeLock"
                 )
                 wakeLock?.acquire(10 * 60 * 1000L)
@@ -492,6 +512,20 @@ class AlarmOverlayActivity : ComponentActivity() {
         wakeLock = null
     }
 
+    /**
+     * Meminta sistem menampilkan layar unlock agar startActivity ke app/Settings
+     * lain bisa jalan dari atas lockscreen. Hanya dipanggil dari aksi eksplisit
+     * user — jangan dipakai otomatis saat alarm berbunyi.
+     */
+    private fun requestUnlockForExternalLaunch() {
+        try {
+            val keyguardManager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
+            if (keyguardManager.isKeyguardLocked) {
+                keyguardManager.requestDismissKeyguard(this, null)
+            }
+        } catch (_: Exception) { }
+    }
+
     private fun hasUsageAccess(): Boolean {
         return try {
             val appOps = getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
@@ -506,6 +540,9 @@ class AlarmOverlayActivity : ComponentActivity() {
     }
 
     private fun openUsageAccessSettings() {
+        // Membuka Settings butuh device ter-unlock: minta unlock HANYA atas aksi
+        // eksplisit user ini, bukan otomatis saat alarm berbunyi.
+        requestUnlockForExternalLaunch()
         try {
             startActivity(Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -542,6 +579,8 @@ class AlarmOverlayActivity : ComponentActivity() {
                 wakeUpTrackingActive = true
                 startWakeUpTracking(appPackages, durationSeconds)
             }
+            // Membuka app lain dari atas lockscreen butuh unlock dulu.
+            requestUnlockForExternalLaunch()
             try {
                 startActivity(intent)
             } catch (e: Exception) {
@@ -553,6 +592,7 @@ class AlarmOverlayActivity : ComponentActivity() {
             // info aplikasi agar user paham, bukan tombol mati.
             Log.w("ZenithAlarm", "Wake-up app $packageName tidak bisa dibuka")
             android.widget.Toast.makeText(this, "Aplikasi tidak dapat dibuka", android.widget.Toast.LENGTH_SHORT).show()
+            requestUnlockForExternalLaunch()
             try {
                 startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                     data = android.net.Uri.parse("package:$packageName")

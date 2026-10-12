@@ -89,11 +89,22 @@ class AlarmWatchdogWorker(
             val manager = applicationContext.getSystemService(NotificationManager::class.java)
 
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                if (manager.getNotificationChannel(channelId) == null) {
+                val existing = manager.getNotificationChannel(channelId)
+                if (existing == null) {
                     val channel = NotificationChannel(
                         channelId, "Alarm", NotificationManager.IMPORTANCE_HIGH
-                    ).apply { description = "Alarm alerts" }
+                    ).apply {
+                        description = "Alarm alerts"
+                        setBypassDnd(true)
+                        lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                    }
                     manager.createNotificationChannel(channel)
+                } else if (!existing.canBypassDnd() ||
+                    existing.lockscreenVisibility != android.app.Notification.VISIBILITY_PUBLIC
+                ) {
+                    existing.setBypassDnd(true)
+                    existing.lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                    manager.createNotificationChannel(existing)
                 }
             }
 
@@ -115,7 +126,9 @@ class AlarmWatchdogWorker(
                 .setSmallIcon(R.drawable.ic_flag)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setFullScreenIntent(pendingIntent, true)
+                .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                 builder.setTimeoutAfter(60_000L)

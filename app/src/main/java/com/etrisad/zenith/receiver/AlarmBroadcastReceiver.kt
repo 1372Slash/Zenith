@@ -100,6 +100,20 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             }
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
         }
+
+        // 1. Audio dulu, langsung dari receiver: di Android 12+ background activity
+        //    launch dari receiver saat layar mati/terkunci diblokir sistem, sehingga
+        //    mengandalkan Activity untuk memutar suara = alarm sunyi total.
+        //    Kalau FGS-start ditolak sistem (bukan exemption), abaikan — Activity
+        //    yang terbuka via full-screen intent akan memutar ulang.
+        try {
+            com.etrisad.zenith.service.AlarmPlaybackService.start(context, alarmTime)
+        } catch (e: Exception) {
+            Log.w("AlarmReceiver", "showAlarm: playback service start failed: ${e.message}")
+        }
+
+        // 2. Best-effort direct launch: jalan saat layar nyala/unlocked, diblokir
+        //    sistem saat terkunci — untuk kasus itu jalur (3) yang mengambil alih.
         Log.d("AlarmReceiver", "showAlarm: trying startActivity")
         try {
             context.startActivity(activityIntent)
@@ -108,12 +122,9 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             Log.w("AlarmReceiver", "showAlarm: startActivity failed: ${e.message}")
         }
 
+        // 3. Jalur lockscreen resmi: full-screen intent. Sistem yang memutuskan
+        //    membuka overlay di atas keyguard — bukan kita via requestDismiss.
         fireAlarmNotification(context, alarmTime, snoozeCount, activityIntent, alarmId)
-        // NOTE: scheduleWakeAlarm (+1s via AlarmManager.getActivity) sengaja dihapus.
-        // Itu memakai requestCode tetap 3002 untuk semua alarm (tabrakan), memicu
-        // onNewIntent ganda, dan di Android 12+ background activity launch diblokir
-        // sehingga hanya menambah churn. Full-screen intent pada notif 2001 sudah
-        // menjadi jalur wake yang benar.
     }
 
     private fun fireAlarmNotification(context: Context, alarmTime: String, snoozeCount: Int, activityIntent: Intent, alarmId: Long = 0L) {
@@ -121,6 +132,17 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             val channelId = CHANNEL_ID_FIRING
             val manager = context.getSystemService(NotificationManager::class.java)
             ensureFiringChannel(context)
+
+            // Android 14+: user bisa mencabut izin full-screen intent per-app; kalau
+            // dicabut, sistem mengabaikan setFullScreenIntent dan overlay tidak akan
+            // muncul di atas lockscreen (hanya heads-up/notif biasa).
+            if (Build.VERSION.SDK_INT >= 34) {
+                try {
+                    if (manager != null && !manager.canUseFullScreenIntent()) {
+                        Log.w("AlarmReceiver", "fireAlarmNotification: full-screen intent permission revoked, overlay may not show over lockscreen")
+                    }
+                } catch (_: Exception) { }
+            }
 
             // Request code unik per alarm agar tap notif membuka jam yang benar.
             // Dulu requestCode=0 untuk semua alarm sehingga PendingIntent saling timpa.
@@ -130,15 +152,20 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
+            // Ongoing + tidak auto-cancel: notif adalah pintu darurat membuka
+            // overlay (kasus sistem menahan FSI). Dihapus eksplisit saat alarm
+            // di-dismiss/snooze via cancelFiringNotification, jadi tidak nyangkut.
             val builder = NotificationCompat.Builder(context, channelId)
                 .setContentTitle(if (snoozeCount > 0) "Snoozed Alarm" else "Alarm")
                 .setContentText("It's $alarmTime!")
                 .setSmallIcon(R.drawable.ic_flag)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setFullScreenIntent(pendingIntent, true)
-                .setAutoCancel(true)
-                .setOngoing(false)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(false)
+                .setOngoing(true)
 
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                 builder.setTimeoutAfter(30_000L)
@@ -816,12 +843,25 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             try {
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
                 val manager = context.getSystemService(NotificationManager::class.java) ?: return
-                if (manager.getNotificationChannel(CHANNEL_ID_FIRING) == null) {
+                val existing = manager.getNotificationChannel(CHANNEL_ID_FIRING)
+                if (existing == null) {
                     manager.createNotificationChannel(
                         NotificationChannel(CHANNEL_ID_FIRING, "Alarm", NotificationManager.IMPORTANCE_HIGH).apply {
                             description = "Alarm alerts"
+                            // Alarm harus tembus Do Not Disturb dan terlihat di lockscreen,
+                            // kalau tidak full-screen intent tidak di-fire sistem.
+                            setBypassDnd(true)
+                            lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
                         }
                     )
+                } else if (!existing.canBypassDnd() ||
+                    existing.lockscreenVisibility != android.app.Notification.VISIBILITY_PUBLIC
+                ) {
+                    // Channel dibuat versi lama tanpa bypass-DND/visibility: patch agar
+                    // alarm lama yang update aplikasi ikut tembus lockscreen + DND.
+                    existing.setBypassDnd(true)
+                    existing.lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                    manager.createNotificationChannel(existing)
                 }
             } catch (_: Exception) { }
         }

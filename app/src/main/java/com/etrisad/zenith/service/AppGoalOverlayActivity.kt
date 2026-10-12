@@ -1,6 +1,5 @@
 package com.etrisad.zenith.service
 
-import android.app.KeyguardManager
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -50,10 +49,13 @@ class AppGoalOverlayActivity : ComponentActivity() {
 
         setShowWhenLocked(true)
         setTurnScreenOn(true)
-        val keyguardManager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
-        keyguardManager.requestDismissKeyguard(this, null)
-        
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        @Suppress("DEPRECATION")
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+        )
 
         setContent {
             val userPreferencesRepository = (application as ZenithApplication).userPreferencesRepository
