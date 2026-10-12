@@ -82,7 +82,7 @@
 - **Pause Point**: Mindful tasks before opening apps — waiting, breathing, walk, QR/NFC scan, number slide, switch, math, counting, typing, goal-app choice.
 - **Heatmap & History**: Long-term weekly/monthly/yearly summaries, per-app breakdown, week detail with delta, unlimited swipe-back history.
 - **Website Tracking & Shielding**: Track time spent on specific websites and apply shields to domains across 12+ browsers.
-- **Alarm System**: Multi-alarm with custom sounds, TTS, math challenge mode, gradual volume, and wake-up app launching.
+- **Alarm System**: Multi-alarm with custom sounds, TTS, Pause Point dismiss missions, gradual volume, and wake-up app launching.
 - **Eye Care**: 20-20-20 rule reminders with configurable work/rest durations.
 - **Grace Period**: Time windows where all apps become unblocked.
 - **Incentive Lock**: Progressively unlock shields as you complete goals through five tiers.

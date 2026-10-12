@@ -31,11 +31,13 @@ import com.etrisad.zenith.data.model.AlarmItem
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.receiver.AlarmBroadcastReceiver
+import com.etrisad.zenith.service.AlarmOverlayActivity
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithToggleButtonGroup
 import com.etrisad.zenith.ui.components.ZenithToggleOption
 import com.etrisad.zenith.ui.components.focus.AlarmItemSettingsBottomSheet
+import com.etrisad.zenith.ui.components.pausepoint.PausePointEngine
 import com.etrisad.zenith.ui.components.focus.SwipeableItemContainer
 import com.etrisad.zenith.ui.screens.bedtime.TimePickerDialog
 import kotlinx.coroutines.Dispatchers
@@ -455,8 +457,19 @@ fun AlarmScreen(
                 preventVolumeDrop = currentEditing.preventVolumeDrop,
                 wakeUpAppPackageNames = currentEditing.wakeUpAppPackageNames,
                 wakeUpAppDurationSeconds = currentEditing.wakeUpAppDurationSeconds,
+                dismissTaskTypeNames = currentEditing.dismissTaskTypeNames,
+                pausePointQrCodeCount = prefs.pausePointQrCodes.count { it.trim().isNotEmpty() },
+                pausePointNfcTagCount = prefs.pausePointNfcTagIds.count { PausePointEngine.normalizeNfcId(it).isNotEmpty() },
+                initialAlarmId = currentEditing.id,
+                onTestAlarm = { draft ->
+                    AlarmOverlayActivity.startTest(
+                        context,
+                        draft.timeString,
+                        preferencesRepository.serializeAlarms(listOf(draft))
+                    )
+                },
                 onDismiss = { editingAlarm = null },
-                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, gradualVolumeDurationSeconds, mathChallengeEnabled, alarmVolume, ttsEnabled, ttsCustomPhrase, ttsLanguage, ttsTalkAfterSeconds, ttsRepeatCount, ttsIntervalSeconds, preventVolumeDrop, wakeUpAppPackageNames, wakeUpAppDurationSeconds ->
+                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, gradualVolumeDurationSeconds, mathChallengeEnabled, alarmVolume, ttsEnabled, ttsCustomPhrase, ttsLanguage, ttsTalkAfterSeconds, ttsRepeatCount, ttsIntervalSeconds, preventVolumeDrop, wakeUpAppPackageNames, wakeUpAppDurationSeconds, dismissTaskTypeNames ->
                     val original = alarmList.find { it.id == currentEditing.id }
                     val timeChanged = original != null && (original.hour != currentEditing.hour || original.minute != currentEditing.minute)
                     val daysChanged = original != null && original.days != selectedDays
@@ -483,6 +496,7 @@ fun AlarmScreen(
                             preventVolumeDrop = preventVolumeDrop,
                             wakeUpAppPackageNames = wakeUpAppPackageNames,
                             wakeUpAppDurationSeconds = wakeUpAppDurationSeconds,
+                            dismissTaskTypeNames = dismissTaskTypeNames,
                             enabled = if (timeChanged || daysChanged) true else currentEditing.enabled
                         )
                     )
@@ -519,8 +533,19 @@ fun AlarmScreen(
                 preventVolumeDrop = currentNew.preventVolumeDrop,
                 wakeUpAppPackageNames = currentNew.wakeUpAppPackageNames,
                 wakeUpAppDurationSeconds = currentNew.wakeUpAppDurationSeconds,
+                dismissTaskTypeNames = currentNew.dismissTaskTypeNames,
+                pausePointQrCodeCount = prefs.pausePointQrCodes.count { it.trim().isNotEmpty() },
+                pausePointNfcTagCount = prefs.pausePointNfcTagIds.count { PausePointEngine.normalizeNfcId(it).isNotEmpty() },
+                initialAlarmId = currentNew.id,
+                onTestAlarm = { draft ->
+                    AlarmOverlayActivity.startTest(
+                        context,
+                        draft.timeString,
+                        preferencesRepository.serializeAlarms(listOf(draft))
+                    )
+                },
                 onDismiss = { newAlarm = null },
-                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, gradualVolumeDurationSeconds, mathChallengeEnabled, alarmVolume, ttsEnabled, ttsCustomPhrase, ttsLanguage, ttsTalkAfterSeconds, ttsRepeatCount, ttsIntervalSeconds, preventVolumeDrop, wakeUpAppPackageNames, wakeUpAppDurationSeconds ->
+                onSave = { name, soundUri, soundEnabled, autoRepeatEnabled, selectedDays, vibrateEnabled, snoozeDurationMinutes, snoozeMaxCount, gradualVolumeEnabled, gradualVolumeDurationSeconds, mathChallengeEnabled, alarmVolume, ttsEnabled, ttsCustomPhrase, ttsLanguage, ttsTalkAfterSeconds, ttsRepeatCount, ttsIntervalSeconds, preventVolumeDrop, wakeUpAppPackageNames, wakeUpAppDurationSeconds, dismissTaskTypeNames ->
                     preferencesRepository.addAlarm(
                         currentNew.copy(
                             name = name,
@@ -543,7 +568,8 @@ fun AlarmScreen(
                             ttsIntervalSeconds = ttsIntervalSeconds,
                             preventVolumeDrop = preventVolumeDrop,
                             wakeUpAppPackageNames = wakeUpAppPackageNames,
-                            wakeUpAppDurationSeconds = wakeUpAppDurationSeconds
+                            wakeUpAppDurationSeconds = wakeUpAppDurationSeconds,
+                            dismissTaskTypeNames = dismissTaskTypeNames
                         )
                     )
                     scope.launch(Dispatchers.IO) {
@@ -865,6 +891,15 @@ private fun AlarmListItem(
                         Icon(
                             imageVector = Icons.Outlined.Repeat,
                             contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (isHighlighted) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (alarm.dismissTaskTypeNames.isNotEmpty() || alarm.mathChallengeEnabled) {
+                        Icon(
+                            imageVector = Icons.Outlined.Extension,
+                            contentDescription = "Dismiss mission",
                             modifier = Modifier.size(20.dp),
                             tint = if (isHighlighted) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
                                     else MaterialTheme.colorScheme.onSurfaceVariant

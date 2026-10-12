@@ -151,7 +151,7 @@ object FeatureInfoRegistry {
         summary = "A full alarm clock built to get you out of bed, integrated with Zenith's anti-oversleep tooling.",
         sections = listOf(
             FeatureInfoSections.whatItDoes(
-                "Fires alarms with rich wake-up enforcement: math challenges, spoken phrases, gradual volume, and snooze limits.",
+                "Fires alarms with rich wake-up enforcement: pause-point dismiss missions, spoken phrases, gradual volume, and snooze limits.",
                 "Can auto-open selected 'wake up' apps when dismissed so you start your morning routine."
             ),
             FeatureInfoSections.whatYoullSee(

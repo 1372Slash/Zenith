@@ -4,6 +4,8 @@ import android.content.res.Configuration
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -14,8 +16,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.Calculate
 import androidx.compose.material.icons.outlined.Snooze
+import com.etrisad.zenith.ui.components.pausepoint.PausePointTask
+import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskContent
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -47,7 +50,7 @@ fun AlarmOverlayContent(
     onSnooze: () -> Unit = {},
     snoozeCount: Int = 0,
     snoozeMaxCount: Int = 3,
-    mathChallengeEnabled: Boolean = false,
+    dismissTask: PausePointTask? = null,
     wakeUpAppPackageNames: List<String> = emptyList(),
     wakeUpAppNames: Map<String, String> = emptyMap(),
     wakeUpAppDurationSeconds: Int = 120,
@@ -58,27 +61,13 @@ fun AlarmOverlayContent(
     wakeUpNeedsPermission: Boolean = false,
     onOpenUsageSettings: () -> Unit = {}
 ) {
-    var showMathChallenge by remember { mutableStateOf(false) }
-    var mathUserAnswer by remember { mutableStateOf("") }
-    var mathCorrect by remember { mutableStateOf(false) }
-    var mathA by remember { mutableStateOf(0) }
-    var mathB by remember { mutableStateOf(0) }
-    var mathError by remember { mutableStateOf(false) }
+    var showDismissTask by remember { mutableStateOf(false) }
+    var dismissTaskDone by remember(dismissTask) { mutableStateOf(false) }
     var showWakeUpSheet by remember { mutableStateOf(false) }
 
-    LaunchedEffect(showMathChallenge) {
-        if (showMathChallenge) {
-            mathA = (1..20).random()
-            mathB = (1..20).random()
-            mathUserAnswer = ""
-            mathCorrect = false
-            mathError = false
-        }
-    }
-
     fun handleDismiss(action: () -> Unit) {
-        if (mathChallengeEnabled && !showMathChallenge) {
-            showMathChallenge = true
+        if (dismissTask != null && !dismissTaskDone && !showDismissTask) {
+            showDismissTask = true
         } else if (wakeUpAppPackageNames.isNotEmpty() && !wakeUpComplete) {
             showWakeUpSheet = true
         } else {
@@ -86,21 +75,16 @@ fun AlarmOverlayContent(
         }
     }
 
-    fun handleMathSubmit() {
-        val answer = mathUserAnswer.toIntOrNull()
-        if (answer == mathA + mathB) {
-            mathCorrect = true
-            // Math + wake-up app bisa aktif bersamaan. Dulu solve math langsung
-            // dismiss dan melewati verifikasi app sepenuhnya. Sekarang lanjutkan
-            // ke wake-up sheet bila verifikasi app masih belum lengkap.
-            if (wakeUpAppPackageNames.isNotEmpty() && !wakeUpComplete) {
-                showMathChallenge = false
-                showWakeUpSheet = true
-            } else {
-                onDismiss()
-            }
+    fun handleMissionCompleted() {
+        dismissTaskDone = true
+        showDismissTask = false
+        // Math + wake-up app bisa aktif bersamaan. Dulu solve math langsung
+        // dismiss dan melewati verifikasi app sepenuhnya. Sekarang lanjutkan
+        // ke wake-up sheet bila verifikasi app masih belum lengkap.
+        if (wakeUpAppPackageNames.isNotEmpty() && !wakeUpComplete) {
+            showWakeUpSheet = true
         } else {
-            mathError = true
+            onDismiss()
         }
     }
 
@@ -364,15 +348,11 @@ fun AlarmOverlayContent(
             }
         }
 
-        if (showMathChallenge) {
-            MathChallengeOverlay(
-                mathA = mathA,
-                mathB = mathB,
-                mathUserAnswer = mathUserAnswer,
-                mathError = mathError,
-                onAnswerChange = { mathUserAnswer = it },
-                onSubmit = { handleMathSubmit() },
-                onDismiss = { showMathChallenge = false }
+        if (showDismissTask && dismissTask != null) {
+            DismissMissionSheet(
+                task = dismissTask,
+                onCompleted = { handleMissionCompleted() },
+                onBackToAlarm = { showDismissTask = false }
             )
         }
 
@@ -884,27 +864,23 @@ private fun AlarmInfoCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MathChallengeOverlay(
-    mathA: Int,
-    mathB: Int,
-    mathUserAnswer: String,
-    mathError: Boolean,
-    onAnswerChange: (String) -> Unit,
-    onSubmit: () -> Unit,
-    onDismiss: () -> Unit
+private fun DismissMissionSheet(
+    task: PausePointTask,
+    onCompleted: () -> Unit,
+    onBackToAlarm: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    fun dismissWithAnimation() {
+    fun closeThen(action: () -> Unit) {
         scope.launch {
-            sheetState.hide()
-            onDismiss()
+            try { sheetState.hide() } catch (_: Exception) { }
+            action()
         }
     }
 
     ModalBottomSheet(
-        onDismissRequest = { dismissWithAnimation() },
+        onDismissRequest = { onBackToAlarm() },
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp
@@ -913,12 +889,13 @@ private fun MathChallengeOverlay(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp)
                 .navigationBarsPadding()
         ) {
             Icon(
-                imageVector = Icons.Outlined.Calculate,
+                imageVector = task.type.icon,
                 contentDescription = null,
                 modifier = Modifier.size(56.dp),
                 tint = MaterialTheme.colorScheme.primary
@@ -927,7 +904,7 @@ private fun MathChallengeOverlay(
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "Math Challenge",
+                text = task.type.displayName,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Black,
                 color = MaterialTheme.colorScheme.onSurface
@@ -936,58 +913,25 @@ private fun MathChallengeOverlay(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Solve to dismiss the alarm",
+                text = "Complete the mission to dismiss the alarm",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            Text(
-                text = "$mathA + $mathB = ?",
-                style = MaterialTheme.typography.displayLarge,
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            OutlinedTextField(
-                value = mathUserAnswer,
-                onValueChange = { onAnswerChange(it.filter { c -> c.isDigit() }) },
-                modifier = Modifier
-                    .width(200.dp)
-                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp)),
-                textStyle = MaterialTheme.typography.headlineLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                ),
-                singleLine = true,
-                isError = mathError,
-                supportingText = if (mathError) {
-                    { Text("Wrong answer, try again") }
-                } else null,
-                shape = RoundedCornerShape(16.dp)
+            PausePointTaskContent(
+                task = task,
+                onTaskCompleted = { closeThen(onCompleted) }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             ZenithButton(
-                onClick = onSubmit,
+                onClick = { closeThen(onBackToAlarm) },
                 modifier = Modifier.fillMaxWidth(),
-                text = "Submit Answer",
-                type = ZenithButtonType.Filled,
-                size = ZenithButtonSize.ExtraLarge,
-                fillMaxWidth = true,
-                enabled = mathUserAnswer.isNotEmpty()
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            ZenithButton(
-                onClick = { dismissWithAnimation() },
-                modifier = Modifier.fillMaxWidth(),
-                text = "Cancel",
+                text = "Back to Alarm",
                 type = ZenithButtonType.Outlined,
                 size = ZenithButtonSize.ExtraLarge,
                 fillMaxWidth = true

@@ -30,6 +30,9 @@ import com.etrisad.zenith.data.preferences.ThemeConfig
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.receiver.AlarmBroadcastReceiver
 import com.etrisad.zenith.ui.components.AlarmOverlayContent
+import com.etrisad.zenith.ui.components.pausepoint.AlarmDismissTasks
+import com.etrisad.zenith.ui.components.pausepoint.PausePointEngine
+import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
 import com.etrisad.zenith.ui.theme.ZenithTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -63,6 +66,9 @@ class AlarmOverlayActivity : ComponentActivity() {
     private var alarmTime: String = "07:00"
     private var snoozeCount: Int = 0
     private var testMathChallenge: Boolean = false
+    // JSON draf AlarmItem untuk mode test: dipakai sebagai pengganti alarm
+    // tersimpan dan menandakan semua jalur keluar harus read-only.
+    private var testAlarmJson: String? = null
     private var testGradualVolume: Boolean = false
     private var restartKey by mutableIntStateOf(0)
 
@@ -85,9 +91,12 @@ class AlarmOverlayActivity : ComponentActivity() {
         Log.d("ZenithAlarm", "AlarmOverlayActivity.onCreate alarmTime=$alarmTime snoozeCount=$snoozeCount")
         snoozeCount = intent?.getIntExtra(EXTRA_SNOOZE_COUNT, 0) ?: 0
         testMathChallenge = intent?.getBooleanExtra(EXTRA_TEST_MATH_CHALLENGE, false) ?: false
+        testAlarmJson = intent?.getStringExtra(EXTRA_TEST_ALARM_JSON)
         testGradualVolume = intent?.getBooleanExtra(EXTRA_TEST_GRADUAL_VOLUME, false) ?: false
 
-        AlarmPlaybackService.start(this, alarmTime)
+        val testJson = testAlarmJson
+        if (testJson != null) AlarmPlaybackService.startTest(this, alarmTime, testJson)
+        else AlarmPlaybackService.start(this, alarmTime)
         bindService(Intent(this, AlarmPlaybackService::class.java), connection, Context.BIND_AUTO_CREATE)
 
         setShowWhenLocked(true)
@@ -122,8 +131,14 @@ class AlarmOverlayActivity : ComponentActivity() {
                     initial = UserPreferences()
                 )
 
-                val currentAlarm = remember(userPreferences.alarmsJson) {
-                    userPreferencesRepository.parseAlarms(userPreferences.alarmsJson)
+                val testAlarm = remember(testAlarmJson) {
+                    testAlarmJson?.let { json ->
+                        runCatching { userPreferencesRepository.parseAlarms(json).firstOrNull() }.getOrNull()
+                    }
+                }
+
+                val currentAlarm = remember(userPreferences.alarmsJson, testAlarm) {
+                    testAlarm ?: userPreferencesRepository.parseAlarms(userPreferences.alarmsJson)
                         .find { it.timeString == alarmTime }
                 }
 
@@ -148,6 +163,27 @@ class AlarmOverlayActivity : ComponentActivity() {
                 val wakeUpAppDurationSeconds = remember(currentAlarm, wakeUpAppPackageNames) {
                     if (wakeUpAppPackageNames.isEmpty()) 0
                     else (currentAlarm?.wakeUpAppDurationSeconds ?: 120).coerceIn(5, 600)
+                }
+
+                // Misi dismiss: satu tugas Pause Point acak dari tipe yang dipilih
+                // alarm ini, memakai konfigurasi Pause Point global (varian, kode
+                // QR, tag NFC). Dibangkitkan sekali per bunyi agar tidak berubah
+                // saat recompose. Test overlay memaksa MATH.
+                val dismissTaskTypes = remember(currentAlarm, testMathChallenge) {
+                    if (testMathChallenge) setOf(PausePointTaskType.MATH)
+                    else AlarmDismissTasks.effectiveTypes(
+                        currentAlarm?.dismissTaskTypeNames ?: emptySet(),
+                        currentAlarm?.mathChallengeEnabled ?: false
+                    )
+                }
+                val dismissTask = remember(dismissTaskTypes, alarmTime, userPreferences.pausePointConfig) {
+                    if (dismissTaskTypes.isEmpty()) null
+                    else PausePointEngine.generateTask(
+                        enabledTypes = dismissTaskTypes,
+                        config = userPreferences.pausePointConfig,
+                        qrCodes = userPreferences.pausePointQrCodes,
+                        nfcTagIds = userPreferences.pausePointNfcTagIds
+                    )
                 }
 
                 val darkTheme = when (userPreferences.themeConfig) {
@@ -194,8 +230,7 @@ class AlarmOverlayActivity : ComponentActivity() {
                         },
                         snoozeCount = snoozeCount,
                         snoozeMaxCount = currentAlarm?.snoozeMaxCount ?: 3,
-                        mathChallengeEnabled = if (testMathChallenge) testMathChallenge
-                        else currentAlarm?.mathChallengeEnabled ?: false,
+                        dismissTask = dismissTask,
                         wakeUpAppPackageNames = wakeUpAppPackageNames,
                         wakeUpAppNames = wakeUpAppNames,
                         wakeUpAppDurationSeconds = wakeUpAppDurationSeconds,
@@ -236,15 +271,24 @@ class AlarmOverlayActivity : ComponentActivity() {
         alarmTime = newAlarmTime
         snoozeCount = intent.getIntExtra(EXTRA_SNOOZE_COUNT, 0)
         testMathChallenge = intent.getBooleanExtra(EXTRA_TEST_MATH_CHALLENGE, false)
+        testAlarmJson = intent.getStringExtra(EXTRA_TEST_ALARM_JSON)
         testGradualVolume = intent.getBooleanExtra(EXTRA_TEST_GRADUAL_VOLUME, false)
         restartKey++
 
         isAlarmActive = true
-        AlarmPlaybackService.start(this, alarmTime)
+        val retestJson = testAlarmJson
+        if (retestJson != null) AlarmPlaybackService.startTest(this, alarmTime, retestJson)
+        else AlarmPlaybackService.start(this, alarmTime)
     }
 
     private fun dismissWithAutoRepeat() {
         Log.d("ZenithAlarm", "dismissWithAutoRepeat: alarmTime=$alarmTime")
+        // Mode test: hanya hentikan suara + tutup, tanpa menyentuh
+        // jadwal, smart-repeat, atau state tersimpan apapun.
+        if (testAlarmJson != null) {
+            stopAlarmAndFinish()
+            return
+        }
         val dismissAt = System.currentTimeMillis()
         lifecycleScope.launch(Dispatchers.IO) {
             val userPreferencesRepository = (application as ZenithApplication).userPreferencesRepository
@@ -308,6 +352,10 @@ class AlarmOverlayActivity : ComponentActivity() {
      */
     private fun dismissAfterWakeUpVerified() {
         Log.d("ZenithAlarm", "dismissAfterWakeUpVerified: alarmTime=$alarmTime")
+        if (testAlarmJson != null) {
+            stopAlarmAndFinish()
+            return
+        }
         lifecycleScope.launch(Dispatchers.IO) {
             val userPreferencesRepository = (application as ZenithApplication).userPreferencesRepository
             val alarms = userPreferencesRepository.parseAlarms(
@@ -340,6 +388,11 @@ class AlarmOverlayActivity : ComponentActivity() {
 
     private fun snooze() {
         Log.d("ZenithAlarm", "snooze: alarmTime=$alarmTime snoozeCount=$snoozeCount")
+        // Mode test: snooze hanya menutup test, tidak menjadwalkan alarm nyata.
+        if (testAlarmJson != null) {
+            stopAlarmAndFinish()
+            return
+        }
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val userPreferencesRepository = (application as ZenithApplication).userPreferencesRepository
@@ -619,6 +672,7 @@ class AlarmOverlayActivity : ComponentActivity() {
         const val EXTRA_ALARM_TIME = "extra_alarm_time"
         const val EXTRA_SNOOZE_COUNT = "extra_snooze_count"
         const val EXTRA_TEST_MATH_CHALLENGE = "extra_test_math_challenge"
+        const val EXTRA_TEST_ALARM_JSON = "extra_test_alarm_json"
         const val EXTRA_TEST_GRADUAL_VOLUME = "extra_test_gradual_volume"
         const val ALARM_AUTO_DISMISS_MS = 10 * 60 * 1000L
 
@@ -628,6 +682,21 @@ class AlarmOverlayActivity : ComponentActivity() {
         fun start(context: Context, alarmTime: String) {
             val intent = Intent(context, AlarmOverlayActivity::class.java).apply {
                 putExtra(EXTRA_ALARM_TIME, alarmTime)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            }
+            context.startActivity(intent)
+        }
+
+        /**
+         * Fires the overlay immediately to preview a draft alarm setup without
+         * saving anything: the draft JSON is used instead of stored alarms,
+         * and dismissing/snoozing only stops the test (no reschedule, no
+         * smart-repeat, no stored-state writes).
+         */
+        fun startTest(context: Context, alarmTime: String, alarmJson: String) {
+            val intent = Intent(context, AlarmOverlayActivity::class.java).apply {
+                putExtra(EXTRA_ALARM_TIME, alarmTime)
+                putExtra(EXTRA_TEST_ALARM_JSON, alarmJson)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             }
             context.startActivity(intent)

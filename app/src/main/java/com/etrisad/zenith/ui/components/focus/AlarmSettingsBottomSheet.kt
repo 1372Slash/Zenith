@@ -45,6 +45,9 @@ import com.etrisad.zenith.ui.viewmodel.FocusUiState
 import com.etrisad.zenith.ui.viewmodel.PickerTab
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.etrisad.zenith.data.model.AlarmItem
+import com.etrisad.zenith.ui.components.pausepoint.AlarmDismissTasks
+import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
 import androidx.core.net.toUri
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,8 +74,13 @@ fun AlarmItemSettingsBottomSheet(
     preventVolumeDrop: Boolean = false,
     wakeUpAppPackageNames: List<String> = emptyList(),
     wakeUpAppDurationSeconds: Int = 120,
+    dismissTaskTypeNames: Set<String> = emptySet(),
+    pausePointQrCodeCount: Int = 0,
+    pausePointNfcTagCount: Int = 0,
+    initialAlarmId: Long = 0L,
+    onTestAlarm: (AlarmItem) -> Unit = {},
     onDismiss: () -> Unit,
-    onSave: suspend (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, gradualVolumeDurationSeconds: Int, mathChallengeEnabled: Boolean, alarmVolume: Float, ttsEnabled: Boolean, ttsCustomPhrase: String?, ttsLanguage: String?, ttsTalkAfterSeconds: Int, ttsRepeatCount: Int, ttsIntervalSeconds: Int, preventVolumeDrop: Boolean, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int) -> Unit,
+    onSave: suspend (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, gradualVolumeDurationSeconds: Int, mathChallengeEnabled: Boolean, alarmVolume: Float, ttsEnabled: Boolean, ttsCustomPhrase: String?, ttsLanguage: String?, ttsTalkAfterSeconds: Int, ttsRepeatCount: Int, ttsIntervalSeconds: Int, preventVolumeDrop: Boolean, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int, dismissTaskTypeNames: Set<String>) -> Unit,
     onTimeClick: (() -> Unit)? = null,
     alarmTimeText: String? = null
 ) {
@@ -98,6 +106,11 @@ fun AlarmItemSettingsBottomSheet(
         initialPreventVolumeDrop = preventVolumeDrop,
         initialWakeUpAppPackageNames = wakeUpAppPackageNames,
         initialWakeUpAppDurationSeconds = wakeUpAppDurationSeconds,
+        initialDismissTaskTypeNames = dismissTaskTypeNames,
+        pausePointQrCodeCount = pausePointQrCodeCount,
+        pausePointNfcTagCount = pausePointNfcTagCount,
+        initialAlarmId = initialAlarmId,
+        onTestAlarm = onTestAlarm,
         onDismiss = onDismiss,
         onSave = onSave,
         onTimeClick = onTimeClick,
@@ -129,8 +142,13 @@ private fun AlarmSettingsSheetContent(
     initialPreventVolumeDrop: Boolean = false,
     initialWakeUpAppPackageNames: List<String> = emptyList(),
     initialWakeUpAppDurationSeconds: Int = 120,
+    initialDismissTaskTypeNames: Set<String> = emptySet(),
+    pausePointQrCodeCount: Int = 0,
+    pausePointNfcTagCount: Int = 0,
+    initialAlarmId: Long = 0L,
+    onTestAlarm: (AlarmItem) -> Unit = {},
     onDismiss: () -> Unit,
-    onSave: suspend (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, gradualVolumeDurationSeconds: Int, mathChallengeEnabled: Boolean, alarmVolume: Float, ttsEnabled: Boolean, ttsCustomPhrase: String?, ttsLanguage: String?, ttsTalkAfterSeconds: Int, ttsRepeatCount: Int, ttsIntervalSeconds: Int, preventVolumeDrop: Boolean, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int) -> Unit,
+    onSave: suspend (name: String, soundUri: String?, soundEnabled: Boolean, autoRepeatEnabled: Boolean, selectedDays: Set<Int>, vibrateEnabled: Boolean, snoozeDurationMinutes: Int, snoozeMaxCount: Int, gradualVolumeEnabled: Boolean, gradualVolumeDurationSeconds: Int, mathChallengeEnabled: Boolean, alarmVolume: Float, ttsEnabled: Boolean, ttsCustomPhrase: String?, ttsLanguage: String?, ttsTalkAfterSeconds: Int, ttsRepeatCount: Int, ttsIntervalSeconds: Int, preventVolumeDrop: Boolean, wakeUpAppPackageNames: List<String>, wakeUpAppDurationSeconds: Int, dismissTaskTypeNames: Set<String>) -> Unit,
     onTimeClick: (() -> Unit)?,
     alarmTimeText: String?
 ) {
@@ -162,7 +180,14 @@ private fun AlarmSettingsSheetContent(
     var snoozeMaxCount by remember { mutableStateOf(initialSnoozeMaxCount) }
     var gradualVolumeEnabled by remember { mutableStateOf(initialGradualVolumeEnabled) }
     var gradualVolumeDurationSeconds by remember { mutableStateOf(initialGradualVolumeDurationSeconds) }
-    var mathChallengeEnabled by remember { mutableStateOf(initialMathChallengeEnabled) }
+    var dismissTaskTypeNames by remember(initialDismissTaskTypeNames, initialMathChallengeEnabled) {
+        mutableStateOf(
+            if (initialDismissTaskTypeNames.isNotEmpty())
+                AlarmDismissTasks.toNames(AlarmDismissTasks.parseNames(initialDismissTaskTypeNames))
+            else if (initialMathChallengeEnabled) setOf(PausePointTaskType.MATH.name)
+            else emptySet()
+        )
+    }
     var alarmVolume by remember { mutableFloatStateOf(initialAlarmVolume) }
     var ttsEnabled by remember { mutableStateOf(initialTtsEnabled) }
     var ttsCustomPhrase by remember { mutableStateOf(initialTtsCustomPhrase) }
@@ -290,6 +315,36 @@ private fun AlarmSettingsSheetContent(
             )
             alarmSoundUri = it.toString()
         }
+    }
+
+    // Menyimpan draf apa adanya agar Test Alarm memakai setup yang sama
+    // persis dengan item alarm yang sedang diedit (overlay + playback
+    // selalu membaca alarm tersimpan, bukan draf).
+    suspend fun saveDraft() {
+        onSave(
+            alarmName,
+            alarmSoundUri,
+            alarmSoundEnabled,
+            alarmAutoRepeatEnabled,
+            selectedDays,
+            vibrateEnabled,
+            snoozeDurationMinutes,
+            snoozeMaxCount,
+            gradualVolumeEnabled,
+            gradualVolumeDurationSeconds,
+            PausePointTaskType.MATH.name in dismissTaskTypeNames,
+            alarmVolume,
+            ttsEnabled,
+            ttsCustomPhrase,
+            ttsLanguage,
+            ttsTalkAfterSeconds,
+            ttsRepeatCount,
+            ttsIntervalSeconds,
+            preventVolumeDrop,
+            if (useCertainAppEnabled && wakeUpAppPackageNames.isNotEmpty()) wakeUpAppPackageNames else emptyList(),
+            wakeUpAppDurationSeconds,
+            dismissTaskTypeNames
+        )
     }
 
     ModalBottomSheet(
@@ -601,7 +656,7 @@ private fun AlarmSettingsSheetContent(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        CardGroup(shape = middleShape, containerColor = containerColor) {
+                        CardGroup(shape = bottomShape, containerColor = containerColor) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -643,9 +698,11 @@ private fun AlarmSettingsSheetContent(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(24.dp))
 
-                        CardGroup(shape = bottomShape, containerColor = containerColor) {
+                        PreferenceCategory(title = "Wake Mission")
+
+                        CardGroup(shape = topShape, containerColor = containerColor) {
                             Column {
                                 Row(
                                     modifier = Modifier
@@ -943,48 +1000,149 @@ private fun AlarmSettingsSheetContent(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
 
-                        PreferenceCategory(title = "Wake Mission")
-
-                        CardGroup(shape = RoundedCornerShape(28.dp), containerColor = containerColor) {
-                            Row(
+                        CardGroup(shape = bottomShape, containerColor = containerColor) {
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { mathChallengeEnabled = !mathChallengeEnabled }
                                     .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-                                    contentAlignment = Alignment.Center
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Extension,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Dismiss Missions",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "Finish a Pause Point task to dismiss the alarm",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    if (dismissTaskTypeNames.isNotEmpty()) {
+                                        TextButton(onClick = { dismissTaskTypeNames = emptySet() }) {
+                                            Text("Clear")
+                                        }
+                                    }
+                                }
+
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Calculate,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        modifier = Modifier.size(20.dp)
-                                    )
+                                    val missionRows = AlarmDismissTasks.availableTypes
+                                        .take(6).chunked(3) + AlarmDismissTasks.availableTypes.drop(6).chunked(2)
+                                    missionRows.forEach { row ->
+                                        ZenithGroupedButton(size = ZenithButtonSize.Small) {
+                                            row.forEachIndexed { index, type ->
+                                                val selected = type.name in dismissTaskTypeNames
+                                                val pShape = when (index) {
+                                                    0 -> RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp, topEnd = 8.dp, bottomEnd = 8.dp)
+                                                    row.lastIndex -> RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = 16.dp, bottomEnd = 16.dp)
+                                                    else -> RoundedCornerShape(8.dp)
+                                                }
+                                                ZenithButtonWeighted(
+                                                    onClick = {
+                                                        dismissTaskTypeNames =
+                                                            if (selected) dismissTaskTypeNames - type.name
+                                                            else dismissTaskTypeNames + type.name
+                                                    },
+                                                    text = type.displayName,
+                                                    icon = type.icon,
+                                                    type = if (selected) ZenithButtonType.Filled else ZenithButtonType.Tonal,
+                                                    size = ZenithButtonSize.Small,
+                                                    selected = selected,
+                                                    shape = pShape,
+                                                    isFirst = index == 0,
+                                                    isLast = index == row.lastIndex,
+                                                    contentScaleEnabled = false
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column(modifier = Modifier.weight(1f)) {
+
+                                Text(
+                                    text = if (dismissTaskTypeNames.isEmpty())
+                                        "No mission: the alarm dismisses directly, like before."
+                                    else "One random mission is picked each time the alarm fires. Missions reuse your global Pause Point setups (durations, QR codes, NFC tags).",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                if (PausePointTaskType.QR_SCAN.name in dismissTaskTypeNames && pausePointQrCodeCount == 0) {
                                     Text(
-                                        text = "Math Challenge",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "Solve a math problem before dismissing alarm",
+                                        text = "No saved QR codes yet — register one under Settings > Features > Pause Point, otherwise QR missions fall back to waiting.",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.error
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                AnimatedSwitch(
-                                    checked = mathChallengeEnabled,
-                                    onCheckedChange = { mathChallengeEnabled = it }
+                                if (PausePointTaskType.NFC_SCAN.name in dismissTaskTypeNames && pausePointNfcTagCount == 0) {
+                                    Text(
+                                        text = "No saved NFC tags yet — register one under Settings > Features > Pause Point, otherwise NFC missions fall back to waiting.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+
+                                // Test memakai draf saat ini tanpa menyimpan: overlay
+                                // berjalan dalam mode test yang read-only sehingga
+                                // alarm nyata tidak tersentuh sama sekali.
+                                ZenithButton(
+                                    onClick = {
+                                        val parts = (currentTimeText ?: "07:00").split(":")
+                                        onTestAlarm(
+                                            AlarmItem(
+                                                id = initialAlarmId,
+                                                hour = parts.getOrNull(0)?.toIntOrNull() ?: 7,
+                                                minute = parts.getOrNull(1)?.toIntOrNull() ?: 0,
+                                                name = alarmName,
+                                                days = selectedDays,
+                                                soundUri = alarmSoundUri,
+                                                soundEnabled = alarmSoundEnabled,
+                                                autoRepeatEnabled = alarmAutoRepeatEnabled,
+                                                vibrateEnabled = vibrateEnabled,
+                                                snoozeDurationMinutes = snoozeDurationMinutes,
+                                                snoozeMaxCount = snoozeMaxCount,
+                                                gradualVolumeEnabled = gradualVolumeEnabled,
+                                                gradualVolumeDurationSeconds = gradualVolumeDurationSeconds,
+                                                mathChallengeEnabled = PausePointTaskType.MATH.name in dismissTaskTypeNames,
+                                                dismissTaskTypeNames = dismissTaskTypeNames,
+                                                alarmVolume = alarmVolume,
+                                                ttsEnabled = ttsEnabled,
+                                                ttsCustomPhrase = ttsCustomPhrase,
+                                                ttsLanguage = ttsLanguage,
+                                                ttsTalkAfterSeconds = ttsTalkAfterSeconds,
+                                                ttsRepeatCount = ttsRepeatCount,
+                                                ttsIntervalSeconds = ttsIntervalSeconds,
+                                                preventVolumeDrop = preventVolumeDrop,
+                                                wakeUpAppPackageNames = if (useCertainAppEnabled && wakeUpAppPackageNames.isNotEmpty()) wakeUpAppPackageNames else emptyList(),
+                                                wakeUpAppDurationSeconds = wakeUpAppDurationSeconds
+                                            )
+                                        )
+                                    },
+                                    text = "Test Alarm",
+                                    icon = Icons.Outlined.PlayArrow,
+                                    type = ZenithButtonType.Outlined,
+                                    size = ZenithButtonSize.Medium,
+                                    fillMaxWidth = true
                                 )
                             }
                         }
@@ -1139,6 +1297,8 @@ private fun AlarmSettingsSheetContent(
                                                                     .build()
                                                             )
                                                             previewPlayer.setOnPreparedListener {
+                                                                // Preview mengikuti slider volume alarm.
+                                                                it.setVolume(alarmVolume, alarmVolume)
                                                                 it.start()
                                                                 isPlayingPreview = true
                                                             }
@@ -1291,7 +1451,13 @@ private fun AlarmSettingsSheetContent(
                                 )
                                 Slider(
                                     value = alarmVolume,
-                                    onValueChange = { alarmVolume = it },
+                                    onValueChange = {
+                                        alarmVolume = it
+                                        // Geser saat preview bunyi: volumenya ikut live.
+                                        if (isPlayingPreview) {
+                                            try { previewPlayer.setVolume(it, it) } catch (_: Exception) { }
+                                        }
+                                    },
                                     modifier = Modifier
                                         .weight(1f)
                                         .padding(horizontal = 8.dp),
@@ -1790,29 +1956,7 @@ private fun AlarmSettingsSheetContent(
                             isSaving = true
                             try {
                                 val tSaveStart = System.currentTimeMillis()
-                                onSave(
-                                    alarmName,
-                                    alarmSoundUri,
-                                    alarmSoundEnabled,
-                                    alarmAutoRepeatEnabled,
-                                    selectedDays,
-                                    vibrateEnabled,
-                                    snoozeDurationMinutes,
-                                    snoozeMaxCount,
-                                    gradualVolumeEnabled,
-                                    gradualVolumeDurationSeconds,
-                                    mathChallengeEnabled,
-                                    alarmVolume,
-                                    ttsEnabled,
-                                    ttsCustomPhrase,
-                                    ttsLanguage,
-                                    ttsTalkAfterSeconds,
-                                    ttsRepeatCount,
-                                    ttsIntervalSeconds,
-                                    preventVolumeDrop,
-                                    if (useCertainAppEnabled && wakeUpAppPackageNames.isNotEmpty()) wakeUpAppPackageNames else emptyList(),
-                                    wakeUpAppDurationSeconds
-                                )
+                                saveDraft()
                                 android.util.Log.d("AlarmPerf", "onSave callback took ${System.currentTimeMillis() - tSaveStart}ms")
                                 val tHide = System.currentTimeMillis()
                                 sheetState.hide()
