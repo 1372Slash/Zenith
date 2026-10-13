@@ -8,7 +8,10 @@ import androidx.room.PrimaryKey
 @Keep
 @Entity(
     tableName = "website_usage",
-    indices = [Index(value = ["date", "domain"], unique = true)]
+    indices = [
+        Index(value = ["date", "domain"], unique = true),
+        Index(value = ["domain", "date"])
+    ]
 )
 data class WebsiteUsageEntity(
     @PrimaryKey(autoGenerate = true)

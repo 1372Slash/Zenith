@@ -35,7 +35,7 @@ import com.etrisad.zenith.data.local.Converters
         WebsiteUsageEntity::class,
         PomodoroSessionEntity::class
     ],
-    version = 34,
+    version = 35,
     exportSchema = true,
     autoMigrations = [
         androidx.room.AutoMigration(from = 12, to = 13),
@@ -118,6 +118,25 @@ abstract class ZenithDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 try {
                     db.execSQL("ALTER TABLE schedules ADD COLUMN activeDays TEXT NOT NULL DEFAULT '1,2,3,4,5,6,7'")
+                } catch (_: Exception) {}
+            }
+        }
+
+        private val MIGRATION_34_35 = object : Migration(34, 35) {
+            // Index-only migration: no data changes, no data loss. Names must match
+            // Room's generated names (index_<table>_<columns>) for schema validation.
+            override fun migrate(db: SupportSQLiteDatabase) {
+                try {
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_schedules_isActive` ON `schedules` (`isActive`)")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_website_usage_domain_date` ON `website_usage` (`domain`, `date`)")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_daily_usage_packageName_date` ON `daily_usage` (`packageName`, `date`)")
+                } catch (_: Exception) {}
+                try {
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_pomodoro_sessions_date_completedAt` ON `pomodoro_sessions` (`date`, `completedAt`)")
                 } catch (_: Exception) {}
             }
         }
@@ -404,7 +423,7 @@ abstract class ZenithDatabase : RoomDatabase() {
         fun getDatabase(context: Context): ZenithDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: run {
-                    DbLogBuffer.d("ZenithDB", "Creating database instance (version=34, journal=WAL)")
+                    DbLogBuffer.d("ZenithDB", "Creating database instance (version=35, journal=WAL)")
                     val instance = Room.databaseBuilder(
                         context.applicationContext,
                         ZenithDatabase::class.java,
@@ -416,7 +435,7 @@ abstract class ZenithDatabase : RoomDatabase() {
                             MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
                             MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18,
                             MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
-                            MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25,                             MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34
+                            MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25,                             MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35
                         )
                         .setQueryExecutor(Executors.newFixedThreadPool(4))
                         .setTransactionExecutor(Executors.newSingleThreadExecutor())

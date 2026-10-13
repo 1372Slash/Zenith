@@ -3,7 +3,11 @@ package com.etrisad.zenith.service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 class ZenithHeartbeatReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -28,13 +32,11 @@ class ZenithHeartbeatReceiver : BroadcastReceiver() {
                 action == "com.etrisad.zenith.action.HEARTBEAT"
             if (needsGate) {
                 val pending = goAsync()
-                Thread {
+                CoroutineScope(Dispatchers.IO).launch {
                     try {
                         val prefsRepo = com.etrisad.zenith.data.preferences.UserPreferencesRepository(context.applicationContext)
-                        val prefs = kotlinx.coroutines.runBlocking {
-                            kotlinx.coroutines.withTimeoutOrNull(3000) {
-                                prefsRepo.userPreferencesFlow.first()
-                            }
+                        val prefs = withTimeoutOrNull(3000) {
+                            prefsRepo.userPreferencesFlow.first()
                         }
                         val needsService = prefs == null || prefs.alarmMasterEnabled ||
                             prefs.bedtimeEnabled || prefs.eyeCareEnabled ||
@@ -45,7 +47,7 @@ class ZenithHeartbeatReceiver : BroadcastReceiver() {
                     } finally {
                         try { pending.finish() } catch (_: Exception) {}
                     }
-                }.start()
+                }
                 return
             }
             try {

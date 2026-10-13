@@ -2,6 +2,7 @@ package com.etrisad.zenith.data.local.entity
 
 import androidx.annotation.Keep
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
 
@@ -11,7 +12,10 @@ enum class ScheduleMode {
 }
 
 @Keep
-@Entity(tableName = "schedules")
+@Entity(
+    tableName = "schedules",
+    indices = [Index(value = ["isActive"])]
+)
 data class ScheduleEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,

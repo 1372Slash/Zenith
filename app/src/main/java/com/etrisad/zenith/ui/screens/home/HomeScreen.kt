@@ -117,8 +117,9 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val preferences by viewModel.homeScreenPreferences.collectAsState()
-    val bannerPrefs by userPreferencesRepository.userPreferencesFlow.collectAsState(
-        initial = UserPreferences()
+    // Banner-only slice: banner writes recompose, unrelated prefs don't.
+    val bannerPrefs by userPreferencesRepository.bannerPrefsFlow.collectAsState(
+        initial = UserPreferencesRepository.BannerPrefs()
     )
 
     val coroutineScope = rememberCoroutineScope()

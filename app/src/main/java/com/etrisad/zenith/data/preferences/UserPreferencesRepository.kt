@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.text.SimpleDateFormat
@@ -646,19 +647,78 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         )
     }.distinctUntilChanged()
 
+    // ---- Lightweight domain flows: subscribe to a small slice instead of the
+    // full ~150-field UserPreferences so an unrelated key change doesn't
+    // recompose the collector. Each is distinctUntilChanged on its own fields.
+    data class AppearancePrefs(
+        val themeConfig: ThemeConfig = ThemeConfig.FOLLOW_SYSTEM,
+        val dynamicColor: Boolean = true,
+        val fontOption: FontOption = FontOption.GOOGLE_SANS_FLEX,
+        val expressiveColors: Boolean = false,
+        val gsFlexSettings: GSFlexSettings = GSFlexSettings()
+    )
+
+    val appearanceFlow: Flow<AppearancePrefs> = userPreferencesFlow.map {
+        AppearancePrefs(
+            themeConfig = it.themeConfig,
+            dynamicColor = it.dynamicColor,
+            fontOption = it.fontOption,
+            expressiveColors = it.expressiveColors,
+            gsFlexSettings = it.gsFlexSettings
+        )
+    }.distinctUntilChanged()
+
+    data class BannerPrefs(
+        val userBannerUri: String = "",
+        val profileBannerOnHome: Boolean = false
+    )
+
+    val bannerPrefsFlow: Flow<BannerPrefs> = userPreferencesFlow.map {
+        BannerPrefs(
+            userBannerUri = it.userBannerUri,
+            profileBannerOnHome = it.profileBannerOnHome
+        )
+    }.distinctUntilChanged()
+
+    data class AlarmPrefs(
+        val alarmsJson: String = "[]",
+        val alarmMasterEnabled: Boolean = false,
+        val alarmAutoRepeatEnabled: Boolean = true,
+        val pausePointQrCodeCount: Int = 0,
+        val pausePointNfcTagCount: Int = 0
+    )
+
+    val alarmPrefsFlow: Flow<AlarmPrefs> = userPreferencesFlow.map {
+        AlarmPrefs(
+            alarmsJson = it.alarmsJson,
+            alarmMasterEnabled = it.alarmMasterEnabled,
+            alarmAutoRepeatEnabled = it.alarmAutoRepeatEnabled,
+            pausePointQrCodeCount = it.pausePointQrCodes.count { code -> code.trim().isNotEmpty() },
+            pausePointNfcTagCount = it.pausePointNfcTagIds.count { id ->
+                com.etrisad.zenith.ui.components.pausepoint.PausePointEngine.normalizeNfcId(id).isNotEmpty()
+            }
+        )
+    }.distinctUntilChanged()
+
     val streakCalculator = StreakCalculator(context, userPreferencesFlow)
 
     private val moshi = Moshi.Builder()
         .add(KotlinJsonAdapterFactory())
         .build()
 
-    private val alarmsAdapter = moshi.adapter(List::class.java).serializeNulls()
+    private val alarmsAdapter: com.squareup.moshi.JsonAdapter<List<AlarmItem>> by lazy {
+        moshi.adapter(com.squareup.moshi.Types.newParameterizedType(List::class.java, AlarmItem::class.java))
+    }
+    private val stringListAdapter: com.squareup.moshi.JsonAdapter<List<String>> by lazy {
+        moshi.adapter(com.squareup.moshi.Types.newParameterizedType(List::class.java, String::class.java))
+    }
+    private val variantListAdapter: com.squareup.moshi.JsonAdapter<List<PausePointVariant>> by lazy {
+        moshi.adapter(com.squareup.moshi.Types.newParameterizedType(List::class.java, PausePointVariant::class.java))
+    }
 
     fun parseAlarms(json: String): List<AlarmItem> {
         return try {
-            val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, AlarmItem::class.java)
-            val adapter: com.squareup.moshi.JsonAdapter<List<AlarmItem>> = moshi.adapter(type)
-            adapter.fromJson(json) ?: emptyList()
+            alarmsAdapter.fromJson(json) ?: emptyList()
         } catch (_: Exception) {
             emptyList()
         }
@@ -667,9 +727,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
     fun parseStringList(json: String?): List<String> {
         if (json.isNullOrBlank()) return emptyList()
         return try {
-            val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, String::class.java)
-            val adapter: com.squareup.moshi.JsonAdapter<List<String>> = moshi.adapter(type)
-            adapter.fromJson(json) ?: emptyList()
+            stringListAdapter.fromJson(json) ?: emptyList()
         } catch (_: Exception) {
             emptyList()
         }
@@ -677,9 +735,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 
     fun serializeStringList(values: List<String>): String {
         return try {
-            val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, String::class.java)
-            val adapter: com.squareup.moshi.JsonAdapter<List<String>> = moshi.adapter(type)
-            adapter.toJson(values)
+            stringListAdapter.toJson(values)
         } catch (_: Exception) {
             "[]"
         }
@@ -688,9 +744,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
     private fun parseVariantList(json: String?): List<PausePointVariant> {
         if (json.isNullOrBlank()) return emptyList()
         return try {
-            val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, PausePointVariant::class.java)
-            val adapter: com.squareup.moshi.JsonAdapter<List<PausePointVariant>> = moshi.adapter(type)
-            adapter.fromJson(json) ?: emptyList()
+            variantListAdapter.fromJson(json) ?: emptyList()
         } catch (_: Exception) {
             emptyList()
         }
@@ -698,9 +752,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 
     private fun serializePausePointVariants(variants: List<PausePointVariant>): String {
         return try {
-            val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, PausePointVariant::class.java)
-            val adapter: com.squareup.moshi.JsonAdapter<List<PausePointVariant>> = moshi.adapter(type)
-            adapter.toJson(variants)
+            variantListAdapter.toJson(variants)
         } catch (_: Exception) {
             "[]"
         }
@@ -708,9 +760,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 
     fun serializeAlarms(alarms: List<AlarmItem>): String {
         return try {
-            val type = com.squareup.moshi.Types.newParameterizedType(List::class.java, AlarmItem::class.java)
-            val adapter: com.squareup.moshi.JsonAdapter<List<AlarmItem>> = moshi.adapter(type)
-            adapter.toJson(alarms)
+            alarmsAdapter.toJson(alarms)
         } catch (_: Exception) {
             "[]"
         }
@@ -861,7 +911,9 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
     }
 
     suspend fun setScreenTimeTarget(minutes: Int) {
-        val currentTarget = userPreferencesFlow.first().screenTimeTargetMinutes
+        // Direct key read: avoids building the full ~150-field UserPreferences
+        // (with Moshi parses) just to compare one int.
+        val currentTarget = context.dataStore.data.first()[PreferencesKeys.SCREEN_TIME_TARGET] ?: 0
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.SCREEN_TIME_TARGET] = minutes
         }
@@ -973,8 +1025,11 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
     }
 
     suspend fun initializeDefaultWhitelist() {
-        val prefs = userPreferencesFlow.first()
-        if (!prefs.whitelistInitialized && prefs.whitelistedPackages.isEmpty()) {
+        // Direct key reads: this runs at startup, avoid the full prefs build.
+        val initialized = context.runtimeDataStore.data.first()[RuntimeKeys.WHITELIST_INITIALIZED] ?: false
+        val existing = context.dataStore.data.first()[PreferencesKeys.WHITELISTED_PACKAGES]
+            ?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
+        if (!initialized && existing.isEmpty()) {
             withContext(Dispatchers.IO) {
                 val pm = context.packageManager
                 val installedApps = try {
@@ -1292,8 +1347,8 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
     }
 
     suspend fun isGracePeriodEditAllowed(): Boolean {
-        val prefs = userPreferencesFlow.first()
-        val last = prefs.gracePeriodLastEditTimestamp
+        // Direct key read: avoid the full prefs build for one timestamp.
+        val last = context.dataStore.data.first()[PreferencesKeys.GRACE_PERIOD_LAST_EDIT_TIMESTAMP] ?: 0L
         if (last == 0L) return true
         return System.currentTimeMillis() - last >= GRACE_PERIOD_EDIT_COOLDOWN_MILLIS
     }
@@ -1310,9 +1365,10 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
     }
 
     suspend fun setGracePeriodStartTime(time: String): Boolean {
-        val prefs = userPreferencesFlow.first()
         if (!isGracePeriodEditAllowed()) return false
-        if (!isGracePeriodDurationValid(time, prefs.gracePeriodEndTime)) return false
+        // Direct key read for the paired value: avoid the full prefs build.
+        val endTime = context.dataStore.data.first()[PreferencesKeys.GRACE_PERIOD_END_TIME] ?: "13:00"
+        if (!isGracePeriodDurationValid(time, endTime)) return false
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.GRACE_PERIOD_START_TIME] = time
             preferences[PreferencesKeys.GRACE_PERIOD_LAST_EDIT_TIMESTAMP] = System.currentTimeMillis()
@@ -1321,9 +1377,10 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
     }
 
     suspend fun setGracePeriodEndTime(time: String): Boolean {
-        val prefs = userPreferencesFlow.first()
         if (!isGracePeriodEditAllowed()) return false
-        if (!isGracePeriodDurationValid(prefs.gracePeriodStartTime, time)) return false
+        // Direct key read for the paired value: avoid the full prefs build.
+        val startTime = context.dataStore.data.first()[PreferencesKeys.GRACE_PERIOD_START_TIME] ?: "12:00"
+        if (!isGracePeriodDurationValid(startTime, time)) return false
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.GRACE_PERIOD_END_TIME] = time
             preferences[PreferencesKeys.GRACE_PERIOD_LAST_EDIT_TIMESTAMP] = System.currentTimeMillis()
@@ -1717,34 +1774,52 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.ALARM_MASTER_ENABLED] = enabled }
     }
 
+    // Cold flow of the parsed alarm list: subscribe instead of building the full
+    // ~150-field UserPreferences + re-parsing at every call site.
+    val alarmsListFlow: Flow<List<AlarmItem>> = context.dataStore.data
+        .map { prefs -> parseAlarms(prefs[PreferencesKeys.ALARMS_JSON] ?: "[]") }
+        .distinctUntilChanged()
+
     suspend fun getAlarmsSnapshot(): List<AlarmItem> {
+        // Single-key read + cached adapter: callers must use this instead of
+        // building the full UserPreferences just to parse one JSON string.
         val json = context.dataStore.data.first()[PreferencesKeys.ALARMS_JSON] ?: "[]"
         return parseAlarms(json)
     }
 
+    // Serializes concurrent read-modify-writes of ALARMS_JSON (UI actions +
+    // watchdog/boot/overlay can interleave) so no update is silently lost.
+    private val alarmsMutex = kotlinx.coroutines.sync.Mutex()
+
     suspend fun addAlarm(alarm: AlarmItem) {
-        context.dataStore.edit { prefs ->
-            val current = parseAlarms(prefs[PreferencesKeys.ALARMS_JSON] ?: "[]")
-            prefs[PreferencesKeys.ALARMS_JSON] = serializeAlarms(current + alarm)
+        alarmsMutex.withLock {
+            context.dataStore.edit { prefs ->
+                val current = parseAlarms(prefs[PreferencesKeys.ALARMS_JSON] ?: "[]")
+                prefs[PreferencesKeys.ALARMS_JSON] = serializeAlarms(current + alarm)
+            }
         }
     }
 
     suspend fun updateAlarm(alarm: AlarmItem) {
-        context.dataStore.edit { prefs ->
-            val current = parseAlarms(prefs[PreferencesKeys.ALARMS_JSON] ?: "[]").toMutableList()
-            val index = current.indexOfFirst { it.id == alarm.id }
-            if (index >= 0) {
-                current[index] = alarm
-                prefs[PreferencesKeys.ALARMS_JSON] = serializeAlarms(current)
+        alarmsMutex.withLock {
+            context.dataStore.edit { prefs ->
+                val current = parseAlarms(prefs[PreferencesKeys.ALARMS_JSON] ?: "[]").toMutableList()
+                val index = current.indexOfFirst { it.id == alarm.id }
+                if (index >= 0) {
+                    current[index] = alarm
+                    prefs[PreferencesKeys.ALARMS_JSON] = serializeAlarms(current)
+                }
             }
         }
     }
 
     suspend fun deleteAlarm(alarmId: Long) {
-        context.dataStore.edit { prefs ->
-            val current = parseAlarms(prefs[PreferencesKeys.ALARMS_JSON] ?: "[]").toMutableList()
-            current.removeAll { it.id == alarmId }
-            prefs[PreferencesKeys.ALARMS_JSON] = serializeAlarms(current)
+        alarmsMutex.withLock {
+            context.dataStore.edit { prefs ->
+                val current = parseAlarms(prefs[PreferencesKeys.ALARMS_JSON] ?: "[]").toMutableList()
+                current.removeAll { it.id == alarmId }
+                prefs[PreferencesKeys.ALARMS_JSON] = serializeAlarms(current)
+            }
         }
     }
 

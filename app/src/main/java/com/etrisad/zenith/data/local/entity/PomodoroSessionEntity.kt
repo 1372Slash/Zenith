@@ -8,7 +8,8 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "pomodoro_sessions",
     indices = [
-        Index(value = ["date"])
+        Index(value = ["date"]),
+        Index(value = ["date", "completedAt"])
     ]
 )
 data class PomodoroSessionEntity(

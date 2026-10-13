@@ -10,7 +10,8 @@ import androidx.room.PrimaryKey
     tableName = "daily_usage",
     indices = [
         Index(value = ["date", "packageName"], unique = true),
-        Index(value = ["date"])
+        Index(value = ["date"]),
+        Index(value = ["packageName", "date"])
     ]
 )
 data class DailyUsageEntity(

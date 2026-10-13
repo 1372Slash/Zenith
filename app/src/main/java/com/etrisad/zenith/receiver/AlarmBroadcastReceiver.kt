@@ -16,8 +16,10 @@ import com.etrisad.zenith.R
 import com.etrisad.zenith.ZenithApplication
 import com.etrisad.zenith.data.model.AlarmItem
 import com.etrisad.zenith.service.AlarmOverlayActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
@@ -55,30 +57,44 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 showAlarm(context, alarmTime, intent)
             }
             ACTION_CHECK_USAGE -> {
-                val alarmTime = intent.getStringExtra(AlarmOverlayActivity.EXTRA_ALARM_TIME) ?: "07:00"
-                val isOnce = intent.getBooleanExtra(EXTRA_IS_ONCE, false)
-                val attempt = intent.getIntExtra(EXTRA_RETRIGGER_COUNT, 0)
-                val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, 0L)
-                val dismissAt = intent.getLongExtra(EXTRA_DISMISS_AT, 0L)
-                // Overlay lain sedang tampil (mis. alarm lain berbunyi) = user jelas
-                // sedang berinteraksi dengan HP -> anggap bangun, jangan mengulang.
-                if (AlarmOverlayActivity.isShowing) {
-                    cancelSmartWakeReminder(context)
-                    sendAutoRepeatCompleteNotification(context, alarmTime)
-                    if (isOnce) disableAlarm(context, alarmTime)
-                    return
-                }
-                val awake = isUserAwake(context, dismissAt)
-                if (!awake) {
-                    scheduleReTrigger(context, alarmTime, attempt, alarmId)
-                    // Biarkan reminder yang dipasang saat dismiss tetap hidup sampai
-                    // re-trigger berikutnya berbunyi (lalu di-cancel di onReceive).
-                } else {
-                    cancelSmartWakeReminder(context)
-                    sendAutoRepeatCompleteNotification(context, alarmTime)
-                    if (isOnce) disableAlarm(context, alarmTime)
+                // DataStore/UsageStats reads must not block onReceive's main thread:
+                // handle async with goAsync so firing stays exact even under load.
+                val pending = goAsync()
+                CoroutineScope(Dispatchers.Default).launch {
+                    try {
+                        handleCheckUsage(context, intent)
+                    } catch (_: Exception) {
+                    } finally {
+                        try { pending.finish() } catch (_: Exception) { }
+                    }
                 }
             }
+        }
+    }
+
+    private suspend fun handleCheckUsage(context: Context, intent: Intent) {
+        val alarmTime = intent.getStringExtra(AlarmOverlayActivity.EXTRA_ALARM_TIME) ?: "07:00"
+        val isOnce = intent.getBooleanExtra(EXTRA_IS_ONCE, false)
+        val attempt = intent.getIntExtra(EXTRA_RETRIGGER_COUNT, 0)
+        val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, 0L)
+        val dismissAt = intent.getLongExtra(EXTRA_DISMISS_AT, 0L)
+        // Another overlay showing (e.g. another alarm firing) = user clearly
+        // interacting with the phone -> assume awake, don't repeat.
+        if (AlarmOverlayActivity.isShowing) {
+            cancelSmartWakeReminder(context)
+            sendAutoRepeatCompleteNotification(context, alarmTime)
+            if (isOnce) disableAlarm(context, alarmTime)
+            return
+        }
+        val awake = isUserAwake(context, dismissAt)
+        if (!awake) {
+            scheduleReTrigger(context, alarmTime, attempt, alarmId)
+            // Leave the reminder posted at dismiss alive until the next
+            // re-trigger fires (then cancelled in onReceive).
+        } else {
+            cancelSmartWakeReminder(context)
+            sendAutoRepeatCompleteNotification(context, alarmTime)
+            if (isOnce) disableAlarm(context, alarmTime)
         }
     }
 
@@ -165,15 +181,12 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun sendAutoRepeatCompleteNotification(context: Context, alarmTime: String) {
+    private suspend fun sendAutoRepeatCompleteNotification(context: Context, alarmTime: String) {
         try {
             val alarmName = try {
                 val app = context.applicationContext as ZenithApplication
-                runBlocking {
-                    val prefs = app.userPreferencesRepository.userPreferencesFlow.first()
-                    app.userPreferencesRepository.parseAlarms(prefs.alarmsJson)
-                        .find { it.timeString == alarmTime }?.name
-                }
+                app.userPreferencesRepository.getAlarmsSnapshot()
+                    .find { it.timeString == alarmTime }?.name
             } catch (_: Exception) { null }
             val display = alarmName?.let { "$it at $alarmTime" } ?: alarmTime
             ensureInfoChannel(context)
@@ -750,18 +763,14 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             }
         }
 
-        fun disableAlarm(context: Context, alarmTime: String) {
+        suspend fun disableAlarm(context: Context, alarmTime: String) {
             try {
                 val app = context.applicationContext as ZenithApplication
                 var alarmId = 0L
-                runBlocking {
-                    val repo = app.userPreferencesRepository
-                    val prefs = repo.userPreferencesFlow.first()
-                    val alarms = repo.parseAlarms(prefs.alarmsJson)
-                    val alarm = alarms.find { it.timeString == alarmTime } ?: return@runBlocking
-                    alarmId = alarm.id
-                    repo.updateAlarm(alarm.copy(enabled = false))
-                }
+                val repo = app.userPreferencesRepository
+                val alarm = repo.getAlarmsSnapshot().find { it.timeString == alarmTime } ?: return
+                alarmId = alarm.id
+                repo.updateAlarm(alarm.copy(enabled = false))
                 cancelAlarm(context, alarmTime, alarmId)
             } catch (e: Exception) {
             }
@@ -874,7 +883,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         }
 
         @JvmOverloads
-        fun showAutoRepeatReminderNotification(context: Context, alarmTime: String, alarmId: Long = 0L) {
+        suspend fun showAutoRepeatReminderNotification(context: Context, alarmTime: String, alarmId: Long = 0L) {
             try {
                 ensureInfoChannel(context)
                 val manager = context.getSystemService(NotificationManager::class.java)
@@ -888,11 +897,8 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
 
                 val alarmName = try {
                     val app = context.applicationContext as ZenithApplication
-                    runBlocking {
-                        val prefs = app.userPreferencesRepository.userPreferencesFlow.first()
-                        app.userPreferencesRepository.parseAlarms(prefs.alarmsJson)
-                            .find { it.timeString == alarmTime }?.name
-                    }
+                    app.userPreferencesRepository.getAlarmsSnapshot()
+                        .find { it.timeString == alarmTime }?.name
                 } catch (_: Exception) { null }
                 val namePart = alarmName?.let { "\"$it\" " } ?: ""
 

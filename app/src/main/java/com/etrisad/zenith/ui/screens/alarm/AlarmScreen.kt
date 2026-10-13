@@ -28,7 +28,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.data.model.AlarmItem
-import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.receiver.AlarmBroadcastReceiver
 import com.etrisad.zenith.service.AlarmOverlayActivity
@@ -37,7 +36,6 @@ import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithToggleButtonGroup
 import com.etrisad.zenith.ui.components.ZenithToggleOption
 import com.etrisad.zenith.ui.components.focus.AlarmItemSettingsBottomSheet
-import com.etrisad.zenith.ui.components.pausepoint.PausePointEngine
 import com.etrisad.zenith.ui.components.focus.SwipeableItemContainer
 import com.etrisad.zenith.ui.screens.bedtime.TimePickerDialog
 import kotlinx.coroutines.Dispatchers
@@ -57,7 +55,8 @@ fun AlarmScreen(
 ) {
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
-    val prefs by preferencesRepository.userPreferencesFlow.collectAsState(initial = UserPreferences())
+    // Alarm-only slice: alarm/master writes recompose, unrelated prefs don't.
+    val prefs by preferencesRepository.alarmPrefsFlow.collectAsState(initial = UserPreferencesRepository.AlarmPrefs())
 
     var sortType by remember { mutableStateOf(AlarmSortType.TIME) }
 
@@ -489,8 +488,8 @@ fun AlarmScreen(
                 wakeUpAppPackageNames = currentEditing.wakeUpAppPackageNames,
                 wakeUpAppDurationSeconds = currentEditing.wakeUpAppDurationSeconds,
                 dismissTaskTypeNames = currentEditing.dismissTaskTypeNames,
-                pausePointQrCodeCount = prefs.pausePointQrCodes.count { it.trim().isNotEmpty() },
-                pausePointNfcTagCount = prefs.pausePointNfcTagIds.count { PausePointEngine.normalizeNfcId(it).isNotEmpty() },
+                pausePointQrCodeCount = prefs.pausePointQrCodeCount,
+                pausePointNfcTagCount = prefs.pausePointNfcTagCount,
                 initialAlarmId = currentEditing.id,
                 onTestAlarm = { draft ->
                     AlarmOverlayActivity.startTest(
@@ -565,8 +564,8 @@ fun AlarmScreen(
                 wakeUpAppPackageNames = currentNew.wakeUpAppPackageNames,
                 wakeUpAppDurationSeconds = currentNew.wakeUpAppDurationSeconds,
                 dismissTaskTypeNames = currentNew.dismissTaskTypeNames,
-                pausePointQrCodeCount = prefs.pausePointQrCodes.count { it.trim().isNotEmpty() },
-                pausePointNfcTagCount = prefs.pausePointNfcTagIds.count { PausePointEngine.normalizeNfcId(it).isNotEmpty() },
+                pausePointQrCodeCount = prefs.pausePointQrCodeCount,
+                pausePointNfcTagCount = prefs.pausePointNfcTagCount,
                 initialAlarmId = currentNew.id,
                 onTestAlarm = { draft ->
                     AlarmOverlayActivity.startTest(

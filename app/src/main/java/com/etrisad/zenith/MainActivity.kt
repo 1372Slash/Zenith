@@ -87,11 +87,13 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            val userPreferences by userPreferencesRepository.userPreferencesFlow.collectAsState(
-                initial = com.etrisad.zenith.data.preferences.UserPreferences()
+            // Appearance-only slice: theme/font changes recompose, unrelated
+            // prefs writes (usage timestamps, streaks, alarms) don't.
+            val appearance by userPreferencesRepository.appearanceFlow.collectAsState(
+                initial = com.etrisad.zenith.data.preferences.UserPreferencesRepository.AppearancePrefs()
             )
 
-            val darkTheme = when (userPreferences.themeConfig) {
+            val darkTheme = when (appearance.themeConfig) {
                 com.etrisad.zenith.data.preferences.ThemeConfig.FOLLOW_SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
                 com.etrisad.zenith.data.preferences.ThemeConfig.LIGHT -> false
                 com.etrisad.zenith.data.preferences.ThemeConfig.DARK -> true
@@ -100,10 +102,10 @@ class MainActivity : ComponentActivity() {
 
             ZenithTheme(
                 darkTheme = darkTheme,
-                dynamicColor = userPreferences.dynamicColor,
-                fontOption = userPreferences.fontOption,
-                expressiveColors = userPreferences.expressiveColors,
-                gsFlexSettings = userPreferences.gsFlexSettings
+                dynamicColor = appearance.dynamicColor,
+                fontOption = appearance.fontOption,
+                expressiveColors = appearance.expressiveColors,
+                gsFlexSettings = appearance.gsFlexSettings
             ) {
                 val windowSizeClass = calculateWindowSizeClass(this)
                 MainScreen(

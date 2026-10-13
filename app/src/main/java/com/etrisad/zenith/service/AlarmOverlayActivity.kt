@@ -587,34 +587,31 @@ class AlarmOverlayActivity : ComponentActivity() {
     }
 
     private fun startWakeUpTracking(appPackages: List<String> = emptyList(), durationSeconds: Int = 120) {
-        val packages = appPackages.ifEmpty {
-            val repo = (application as ZenithApplication).userPreferencesRepository
-            try {
-                val prefs = kotlinx.coroutines.runBlocking { repo.userPreferencesFlow.first() }
-                repo.parseAlarms(prefs.alarmsJson)
-                    .find { it.timeString == alarmTime }
-                    ?.wakeUpAppPackageNames ?: emptyList()
-            } catch (_: Exception) { emptyList() }
-        }
-        val duration = if (durationSeconds != 120 || appPackages.isNotEmpty()) durationSeconds else {
-            val repo = (application as ZenithApplication).userPreferencesRepository
-            try {
-                val prefs = kotlinx.coroutines.runBlocking { repo.userPreferencesFlow.first() }
-                repo.parseAlarms(prefs.alarmsJson)
-                    .find { it.timeString == alarmTime }
-                    ?.wakeUpAppDurationSeconds ?: 120
-            } catch (_: Exception) { 120 }
-        }
-        if (packages.isEmpty() || duration <= 0) {
-            // Invalid config (e.g. all apps uninstalled): don't gate.
-            withContextForMainSync {
-                wakeUpComplete = true
-                wakeUpTrackingActive = false
-            }
-            return
-        }
         wakeUpJob?.cancel()
         wakeUpJob = lifecycleScope.launch(Dispatchers.IO) {
+            val repo = (application as ZenithApplication).userPreferencesRepository
+            val packages = appPackages.ifEmpty {
+                try {
+                    repo.getAlarmsSnapshot()
+                        .find { it.timeString == alarmTime }
+                        ?.wakeUpAppPackageNames ?: emptyList()
+                } catch (_: Exception) { emptyList() }
+            }
+            val duration = if (durationSeconds != 120 || appPackages.isNotEmpty()) durationSeconds else {
+                try {
+                    repo.getAlarmsSnapshot()
+                        .find { it.timeString == alarmTime }
+                        ?.wakeUpAppDurationSeconds ?: 120
+                } catch (_: Exception) { 120 }
+            }
+            if (packages.isEmpty() || duration <= 0) {
+                // Invalid config (e.g. all apps uninstalled): don't gate.
+                withContextForMainSync {
+                    wakeUpComplete = true
+                    wakeUpTrackingActive = false
+                }
+                return@launch
+            }
             while (true) {
                 delay(3000)
                 if (!hasUsageAccess()) {

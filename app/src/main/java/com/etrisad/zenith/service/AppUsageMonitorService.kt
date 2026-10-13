@@ -132,6 +132,16 @@ class AppUsageMonitorService : Service() {
     private var cachedBypassResult = false
     private var cachedBypassTime = 0L
 
+    // Stale-while-revalidate DB caches: monitoring hot paths must never block on
+    // Room/DataStore. Refresh happens on serviceScope (IO); getters return the
+    // last known value immediately.
+    @Volatile
+    private var cachedWebsiteGlobalUsage = 0L
+    @Volatile
+    private var lastWebsiteGlobalFetch = 0L
+    private val websiteDomainUsageCache = ConcurrentHashMap<String, Long>()
+    private val websiteDomainFetchTime = ConcurrentHashMap<String, Long>()
+
     private var monitoringLoopActive = false
     private var lastLoopTick = 0L
 
@@ -2106,13 +2116,17 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun getWebsiteGlobalUsageToday(): Long {
-        val todayDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
-        return kotlinx.coroutines.runBlocking {
-            try {
-                val websiteUsages = shieldRepository.getWebsiteUsageForDate(todayDate).first()
-                websiteUsages.sumOf { it.usageTimeMillis }
-            } catch (_: Exception) { 0L }
+        val now = System.currentTimeMillis()
+        if (now - lastWebsiteGlobalFetch > 60_000L) {
+            lastWebsiteGlobalFetch = now
+            serviceScope.launch {
+                try {
+                    val todayDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                    cachedWebsiteGlobalUsage = shieldRepository.getWebsiteUsageListForDate(todayDate).sumOf { it.usageTimeMillis }
+                } catch (_: Exception) { }
+            }
         }
+        return cachedWebsiteGlobalUsage
     }
 
     private fun getFilteredGlobalUsage(appUsageMap: Map<String, Long>): Long {
@@ -2159,13 +2173,18 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun getWebsiteUsageToday(domain: String): Long {
-        val todayDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
-        return kotlinx.coroutines.runBlocking {
+        val now = System.currentTimeMillis()
+        val cached = websiteDomainUsageCache[domain]
+        if (cached != null && now - (websiteDomainFetchTime[domain] ?: 0L) < 60_000L) return cached
+        websiteDomainFetchTime[domain] = now
+        serviceScope.launch {
             try {
+                val todayDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
                 val usage = shieldRepository.getWebsiteUsage(todayDate, domain)
-                usage?.usageTimeMillis ?: 0L
-            } catch (_: Exception) { 0L }
+                if (usage != null) websiteDomainUsageCache[domain] = usage.usageTimeMillis
+            } catch (_: Exception) { }
         }
+        return cached ?: 0L
     }
 
     private fun getTotalUsageToday(packageName: String): Long {
@@ -2178,21 +2197,19 @@ class AppUsageMonitorService : Service() {
         }
         val saved = SharedMonitoringState.lastKnownPackageUsage[packageName]
         if (saved != null && saved > 0L) return saved
+        val systemNow = getSystemUsageToday(packageName)
         val shield = SharedMonitoringState.allShieldsCache[packageName]
         if (shield != null && shield.limitPeriod != LimitPeriod.DAILY) {
             val cached = periodUsageCache[packageName]
             if (cached != null && cached > 0) return cached
-            val loaded = kotlinx.coroutines.runBlocking {
+            serviceScope.launch {
                 try {
-                    shieldRepository.getWeeklyUsageLive(packageName, getSystemUsageToday(packageName))
-                } catch (_: Exception) { 0L }
-            }
-            if (loaded > 0) {
-                periodUsageCache[packageName] = loaded
-                return loaded
+                    val loaded = shieldRepository.getWeeklyUsageLive(packageName, systemNow)
+                    if (loaded > 0) periodUsageCache[packageName] = loaded
+                } catch (_: Exception) { }
             }
         }
-        return getSystemUsageToday(packageName)
+        return systemNow
     }
 
     private fun getSystemUsageToday(packageName: String): Long {
