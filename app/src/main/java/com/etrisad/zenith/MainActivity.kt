@@ -136,7 +136,6 @@ class MainActivity : ComponentActivity() {
             Configuration.UI_MODE_NIGHT_NO -> "LIGHT"
             else -> "UNDEFINED"
         }
-        android.util.Log.d("ZenithDB", "CONFIG_CHANGED: uiMode=$uiModeStr orientation=${newConfig.orientation} locale=${newConfig.locale} fontScale=${newConfig.fontScale} density=${newConfig.densityDpi}")
         com.etrisad.zenith.data.local.database.DbLogBuffer.d("ZenithDB", "CONFIG_CHANGED: uiMode=$uiModeStr orientation=${newConfig.orientation} locale=${newConfig.locale} fontScale=${newConfig.fontScale} density=${newConfig.densityDpi}")
     }
 }

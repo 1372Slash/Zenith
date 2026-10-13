@@ -67,7 +67,6 @@ class ShieldRepository(
             shieldDao.getAllShields().collect {
                 _allShieldsCache.value = it
                 _isShieldsLoaded.value = true
-                android.util.Log.d("ZenithGoalShield", "DB_LOADED: ${it.size} shields from DB [${it.filter { s -> s.type == com.etrisad.zenith.data.local.entity.FocusType.SHIELD }.size} shields, ${it.filter { s -> s.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL }.size} goals]")
                 DbLogBuffer.d("ZenithGoalShield", "DB_LOADED: ${it.size} shields from DB [${it.filter { s -> s.type == com.etrisad.zenith.data.local.entity.FocusType.SHIELD }.size} shields, ${it.filter { s -> s.type == com.etrisad.zenith.data.local.entity.FocusType.GOAL }.size} goals]")
             }
         }
@@ -80,7 +79,6 @@ class ShieldRepository(
         hourlyUsageDao = db.hourlyUsageDao()
         websiteUsageDao = db.websiteUsageDao()
         startShieldCollectors()
-        android.util.Log.d("ZenithDB", "DB_REBOUND: repository DAO handles re-pointed at a fresh instance")
         DbLogBuffer.d("ZenithDB", "DB_REBOUND: repository DAO handles re-pointed at a fresh instance")
     }
 
@@ -94,14 +92,11 @@ class ShieldRepository(
             val hourlyCount = db.query("SELECT COUNT(*) FROM hourly_usage").use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
             val websiteCount = db.query("SELECT COUNT(*) FROM website_usage").use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
             val scheduleCount = db.query("SELECT COUNT(*) FROM schedules").use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
-            android.util.Log.d("ZenithDB", "HEALTH_CHECK: shields=$shieldCount daily=$dailyCount hourly=$hourlyCount website=$websiteCount schedules=$scheduleCount")
             DbLogBuffer.d("ZenithDB", "HEALTH_CHECK: shields=$shieldCount daily=$dailyCount hourly=$hourlyCount website=$websiteCount schedules=$scheduleCount")
             if (shieldCount > 0 && dailyCount == 0) {
-                android.util.Log.w("ZenithDB", "DATA_INCONSISTENCY: shields=$shieldCount but daily_usage=0 - stats data is MISSING!")
                 DbLogBuffer.w("ZenithDB", "DATA_INCONSISTENCY: shields=$shieldCount but daily_usage=0 - stats data is MISSING!")
             }
         } catch (e: Exception) {
-            android.util.Log.e("ZenithDB", "HEALTH_CHECK_FAILED: ${e.message}")
             DbLogBuffer.e("ZenithDB", "HEALTH_CHECK_FAILED: ${e.message}")
         }
     }
@@ -282,14 +277,11 @@ class ShieldRepository(
     }
 
     suspend fun insertShield(shield: ShieldEntity) {
-        android.util.Log.d("ZenithGoalShield", "DB_INSERT: pkg=${shield.packageName} type=${shield.type} appName=${shield.appName} timeLimit=${shield.timeLimitMinutes}m isWebsite=${shield.isWebsite}")
         DbLogBuffer.d("ZenithGoalShield", "DB_INSERT: pkg=${shield.packageName} type=${shield.type} appName=${shield.appName} timeLimit=${shield.timeLimitMinutes}m isWebsite=${shield.isWebsite}")
         try {
             shieldDao.insertShield(shield)
-            android.util.Log.d("ZenithGoalShield", "DB_INSERT_SUCCESS: pkg=${shield.packageName} type=${shield.type}")
             DbLogBuffer.d("ZenithGoalShield", "DB_INSERT_SUCCESS: pkg=${shield.packageName} type=${shield.type}")
         } catch (e: Exception) {
-            android.util.Log.e("ZenithGoalShield", "DB_INSERT_FAILED: pkg=${shield.packageName} error=${e.message}")
             DbLogBuffer.e("ZenithGoalShield", "DB_INSERT_FAILED: pkg=${shield.packageName} error=${e.message}")
             throw e
         }
@@ -306,7 +298,6 @@ class ShieldRepository(
         try {
             shieldDao.updateShield(shield)
         } catch (e: Exception) {
-            android.util.Log.e("ShieldRepo", "Gagal update database: ${e.message}")
         }
     }
 

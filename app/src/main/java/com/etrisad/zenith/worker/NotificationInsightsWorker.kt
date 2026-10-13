@@ -20,7 +20,6 @@ class NotificationInsightsWorker(context: Context, params: WorkerParameters) : C
     override suspend fun doWork(): Result {
         val pm = applicationContext.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
         if (!pm.isInteractive) {
-            android.util.Log.d("Zenith_SCREEN", "NotificationInsightsWorker SKIPPED: screen OFF")
             return Result.success()
         }
         val type = inputData.getString(KEY_INSIGHT_TYPE) ?: return Result.failure()

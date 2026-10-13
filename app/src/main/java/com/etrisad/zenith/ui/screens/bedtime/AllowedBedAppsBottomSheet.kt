@@ -62,7 +62,6 @@ fun AllowedBedAppsBottomSheet(
                     pm.getInstalledApplications(0)
                 }
             } catch (e: Exception) {
-                android.util.Log.e("AllowedBedApps", "Failed to get installed applications", e)
                 emptyList()
             }
 

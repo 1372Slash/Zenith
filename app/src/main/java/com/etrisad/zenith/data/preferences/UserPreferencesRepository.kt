@@ -1723,16 +1723,13 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
     }
 
     suspend fun addAlarm(alarm: AlarmItem) {
-        val t0 = System.currentTimeMillis()
         context.dataStore.edit { prefs ->
             val current = parseAlarms(prefs[PreferencesKeys.ALARMS_JSON] ?: "[]")
             prefs[PreferencesKeys.ALARMS_JSON] = serializeAlarms(current + alarm)
         }
-        android.util.Log.d("AlarmPerf", "addAlarm() took ${System.currentTimeMillis() - t0}ms")
     }
 
     suspend fun updateAlarm(alarm: AlarmItem) {
-        val t0 = System.currentTimeMillis()
         context.dataStore.edit { prefs ->
             val current = parseAlarms(prefs[PreferencesKeys.ALARMS_JSON] ?: "[]").toMutableList()
             val index = current.indexOfFirst { it.id == alarm.id }
@@ -1741,17 +1738,14 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
                 prefs[PreferencesKeys.ALARMS_JSON] = serializeAlarms(current)
             }
         }
-        android.util.Log.d("AlarmPerf", "updateAlarm() took ${System.currentTimeMillis() - t0}ms")
     }
 
     suspend fun deleteAlarm(alarmId: Long) {
-        val t0 = System.currentTimeMillis()
         context.dataStore.edit { prefs ->
             val current = parseAlarms(prefs[PreferencesKeys.ALARMS_JSON] ?: "[]").toMutableList()
             current.removeAll { it.id == alarmId }
             prefs[PreferencesKeys.ALARMS_JSON] = serializeAlarms(current)
         }
-        android.util.Log.d("AlarmPerf", "deleteAlarm($alarmId) took ${System.currentTimeMillis() - t0}ms")
     }
 
     suspend fun migrateAlarmIdsIfNeeded() {

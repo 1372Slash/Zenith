@@ -1,7 +1,6 @@
 package com.etrisad.zenith.service
 
 import android.accessibilityservice.AccessibilityService
-import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.etrisad.zenith.data.website.WebsiteRepository
@@ -182,7 +181,6 @@ class WebsiteUrlTracker(
             }
             return null
         } catch (e: Exception) {
-            Log.e("Zenith_URL", "Error extracting URL: ${e.message}")
             return null
         }
     }

@@ -74,7 +74,6 @@ fun WhitelistBottomSheet(
                     pm.getInstalledApplications(0)
                 }
             } catch (e: Exception) {
-                android.util.Log.e("WhitelistBottomSheet", "Failed to get installed applications", e)
                 emptyList()
             }
 

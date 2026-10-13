@@ -41,7 +41,6 @@ class ZenithHeartbeatReceiver : BroadcastReceiver() {
                             prefs.usageGlimpseEnabled || prefs.pomodoroEnabled
                         if (needsService) startMonitorLocked(context, action)
                     } catch (e: Exception) {
-                        android.util.Log.e("ZenithHeartbeat", "Gated heartbeat failed: ${e.message}")
                         try { startMonitorLocked(context, action) } catch (_: Exception) {}
                     } finally {
                         try { pending.finish() } catch (_: Exception) {}
@@ -52,7 +51,6 @@ class ZenithHeartbeatReceiver : BroadcastReceiver() {
             try {
                 startMonitorLocked(context, action)
             } catch (e: Exception) {
-                android.util.Log.e("ZenithHeartbeat", "Failed to process heartbeat: ${e.message}")
             }
         }
     }
@@ -70,7 +68,6 @@ class ZenithHeartbeatReceiver : BroadcastReceiver() {
         try {
             context.startForegroundService(monitorIntent)
         } catch (e: Exception) {
-            android.util.Log.w("ZenithHeartbeat", "Failed to start service: ${e.message}")
         }
         if (ZenithService.isServiceRunning) {
             val accessIntent = Intent(context, ZenithService::class.java).apply {

@@ -2,7 +2,6 @@ package com.etrisad.zenith.service
 
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.util.Log
 import android.view.inputmethod.InputMethodManager
 import com.etrisad.zenith.data.local.database.OverlayLogBuffer
 import com.etrisad.zenith.data.local.entity.FocusType
@@ -76,7 +75,6 @@ class OverlayActionHandler(
     }
 
     fun cancelPendingTimers() {
-        Log.d("Zenith_SCREEN", "OverlayActionHandler: cancelling ${allowedSessionHandlers.size} pending timers")
         allowedSessionHandlers.values.forEach { mainHandler.removeCallbacks(it) }
         allowedSessionHandlers.clear()
         websiteDismissHandlers.values.forEach { mainHandler.removeCallbacks(it) }
@@ -172,7 +170,6 @@ class OverlayActionHandler(
         getTotalUsageTodayFn: () -> Long,
     ) {
         if (!AppStateHolder.isScreenOn.value) {
-            Log.d("Zenith_SCREEN", "showShieldOverlay($targetPackageName) SKIPPED: screen OFF")
             return
         }
         OverlayLogBuffer.d("OverlayAct", "showShieldOverlay: $targetPackageName (shield type=${shield.type})")
@@ -396,18 +393,14 @@ class OverlayActionHandler(
 
     private fun createSessionTimerRunnable(packageName: String, expectedEndTime: Long): Runnable {
         return Runnable {
-            Log.d("Zenith_BT", "Timer FIRED for $packageName")
             if (!AppStateHolder.isScreenOn.value) {
-                Log.d("Zenith_BT", "Timer EXIT: screen OFF for $packageName")
                 return@Runnable
             }
             val entryEndTime = allowedApps[packageName]
             if (entryEndTime == null) {
-                Log.d("Zenith_BT", "Timer EXIT: no allowedApps entry for $packageName")
                 return@Runnable
             }
             if (allowedApps[packageName] != entryEndTime) {
-                Log.d("Zenith_BT", "Timer EXIT: entry replaced for $packageName")
                 return@Runnable
             }
             val fg = getForegroundAppName()
@@ -416,7 +409,6 @@ class OverlayActionHandler(
                 val activeDomain = WebsiteStateHolder.currentWebsiteDomain.value
                 val sessionDomain = packageName.removePrefix("zenith-web:")
                 if (activeDomain != sessionDomain) {
-                    Log.d("Zenith_BT", "Timer EXIT: website changed for $packageName (active=$activeDomain)")
                     allowedApps.remove(packageName)
                     // Session ended: ensure stale HUD cannot be resurrected on re-entry.
                     // Silent: this path had no overlay follow-up before, keep it that way.
@@ -424,7 +416,6 @@ class OverlayActionHandler(
                     return@Runnable
                 }
                 if (fg == null || !WebsiteRepository.isKnownBrowser(fg)) {
-                    Log.d("Zenith_BT", "Timer EXPIRE: browser not in foreground for $packageName (fg=$fg)")
                     saveWebsiteSessionUsage(packageName)
                     allowedApps.remove(packageName)
                     scope.launch(Dispatchers.Main) {
@@ -433,11 +424,9 @@ class OverlayActionHandler(
                     return@Runnable
                 }
             } else if (fg != packageName) {
-                Log.d("Zenith_BT", "Timer EXIT: foreground mismatch for $packageName (fg=$fg)")
                 return@Runnable
             }
             if (InterceptOverlayManager.isShowing && InterceptOverlayManager.currentPackage != packageName) {
-                Log.d("Zenith_BT", "Timer EXIT: overlay already showing for ${InterceptOverlayManager.currentPackage}")
                 return@Runnable
             }
             if (packageName.startsWith("zenith-web:")) {
@@ -448,13 +437,11 @@ class OverlayActionHandler(
             val mindful = mindfulGatewayStates[packageName]
             val shield = s ?: mindful
             if (shield == null) {
-                Log.d("Zenith_BT", "Timer EXIT: shield not found for $packageName")
                 // No shield to re-block, but the allowed session is over: drop stale HUD.
                 // Silent: preserve the old early-return behavior (no extra callbacks).
                 sessionUsageOverlayManager.hideHUD(packageName, invokeOnSessionEnd = false)
                 return@Runnable
             }
-            Log.d("Zenith_BT", "Timer EXECUTING action for $packageName (autoQuit=${shield.isAutoQuitEnabled})")
             // The allowed session has expired. The HUD runs on its own coarse timer
             // (10s/20s/30s/60s ticks) so its secondsLeft is typically still > 0 here
             // (e.g. 30s left). If we don't hide it now, going to home cancels the HUD
@@ -495,7 +482,6 @@ class OverlayActionHandler(
             scope.launch(Dispatchers.Main) {
                 sessionUsageOverlayManager.pauseSessionTimer(browserPackage)
             }
-            Log.d("Zenith_BT", "Paused browser session for $browserPackage (endTime=$endTime)")
         }
     }
 
@@ -524,7 +510,6 @@ class OverlayActionHandler(
                 }
             }
         }
-        Log.d("Zenith_BT", "Resumed browser session for $browserPackage (remaining=${remaining}ms)")
         return true
     }
 
@@ -569,7 +554,6 @@ class OverlayActionHandler(
         }
         websiteDismissHandlers[websitePkg] = runnable
         mainHandler.postDelayed(runnable, WEBSITE_DISMISS_GRACE_MS)
-        Log.d("Zenith_BT", "Website session pending dismiss for $websitePkg")
     }
 
     fun pauseWebsiteSession(websitePkg: String) {
@@ -590,7 +574,6 @@ class OverlayActionHandler(
         mainHandler.post {
             sessionUsageOverlayManager.pauseSessionTimer(websitePkg)
         }
-        Log.d("Zenith_BT", "Website session paused for $websitePkg")
     }
 
     fun cancelWebsiteSessionDismiss(websitePkg: String) {
@@ -609,7 +592,6 @@ class OverlayActionHandler(
                 sessionUsageOverlayManager.resumeSessionTimer(websitePkg)
                 sessionUsageOverlayManager.updateForegroundApp(websitePkg)
             }
-            Log.d("Zenith_BT", "Website session dismiss cancelled for $websitePkg (remaining=${remaining}ms)")
         }
     }
 
@@ -690,7 +672,6 @@ class OverlayActionHandler(
                     shieldRepository.insertHourlyUsage(hourlyEntities)
                 }
             } catch (e: Exception) {
-                Log.e("Zenith_BT", "Error saving website usage: ${e.message}")
             }
         }
 
@@ -733,7 +714,6 @@ class OverlayActionHandler(
         onAllowUseExtra: ((minutes: Int) -> Unit)? = null,
     ) {
         if (!AppStateHolder.isScreenOn.value) {
-            Log.d("Zenith_SCREEN", "showScheduleOverlay($packageName) SKIPPED: screen OFF")
             return
         }
         scope.launch(Dispatchers.Main) {
@@ -794,7 +774,6 @@ class OverlayActionHandler(
 
     fun showBedtimeOverlay(packageName: String) {
         if (!AppStateHolder.isScreenOn.value) {
-            Log.d("Zenith_SCREEN", "showBedtimeOverlay($packageName) SKIPPED: screen OFF")
             return
         }
         scope.launch(Dispatchers.Main) {
@@ -826,7 +805,6 @@ class OverlayActionHandler(
         onAllowUseExtra: ((minutes: Int) -> Unit)? = null,
     ) {
         if (!AppStateHolder.isScreenOn.value) {
-            Log.d("Zenith_SCREEN", "showWindDownOverlay($packageName) SKIPPED: screen OFF")
             return
         }
         scope.launch(Dispatchers.Main) {

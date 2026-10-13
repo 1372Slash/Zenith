@@ -1,7 +1,6 @@
 package com.etrisad.zenith.service
 
 import android.accessibilityservice.AccessibilityService
-import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
 import com.etrisad.zenith.data.website.NEW_TAB_BUTTON_ID_LIST
 import com.etrisad.zenith.data.website.WebsiteRepository
@@ -12,24 +11,20 @@ object BrowserNewTabAction {
 
     fun performNewTabClick(service: AccessibilityService, browserPackage: String): Boolean {
         if (!WebsiteRepository.isKnownBrowser(browserPackage)) {
-            Log.d(TAG, "Unknown browser: $browserPackage")
             return false
         }
 
         val info = NEW_TAB_BUTTON_ID_LIST[browserPackage]
         if (info == null) {
-            Log.d(TAG, "No new tab button info for: $browserPackage")
             return false
         }
 
         try {
             val root = service.rootInActiveWindow ?: run {
-                Log.d(TAG, "No root node in active window")
                 return false
             }
 
             if (root.packageName != browserPackage) {
-                Log.d(TAG, "Active window is not the browser: ${root.packageName}")
                 root.recycle()
                 return false
             }
@@ -45,7 +40,6 @@ object BrowserNewTabAction {
                         node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                         node.recycle()
                         root.recycle()
-                        Log.d(TAG, "Clicked tab switcher button for $browserPackage")
                         return true
                     }
                     for (i in 0 until node.childCount) {
@@ -54,7 +48,6 @@ object BrowserNewTabAction {
                             child.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                             child.recycle()
                             root.recycle()
-                            Log.d(TAG, "Clicked child of tab switcher for $browserPackage")
                             return true
                         }
                         child.recycle()
@@ -62,7 +55,6 @@ object BrowserNewTabAction {
                     node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                     node.recycle()
                     root.recycle()
-                    Log.d(TAG, "Clicked tab switcher (non-clickable fallback) for $browserPackage")
                     return true
                 }
                 tabSwitcherNodes?.forEach { it.recycle() }
@@ -77,7 +69,6 @@ object BrowserNewTabAction {
                     newTabNodes[0].performAction(AccessibilityNodeInfo.ACTION_CLICK)
                     newTabNodes.forEach { it.recycle() }
                     root.recycle()
-                    Log.d(TAG, "Clicked new tab button for $browserPackage")
                     return true
                 }
                 newTabNodes?.forEach { it.recycle() }
@@ -97,7 +88,6 @@ object BrowserNewTabAction {
                                 node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                                 nodes.forEach { it.recycle() }
                                 root.recycle()
-                                Log.d(TAG, "Clicked by content description '$desc' for $browserPackage")
                                 return true
                             }
                             for (i in 0 until node.childCount) {
@@ -107,7 +97,6 @@ object BrowserNewTabAction {
                                     child.recycle()
                                     nodes.forEach { it.recycle() }
                                     root.recycle()
-                                    Log.d(TAG, "Clicked child by text '$desc' for $browserPackage")
                                     return true
                                 }
                                 child.recycle()
@@ -119,10 +108,8 @@ object BrowserNewTabAction {
             }
 
             root.recycle()
-            Log.d(TAG, "Could not find any new tab button for $browserPackage")
             return false
         } catch (e: Exception) {
-            Log.e(TAG, "Error performing new tab click for $browserPackage: ${e.message}")
             return false
         }
     }

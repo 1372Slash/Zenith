@@ -9,7 +9,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import android.view.Gravity
 import com.etrisad.zenith.data.local.database.OverlayLogBuffer
 import android.view.WindowManager
@@ -648,7 +647,6 @@ class InterceptOverlayManager(
         } catch (e: Exception) {
             val currentTime = System.currentTimeMillis()
             if (e.message != lastOverlayError || currentTime - lastOverlayErrorTime > 30000) {
-                Log.e(TAG, "Error adding overlay for $currentPackage: ${e.message}", e)
                 lastOverlayError = e.message
                 lastOverlayErrorTime = currentTime
             }
@@ -803,7 +801,6 @@ class InterceptOverlayManager(
         } catch (e: Exception) {
             val currentTime = System.currentTimeMillis()
             if (e.message != lastOverlayError || currentTime - lastOverlayErrorTime > 30000) {
-                Log.e(TAG, "Error removing overlay: ${e.message}", e)
                 lastOverlayError = e.message
                 lastOverlayErrorTime = currentTime
             }

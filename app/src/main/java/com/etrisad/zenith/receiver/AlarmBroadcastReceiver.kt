@@ -11,7 +11,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.etrisad.zenith.R
 import com.etrisad.zenith.ZenithApplication
@@ -30,7 +29,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             ACTION_FIRE_ALARM -> {
                 val alarmTime = intent.getStringExtra(AlarmOverlayActivity.EXTRA_ALARM_TIME) ?: "07:00"
                 val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, 0L)
-                Log.d("AlarmReceiver", "onReceive: ACTION_FIRE_ALARM alarmTime=$alarmTime alarmId=$alarmId")
                 // Alarm berbunyi lagi -> reminder "akan bunyi lagi" sudah basi, notif complete lama juga basi.
                 cancelSmartWakeReminder(context)
                 cancelAutoRepeatComplete(context)
@@ -44,7 +42,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 val attempt = intent.getIntExtra(EXTRA_RETRIGGER_COUNT, 0)
                 val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, 0L)
                 val isSnooze = intent.getBooleanExtra(EXTRA_IS_SNOOZE, false)
-                Log.d("AlarmReceiver", "onReceive: ACTION_RE_TRIGGER alarmTime=$alarmTime attempt=$attempt alarmId=$alarmId isSnooze=$isSnooze")
                 cancelSmartWakeReminder(context)
                 cancelAutoRepeatComplete(context)
                 cancelMissedAlarmNotification(context)
@@ -66,20 +63,17 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 // Overlay lain sedang tampil (mis. alarm lain berbunyi) = user jelas
                 // sedang berinteraksi dengan HP -> anggap bangun, jangan mengulang.
                 if (AlarmOverlayActivity.isShowing) {
-                    Log.d("AlarmReceiver", "ACTION_CHECK_USAGE: overlay showing, assuming awake")
                     cancelSmartWakeReminder(context)
                     sendAutoRepeatCompleteNotification(context, alarmTime)
                     if (isOnce) disableAlarm(context, alarmTime)
                     return
                 }
                 val awake = isUserAwake(context, dismissAt)
-                Log.d("AlarmReceiver", "ACTION_CHECK_USAGE: alarmTime=$alarmTime, awake=$awake, isOnce=$isOnce attempt=$attempt alarmId=$alarmId dismissAt=$dismissAt")
                 if (!awake) {
                     scheduleReTrigger(context, alarmTime, attempt, alarmId)
                     // Biarkan reminder yang dipasang saat dismiss tetap hidup sampai
                     // re-trigger berikutnya berbunyi (lalu di-cancel di onReceive).
                 } else {
-                    Log.d("AlarmReceiver", "ACTION_CHECK_USAGE: user awake, auto-repeat completed")
                     cancelSmartWakeReminder(context)
                     sendAutoRepeatCompleteNotification(context, alarmTime)
                     if (isOnce) disableAlarm(context, alarmTime)
@@ -101,29 +95,25 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
         }
 
-        // 1. Audio dulu, langsung dari receiver: di Android 12+ background activity
-        //    launch dari receiver saat layar mati/terkunci diblokir sistem, sehingga
-        //    mengandalkan Activity untuk memutar suara = alarm sunyi total.
-        //    Kalau FGS-start ditolak sistem (bukan exemption), abaikan — Activity
-        //    yang terbuka via full-screen intent akan memutar ulang.
+        // 1. Audio first, directly from receiver: on Android 12+ background activity
+        //    launch from receiver while screen is off/locked is blocked by the system, so
+        //    relying on the Activity to play sound = totally silent alarm.
+        //    If FGS-start is denied by the system (not exemption), ignore — the Activity
+        //    opened via full-screen intent will replay.
         try {
             com.etrisad.zenith.service.AlarmPlaybackService.start(context, alarmTime)
         } catch (e: Exception) {
-            Log.w("AlarmReceiver", "showAlarm: playback service start failed: ${e.message}")
         }
 
-        // 2. Best-effort direct launch: jalan saat layar nyala/unlocked, diblokir
-        //    sistem saat terkunci — untuk kasus itu jalur (3) yang mengambil alih.
-        Log.d("AlarmReceiver", "showAlarm: trying startActivity")
+        // 2. Best-effort direct launch: works when screen is on/unlocked, blocked by
+        //    the system when locked — path (3) takes over for that case.
         try {
             context.startActivity(activityIntent)
-            Log.d("AlarmReceiver", "showAlarm: startActivity succeeded")
         } catch (e: Exception) {
-            Log.w("AlarmReceiver", "showAlarm: startActivity failed: ${e.message}")
         }
 
-        // 3. Jalur lockscreen resmi: full-screen intent. Sistem yang memutuskan
-        //    membuka overlay di atas keyguard — bukan kita via requestDismiss.
+        // 3. Official lockscreen path: full-screen intent. The system decides
+        //    opening the overlay above the keyguard — not us via requestDismiss.
         fireAlarmNotification(context, alarmTime, snoozeCount, activityIntent, alarmId)
     }
 
@@ -139,7 +129,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             if (Build.VERSION.SDK_INT >= 34) {
                 try {
                     if (manager != null && !manager.canUseFullScreenIntent()) {
-                        Log.w("AlarmReceiver", "fireAlarmNotification: full-screen intent permission revoked, overlay may not show over lockscreen")
                     }
                 } catch (_: Exception) { }
             }
@@ -172,9 +161,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             }
 
             manager.notify(NOTIFICATION_ID_FIRING, builder.build())
-            Log.d("AlarmReceiver", "fireAlarmNotification: notification posted")
         } catch (e: Exception) {
-            Log.e("AlarmReceiver", "fireAlarmNotification failed: ${e.message}", e)
         }
     }
 
@@ -208,27 +195,27 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
     }
 
     /**
-     * Smart-wake check: "apakah user benar-benar memakai HP setelah dismiss?"
+     * Smart-wake check: "is the user really using the phone after dismiss?"
      *
-     * Pelajaran dari dua iterasi sebelumnya:
-     * - v1 (satu event apa pun = bangun): SystemUI/keyguard saat dismiss ikut
-     *   kehitung -> false positive.
-     * - v2 (total durasi foreground >= 15s = bangun): launcher yang ditinggal
-     *   tampil setelah overlay ditutup ikut kehitung ekornya sampai 60s -> SELALU
-     *   dianggap bangun -> repeat TIDAK PERNAH bunyi. Durasi presence != interaksi.
+     * Lessons from two previous iterations:
+     * - v1 (any single event = awake): SystemUI/keyguard at dismiss counted
+     *   too -> false positive.
+     * - v2 (total foreground duration >= 15s = awake): launcher left showing
+     *   after overlay close counted its tail up to 60s -> ALWAYS
+     *   considered awake -> repeat NEVER fired. Presence duration != interaction.
      *
-     * v3 (sekarang), berlapis:
-     * 1. Layar mati -> tidur -> ULANGI. (Ditaruh, screen timeout.)
-     * 2. Keyguard terkunci -> tidur -> ULANGI. (Tombol power / kembali tidur.)
-     * 3. Layar nyala + tidak terkunci -> butuh bukti INTERAKSI nyata setelah
-     *    grace 5s (transisi tutup-overlay diabaikan):
-     *    - ada app non-launcher yang dibuka, ATAU
-     *    - ada app non-launcher yang menetap >= 20s (mis. sedang baca sebelum
-     *      alarm bunyi dan lanjut), ATAU
-     *    - launcher masuk foreground >= 2x (navigasi/home bolak-balik).
-     *    Duduk diam di home screen dengan layar menyala TIDAK dihitung memakai.
-     * - Tanpa izin PACKAGE_USAGE_STATS: fail-safe = anggap bangun (setop repeat,
-     *   hindari spam 12x).
+     * v3 (current), layered:
+     * 1. Screen off -> asleep -> REPEAT. (Put down, screen timeout.)
+     * 2. Keyguard locked -> asleep -> REPEAT. (Power button / back to sleep.)
+     * 3. Screen on + unlocked -> needs proof of REAL interaction after
+     *    5s grace (overlay-close transition ignored):
+     *    - a non-launcher app opened, OR
+     *    - a non-launcher app staying >= 20s (e.g. reading before
+     *      the alarm fired and continuing), OR
+     *    - launcher entering foreground >= 2x (back-and-forth nav/home).
+     *    Sitting idle on home screen with screen on does NOT count as using.
+     * - Without PACKAGE_USAGE_STATS permission: fail-safe = assume awake (stop repeat,
+     *   avoid 12x spam).
      */
     internal fun hasRecentUsage(context: Context, dismissAtMs: Long): Boolean {
         return isUserAwake(context, dismissAtMs)
@@ -237,25 +224,20 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
     internal fun isUserAwake(context: Context, dismissAtMs: Long): Boolean {
         try {
             if (!hasUsageStatsPermission(context)) {
-                Log.w("AlarmReceiver", "isUserAwake: no usage-stats permission, assuming awake (stop repeat to avoid spam)")
                 return true
             }
             val powerManager = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
             if (!powerManager.isInteractive) {
-                Log.d("AlarmReceiver", "isUserAwake: screen off -> asleep, will repeat")
                 return false
             }
             val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
             if (keyguardManager.isKeyguardLocked) {
-                Log.d("AlarmReceiver", "isUserAwake: keyguard locked -> asleep, will repeat")
                 return false
             }
             return hasGenuineInteraction(context, dismissAtMs)
         } catch (e: SecurityException) {
-            Log.w("AlarmReceiver", "isUserAwake permission denied: ${e.message}, assuming awake")
             return true
         } catch (e: Exception) {
-            Log.w("AlarmReceiver", "isUserAwake check failed: ${e.message}, assuming awake to avoid repeat-spam")
             return true
         }
     }
@@ -324,7 +306,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             // Aturan 1: app non-launcher dibuka setelah grace = interaksi nyata.
             for ((pkg, enters) in entersAfterGrace) {
                 if (enters >= 1 && pkg != launcherPackage) {
-                    Log.d("AlarmReceiver", "hasGenuineInteraction: $pkg opened after dismiss -> awake")
                     return true
                 }
             }
@@ -332,7 +313,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             // user lanjut memakai) = masih memakai.
             for ((pkg, total) in foregroundInWindow) {
                 if (pkg != launcherPackage && total >= MIN_SUSTAINED_FOREGROUND_MS) {
-                    Log.d("AlarmReceiver", "hasGenuineInteraction: $pkg sustained ${total}ms -> awake")
                     return true
                 }
             }
@@ -340,13 +320,10 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             // saja bisa jadi cuma transisi tutup-overlay yang telat).
             val launcherEnters = launcherPackage?.let { entersAfterGrace[it] ?: 0 } ?: 0
             if (launcherEnters >= 2) {
-                Log.d("AlarmReceiver", "hasGenuineInteraction: launcher x$launcherEnters -> awake")
                 return true
             }
-            Log.d("AlarmReceiver", "hasGenuineInteraction: window=[$windowStart, $now] enters=$entersAfterGrace sustained=$foregroundInWindow -> asleep")
             return false
         } catch (e: Exception) {
-            Log.w("AlarmReceiver", "hasGenuineInteraction failed: ${e.message}, assuming awake to avoid repeat-spam")
             return true
         }
     }
@@ -368,7 +345,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             }
             mode == android.app.AppOpsManager.MODE_ALLOWED
         } catch (_: Exception) {
-            // Kalau tidak bisa dicek, biarkan queryEvents yang menentukan (fail-safe di atas).
+            // If it can't be checked, let queryEvents decide (fail-safe above).
             true
         }
     }
@@ -450,7 +427,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                     }
                     context.startActivity(intent)
                 } catch (e: Exception) {
-                    Log.w("AlarmReceiver", "Failed to open exact alarm settings: ${e.message}")
                 }
             }
         }
@@ -466,7 +442,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                     context.startActivity(intent)
                 }
             } catch (e: Exception) {
-                Log.w("AlarmReceiver", "Failed to request battery optimization exemption: ${e.message}")
             }
         }
 
@@ -487,7 +462,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             )
 
             val triggerAtMillis = calculateTriggerMillis(alarmTime, days)
-            Log.d("AlarmReceiver", "scheduleAlarm: $alarmTime at $triggerAtMillis (now=${System.currentTimeMillis()})")
 
             setExactAlarm(context, triggerAtMillis, pendingIntent)
         }
@@ -543,7 +517,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 cancelSmartWakeReminder(context)
                 cancelFiringNotification(context)
             } else {
-                Log.d("AlarmReceiver", "cancelAlarm: cancelling all alarm intents")
                 for (h in 0..23) {
                     for (m in 0..59) {
                         val requestCode = REQUEST_CODE_ALARM_BASE + h * 100 + m
@@ -602,9 +575,9 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 if (alarmId > 0L) putExtra(EXTRA_ALARM_ID, alarmId)
             }
 
-            // Id-aware agar dua alarm beda tidak saling menimpa usage-check.
-            // Varian legacy tetap dijadwalkan ulang? Tidak — cukup id-aware + legacy
-            // dibatalkan dulu supaya tidak ada check ganda basi.
+            // Id-aware so two different alarms don't overwrite each other's usage-check.
+            // Re-schedule the legacy variant? No — id-aware + legacy is enough
+            // cancelled first so there's no stale double check.
             cancelUsageCheck(context, alarmTime, alarmId)
             val requestCode = if (alarmId > 0L) requestCodeForId(REQUEST_CODE_CHECK_BASE, alarmTime, alarmId)
             else requestCodeFor(REQUEST_CODE_CHECK_BASE, alarmTime)
@@ -614,7 +587,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             )
 
             val triggerAtMillis = System.currentTimeMillis() + 60_000L
-            Log.d("AlarmReceiver", "scheduleUsageCheck: $alarmTime +60s (requestCode=$requestCode dismissAt=$dismissAtMs)")
             setExactAlarm(context, triggerAtMillis, pendingIntent)
         }
 
@@ -643,10 +615,10 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            // PENTING: bersihkan dulu, BARU jadwalkan. cancelReTrigger menyapu
-            // kode snooze 0..50 — kalau urutannya dibalik, snooze yang baru
-            // dipasang langsung ikut ter-cancel dan TIDAK PERNAH bunyi.
-            // Snooze menggantikan smart-repeat: bersihkan rantai + reminder basi.
+            // IMPORTANT: clean first, THEN schedule. cancelReTrigger sweeps
+            // snooze codes 0..50 — if the order is reversed, the newly installed
+            // snooze gets cancelled too and NEVER fires.
+            // Snooze replaces smart-repeat: clean the chain + stale reminder.
             cancelReTrigger(context, alarmTime, alarmId)
             cancelUsageCheck(context, alarmTime, alarmId)
             cancelSmartWakeReminder(context)
@@ -684,7 +656,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         @JvmOverloads
         fun scheduleReTrigger(context: Context, alarmTime: String, attempt: Int = 0, alarmId: Long = 0L) {
             if (attempt >= MAX_RE_TRIGGER_ATTEMPTS) {
-                Log.d("AlarmReceiver", "scheduleReTrigger: max attempts reached for $alarmTime, stopping chain")
                 // Rantai habis: once-alarm harus dimatikan agar tidak nyangkut enabled
                 // tanpa jadwal; reminder basi juga dibersihkan.
                 cancelSmartWakeReminder(context)
@@ -706,7 +677,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             )
 
             val triggerAtMillis = System.currentTimeMillis() + 300_000L
-            Log.d("AlarmReceiver", "scheduleReTrigger: $alarmTime +5min (requestCode=$requestCode attempt=${attempt + 1})")
             setExactAlarm(context, triggerAtMillis, pendingIntent)
         }
 
@@ -765,7 +735,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 try {
                     if (!alarmManager.canScheduleExactAlarms()) {
-                        Log.w("AlarmReceiver", "Exact alarm not granted, using inexact fallback")
                         alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
                         return
                     }
@@ -774,11 +743,9 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             try {
                 alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
             } catch (e2: Exception) {
-                Log.e("AlarmReceiver", "setExactAndAllowWhileIdle failed: ${e2.message}")
                 try {
                     alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
                 } catch (e3: Exception) {
-                    Log.e("AlarmReceiver", "setAndAllowWhileIdle failed: ${e3.message}")
                 }
             }
         }
@@ -796,9 +763,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                     repo.updateAlarm(alarm.copy(enabled = false))
                 }
                 cancelAlarm(context, alarmTime, alarmId)
-                Log.d("AlarmReceiver", "disableAlarm: $alarmTime disabled")
             } catch (e: Exception) {
-                Log.w("AlarmReceiver", "disableAlarm failed: ${e.message}")
             }
         }
 
@@ -958,9 +923,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 }
 
                 manager.notify(NOTIFICATION_ID_SMART_WAKE_REMINDER, builder.build())
-                Log.d("AlarmReceiver", "showAutoRepeatReminderNotification: posted for $alarmTime, next ~$nextTime")
             } catch (e: Exception) {
-                Log.e("AlarmReceiver", "showAutoRepeatReminderNotification failed: ${e.message}", e)
             }
         }
 
@@ -1010,7 +973,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 }
             }
 
-            Log.d("AlarmReceiver", "calculateTriggerMillis: alarmTime=$alarmTime, now=$now, trigger=${calendar.timeInMillis}")
             return calendar.timeInMillis
         }
     }

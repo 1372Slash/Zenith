@@ -5,7 +5,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -25,7 +24,6 @@ class AlarmWatchdogWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        Log.d("AlarmWatchdog", "doWork: checking for missed alarms")
         return try {
             val app = applicationContext as ZenithApplication
             val prefs = app.userPreferencesRepository.userPreferencesFlow.first()
@@ -36,12 +34,11 @@ class AlarmWatchdogWorker(
             if (enabledAlarms.isEmpty()) return Result.success()
 
             val now = System.currentTimeMillis()
-            // Kalau user baru saja dismiss (<15 mnt), itu BUKAN missed — jangan spam.
-            // Dulu watchdog hanya cek isShowing sehingga alarm yang sudah didismiss
-            // normal tetap dituduh "Missed" di tiap run 15-menitan.
+            // If the user just dismissed (<15 min), that's NOT missed — don't spam.
+            // Previously the watchdog only checked isShowing so a normally dismissed
+            // alarm was accused "Missed" on every 15-min run.
             val lastDismiss = AlarmBroadcastReceiver.lastDismissAt(applicationContext)
             if (lastDismiss > 0L && now - lastDismiss < 15 * 60 * 1000L) {
-                Log.d("AlarmWatchdog", "skip: dismissed recently (${now - lastDismiss}ms ago)")
                 return Result.success()
             }
             for (alarm in enabledAlarms) {
@@ -68,17 +65,14 @@ class AlarmWatchdogWorker(
                         val lastDismissPerAlarm = prefs.getLong("last_dismiss_${alarm.timeString}", 0L)
                         val lastHandled = maxOf(lastFire, lastDismissPerAlarm)
                         if (lastHandled > 0L && now - lastHandled < windowMs) {
-                            Log.d("AlarmWatchdog", "skip missed ${alarm.timeString}: handled ${now - lastHandled}ms ago")
                             continue
                         }
-                        Log.w("AlarmWatchdog", "Missed alarm ${alarm.timeString}, firing now")
                         fireMissedAlarmNotification(alarm.timeString, alarm.id)
                     }
                 }
             }
             Result.success()
         } catch (e: Exception) {
-            Log.e("AlarmWatchdog", "doWork failed: ${e.message}", e)
             Result.success()
         }
     }
@@ -135,9 +129,7 @@ class AlarmWatchdogWorker(
             }
 
             manager.notify(2003, builder.build())
-            Log.d("AlarmWatchdog", "Posted missed-alarm notification for $alarmTime")
         } catch (e: Exception) {
-            Log.e("AlarmWatchdog", "fireMissedAlarmNotification failed: ${e.message}", e)
         }
     }
 
@@ -157,12 +149,10 @@ class AlarmWatchdogWorker(
                 ExistingPeriodicWorkPolicy.KEEP,
                 request
             )
-            Log.d("AlarmWatchdog", "Watchdog worker enqueued (15-min interval)")
         }
 
         fun cancel(context: Context) {
             WorkManager.getInstance(context).cancelUniqueWork(UNIQUE_WORK_NAME)
-            Log.d("AlarmWatchdog", "Watchdog worker cancelled")
         }
     }
 }

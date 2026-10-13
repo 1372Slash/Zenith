@@ -470,7 +470,6 @@ class HomeViewModel(
                 try {
                     shieldRepository.deleteOldHourlyUsage(thresholdDate)
                 } catch (e: Exception) {
-                    android.util.Log.e("HomeVM", "Failed to delete old hourly usage", e)
                 }
 
                 setupDataObservers()
@@ -479,14 +478,12 @@ class HomeViewModel(
                     try {
                         syncDataNowInternal(isInitial = true)
                     } catch (e: Exception) {
-                        android.util.Log.e("HomeVM", "Initial sync failed", e)
                         _uiState.update { it.copy(isLoading = false) }
                     }
                 }
 
                 startRealTimeUpdates()
             } catch (e: Exception) {
-                android.util.Log.e("HomeVM", "ViewModel init failed", e)
                 _uiState.update { it.copy(isLoading = false) }
             }
         }
@@ -495,15 +492,12 @@ class HomeViewModel(
     // Factories (not one-time vals): the self-healing observer re-collects after
     // a DB rebind, so each attempt must build streams from current DAO handles.
     private fun recentUsageFlow() = shieldRepository.getRecentUsage(21).onEach {
-        android.util.Log.d("ZenithDB", "DATA_OBSERVER: recentUsageFlow emitted ${it.size} items")
         DbLogBuffer.d("ZenithDB", "DATA_OBSERVER: recentUsageFlow emitted ${it.size} items")
     }
     private fun globalUsageFlow() = shieldRepository.getLastNDaysGlobalUsage(60).onEach {
-        android.util.Log.d("ZenithDB", "DATA_OBSERVER: globalUsageFlow emitted ${it.size} items")
         DbLogBuffer.d("ZenithDB", "DATA_OBSERVER: globalUsageFlow emitted ${it.size} items")
     }
     private val prefsFlow = userPreferencesRepository.userPreferencesFlow.onEach {
-        android.util.Log.d("ZenithDB", "DATA_OBSERVER: userPrefsFlow emitted")
         DbLogBuffer.d("ZenithDB", "DATA_OBSERVER: userPrefsFlow emitted")
     }
 
@@ -512,10 +506,8 @@ class HomeViewModel(
         global: List<DailyUsageEntity>,
         prefs: UserPreferences
     ): Boolean {
-        android.util.Log.d("ZenithDB", "DATA_OBSERVER: recentUsage=${usage.size} records, globalUsage=${global.size} records")
         DbLogBuffer.d("ZenithDB", "DATA_OBSERVER: recentUsage=${usage.size} records, globalUsage=${global.size} records")
         if (usage.isEmpty() && global.isEmpty()) {
-            android.util.Log.w("ZenithDB", "DATA_OBSERVER: BOTH recentUsage AND globalUsage are EMPTY!")
             DbLogBuffer.w("ZenithDB", "DATA_OBSERVER: BOTH recentUsage AND globalUsage are EMPTY!")
         }
         val forceUpdate = (lastPreferSystem != null && lastPreferSystem != prefs.preferSystemUsageHistory) ||
@@ -637,7 +629,6 @@ class HomeViewModel(
                             } catch (e: kotlinx.coroutines.CancellationException) {
                                 throw e
                             } catch (e: Exception) {
-                                android.util.Log.e("HomeVM", "Data observer collect failed: ${e.message}")
                             }
                         }
                     break
@@ -645,7 +636,6 @@ class HomeViewModel(
                     throw e
                 } catch (e: Exception) {
                     observerAttempt++
-                    android.util.Log.e("ZenithDB", "DATA_OBSERVER_DIED[$observerAttempt]: ${e::class.simpleName}: ${e.message} dbOpen=${shieldRepository.isDatabaseOpen()}, rebinding and retrying")
                     DbLogBuffer.e("ZenithDB", "DATA_OBSERVER_DIED[$observerAttempt]: ${e::class.simpleName}: ${e.message} dbOpen=${shieldRepository.isDatabaseOpen()}, rebinding and retrying")
                     try {
                         shieldRepository.rebindDatabase(
@@ -695,7 +685,6 @@ class HomeViewModel(
                     throw e
                 } catch (e: Exception) {
                     attempt++
-                    android.util.Log.e("ZenithDB", "WEBSITE_OBSERVER_DIED[$attempt]: ${e::class.simpleName}: ${e.message}, rebinding and retrying")
                     DbLogBuffer.e("ZenithDB", "WEBSITE_OBSERVER_DIED[$attempt]: ${e::class.simpleName}: ${e.message}, rebinding and retrying")
                     rebindDatabaseHandles("websiteObserver")
                     delay(5000)
@@ -745,7 +734,6 @@ class HomeViewModel(
 
                 usageHistoryManager.repairDataInternal(todayStr)
             } catch (e: Exception) {
-                android.util.Log.e("HomeVM", "Sync failed: ${e.message}")
             } finally {
                 userPreferencesRepository.refreshAppStreaks(shieldRepository)
                 userPreferencesRepository.refreshWebStreaks(shieldRepository)
@@ -770,7 +758,6 @@ class HomeViewModel(
                     syncManager.syncUsageData()
                 }
             } catch (e: Exception) {
-                android.util.Log.e("HomeVM", "Reset carryover failed: ${e.message}")
             } finally {
                 userPreferencesRepository.refreshAppStreaks(shieldRepository)
                 userPreferencesRepository.refreshWebStreaks(shieldRepository)
@@ -859,10 +846,8 @@ class HomeViewModel(
             shieldRepository.rebindDatabase(
                 com.etrisad.zenith.data.local.database.ZenithDatabase.getDatabase(context)
             )
-            android.util.Log.d("ZenithDB", "DB_REBOUND[$reason]: handles re-pointed, dbOpen=${shieldRepository.isDatabaseOpen()}")
             DbLogBuffer.d("ZenithDB", "DB_REBOUND[$reason]: handles re-pointed, dbOpen=${shieldRepository.isDatabaseOpen()}")
         } catch (e: Exception) {
-            android.util.Log.e("ZenithDB", "DB_REBIND_FAILED[$reason]: ${e::class.simpleName}: ${e.message}")
             DbLogBuffer.e("ZenithDB", "DB_REBIND_FAILED[$reason]: ${e::class.simpleName}: ${e.message}")
         }
     }
@@ -870,31 +855,24 @@ class HomeViewModel(
     private suspend fun performUsageStatsRefresh(showLoading: Boolean = true) {
         if (showLoading) _uiState.update { it.copy(isLoading = true) }
         val refreshId = System.currentTimeMillis() % 100000
-        android.util.Log.d("ZenithDB", "REFRESH_START[$refreshId]: allHistory=${allHistory.size} allShields=${allShields.size} globalHistory=${globalHistory.size}")
         DbLogBuffer.d("ZenithDB", "REFRESH_START[$refreshId]: allHistory=${allHistory.size} allShields=${allShields.size} globalHistory=${globalHistory.size}")
 
         try {
         if (allHistory.isEmpty()) {
-            android.util.Log.w("ZenithDB", "REFRESH[$refreshId]: allHistory EMPTY, falling back to direct Room query")
             DbLogBuffer.w("ZenithDB", "REFRESH[$refreshId]: allHistory EMPTY, falling back to direct Room query")
             try {
                 allHistory = loadRecentUsageFallback(30)
-                android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: FALLBACK allHistory loaded ${allHistory.size} records")
                 DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: FALLBACK allHistory loaded ${allHistory.size} records")
             } catch (e: Exception) {
-                android.util.Log.e("ZenithDB", "REFRESH[$refreshId]: FALLBACK allHistory failed: ${e::class.simpleName}: ${e.message} dbOpen=${shieldRepository.isDatabaseOpen()}")
                 DbLogBuffer.e("ZenithDB", "REFRESH[$refreshId]: FALLBACK allHistory failed: ${e::class.simpleName}: ${e.message} dbOpen=${shieldRepository.isDatabaseOpen()}")
             }
         }
         if (globalHistory.isEmpty()) {
-            android.util.Log.w("ZenithDB", "REFRESH[$refreshId]: globalHistory EMPTY, falling back to direct Room query")
             DbLogBuffer.w("ZenithDB", "REFRESH[$refreshId]: globalHistory EMPTY, falling back to direct Room query")
             try {
                 globalHistory = loadGlobalUsageFallback(60)
-                android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: FALLBACK globalHistory loaded ${globalHistory.size} records")
                 DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: FALLBACK globalHistory loaded ${globalHistory.size} records")
             } catch (e: Exception) {
-                android.util.Log.e("ZenithDB", "REFRESH[$refreshId]: FALLBACK globalHistory failed: ${e::class.simpleName}: ${e.message} dbOpen=${shieldRepository.isDatabaseOpen()}")
                 DbLogBuffer.e("ZenithDB", "REFRESH[$refreshId]: FALLBACK globalHistory failed: ${e::class.simpleName}: ${e.message} dbOpen=${shieldRepository.isDatabaseOpen()}")
             }
         }
@@ -905,7 +883,6 @@ class HomeViewModel(
         val (launcherApps, launcherPackage) = usageHistoryManager.getLauncherInfo()
         val excludePackages = setOfNotNull(this@HomeViewModel.context.packageName, launcherPackage) + SharedMonitoringState.excludedFromTrackingPackages
 
-        android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: launcherApps=${launcherApps.size} launcherPkg=$launcherPackage exclude=$excludePackages")
         DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: launcherApps=${launcherApps.size} launcherPkg=$launcherPackage exclude=$excludePackages")
 
         val now = System.currentTimeMillis()
@@ -932,11 +909,9 @@ class HomeViewModel(
 
         val dateFormat = usageHistoryManager.getDateFormat()
 
-        android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: fetching todayDetailed isSelectedToday=$isSelectedToday")
         val todayDetailed = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = isSelectedToday, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute)
         }
-        android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: todayDetailed apps=${todayDetailed.appUsageMap.size} hourlyKeys=${todayDetailed.hourlyUsageMap.size}")
         DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: todayDetailed apps=${todayDetailed.appUsageMap.size} hourlyKeys=${todayDetailed.hourlyUsageMap.size}")
         val filteredTodayUsage = todayDetailed.appUsageMap.filter { (pkg, _) ->
             val isUserApp = pkg in launcherApps || pm.getLaunchIntentForPackage(pkg) != null
@@ -946,7 +921,6 @@ class HomeViewModel(
         }.toMutableMap()
 
         if (isSelectedToday && timeSinceMidnight > 300_000L && filteredTodayUsage.values.sum() == 0L) {
-            android.util.Log.w("HomeVM", "UsageHelper empty, falling back to queryAndAggregateUsageStats")
             val systemFallback = withContext(Dispatchers.IO) {
                 usm.queryAndAggregateUsageStats(todayStart, now)
             }
@@ -1031,7 +1005,6 @@ class HomeViewModel(
         val totalToday = filteredTodayUsage.values.sum().coerceAtMost(timeSinceMidnight)
 
         if (isSelectedToday && totalToday == 0L && timeSinceMidnight > 300_000L) {
-            android.util.Log.w("HomeVM", "totalToday is 0 after refresh, scheduling deferred repair")
             val todayStr = dateFormat.format(Date(todayStart))
             viewModelScope.launch {
                 delay(100)
@@ -1081,7 +1054,6 @@ class HomeViewModel(
             }
         }
 
-        android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: appList=${appList.size} appTotals=${appTotals.size} filteredToday=${filteredTodayUsage.size} selectedDayHistory=${allHistory.filter { it.date == dateFormat.format(Date(if (selectedDate == 0L) todayStart else selectedDate)) }.size}")
         DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: appList=${appList.size} appTotals=${appTotals.size} filteredToday=${filteredTodayUsage.size} selectedDayHistory=${allHistory.filter { it.date == dateFormat.format(Date(if (selectedDate == 0L) todayStart else selectedDate)) }.size}")
 
         val allAppsUsage = appList.sortedByDescending { it.totalTimeVisible }
@@ -1108,11 +1080,9 @@ class HomeViewModel(
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            android.util.Log.e("ZenithDB", "REFRESH[$refreshId]: WEBSITE_FAILED ${e::class.simpleName}: ${e.message}")
             DbLogBuffer.e("ZenithDB", "REFRESH[$refreshId]: WEBSITE_FAILED ${e::class.simpleName}: ${e.message}")
             emptyList()
         }
-        android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: STEP_WEBSITE_DONE websiteSize=${websiteUsage.size}")
         DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: STEP_WEBSITE_DONE websiteSize=${websiteUsage.size}")
         val selectedDayHistory = allHistory.filter { it.date == selectedDateStr }
         val appSum = allAppsUsage.sumOf { it.totalTimeVisible }
@@ -1140,7 +1110,6 @@ class HomeViewModel(
             }
             shield.copy(remainingTimeMillis = finalRemaining)
         }
-        android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: STEP_SHIELDS_DONE shieldsSize=${liveShields.size}")
         DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: STEP_SHIELDS_DONE shieldsSize=${liveShields.size}")
 
         val selectedDayTotal = if (isSelectedToday) {
@@ -1177,7 +1146,6 @@ class HomeViewModel(
         } catch (_: Exception) {
             emptyList()
         }
-        android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: STEP_HOURLY_DONE dbHourlySize=${dbHourly.size}")
         DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: STEP_HOURLY_DONE dbHourlySize=${dbHourly.size}")
         val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         val newlyLocked = mutableListOf<HourlyUsageEntity>()
@@ -1404,7 +1372,6 @@ class HomeViewModel(
         // can recover instead of staying stuck on zeros.
         val wasEmpty = prevState.allAppsUsage.isEmpty() || prevState.dailyUsageHistory.isEmpty()
 
-        android.util.Log.d("ZenithDB", "REFRESH[$refreshId]: UI_UPDATE prevTotal=${prevState.totalScreenTime} selectedDayTotal=$selectedDayTotal todayChanged=$todayChanged todayBarChanged=$todayBarChanged wasEmpty=$wasEmpty appListSize=${allAppsUsage.size} hourlySize=${hourlyUsage.size} shields=${liveShields.size} websiteSize=${websiteUsage.size}")
         DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: UI_UPDATE prevTotal=${prevState.totalScreenTime} selectedDayTotal=$selectedDayTotal todayChanged=$todayChanged todayBarChanged=$todayBarChanged wasEmpty=$wasEmpty appListSize=${allAppsUsage.size} hourlySize=${hourlyUsage.size} shields=${liveShields.size} websiteSize=${websiteUsage.size}")
 
         if (!todayChanged && !todayBarChanged && !wasEmpty) {
@@ -1447,23 +1414,19 @@ class HomeViewModel(
             ) }
         }
 
-        android.util.Log.d("ZenithDB", "REFRESH_DONE[$refreshId]: totalScreenTime=${_uiState.value.totalScreenTime} appListSize=${_uiState.value.allAppsUsage.size} hourlySize=${_uiState.value.hourlyUsage.size} shields=${_uiState.value.activeShields.size} websiteSize=${_uiState.value.websiteUsage.size}")
         DbLogBuffer.d("ZenithDB", "REFRESH_DONE[$refreshId]: totalScreenTime=${_uiState.value.totalScreenTime} appListSize=${_uiState.value.allAppsUsage.size} hourlySize=${_uiState.value.hourlyUsage.size} shields=${_uiState.value.activeShields.size} websiteSize=${_uiState.value.websiteUsage.size}")
 
         } catch (e: kotlinx.coroutines.CancellationException) {
             val scopeActive = viewModelScope.isActive
             val jobActive = kotlin.coroutines.coroutineContext[kotlinx.coroutines.Job]?.isActive
             val header = "REFRESH_CANCELLED[$refreshId]: scopeActive=$scopeActive jobActive=$jobActive"
-            android.util.Log.e("ZenithDB", header)
             DbLogBuffer.e("ZenithDB", header)
             val stackLines = e.stackTraceToString().lines().take(8)
             for (line in stackLines) {
-                android.util.Log.e("ZenithDB", "  $line")
                 DbLogBuffer.e("ZenithDB", "  $line")
             }
             if (jobActive == false) throw e
         } catch (e: Exception) {
-            android.util.Log.e("ZenithDB", "REFRESH_FAILED[$refreshId]: ${e::class.simpleName}: ${e.message}")
             DbLogBuffer.e("ZenithDB", "REFRESH_FAILED[$refreshId]: ${e::class.simpleName}: ${e.message}")
         }
     }
@@ -1540,11 +1503,9 @@ class HomeViewModel(
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             throw e
                         } catch (e: Exception) {
-                            android.util.Log.e("HomeVM", "Error in website detail combine for $packageName: ${e.message}")
                             _appDetailUiState.update { it.copy(isLoading = false) }
                         }
                     }.catch { e ->
-                        android.util.Log.e("HomeVM", "Website detail flow failed for $packageName: ${e.message}")
                         _appDetailUiState.update { it.copy(isLoading = false) }
                     }.collect()
                 } else {
@@ -1607,18 +1568,15 @@ class HomeViewModel(
                         } catch (e: kotlinx.coroutines.CancellationException) {
                             throw e
                         } catch (e: Exception) {
-                            android.util.Log.e("HomeVM", "Error in app detail combine for $packageName: ${e.message}")
                             _appDetailUiState.update { it.copy(isLoading = false) }
                         }
                     }.catch { e ->
-                        android.util.Log.e("HomeVM", "App detail flow failed for $packageName: ${e.message}")
                         _appDetailUiState.update { it.copy(isLoading = false) }
                     }.collect()
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                android.util.Log.e("HomeVM", "App detail load failed for $packageName: ${e.message}")
                 _appDetailUiState.update { it.copy(isLoading = false) }
             }
         }
@@ -1737,7 +1695,6 @@ class HomeViewModel(
                         val checkTodayStart = usageHistoryManager.getMidnight(0)
                         val checkTimeSinceMidnight = now2 - checkTodayStart
                         if (_uiState.value.totalScreenTime == 0L && checkTimeSinceMidnight > 300_000L) {
-                            android.util.Log.w("HomeVM", "Sanity: totalScreenTime=0, scheduling repair")
                             val todayStr = usageHistoryManager.getDateFormat().format(Date(checkTodayStart))
                             viewModelScope.launch {
                                 delay(100)
@@ -1762,7 +1719,6 @@ class HomeViewModel(
                     DbLogBuffer.w("ZenithDB", "REALTIME_CANCELLED: scopeActive=true message=${e.message}")
                     delay(5000)
                 } catch (e: Exception) {
-                    android.util.Log.e("HomeVM", "Real-time update failed: ${e.message}")
                     delay(5000)
                 }
             }
@@ -1949,7 +1905,6 @@ class HomeViewModel(
 
     override fun onCleared() {
         DbLogBuffer.e("ZenithDB", "HOME_VM_CLEARED: HomeViewModel being destroyed - viewModelScope will cancel all coroutines")
-        android.util.Log.e("HomeVM", "HomeViewModel onCleared - scope cancellation imminent")
         super.onCleared()
     }
 

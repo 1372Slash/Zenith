@@ -98,12 +98,10 @@ class FocusViewModel(
                 .collect { shields ->
                     try {
                         allShields = shields
-                        android.util.Log.d("ZenithGoalShield", "VM_COLLECT: received ${shields.size} shields from repo Flow")
                         DbLogBuffer.d("ZenithGoalShield", "VM_COLLECT: received ${shields.size} shields from repo Flow")
                         updateShieldedLists(shields)
                         updateInstalledAppsFilter()
                     } catch (e: Exception) {
-                        android.util.Log.e("FocusViewModel", "Error in allShields collector: ${e.message}")
                     }
                 }
         }
@@ -170,7 +168,6 @@ class FocusViewModel(
                     try {
                         com.etrisad.zenith.util.ScreenUsageHelper.fetchAppUsageTodayTillNow(usm, dayStartHour = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartHour, dayStartMinute = com.etrisad.zenith.service.SharedMonitoringState.cachedDayStartMinute)
                     } catch (e: Exception) {
-                        android.util.Log.e("FocusViewModel", "Error fetching usage stats: ${e.message}")
                         emptyMap<String, Long>()
                     }
                 }
@@ -197,7 +194,6 @@ class FocusViewModel(
                 val shields = liveShields.filter { it.type == FocusType.SHIELD }
                 val goals = liveShields.filter { it.type == FocusType.GOAL }
 
-                android.util.Log.d("ZenithGoalShield", "UI_UPDATE: shields=${shields.size} goals=${goals.size} (from ${latestShields.size} total)")
                 DbLogBuffer.d("ZenithGoalShield", "UI_UPDATE: shields=${shields.size} goals=${goals.size} (from ${latestShields.size} total)")
 
                 _uiState.update { currentState ->
@@ -207,8 +203,6 @@ class FocusViewModel(
                     )
                 }
             } catch (e: Exception) {
-                android.util.Log.e("FocusViewModel", "Critical error in updateShieldedLists: ${e.message}")
-                android.util.Log.e("ZenithGoalShield", "UI_UPDATE_ERROR: ${e.message}")
                 DbLogBuffer.e("ZenithGoalShield", "UI_UPDATE_ERROR: ${e.message}")
                 val shields = latestShields.filter { it.type == FocusType.SHIELD }
                 val goals = latestShields.filter { it.type == FocusType.GOAL }
@@ -269,7 +263,6 @@ class FocusViewModel(
                             pm.getInstalledApplications(0)
                         }
                     } catch (e: Exception) {
-                        android.util.Log.e("FocusViewModel", "Failed to get installed applications", e)
                         emptyList()
                     }
 
@@ -298,7 +291,6 @@ class FocusViewModel(
                 _allInstalledApps.value = apps
                 updateInstalledAppsFilter()
             } catch (e: Exception) {
-                android.util.Log.e("FocusViewModel", "Error loading apps: ${e.message}")
             } finally {
                 _uiState.value = _uiState.value.copy(isLoadingApps = false)
             }
@@ -361,7 +353,6 @@ class FocusViewModel(
                 }
                 .take(limit)
         } catch (e: Exception) {
-            android.util.Log.e("FocusViewModel", "Error fetching top apps: ${e.message}")
             emptyList()
         }
     }
@@ -630,10 +621,8 @@ class FocusViewModel(
         val websiteUrl = if (isWebsite) (url ?: _uiState.value.selectedWebsiteUrl) else null
         viewModelScope.launch {
             try {
-                android.util.Log.d("ZenithGoalShield", "SAVE_START: pkg=$packageName type=$type isWebsite=$isWebsite appName=$appName timeLimit=${timeLimitMinutes}m")
                 DbLogBuffer.d("ZenithGoalShield", "SAVE_START: pkg=$packageName type=$type isWebsite=$isWebsite appName=$appName timeLimit=${timeLimitMinutes}m")
                 val existing = allShields.find { it.packageName == packageName }
-                android.util.Log.d("ZenithGoalShield", "SAVE_EXISTING: ${if (existing != null) "UPDATE existing ${existing.type}" else "NEW insert"}")
                 DbLogBuffer.d("ZenithGoalShield", "SAVE_EXISTING: ${if (existing != null) "UPDATE existing ${existing.type}" else "NEW insert"}")
 
                 val shouldResetStreak = existing?.let {
@@ -684,12 +673,9 @@ class FocusViewModel(
                     activeDays = activeDays
                 )
                 shieldRepository.insertShield(shield); com.etrisad.zenith.service.SharedMonitoringState.notifiedGoals.remove(packageName)
-                android.util.Log.d("ZenithGoalShield", "SAVE_DONE: pkg=$packageName type=$type - insertShield called, cache will update via Flow")
                 DbLogBuffer.d("ZenithGoalShield", "SAVE_DONE: pkg=$packageName type=$type - insertShield called, cache will update via Flow")
             } catch (e: Exception) {
-                android.util.Log.e("ZenithGoalShield", "SAVE_ERROR: pkg=$packageName type=$type error=${e.message}", e)
                 DbLogBuffer.e("ZenithGoalShield", "SAVE_ERROR: pkg=$packageName type=$type error=${e.message}")
-                android.util.Log.e("FocusViewModel", "Error saving focus: ${e.message}")
             } finally {
                 closeSettingsSheet()
             }

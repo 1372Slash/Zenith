@@ -62,7 +62,6 @@ fun AlarmScreen(
     var sortType by remember { mutableStateOf(AlarmSortType.TIME) }
 
     val allAlarms = remember(prefs.alarmsJson) {
-        android.util.Log.d("AlarmDebug", "allAlarms reparsed, raw json=${prefs.alarmsJson}")
         preferencesRepository.parseAlarms(prefs.alarmsJson)
     }
 
@@ -135,10 +134,10 @@ fun AlarmScreen(
 
     fun deleteSelected() {
         scope.launch {
-            // Batalkan PendingIntent + notif per alarm SEBELUM hapus dari repo.
-            // Dulu id-specific exact alarm tidak ikut tersapu (cancel-all hanya sapu
-            // legacy) sehingga alarm yang dihapus masih bisa berbunyi (ghost firing)
-            // dan notif reminder-nya basi menumpuk.
+            // Cancel PendingIntent + notification per alarm BEFORE removing from repo.
+            // Previously id-specific exact alarms were not swept (cancel-all only swept
+            // legacy) so deleted alarms could still fire (ghost firing)
+            // and stale reminder notifications would pile up.
             val targets = alarmList.filter { it.id in selectedAlarmIds }
             targets.forEach { target ->
                 try {
@@ -147,6 +146,39 @@ fun AlarmScreen(
             }
             selectedAlarmIds.forEach { id ->
                 preferencesRepository.deleteAlarm(id)
+            }
+            exitSelectionMode()
+            scope.launch(Dispatchers.IO) {
+                rescheduleAlarms(context, preferencesRepository, prefs.alarmMasterEnabled)
+            }
+        }
+    }
+
+    fun duplicateSelected() {
+        val targets = alarmList.filter { it.id in selectedAlarmIds }
+        if (targets.isEmpty()) return
+        scope.launch {
+            val created = mutableListOf<AlarmItem>()
+            targets.forEach { orig ->
+                val freshId = AlarmItem.createNew(hour = orig.hour, minute = orig.minute, name = orig.name).id
+                val baseName = orig.name.trim()
+                val genericNumber = Regex("""^Alarm #(\d+)$""").find(baseName)?.groupValues?.get(1)?.toIntOrNull()
+                val newName = if (genericNumber != null) {
+                    AlarmItem.nextName(allAlarms + created)
+                } else {
+                    val copyBase = if (baseName.endsWith(" (Copy)")) baseName else "$baseName (Copy)"
+                    var candidate = copyBase
+                    var suffix = 2
+                    val taken = (allAlarms.map { it.name } + created.map { it.name }).toSet()
+                    while (candidate in taken) {
+                        candidate = "$copyBase $suffix"
+                        suffix++
+                    }
+                    candidate
+                }
+                val copy = orig.copy(id = freshId, name = newName)
+                preferencesRepository.addAlarm(copy)
+                created.add(copy)
             }
             exitSelectionMode()
             scope.launch(Dispatchers.IO) {
@@ -307,7 +339,6 @@ fun AlarmScreen(
                     ) {
                         SwipeableItemContainer(
                             onEdit = {
-                                android.util.Log.d("AlarmDebug", "Opening edit sheet (swipe) for id=${alarm.id}, name=${alarm.name}, time=${alarm.hour}:${alarm.minute}")
                                 editingAlarm = alarm
                             },
                             onDelete = {
@@ -338,7 +369,6 @@ fun AlarmScreen(
                                     if (isSelectionMode) {
                                         toggleSelection(alarm.id)
                                     } else {
-                                        android.util.Log.d("AlarmDebug", "Opening edit sheet (tap) for id=${alarm.id}, name=${alarm.name}, time=${alarm.hour}:${alarm.minute}")
                                         editingAlarm = alarm
                                     }
                                 },
@@ -374,6 +404,7 @@ fun AlarmScreen(
                     totalCount = alarmList.size,
                     onClose = { exitSelectionMode() },
                     onSelectAll = { selectAll() },
+                    onDuplicate = { duplicateSelected() },
                     onDelete = { showDeleteConfirmation = true },
                     innerPadding = innerPadding
                 )
@@ -625,6 +656,7 @@ private fun SelectionTopBar(
     totalCount: Int,
     onClose: () -> Unit,
     onSelectAll: () -> Unit,
+    onDuplicate: () -> Unit,
     onDelete: () -> Unit,
     innerPadding: PaddingValues
 ) {
@@ -682,6 +714,20 @@ private fun SelectionTopBar(
                 imageVector = if (selectedCount == totalCount) Icons.Outlined.Deselect else Icons.Outlined.SelectAll,
                 contentDescription = if (selectedCount == totalCount) "Deselect all" else "Select all",
                 tint = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        IconButton(
+            onClick = onDuplicate,
+            enabled = selectedCount > 0,
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.ContentCopy,
+                contentDescription = "Duplicate selected",
+                tint = if (selectedCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
             )
         }
 
@@ -985,22 +1031,16 @@ private suspend fun rescheduleAlarms(
     preferencesRepository: UserPreferencesRepository,
     masterEnabled: Boolean
 ) = withContext(Dispatchers.IO) {
-    val t0 = System.currentTimeMillis()
-
-    val tCancel = System.currentTimeMillis()
-    val tRead = System.currentTimeMillis()
     val alarms = preferencesRepository.getAlarmsSnapshot()
-    android.util.Log.d("AlarmPerf", "rescheduleAlarms: getAlarmsSnapshot took ${System.currentTimeMillis() - tRead}ms")
     AlarmBroadcastReceiver.cancelAlarm(context)
     for (alarm in alarms) {
         AlarmBroadcastReceiver.cancelAlarm(context, alarm.timeString, alarm.id)
     }
-    // Sapu juga notif basi (reminder/complete/firing) setiap reschedule agar shade
-    // tidak menumpuk setelah alarm dimatikan/diubah.
+    // Also sweep stale notifications (reminder/complete/firing) on every reschedule
+    // so the shade doesn't pile up after an alarm is turned off/edited.
     try {
         AlarmBroadcastReceiver.cancelAllAlarmNotifications(context)
     } catch (_: Exception) { }
-    android.util.Log.d("AlarmPerf", "rescheduleAlarms: cancelAlarm took ${System.currentTimeMillis() - tCancel}ms")
 
     if (masterEnabled) {
         val enabledAlarms = alarms.filter { it.enabled }
@@ -1008,6 +1048,4 @@ private suspend fun rescheduleAlarms(
             AlarmBroadcastReceiver.scheduleAlarm(context, alarm.timeString, alarm.days, alarm.id)
         }
     }
-
-    android.util.Log.d("AlarmPerf", "rescheduleAlarms() total took ${System.currentTimeMillis() - t0}ms, masterEnabled=$masterEnabled")
 }

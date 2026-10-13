@@ -15,7 +15,6 @@ import android.os.IBinder
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
 import com.etrisad.zenith.R
@@ -95,7 +94,6 @@ class AlarmPlaybackService : Service() {
         autoStopJob = serviceScope.launch {
             delay(PLAYBACK_AUTO_STOP_MS)
             if (isAlarmActive) {
-                Log.w("AlarmPlayback", "Auto-stopping playback after 10min timeout")
                 stopPlayback()
             }
         }
@@ -178,7 +176,6 @@ class AlarmPlaybackService : Service() {
                 val preventVolDrop = currentAlarm?.preventVolumeDrop ?: false
                 val vibrateEnabled = currentAlarm?.vibrateEnabled ?: true
 
-                Log.d("AlarmPlayback", "playAlarmSound: alarmTime=$alarmTime gradualVolume=$gradualVolume gradualVolumeDuration=${gradualVolumeDuration}s alarmVolume=$alarmVolumeLevel vibrate=$vibrateEnabled ttsTalkAfter=${ttsTalkAfter}s ttsRepeat=$ttsRepeat")
 
                 val soundOff = !prefs.alarmSoundEnabled || currentAlarm?.soundEnabled == false
                 val ttsEnabled = currentAlarm?.ttsEnabled ?: false
@@ -214,7 +211,6 @@ class AlarmPlaybackService : Service() {
                             if (gradualVolume) setVolume(0f, 0f) else setVolume(alarmVolumeLevel, alarmVolumeLevel)
 
                             setOnErrorListener { mp, what, extra ->
-                                Log.e("AlarmPlayback", "MediaPlayer error: what=$what extra=$extra")
                                 try {
                                     mp.reset()
                                     mp.setDataSource(
@@ -223,7 +219,6 @@ class AlarmPlaybackService : Service() {
                                     )
                                     mp.prepareAsync()
                                 } catch (e: Exception) {
-                                    Log.e("AlarmPlayback", "Fallback sound also failed: ${e.message}")
                                 }
                                 true
                             }
@@ -244,11 +239,9 @@ class AlarmPlaybackService : Service() {
                             prepareAsync()
                         }
                     } catch (e: Exception) {
-                        Log.e("AlarmPlayback", "playAlarmSound failed: ${e.message}", e)
                     }
                 }
             } catch (e: Exception) {
-                Log.e("AlarmPlayback", "playAlarmSound outer failed: ${e.message}", e)
             }
         }
     }
@@ -308,7 +301,6 @@ class AlarmPlaybackService : Service() {
                                 if (result == android.speech.tts.TextToSpeech.ERROR) {
                                     ttsRetryCount++
                                     if (ttsRetryCount >= 3) {
-                                        Log.e("AlarmPlayback", "TTS failed after 3 retries, giving up")
                                         return@launch
                                     }
                                     tts?.stop(); tts?.shutdown()
@@ -318,7 +310,6 @@ class AlarmPlaybackService : Service() {
                             } catch (e: Exception) {
                                 ttsRetryCount++
                                 if (ttsRetryCount >= 3) {
-                                    Log.e("AlarmPlayback", "TTS exception after 3 retries, giving up")
                                     return@launch
                                 }
                                 tts?.stop(); tts?.shutdown()
@@ -335,7 +326,6 @@ class AlarmPlaybackService : Service() {
                 }
             }
         } catch (e: Exception) {
-            Log.w("AlarmPlayback", "TTS failed: ${e.message}")
         }
     }
 
@@ -369,7 +359,6 @@ class AlarmPlaybackService : Service() {
                 vibrator?.vibrate(pattern, 0)
             }
         } catch (e: Exception) {
-            Log.w("AlarmPlayback", "Failed to start vibration: ${e.message}")
         }
     }
 
@@ -391,7 +380,6 @@ class AlarmPlaybackService : Service() {
                 audioManager.setStreamVolume(AudioManager.STREAM_ALARM, maxVol / 2, 0)
             }
         } catch (e: Exception) {
-            Log.w("AlarmPlayback", "Failed to force alarm volume: ${e.message}")
         }
     }
 

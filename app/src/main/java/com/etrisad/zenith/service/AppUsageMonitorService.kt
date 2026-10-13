@@ -17,7 +17,6 @@ import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.os.Build
 import android.os.IBinder
-import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.etrisad.zenith.R
@@ -143,18 +142,15 @@ class AppUsageMonitorService : Service() {
         override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
             when (intent?.action) {
                 Intent.ACTION_SCREEN_ON -> {
-                    Log.d("Zenith_SCREEN", "SCREEN ON received")
                     isScreenOn = true
                     AppStateHolder.isScreenOn.value = true
                     currentSessionPackage = null
                     cachedForegroundApp = null
                     cachedForegroundAppTime = 0L
                     cancelScreenOffGoalAlarm()
-                    Log.w("ZenithAUMS", "SCREEN ON: starting foreground")
                     try {
                         startForegroundSafely()
                     } catch (e: Exception) {
-                        Log.e("ZenithAUMS", "startForeground failed: ${e.message}")
                     }
                     overlayManager.hideOverlay()
                     val currentApp = getForegroundApp()
@@ -172,16 +168,12 @@ class AppUsageMonitorService : Service() {
                         }
                     }
                     if (!monitoringLoopActive) {
-                        Log.w("ZenithAUMS", "SCREEN ON: calling startMonitoring()")
                         startMonitoring()
                     } else {
-                        Log.w("ZenithAUMS", "SCREEN ON: monitoringLoopActive=$monitoringLoopActive, SKIP startMonitoring")
                     }
-                    Log.d("Zenith_SCREEN", "SCREEN ON: restoring HUD views")
                     sessionUsageOverlayManager.restoreAllHUDViews()
                 }
                 Intent.ACTION_SCREEN_OFF -> {
-                    Log.d("Zenith_SCREEN", "SCREEN OFF received")
                     isScreenOn = false
                     AppStateHolder.isScreenOn.value = false
                     currentShieldCache = null
@@ -192,13 +184,11 @@ class AppUsageMonitorService : Service() {
                     foregroundAppJob = null
                     monitoringLoopActive = false
                     overlayActionHandler.cancelPendingTimers()
-                    Log.d("Zenith_SCREEN", "Calling hideAllHUDViews() due to SCREEN OFF")
             sessionUsageOverlayManager.destroyAllHUDs()
                     stopEyeCareTimer()
                     usageGlimpseManager?.hide()
                     usageGlimpseJob?.cancel()
                     scheduleScreenOffGoalAlarm()
-                    Log.w("ZenithAUMS", "SCREEN OFF: monitoring cancelled")
                     // Battery: if nothing needs background work, let the service die
                     // instead of keeping heartbeat/monitor alive.
                     stopSelfIfIdle()
@@ -230,7 +220,6 @@ class AppUsageMonitorService : Service() {
             }
             "com.etrisad.zenith.action.SCREEN_OFF_GOAL_CHECK" -> {
                 if (!isScreenOn) {
-                    Log.d("Zenith_SCREEN", "SCREEN_OFF_GOAL_CHECK: running checkGoalReminders()")
                     serviceScope.launch {
                         ensureGoalCacheLoaded()
                         checkGoalReminders()
@@ -238,7 +227,6 @@ class AppUsageMonitorService : Service() {
                     }
                     scheduleScreenOffGoalAlarm()
                 } else {
-                    Log.d("Zenith_SCREEN", "SCREEN_OFF_GOAL_CHECK: ignored, screen is ON")
                 }
             }
             "com.etrisad.zenith.action.TEST_GOAL_CALLER" -> {
@@ -258,11 +246,9 @@ class AppUsageMonitorService : Service() {
                     )
                     Toast.makeText(this, "Test goal caller in 10 min", Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
-                    Log.e("Zenith", "Failed to schedule test goal caller", e)
                 }
             }
             "com.etrisad.zenith.action.TEST_GOAL_CALLER_FIRE" -> {
-                Log.d("Zenith_SCREEN", "TEST_GOAL_CALLER_FIRE: firing test goal caller")
                 serviceScope.launch { sendTestGoalCallerNotification() }
             }
         }
@@ -299,7 +285,6 @@ class AppUsageMonitorService : Service() {
 
     private fun refreshData() {
         if (!isScreenOn) {
-            Log.d("Zenith_SCREEN", "refreshData() SKIPPED: screen is OFF")
             return
         }
         serviceScope.launch {
@@ -366,7 +351,6 @@ class AppUsageMonitorService : Service() {
                     startMonitoring()
                 }
             } catch (e: Exception) {
-                Log.e("ZenithAUMS", "Error in refreshData: ${e.message}")
                 if (!monitoringLoopActive && isScreenOn) startMonitoring()
             }
         }
@@ -569,7 +553,6 @@ class AppUsageMonitorService : Service() {
     }
 
     private suspend fun checkGoalReminders() {
-        Log.d("Zenith_SCREEN", "checkGoalReminders() called (isScreenOn=$isScreenOn)")
         val goals = SharedMonitoringState.goalShieldsCache
         if (goals.isEmpty()) return
         val currentTime = System.currentTimeMillis()
@@ -617,7 +600,6 @@ class AppUsageMonitorService : Service() {
                 }
             }
         } catch (e: Exception) {
-            Log.e("ZenithAUMS", "Error in goal reminder check: ${e.message}")
         }
     }
 
@@ -674,7 +656,6 @@ class AppUsageMonitorService : Service() {
 
         if (isCustomBitmap) iconBitmap?.recycle()
         } catch (e: Exception) {
-            Log.e("ZenithAUMS", "sendGoalSuggestionNotification failed: ${e.message}", e)
         }
     }
 
@@ -758,7 +739,6 @@ class AppUsageMonitorService : Service() {
                 }
             }
         } catch (e: Exception) {
-            Log.e("ZenithAUMS", "sendGoalCallerNotification failed: ${e.message}", e)
         }
     }
 
@@ -846,7 +826,6 @@ class AppUsageMonitorService : Service() {
             }
         }
         } catch (e: Exception) {
-            Log.e("ZenithAUMS", "sendTestGoalCallerNotification failed: ${e.message}", e)
         }
     }
 
@@ -949,7 +928,6 @@ class AppUsageMonitorService : Service() {
 
     private fun startMonitoring() {
         if (!isScreenOn) {
-            Log.d("Zenith_SCREEN", "startMonitoring() SKIPPED: screen is OFF")
             return
         }
         startMonitoringCount++
@@ -960,7 +938,6 @@ class AppUsageMonitorService : Service() {
             try {
                 checkDayChangeOnStartup()
             } catch (t: Throwable) {
-                Log.e("ZenithAUMS", "Error in day change check: ${t.message}")
             }
         }
 
@@ -1139,7 +1116,6 @@ class AppUsageMonitorService : Service() {
     }
 
     private suspend fun logError(t: Throwable) {
-        Log.e("ZenithAUMS", "Error: ${t.message}")
         delay(if (t is OutOfMemoryError) 5000 else 500)
     }
 
@@ -1849,7 +1825,6 @@ class AppUsageMonitorService : Service() {
                             }
                         }
                     } catch (t: Throwable) {
-                        Log.e("ZenithAUMS", "Failed background DB update for ${shield.packageName}: ${t.message}")
                     }
                 }
             }
@@ -1918,7 +1893,7 @@ class AppUsageMonitorService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
 
         val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Test Notification ✅")
+            .setContentTitle("Test Notification âœ…")
             .setContentText("Notifications are working correctly!")
             .setSmallIcon(R.drawable.ic_check)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -2557,11 +2532,9 @@ class AppUsageMonitorService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             }
         } catch (e: Exception) {
-            Log.e("ZenithAUMS", "startForeground(camera) failed: ${e.message}")
             try {
                 startForeground(NOTIFICATION_ID, notification)
             } catch (e2: Exception) {
-                Log.e("ZenithAUMS", "startForeground fallback failed: ${e2.message}")
             }
         }
     }

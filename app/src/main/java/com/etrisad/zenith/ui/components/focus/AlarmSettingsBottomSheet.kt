@@ -945,8 +945,8 @@ private fun AlarmSettingsSheetContent(
 
                                         Spacer(modifier = Modifier.height(12.dp))
 
-                                        // Tanpa Usage Access, verifikasi app stuck di 0 selamanya.
-                                        // Ingatkan di sini (saat setting), bukan saat alarm berbunyi.
+                                        // Without Usage Access, app verification stays stuck at 0 forever.
+                                        // Remind here (at setting time), not when the alarm fires.
                                         val hasUsageAccessForWakeUp = remember(useCertainAppEnabled) {
                                             hasWakeUpUsageAccess(context)
                                         }
@@ -958,13 +958,13 @@ private fun AlarmSettingsSheetContent(
                                             ) {
                                                 Column(modifier = Modifier.padding(12.dp)) {
                                                     Text(
-                                                        text = "Butuh izin Usage Access",
+                                                        text = "Usage Access required",
                                                         style = MaterialTheme.typography.titleSmall,
                                                         fontWeight = FontWeight.Bold,
                                                         color = MaterialTheme.colorScheme.onErrorContainer
                                                     )
                                                     Text(
-                                                        text = "Tanpa izin ini alarm tidak bisa memverifikasi pemakaian aplikasi.",
+                                                        text = "Without this permission Zenith can't verify app usage.",
                                                         style = MaterialTheme.typography.bodySmall,
                                                         color = MaterialTheme.colorScheme.onErrorContainer
                                                     )
@@ -979,7 +979,7 @@ private fun AlarmSettingsSheetContent(
                                                                 )
                                                             } catch (_: Exception) { }
                                                         },
-                                                        text = "Beri Izin",
+                                                        text = "Grant Access",
                                                         type = ZenithButtonType.Outlined,
                                                         size = ZenithButtonSize.Small,
                                                         fillMaxWidth = true
@@ -989,11 +989,29 @@ private fun AlarmSettingsSheetContent(
                                             Spacer(modifier = Modifier.height(8.dp))
                                         }
                                         if (useCertainAppEnabled && wakeUpAppPackageNames.isEmpty()) {
-                                            Text(
-                                                text = "Pilih minimal 1 aplikasi, atau fitur ini tidak aktif saat disimpan.",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.error
-                                            )
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(12.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Info,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        text = "Select at least 1 app, or this is skipped on save.",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1957,10 +1975,8 @@ private fun AlarmSettingsSheetContent(
                             try {
                                 val tSaveStart = System.currentTimeMillis()
                                 saveDraft()
-                                android.util.Log.d("AlarmPerf", "onSave callback took ${System.currentTimeMillis() - tSaveStart}ms")
                                 val tHide = System.currentTimeMillis()
                                 sheetState.hide()
-                                android.util.Log.d("AlarmPerf", "sheetState.hide() took ${System.currentTimeMillis() - tHide}ms")
                                 onDismiss()
                             } finally {
                                 isSaving = false

@@ -48,7 +48,6 @@ class ZenithNotificationListener : NotificationListenerService() {
         if (sbn.packageName == packageName) return
         if (sbn.isOngoing) return
         if (!AppStateHolder.isScreenOn.value) {
-            android.util.Log.d("Zenith_SCREEN", "NotificationListener SKIPPED: screen OFF")
             return
         }
 

@@ -32,7 +32,7 @@ fun FontTestScreen(
 ) {
     var settings by remember { mutableStateOf(GSFlexSettings(preset = GSFlexPreset.ZENITH)) }
     var customText by remember { mutableStateOf("Zenith") }
-    var selectedTab by remember { mutableIntStateOf(2) }
+    var selectedTab by remember { mutableIntStateOf(0) }
 
     val dynamicTypography = VariableFontFactory.createTypography(settings)
 

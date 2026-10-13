@@ -444,21 +444,21 @@ private fun WakeUpAppBottomSheet(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Butuh izin Usage Access",
+                            text = "Usage Access required",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Zenith tidak bisa menghitung durasi pemakaian tanpa izin ini. Progress akan stuck di 0.",
+                            text = "Zenith can't track usage without this permission. Progress stays at 0.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         ZenithButton(
                             onClick = onOpenUsageSettings,
-                            text = "Buka Pengaturan",
+                            text = "Open Settings",
                             type = ZenithButtonType.Filled,
                             size = ZenithButtonSize.Medium,
                             fillMaxWidth = true

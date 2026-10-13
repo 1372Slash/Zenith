@@ -3,7 +3,6 @@ package com.etrisad.zenith.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import com.etrisad.zenith.ZenithApplication
 import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.CoroutineScope
@@ -32,9 +31,7 @@ class BootCompletedReceiver : BroadcastReceiver() {
                         .parseAlarms(prefs.alarmsJson)
                         .filter { it.enabled }
                     AlarmBroadcastReceiver.rescheduleAllAlarms(context, enabledAlarms)
-                    Log.d("BootReceiver", "Rescheduled ${enabledAlarms.size} alarms after boot/update")
                 } else {
-                    Log.d("BootReceiver", "Master switch OFF - skipping alarm reschedule after boot/update")
                 }
                 // Battery: only schedule/enqueue what is actually enabled.
                 // Previously midnight + watchdog 15min + all widgets ran on every boot/time-change.
@@ -82,7 +79,6 @@ class BootCompletedReceiver : BroadcastReceiver() {
                     }
                 } catch (_: Exception) {}
             } catch (e: Exception) {
-                Log.e("BootReceiver", "Failed to reschedule alarms: ${e.message}", e)
             } finally {
                 pendingResult.finish()
             }

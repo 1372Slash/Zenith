@@ -3,7 +3,6 @@ package com.etrisad.zenith.service
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.accessibilityservice.AccessibilityService
-import android.util.Log
 import android.app.usage.UsageStatsManager
 import android.app.usage.UsageEvents
 import android.content.Context
@@ -98,7 +97,6 @@ class ZenithService : AccessibilityService() {
 
     private fun refreshService() {
         if (!AppStateHolder.isScreenOn.value) {
-            Log.d("Zenith_SCREEN", "A11Y refreshService() SKIPPED: screen is OFF")
             return
         }
         serviceScope.launch {
@@ -148,9 +146,7 @@ class ZenithService : AccessibilityService() {
                     packageChangeFlow.tryEmit(pkg)
                 }
 
-                Log.d("ZenithAS", "Service refreshed successfully via REFRESH_DATA")
             } catch (e: Exception) {
-                Log.e("ZenithAS", "Error refreshing service: ${e.message}")
             }
         }
     }
@@ -309,7 +305,6 @@ class ZenithService : AccessibilityService() {
                 try {
                     handlePackageChange(packageName)
                 } catch (e: Exception) {
-                    Log.e("ZenithAS", "Error in handlePackageChange: ${e.message}")
                 }
             }
         }
@@ -319,13 +314,11 @@ class ZenithService : AccessibilityService() {
             val pkg = queryCurrentForegroundApp()
             if (pkg != null && pkg != packageName && lastForegroundApp == null) {
                 if (SharedMonitoringState.isFinancialApp(pkg)) {
-                    Log.d("ZenithAS", "Financial app already in foreground ($pkg), skipping initial detection")
                     return@launch
                 }
                 lastForegroundApp = pkg
                 AppStateHolder.foregroundApp.value = pkg
                 packageChangeFlow.tryEmit(pkg)
-                Log.d("ZenithAS", "Initial foreground app detected via UsageStats: $pkg")
             }
             if (lastForegroundApp == null) {
                 val windowPkg = withContext(Dispatchers.Main) {
@@ -333,7 +326,6 @@ class ZenithService : AccessibilityService() {
                 }
                 if (windowPkg != null && windowPkg != packageName && !shouldBypassBlocking(windowPkg)) {
                     if (SharedMonitoringState.isFinancialApp(windowPkg)) {
-                        Log.d("ZenithAS", "Financial app already in foreground ($windowPkg), skipping initial detection")
                         return@launch
                     }
                     lastForegroundApp = windowPkg
@@ -363,7 +355,6 @@ class ZenithService : AccessibilityService() {
                 try {
                     val realPkg = queryCurrentForegroundApp()
                     if (realPkg != null && realPkg != lastForegroundApp && !InterceptOverlayManager.isSystemUiPackage(realPkg) && !isKeyboardApp(realPkg)) {
-                        Log.d("ZenithAS", "Monitoring job detected package shift: $lastForegroundApp -> $realPkg")
                         OverlayLogBuffer.d("Monitor", "Stale detection: $lastForegroundApp -> $realPkg")
                         lastForegroundApp = realPkg
                         AppStateHolder.foregroundApp.value = realPkg
@@ -422,7 +413,6 @@ class ZenithService : AccessibilityService() {
         if (isKeyboardApp(packageName)) return
 
         if (SharedMonitoringState.isFinancialApp(packageName)) {
-            Log.d("ZenithAS", "Financial app detected ($packageName), skipping accessibility events to avoid detection")
             val now = System.currentTimeMillis()
             val lastNotified = lastBankingNotificationTime[packageName] ?: 0L
             if (now - lastNotified > 15000) {
@@ -448,7 +438,6 @@ class ZenithService : AccessibilityService() {
                 }
 
                 if (domain != null && domain != WebsiteStateHolder.currentWebsiteDomain.value) {
-                    Log.d("Zenith_URL", "URL from contentChanged: $domain")
                     setCurrentWebsiteDomain(domain)
                     serviceScope.launch(Dispatchers.Main) {
                         packageChangeFlow.tryEmit(packageName)
@@ -465,12 +454,10 @@ class ZenithService : AccessibilityService() {
         if (lastA11yPackageTime.size > 500) lastA11yPackageTime.clear()
         lastA11yPackageTime[packageName] = now
 
-        Log.d("Zenith_A11Y", "handleWindowStateChanged: pkg=$packageName domain=${WebsiteStateHolder.currentWebsiteDomain.value}")
 
         if (packageName !in SharedMonitoringState.CRITICAL_SYSTEM_PACKAGES && !isKeyboardApp(packageName)) {
             lastForegroundApp = packageName
         } else {
-            Log.d("Zenith_A11Y", "Skipped lastForegroundApp update for transient package: $packageName (lfga=$lastForegroundApp)")
         }
         AppStateHolder.foregroundApp.value = packageName
 
@@ -480,7 +467,6 @@ class ZenithService : AccessibilityService() {
             }
             val domain = websiteUrlTracker.extractFromWindowStateChange(packageName, event)
             if (domain != null) {
-                Log.d("Zenith_URL", "URL from windowStateChanged: $domain")
                 setCurrentWebsiteDomain(domain)
                 serviceScope.launch(Dispatchers.Main) {
                     packageChangeFlow.tryEmit(packageName)
@@ -494,11 +480,9 @@ class ZenithService : AccessibilityService() {
                 packageName.contains("home", ignoreCase = true)
             if (isLauncher) {
                 val domain = WebsiteStateHolder.currentWebsiteDomain.value
-                Log.d("Zenith_A11Y", "Launcher detected, domain=$domain calling pauseWebsiteSession")
                 if (domain != null) {
                     overlayActionHandler.pauseWebsiteSession("zenith-web:$domain")
                 } else {
-                    Log.d("Zenith_A11Y", "Domain is null, skipping pauseWebsiteSession")
                 }
                 sessionUsageOverlayManager.pauseAllSessions()
                 sessionUsageOverlayManager.updateForegroundApp(packageName, force = true)
@@ -585,7 +569,6 @@ class ZenithService : AccessibilityService() {
                 }
             } catch (_: kotlinx.coroutines.CancellationException) {
             } catch (e: Exception) {
-                Log.e("Zenith_URL", "Error in URL polling: ${e.message}")
             }
         }
     }
@@ -600,7 +583,6 @@ class ZenithService : AccessibilityService() {
         if (oldDomain != null && oldDomain != domain) {
             val currentPkg = lastForegroundApp
             if (domain == null && currentPkg != null && com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(currentPkg)) {
-                Log.d("Zenith_URL", "Ignoring null domain update while browser $currentPkg is active")
                 return
             }
             overlayActionHandler.scheduleWebsiteSessionDismiss("zenith-web:$oldDomain")
@@ -626,7 +608,6 @@ class ZenithService : AccessibilityService() {
             val allowedEnd = allowedApps[websitePkg]
             val isAllowed = allowedEnd != null && System.currentTimeMillis() < allowedEnd
             if (!isAllowed) {
-                Log.d("Zenith_Block", "Immediate block: redirecting to about:blank ($domain)")
                 WebsiteRepository.redirectBrowserToBlankPage(this)
             }
         }
@@ -720,9 +701,7 @@ class ZenithService : AccessibilityService() {
         val currentDomain = WebsiteStateHolder.currentWebsiteDomain.value
         if (currentApp == lastForegroundApp && InterceptOverlayManager.isShowing) {
             if (WebsiteRepository.isKnownBrowser(currentApp) && currentDomain != lastCheckedWebsiteDomain) {
-                Log.d("Zenith_HPC", "Website domain changed, allowing re-check")
             } else {
-                Log.d("Zenith_HPC", "Early return: $currentApp same app + overlay showing")
                 return
             }
         }
@@ -730,11 +709,9 @@ class ZenithService : AccessibilityService() {
 
         if (shouldBypassBlocking(currentApp)) {
             if (InterceptOverlayManager.isShowing && (InterceptOverlayManager.isSystemUiPackage(currentApp) || isKeyboardApp(currentApp))) {
-                Log.d("Zenith_HPC", "Bypass branch SKIPPED for transient system UI: $currentApp")
                 return
             }
 
-            Log.d("Zenith_HPC", "Bypass branch: $currentApp (lfga was $lastForegroundApp)")
             val isLauncher = SharedMonitoringState.launcherPackages.contains(currentApp) ||
                     SharedMonitoringState.defaultLauncherPackage == currentApp ||
                     currentApp.contains("launcher", ignoreCase = true) ||
@@ -771,7 +748,6 @@ class ZenithService : AccessibilityService() {
             bypassCheckRunnable?.let { mainHandler.removeCallbacks(it) }
             bypassCheckRunnable = Runnable {
                 if (!AppStateHolder.isScreenOn.value) {
-                    Log.d("Zenith_SCREEN", "A11Y 800ms callback SKIPPED: screen is OFF")
                     return@Runnable
                 }
                 if (!InterceptOverlayManager.isShowing) return@Runnable
@@ -788,7 +764,6 @@ class ZenithService : AccessibilityService() {
             return
         }
 
-        Log.d("Zenith_HPC", "Non-bypass: $currentApp (lfga was $lastForegroundApp, updating)")
         OverlayLogBuffer.d("Zenith_HPC", "Non-bypass: $currentApp -> checking blocking")
         lastForegroundApp = currentApp
 
@@ -998,7 +973,6 @@ class ZenithService : AccessibilityService() {
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e("ZenithAS", "Failed background DB update: ${e.message}")
                 }
             }
             if (currentShieldCache?.packageName == packageName) {
@@ -1078,11 +1052,9 @@ class ZenithService : AccessibilityService() {
                 return
             }
             if (actualTargetPackage == InterceptOverlayManager.lastClosedPackage && System.currentTimeMillis() - InterceptOverlayManager.lastClosedTime < 2000) {
-                Log.d("Zenith_HPC", "Skipping overlay for recently closed package: $actualTargetPackage")
                 return
             }
             if (actualTargetPackage == InterceptOverlayManager.lastHiddenPackage && System.currentTimeMillis() - InterceptOverlayManager.lastHiddenTime < 2000) {
-                Log.d("Zenith_HPC", "Skipping overlay for recently hidden package: $actualTargetPackage")
                 return
             }
 
@@ -1132,7 +1104,6 @@ class ZenithService : AccessibilityService() {
                 if (isWebsite && effectiveShield.isAutoQuitEnabled) {
                     if (!SharedMonitoringState.earlyKickManager.wasKicked(actualTargetPackage)) {
                         SharedMonitoringState.earlyKickManager.markKicked(actualTargetPackage)
-                        Log.d("Zenith_Block", "Strict block: redirecting browser to about:blank (shield autoQuit enabled for $actualTargetPackage)")
                         WebsiteRepository.redirectBrowserToBlankPage(this)
                         goToHomeScreen()
                         return
@@ -1357,7 +1328,6 @@ class ZenithService : AccessibilityService() {
         if (currentPkg != null && WebsiteRepository.isKnownBrowser(currentPkg)) {
             val domain = WebsiteStateHolder.currentWebsiteDomain.value
             if (domain != null) {
-                Log.d("Zenith_Block", "Redirecting browser to about:blank (blocked domain: $domain)")
                 WebsiteRepository.redirectBrowserToBlankPage(this)
             }
         }
@@ -1367,9 +1337,7 @@ class ZenithService : AccessibilityService() {
     private fun quitWebsite() {
         val browserPkg = WebsiteStateHolder.lastBrowserPackage
         if (browserPkg != null && WebsiteRepository.isKnownBrowser(browserPkg)) {
-            Log.d("Zenith_Block", "Quitting website - opening new tab in $browserPkg")
             if (BrowserNewTabAction.performNewTabClick(this, browserPkg)) {
-                Log.d("Zenith_Block", "New tab action performed for $browserPkg")
                 return
             }
         }

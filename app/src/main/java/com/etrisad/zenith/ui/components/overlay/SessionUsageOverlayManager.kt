@@ -2,7 +2,6 @@ package com.etrisad.zenith.ui.components.overlay
 
 import android.content.Context
 import android.graphics.PixelFormat
-import android.util.Log
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -223,7 +222,6 @@ class SessionUsageOverlayManager(
             mainHandler.post { destroyAllHUDs() }
             return
         }
-        android.util.Log.d("Zenith_SCREEN", "SessionUsageOverlayManager: destroying all HUDs")
         synchronized(activeSessions) {
             activeSessions.forEach { session ->
                 session.hudInstance?.let { destroyHUDInstance(it, session.packageName) }
@@ -696,7 +694,6 @@ class SessionUsageOverlayManager(
                             try {
                                 session.hudInstance = createHUDInstance(session)
                             } catch (e: Exception) {
-                                Log.e("SessionHUD", "Failed to create HUD: ${e.message}")
                             }
                         }
                     }

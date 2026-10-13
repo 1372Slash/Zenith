@@ -30,10 +30,8 @@ class ShieldOperationsManager(
     ) {
         scope.launch {
             try {
-                android.util.Log.d("ZenithGoalShield", "OPS_SAVE_START: pkg=$packageName type=$type appName=$appName timeLimit=${timeLimitMinutes}m")
                 DbLogBuffer.d("ZenithGoalShield", "OPS_SAVE_START: pkg=$packageName type=$type appName=$appName timeLimit=${timeLimitMinutes}m")
                 val existing = shieldRepository.getShieldByPackageName(packageName)
-                android.util.Log.d("ZenithGoalShield", "OPS_SAVE_EXISTING: ${if (existing != null) "UPDATE existing ${existing.type}" else "NEW insert"}")
                 DbLogBuffer.d("ZenithGoalShield", "OPS_SAVE_EXISTING: ${if (existing != null) "UPDATE existing ${existing.type}" else "NEW insert"}")
                 val periodChanged = existing != null && existing.limitPeriod != limitPeriod
                 val newRemainingMillis = if (periodChanged) timeLimitMinutes * 60 * 1000L else (existing?.remainingTimeMillis ?: (timeLimitMinutes * 60 * 1000L))
@@ -62,14 +60,11 @@ class ShieldOperationsManager(
                     activeDays = activeDays
                 )
                 shieldRepository.insertShield(shield)
-                android.util.Log.d("ZenithGoalShield", "OPS_SAVE_DONE: pkg=$packageName type=$type - insertShield called, cache will update via Flow")
                 DbLogBuffer.d("ZenithGoalShield", "OPS_SAVE_DONE: pkg=$packageName type=$type - insertShield called, cache will update via Flow")
                 com.etrisad.zenith.service.SharedMonitoringState.notifiedGoals.remove(packageName)
                 triggerServiceRefresh()
             } catch (e: Exception) {
-                android.util.Log.e("ZenithGoalShield", "OPS_SAVE_ERROR: pkg=$packageName type=$type error=${e.message}", e)
                 DbLogBuffer.e("ZenithGoalShield", "OPS_SAVE_ERROR: pkg=$packageName type=$type error=${e.message}")
-                android.util.Log.e("ShieldOperations", "Error saving focus: ${e.message}")
             } finally {
                 onComplete()
             }

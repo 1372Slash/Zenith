@@ -826,7 +826,7 @@ private fun TtsTestBottomSheet(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    var textInput by remember { mutableStateOf("Selamat datang di Zenith. Ini adalah test Text-to-Speech.") }
+    var textInput by remember { mutableStateOf("Welcome to Zenith. This is a Text-to-Speech test.") }
     var tts by remember { mutableStateOf<android.speech.tts.TextToSpeech?>(null) }
     var ttsStatus by remember { mutableStateOf("Initializing...") }
     var availableLocales by remember { mutableStateOf<List<java.util.Locale>>(emptyList()) }

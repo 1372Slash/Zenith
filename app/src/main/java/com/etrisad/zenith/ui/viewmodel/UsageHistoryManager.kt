@@ -460,7 +460,6 @@ class UsageHistoryManager(
             shieldRepository.insertAllDailyUsage(entitiesToInsert)
             userPreferencesRepository.refreshGlobalStreak(shieldRepository)
         } catch (e: Exception) {
-            android.util.Log.e("HomeVM", "Error repairing data: ${e.message}")
         } finally {
             _isRepairing.value = false
         }

@@ -62,7 +62,6 @@ fun ExcludeFromTrackingBottomSheet(
                     pm.getInstalledApplications(0)
                 }
             } catch (e: Exception) {
-                android.util.Log.e("ExcludeFromTrackingBottomSheet", "Failed to get installed applications", e)
                 emptyList()
             }
 
