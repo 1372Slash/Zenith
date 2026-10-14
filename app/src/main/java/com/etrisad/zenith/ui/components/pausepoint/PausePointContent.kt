@@ -10,9 +10,12 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -688,11 +691,22 @@ private fun SwitchTask(
     onCompleted: () -> Unit
 ) {
     val leverCount = task.leverCount
-    val targetSequence = remember { mutableStateListOf<Boolean>() }
-    val currentStates = remember { mutableStateListOf<Boolean>() }
+    val targetSequence = remember(leverCount) {
+        mutableStateListOf<Boolean>().apply {
+            repeat(leverCount) { add(Random.nextBoolean()) }
+        }
+    }
+    val currentStates = remember(leverCount) {
+        mutableStateListOf<Boolean>().apply {
+            repeat(leverCount) { add(Random.nextBoolean()) }
+            if (size > 0 && indices.all { this[it] == targetSequence[it] }) {
+                this[0] = !this[0]
+            }
+        }
+    }
     val timeoutSeconds = task.timeoutSeconds
-    var timeLeft by remember(timeoutSeconds) { mutableIntStateOf(timeoutSeconds ?: 0) }
-    var timedOut by remember { mutableStateOf(false) }
+    var timeLeft by remember(timeoutSeconds, leverCount) { mutableIntStateOf(timeoutSeconds ?: 0) }
+    var timedOut by remember(leverCount) { mutableStateOf(false) }
 
     fun newPuzzle() {
         targetSequence.clear()
@@ -701,12 +715,12 @@ private fun SwitchTask(
             targetSequence.add(Random.nextBoolean())
             currentStates.add(Random.nextBoolean())
         }
-        if (currentStates.indices.all { currentStates[it] == targetSequence[it] }) {
+        if (currentStates.isNotEmpty() &&
+            currentStates.indices.all { currentStates[it] == targetSequence[it] }
+        ) {
             currentStates[0] = !currentStates[0]
         }
     }
-
-    LaunchedEffect(Unit) { newPuzzle() }
 
     LaunchedEffect(timedOut) {
         if (timedOut) {
@@ -716,7 +730,7 @@ private fun SwitchTask(
         }
     }
 
-    val solved = remember {
+    val solved = remember(leverCount) {
         derivedStateOf { currentStates.isNotEmpty() && currentStates.indices.all { currentStates[it] == targetSequence[it] } }
     }
 
@@ -750,7 +764,11 @@ private fun SwitchTask(
         }
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
             targetSequence.forEach { isOn ->
@@ -774,7 +792,10 @@ private fun SwitchTask(
         Spacer(modifier = Modifier.height(8.dp))
 
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 320.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             repeat(leverCount) { index ->
