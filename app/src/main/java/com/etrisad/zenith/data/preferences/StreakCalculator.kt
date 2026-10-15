@@ -61,17 +61,8 @@ class StreakCalculator(
                 seen = true
             }
         }
-        // No tracked package reported anything: indistinguishable from pruned
-        // data, so report unknown instead of a fake 0-success.
         return if (seen) total else null
     }
-
-    /**
-     * System usage of one app for one day, or null when the OS reports no
-     * entry. A missing entry is NOT proof of zero usage (pruned history,
-     * permission gap), so callers must treat null as unknown and stop
-     * counting, never as an automatic success.
-     */
     private fun fetchSystemAppUsageForDate(
         usm: UsageStatsManager,
         packageName: String,

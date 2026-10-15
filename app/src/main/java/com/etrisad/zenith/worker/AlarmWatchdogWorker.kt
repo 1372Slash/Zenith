@@ -34,9 +34,6 @@ class AlarmWatchdogWorker(
             if (enabledAlarms.isEmpty()) return Result.success()
 
             val now = System.currentTimeMillis()
-            // If the user just dismissed (<15 min), that's NOT missed — don't spam.
-            // Previously the watchdog only checked isShowing so a normally dismissed
-            // alarm was accused "Missed" on every 15-min run.
             val lastDismiss = AlarmBroadcastReceiver.lastDismissAt(applicationContext)
             if (lastDismiss > 0L && now - lastDismiss < 15 * 60 * 1000L) {
                 return Result.success()
@@ -57,7 +54,6 @@ class AlarmWatchdogWorker(
 
                 if (now > alarmTriggerMs && now < alarmTriggerMs + windowMs) {
                     if (!AlarmOverlayActivity.isShowing) {
-                        // Cek state per-alarm juga: kalau baru fire/dismiss, lewati.
                         val prefs = applicationContext.getSharedPreferences(
                             "zenith_alarm_smart_state", Context.MODE_PRIVATE
                         )
@@ -137,9 +133,6 @@ class AlarmWatchdogWorker(
         private const val UNIQUE_WORK_NAME = "AlarmWatchdogWorker"
 
         fun enqueue(context: Context) {
-            // Tanpa RequiresBatteryNotLow: watchdog alarm harus jalan justru saat
-            // baterai rendah (momen kritis alarm). Dulu constraint ini membuat
-            // watchdog mati total saat baterai low.
             val request = PeriodicWorkRequestBuilder<AlarmWatchdogWorker>(
                 15, TimeUnit.MINUTES
             ).build()

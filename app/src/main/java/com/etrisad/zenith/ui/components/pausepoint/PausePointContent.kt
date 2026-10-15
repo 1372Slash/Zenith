@@ -452,7 +452,6 @@ private fun NfcScanTask(
     }
 
     LaunchedEffect(Unit) {
-        // Battery: NFC toggle rarely changes; 3s is enough (was 1s).
         while (true) {
             nfcEnabled = isNfcEnabled(context)
             delay(3000)
@@ -1166,7 +1165,6 @@ private fun generateMathProblem(maxOperand: Int, operator: MathOperator): Triple
             Triple(a, b, a * b)
         }
         MathOperator.DIVIDE -> {
-            // Ensure integer result: pick divisor + quotient, derive dividend.
             val divisor = Random.nextInt(1, max + 1)
             val quotient = Random.nextInt(1, max + 1)
             val dividend = divisor * quotient

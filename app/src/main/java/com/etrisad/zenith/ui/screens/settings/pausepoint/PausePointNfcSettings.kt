@@ -93,7 +93,6 @@ fun PausePointNfcManagerContent(
     val supported = remember { isNfcSupported(context) }
     var nfcOn by remember { mutableStateOf(isNfcEnabled(context)) }
     LaunchedEffect(Unit) {
-        // Battery: NFC toggle rarely changes; 3s is enough (was 1s).
         while (true) {
             nfcOn = isNfcEnabled(context)
             delay(3000)

@@ -442,7 +442,6 @@ class SessionUsageOverlayManager(
         session.timerJob?.cancel()
         session.timerJob = managerScope.launch {
             var lastUpdateMillis = System.currentTimeMillis()
-            // Battery: hard cap 12h per HUD session so a stuck session cannot tick forever.
             val timerStart = System.currentTimeMillis()
             val maxTimerMs = 12 * 60 * 60 * 1000L
             while (true) {
@@ -532,10 +531,6 @@ class SessionUsageOverlayManager(
                     if (session.isGoal && session.secondsElapsedState.intValue >= session.totalSeconds) {
                         com.etrisad.zenith.service.SharedMonitoringState.notifiedGoals.add(session.packageName)
                     }
-                    // Expiry-driven kills already perform their own follow-up
-                    // (goHome/showOverlay/checkShield), so the callback must be
-                    // skippable: firing it would double-remove allowedApps, write a
-                    // spurious lastSessionEndTimestamp and race an extra overlay show.
                     if (invokeOnSessionEnd) {
                         session.onSessionEnd()
                     }

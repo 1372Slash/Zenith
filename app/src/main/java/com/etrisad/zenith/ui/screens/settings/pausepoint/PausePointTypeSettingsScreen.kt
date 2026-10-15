@@ -557,7 +557,6 @@ private fun AddVariantEditor(
                         selected = mathOperator,
                         onSelect = {
                             mathOperator = it
-                            // Suggest gentler defaults for × / ÷ so sub-tasks stay solvable.
                             if (it == MathOperator.MULTIPLY || it == MathOperator.DIVIDE) {
                                 if (sliderValue > 12f) sliderValue = 12f
                             }

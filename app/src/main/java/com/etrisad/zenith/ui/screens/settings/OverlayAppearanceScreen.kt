@@ -87,8 +87,6 @@ fun OverlayAppearanceScreen(
     val paletteScheme = remember(selectedPalette, isDark, baseScheme, customSeed) {
         when {
             selectedPalette.isDynamic -> {
-                // Preview disamakan dengan overlay asli: pakai hierarki flat yang sama
-                // agar warna Dynamic (termasuk ungu) tidak menyatu di preview.
                 generateDynamicColorScheme(baseScheme.primary, isDark, baseScheme, isForPreview = false)
             }
             selectedPalette.id == "custom" -> generateDynamicColorScheme(customSeed, isDark, baseScheme, isForPreview = false)

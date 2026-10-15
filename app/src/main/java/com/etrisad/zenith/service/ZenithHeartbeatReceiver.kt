@@ -24,9 +24,6 @@ class ZenithHeartbeatReceiver : BroadcastReceiver() {
         )
 
         if (action in validActions) {
-            // Battery: BOOT/HEARTBEAT must not blindly start a foreground service.
-            // Service itself calls stopSelfIfIdle(), but avoiding the start saves a wakeup.
-            // Test/goal-check actions always pass through; boot/heartbeat are gated by prefs.
             val needsGate = action == Intent.ACTION_BOOT_COMPLETED ||
                 Intent.ACTION_MY_PACKAGE_REPLACED == action ||
                 action == "com.etrisad.zenith.action.HEARTBEAT"

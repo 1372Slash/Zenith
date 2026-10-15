@@ -124,8 +124,6 @@ class PomodoroViewModel(
         timerJob = viewModelScope.launch {
             while (true) {
                 kotlinx.coroutines.delay(1000)
-                // Battery: pause must not freeze the ticker forever.
-                // Auto-end session if paused longer than 30 minutes.
                 if (SharedMonitoringState.isPomodoroPaused &&
                     System.currentTimeMillis() - SharedMonitoringState.pomodoroPauseTimestamp > 30 * 60 * 1000L
                 ) {

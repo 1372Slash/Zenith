@@ -131,10 +131,6 @@ class AppUsageMonitorService : Service() {
     private var cachedBypassPackage: String? = null
     private var cachedBypassResult = false
     private var cachedBypassTime = 0L
-
-    // Stale-while-revalidate DB caches: monitoring hot paths must never block on
-    // Room/DataStore. Refresh happens on serviceScope (IO); getters return the
-    // last known value immediately.
     @Volatile
     private var cachedWebsiteGlobalUsage = 0L
     @Volatile
@@ -199,8 +195,6 @@ class AppUsageMonitorService : Service() {
                     usageGlimpseManager?.hide()
                     usageGlimpseJob?.cancel()
                     scheduleScreenOffGoalAlarm()
-                    // Battery: if nothing needs background work, let the service die
-                    // instead of keeping heartbeat/monitor alive.
                     stopSelfIfIdle()
                 }
                     android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED -> {
@@ -262,9 +256,6 @@ class AppUsageMonitorService : Service() {
                 serviceScope.launch { sendTestGoalCallerNotification() }
             }
         }
-        // Battery: only request restart when there is real monitoring work.
-        // Idle service (no shields/schedules/bedtime/pomodoro/glimpse/eyeCare/goals)
-        // must not be resurrected by the system.
         return if (hasActiveMonitoringWork()) START_STICKY else START_NOT_STICKY
     }
 
@@ -367,7 +358,6 @@ class AppUsageMonitorService : Service() {
     }
 
     private fun scheduleHeartbeatAlarm() {
-        // Battery: heartbeat chain must not run forever when idle.
         if (!hasActiveMonitoringWork()) {
             cancelHeartbeatAlarm()
             return
@@ -1024,9 +1014,6 @@ class AppUsageMonitorService : Service() {
                     if (t is kotlinx.coroutines.CancellationException) throw t
                     logError(t)
                 }
-
-                // Battery: idle expiry — if no shields/schedules/goals/bedtime/pomodoro
-                // for 30 min, stop looping and let the service die.
                 val idleMinutes = (System.currentTimeMillis() - startTime) / 60_000L
                 if (idleMinutes >= 30 && !hasActiveMonitoringWork()) {
                     cancelHeartbeatAlarm()
@@ -1341,9 +1328,6 @@ class AppUsageMonitorService : Service() {
                         lastKickedPackage = currentApp
                         goToHomeScreen()
                         allowedApps.remove(currentApp)
-                        // Allowed session over: drop HUD now, otherwise its coarse
-                        // timer freezes a stale secondsLeft that resurrects on re-entry.
-                        // Silent: goToHomeScreen() above is the follow-up.
                         sessionUsageOverlayManager.hideHUD(currentApp, invokeOnSessionEnd = false)
                     } else if (!InterceptOverlayManager.isShowing) {
                         if (isAllowedExpired) sessionUsageOverlayManager.hideHUD(currentApp, invokeOnSessionEnd = false)
@@ -1483,9 +1467,6 @@ class AppUsageMonitorService : Service() {
                             lastKickedPackage = currentApp
                             goToHomeScreen()
                             allowedApps.remove(currentApp)
-                            // Allowed session expired via autoQuit kick: HUD must die
-                            // here or its frozen secondsLeft reappears on re-entry.
-                            // Silent: goToHomeScreen() above is the follow-up.
                             sessionUsageOverlayManager.hideHUD(currentApp, invokeOnSessionEnd = false)
                             if (sh.isDelayAppEnabled) {
                                 serviceScope.launch {
@@ -1946,10 +1927,6 @@ class AppUsageMonitorService : Service() {
         val currentForeground = getForegroundApp() ?: lastForegroundApp
         if (!isWebsite && actualTargetPackage != currentForeground && actualTargetPackage != lastForegroundApp) return
         if (isWebsite && currentForeground != null && !WebsiteRepository.isKnownBrowser(currentForeground)) return
-
-        // Prefer the shared map: handleAllowUse publishes every increment there
-        // synchronously, while currentShieldCache may belong to the other
-        // detector path and lag behind (stale 1/2 vs fresh 2/2 flicker).
         var shield = SharedMonitoringState.allShieldsCache[actualTargetPackage]
             ?: if (currentShieldCache?.packageName == actualTargetPackage) {
                 currentShieldCache

@@ -805,7 +805,6 @@ fun MainScreen(
                                                                 com.etrisad.zenith.receiver.AlarmBroadcastReceiver.cancelAlarm(context, alarm.timeString, alarm.id)
                                                             }
                                                             com.etrisad.zenith.receiver.AlarmBroadcastReceiver.cancelAlarm(context)
-                                                            // Master OFF = tidak ada auto-start lagi -> notif wajib hilang.
                                                             try {
                                                                 com.etrisad.zenith.receiver.AlarmBroadcastReceiver.cancelAllAlarmNotifications(context)
                                                             } catch (_: Exception) { }

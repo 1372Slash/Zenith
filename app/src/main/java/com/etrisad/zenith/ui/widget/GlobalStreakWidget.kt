@@ -38,7 +38,6 @@ class GlobalStreakWidget : GlanceAppWidget() {
     override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
 
     companion object {
-        // Memory: bounded LRU (was unbounded mutableMapOf = leak per icon/shape).
         private val bitmapCache = android.util.LruCache<String, Bitmap>(20)
         @Volatile private var lastProvideMs = 0L
         fun clearCache() { try { bitmapCache.evictAll() } catch (_: Exception) {} }

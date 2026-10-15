@@ -65,8 +65,6 @@ class AlarmOverlayActivity : ComponentActivity() {
     private var alarmTime: String = "07:00"
     private var snoozeCount: Int = 0
     private var testMathChallenge: Boolean = false
-    // Draft AlarmItem JSON for test mode: used as a replacement for the stored
-    // alarm and marks all exit paths as read-only.
     private var testAlarmJson: String? = null
     private var testGradualVolume: Boolean = false
     private var restartKey by mutableIntStateOf(0)
@@ -81,14 +79,6 @@ class AlarmOverlayActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        // Must be first, before start service/bind: overlay shows ABOVE the
-        // lockscreen without asking for unlock. DELIBERATELY not calling
-        // requestDismissKeyguard here — on phones with PIN/pattern/password that
-        // puts the system credential prompt IN FRONT of the alarm overlay, and after
-        // unlock the overlay doesn't come forward automatically (user must open via
-        // recent-apps/notification). Unlock is only requested when the user explicitly
-        // opens another app (see requestUnlockForExternalLaunch).
         setShowWhenLocked(true)
         setTurnScreenOn(true)
         @Suppress("DEPRECATION")
@@ -122,8 +112,6 @@ class AlarmOverlayActivity : ComponentActivity() {
         )
         wakeLock?.acquire(10 * 60 * 1000L)
         startWakeLockRenewal()
-        // Battery: auto-dismiss after 10 min so WakeLock + screen-on + playback
-        // cannot run forever when user leaves the phone.
         autoDismissJob?.cancel()
         autoDismissJob = lifecycleScope.launch {
             delay(ALARM_AUTO_DISMISS_MS)
@@ -149,10 +137,6 @@ class AlarmOverlayActivity : ComponentActivity() {
                     testAlarm ?: userPreferencesRepository.parseAlarms(userPreferences.alarmsJson)
                         .find { it.timeString == alarmTime }
                 }
-
-                // Only packages still installed + launchable are counted.
-                // Previously uninstalled packages stayed stored so progress
-                // got stuck forever (soft-lock when the alarm fired).
                 val wakeUpAppPackageNames = remember(currentAlarm) {
                     val raw = currentAlarm?.wakeUpAppPackageNames ?: emptyList()
                     filterLaunchablePackages(raw)
@@ -172,11 +156,6 @@ class AlarmOverlayActivity : ComponentActivity() {
                     if (wakeUpAppPackageNames.isEmpty()) 0
                     else (currentAlarm?.wakeUpAppDurationSeconds ?: 120).coerceIn(5, 600)
                 }
-
-                // Dismiss mission: one random Pause Point task from this alarm's
-                // chosen types, using the global Pause Point config (variants, QR
-                // codes, NFC tags). Generated once per firing so it doesn't change
-                // on recompose. Test overlay forces MATH.
                 val dismissTaskTypes = remember(currentAlarm, testMathChallenge) {
                     if (testMathChallenge) setOf(PausePointTaskType.MATH)
                     else AlarmDismissTasks.effectiveTypes(
@@ -199,10 +178,6 @@ class AlarmOverlayActivity : ComponentActivity() {
                     ThemeConfig.LIGHT -> false
                     ThemeConfig.DARK -> true
                 }
-
-                // Wake-up verification must start counting as soon as the overlay shows,
-                // not only after the user taps a sheet button. Previously tracking only
-                // ran when opened via button, so usage via launcher wasn't counted.
                 androidx.compose.runtime.LaunchedEffect(wakeUpAppPackageNames, alarmTime) {
                     wakeUpNeedsPermission = wakeUpAppPackageNames.isNotEmpty() && !hasUsageAccess()
                     if (wakeUpAppPackageNames.isNotEmpty() && !wakeUpTrackingActive && !wakeUpComplete) {
@@ -226,10 +201,6 @@ class AlarmOverlayActivity : ComponentActivity() {
                         onDismiss = {
                             dismissWithAutoRepeat()
                         },
-                        // DELIBERATELY same as onDismiss: half-awake users just tap
-                        // the fastest button (usually red Stop). If Stop killed
-                        // everything, smart-repeat never ran and the app got blamed.
-                        // Smart decides: used -> stop, put down -> repeat.
                         onStopAlarm = {
                             dismissWithAutoRepeat()
                         },
@@ -262,8 +233,6 @@ class AlarmOverlayActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // User may grant Usage Access from the sheet then return: refresh the flag
-        // so the warning clears and running tracking starts counting.
         if (wakeUpNeedsPermission && hasUsageAccess()) {
             wakeUpNeedsPermission = false
         }
@@ -272,9 +241,6 @@ class AlarmOverlayActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         val newAlarmTime = intent.getStringExtra(EXTRA_ALARM_TIME) ?: return
-
-        // Re-fire while instance exists (e.g. via second full-screen intent):
-        // make sure it stays above the lockscreen.
         setShowWhenLocked(true)
         setTurnScreenOn(true)
 
@@ -295,8 +261,6 @@ class AlarmOverlayActivity : ComponentActivity() {
     }
 
     private fun dismissWithAutoRepeat() {
-        // Test mode: just stop sound + close, without touching
-        // schedule, smart-repeat, or any stored state.
         if (testAlarmJson != null) {
             stopAlarmAndFinish()
             return
@@ -319,10 +283,6 @@ class AlarmOverlayActivity : ComponentActivity() {
             AlarmBroadcastReceiver.recordAlarmDismiss(this@AlarmOverlayActivity, alarmTime)
             AlarmBroadcastReceiver.cancelFiringNotification(this@AlarmOverlayActivity)
             AlarmBroadcastReceiver.cancelReTrigger(this@AlarmOverlayActivity, alarmTime, alarmId)
-
-            // Recurring alarms MUST be rescheduled after every firing (one-shot exact).
-            // Previously this only happened when autoRepeat=true, so recurring
-            // non-smart alarms only fired once then died forever.
             if (isRecurring && currentAlarm != null) {
                 AlarmBroadcastReceiver.scheduleAlarm(
                     this@AlarmOverlayActivity, currentAlarm.timeString, currentAlarm.days, currentAlarm.id
@@ -340,7 +300,6 @@ class AlarmOverlayActivity : ComponentActivity() {
                 AlarmBroadcastReceiver.cancelUsageCheck(this@AlarmOverlayActivity, alarmTime, alarmId)
                 AlarmBroadcastReceiver.cancelSmartWakeReminder(this@AlarmOverlayActivity)
                 if (isOnce && currentAlarm != null) {
-                    // Once without smart-repeat: turn off so it doesn't stay enabled with no schedule.
                     try {
                         userPreferencesRepository.updateAlarm(currentAlarm.copy(enabled = false))
                     } catch (_: Exception) { }
@@ -353,12 +312,6 @@ class AlarmOverlayActivity : ComponentActivity() {
             }
         }
     }
-
-    /**
-     * Wake-up verification done = user proven awake, so no
-     * smart-repeat needed. Previously this path only stopped without reschedule
-     * so the next recurring alarm was lost.
-     */
     private fun dismissAfterWakeUpVerified() {
         if (testAlarmJson != null) {
             stopAlarmAndFinish()

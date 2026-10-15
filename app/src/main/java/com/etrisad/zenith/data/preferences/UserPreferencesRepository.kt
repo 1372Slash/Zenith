@@ -646,10 +646,6 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             pausePointTypingVariants = parseVariantList(settings[PreferencesKeys.PAUSE_POINT_TYPING_VARIANTS]).distinct()
         )
     }.distinctUntilChanged()
-
-    // ---- Lightweight domain flows: subscribe to a small slice instead of the
-    // full ~150-field UserPreferences so an unrelated key change doesn't
-    // recompose the collector. Each is distinctUntilChanged on its own fields.
     data class AppearancePrefs(
         val themeConfig: ThemeConfig = ThemeConfig.FOLLOW_SYSTEM,
         val dynamicColor: Boolean = true,
@@ -871,12 +867,6 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             preferences[RuntimeKeys.USER_XP_TOTAL] = xp.coerceAtLeast(0L)
         }
     }
-
-    /**
-     * Clears the debug override and restores the frozen pre-debug XP
-     * total. Returns false when no override was active. Daily XP awarded
-     * while the override was active is discarded with it.
-     */
     suspend fun clearXpDebugOverride(): Boolean {
         var hadOverride = false
         context.runtimeDataStore.edit { preferences ->

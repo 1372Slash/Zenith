@@ -75,7 +75,6 @@ class ZenithApplication : Application(), ImageLoaderFactory {
         lastUiMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         if (!workersEnqueued) {
             workersEnqueued = true
-            // Battery: gate periodic workers by prefs instead of always-on.
             applicationScope.launch {
                 try {
                     val prefs = userPreferencesRepository.userPreferencesFlow.first()
@@ -91,7 +90,6 @@ class ZenithApplication : Application(), ImageLoaderFactory {
                         com.etrisad.zenith.worker.AlarmWatchdogWorker.enqueue(this@ZenithApplication)
                     }
                 } catch (_: Exception) {
-                    // Fallback: keep essential sync alive if prefs read fails.
                     try { com.etrisad.zenith.service.UsageSyncWorker.enqueue(this@ZenithApplication) } catch (_: Exception) {}
                 }
             }

@@ -117,7 +117,6 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val preferences by viewModel.homeScreenPreferences.collectAsState()
-    // Banner-only slice: banner writes recompose, unrelated prefs don't.
     val bannerPrefs by userPreferencesRepository.bannerPrefsFlow.collectAsState(
         initial = UserPreferencesRepository.BannerPrefs()
     )

@@ -267,8 +267,6 @@ class ShieldRepository(
 
     suspend fun getShieldByPackageName(packageName: String): ShieldEntity? {
         _allShieldsCache.value.find { it.packageName == packageName }?.let { return it }
-        // Cache may lag behind Room (debounce / fresh REPLACE). Always fall
-        // back to DAO so callers never see a false-null right after insert.
         return try {
             shieldDao.getShieldByPackageName(packageName)
         } catch (_: Exception) {

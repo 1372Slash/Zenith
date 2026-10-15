@@ -55,7 +55,6 @@ fun AlarmScreen(
 ) {
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
-    // Alarm-only slice: alarm/master writes recompose, unrelated prefs don't.
     val prefs by preferencesRepository.alarmPrefsFlow.collectAsState(initial = UserPreferencesRepository.AlarmPrefs())
 
     var sortType by remember { mutableStateOf(AlarmSortType.TIME) }
@@ -133,10 +132,6 @@ fun AlarmScreen(
 
     fun deleteSelected() {
         scope.launch {
-            // Cancel PendingIntent + notification per alarm BEFORE removing from repo.
-            // Previously id-specific exact alarms were not swept (cancel-all only swept
-            // legacy) so deleted alarms could still fire (ghost firing)
-            // and stale reminder notifications would pile up.
             val targets = alarmList.filter { it.id in selectedAlarmIds }
             targets.forEach { target ->
                 try {
@@ -1035,8 +1030,6 @@ private suspend fun rescheduleAlarms(
     for (alarm in alarms) {
         AlarmBroadcastReceiver.cancelAlarm(context, alarm.timeString, alarm.id)
     }
-    // Also sweep stale notifications (reminder/complete/firing) on every reschedule
-    // so the shade doesn't pile up after an alarm is turned off/edited.
     try {
         AlarmBroadcastReceiver.cancelAllAlarmNotifications(context)
     } catch (_: Exception) { }

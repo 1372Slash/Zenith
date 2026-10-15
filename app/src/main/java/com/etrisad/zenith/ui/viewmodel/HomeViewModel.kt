@@ -237,11 +237,6 @@ class HomeViewModel(
     val earliestDataDate: StateFlow<String?> = flow {
         emit(shieldRepository.getEarliestDataDate())
     }.flowOn(Dispatchers.IO).stateIn(viewModelScope, SharingStarted.Lazily, null)
-
-    /**
-     * Explains sparse history: when the viewed period starts before any stored
-     * data, tell the user since when data actually exists.
-     */
     fun dataStartNoteFor(periodDays: List<Long>): String? {
         val earliest = earliestDataDate.value ?: return null
         if (periodDays.isEmpty()) return null

@@ -12,9 +12,6 @@ import kotlinx.coroutines.launch
 
 class BootCompletedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        // TIME_SET / TIMEZONE_CHANGED: exact alarm bisa geser; jadwalkan ulang.
-        // Dulu hanya BOOT + PACKAGE_REPLACED sehingga alarm meleset setelah user
-        // mengubah jam/timezone.
         if (intent.action != Intent.ACTION_BOOT_COMPLETED &&
             intent.action != Intent.ACTION_MY_PACKAGE_REPLACED &&
             intent.action != Intent.ACTION_TIME_CHANGED &&
@@ -33,8 +30,6 @@ class BootCompletedReceiver : BroadcastReceiver() {
                     AlarmBroadcastReceiver.rescheduleAllAlarms(context, enabledAlarms)
                 } else {
                 }
-                // Battery: only schedule/enqueue what is actually enabled.
-                // Previously midnight + watchdog 15min + all widgets ran on every boot/time-change.
                 val hasWidgets = try {
                     androidx.glance.appwidget.GlanceAppWidgetManager(context)
                         .getGlanceIds(com.etrisad.zenith.ui.widget.TotalScreenTimeWidget::class.java).isNotEmpty() ||

@@ -21,9 +21,6 @@ class MidnightResetWorker(context: Context, params: WorkerParameters) : Coroutin
 
         val prefsRepo = UserPreferencesRepository(applicationContext)
         val prefs = prefsRepo.userPreferencesFlow.first()
-
-        // Battery: only wake the monitor service when there is real work.
-        // Previously midnight always forced a foreground start + reschedule.
         val needsService = prefs.alarmMasterEnabled || prefs.bedtimeEnabled ||
             prefs.eyeCareEnabled || prefs.usageGlimpseEnabled || prefs.pomodoroEnabled
         if (needsService) {
@@ -34,8 +31,6 @@ class MidnightResetWorker(context: Context, params: WorkerParameters) : Coroutin
                 applicationContext.startForegroundService(serviceIntent)
             } catch (_: Exception) {}
         }
-
-        // Only keep the daily chain alive when needed; otherwise let it die.
         if (needsService) {
             AlarmTasksSchedulingHelper.scheduleMidnightResetTask(applicationContext, prefs.dayStartHour, prefs.dayStartMinute)
         }

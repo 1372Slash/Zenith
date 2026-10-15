@@ -226,7 +226,6 @@ class FocusViewModel(
         viewModelScope.launch {
             while (true) {
                 if (!isActive) {
-                    // Battery: inactive must sleep 60s, not 5s.
                     delay(60_000L)
                     continue
                 }

@@ -75,9 +75,6 @@ class ZenithService : AccessibilityService() {
 
     private var cachedTotalGlobalUsage: Long = 0L
     private var lastGlobalUsageCacheTime: Long = 0L
-
-    // Stale-while-revalidate DB caches: accessibility callbacks run on the main
-    // thread, so hot paths must never block on Room. Refresh on serviceScope (IO).
     @Volatile
     private var cachedWebsiteGlobalUsage: Long = 0L
     @Volatile
@@ -100,8 +97,6 @@ class ZenithService : AccessibilityService() {
         if (intent?.action == "com.etrisad.zenith.action.REFRESH_DATA") {
             refreshService()
         }
-        // Battery: accessibility service is restarted by the system itself.
-        // START_NOT_STICKY avoids an extra resurrection when started via startService().
         return START_NOT_STICKY
     }
 
@@ -351,8 +346,6 @@ class ZenithService : AccessibilityService() {
     private fun startEventDrivenMonitoring() {
         monitoringJob = serviceScope.launch {
             while (true) {
-                // Battery: adaptive interval + screen-off backoff.
-                // Screen-off must sleep, not spin with `continue`.
                 if (!AppStateHolder.isScreenOn.value) {
                     delay(30_000L)
                     continue
@@ -360,7 +353,6 @@ class ZenithService : AccessibilityService() {
                 val cfgDelay = try {
                     SharedMonitoringState.performanceConfig.a11yActiveDelay
                 } catch (_: Exception) { 2_500L }
-                // Clamp to 2.5s..15s so MAX_RESPONSIVENESS cannot spin faster.
                 delay(cfgDelay.coerceIn(2_500L, 15_000L))
                 try {
                     val realPkg = queryCurrentForegroundApp()
@@ -544,8 +536,6 @@ class ZenithService : AccessibilityService() {
     private fun startUrlPolling(browserPackage: String) {
         urlPollJob?.cancel()
         urlPollJob = serviceScope.launch(Dispatchers.IO) {
-            // Battery: cap URL polling to 10 minutes max per browser session.
-            // Previously `while(true)` polled 2x/sec for hours if browser stayed open.
             val pollStart = System.currentTimeMillis()
             val maxPollMs = 10 * 60 * 1000L
             try {
@@ -840,9 +830,6 @@ class ZenithService : AccessibilityService() {
                     lastKickTime = System.currentTimeMillis()
                     lastKickedPackage = currentPkg
                     goToHomeScreen()
-                    // Allowed session expired via autoQuit kick: HUD must die here
-                    // or its frozen secondsLeft reappears on re-entry next to overlay.
-                    // Silent: goToHomeScreen() above is the follow-up.
                     sessionUsageOverlayManager.hideHUD(currentPkg, invokeOnSessionEnd = false)
                     if (s.isDelayAppEnabled) {
                         val updated = s.copy(lastDelayStartTimestamp = 0L)
@@ -1067,10 +1054,6 @@ class ZenithService : AccessibilityService() {
             if (actualTargetPackage == InterceptOverlayManager.lastHiddenPackage && System.currentTimeMillis() - InterceptOverlayManager.lastHiddenTime < 2000) {
                 return
             }
-
-            // Prefer the shared map: handleAllowUse publishes every increment there
-            // synchronously, while currentShieldCache may belong to the other
-            // detector path and lag behind (stale 1/2 vs fresh 2/2 flicker).
             var shield = SharedMonitoringState.allShieldsCache[actualTargetPackage]
                 ?: currentShieldCache?.takeIf { it.packageName == actualTargetPackage }
 

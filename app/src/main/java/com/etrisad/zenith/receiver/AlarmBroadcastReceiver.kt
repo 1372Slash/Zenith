@@ -31,7 +31,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             ACTION_FIRE_ALARM -> {
                 val alarmTime = intent.getStringExtra(AlarmOverlayActivity.EXTRA_ALARM_TIME) ?: "07:00"
                 val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, 0L)
-                // Alarm berbunyi lagi -> reminder "akan bunyi lagi" sudah basi, notif complete lama juga basi.
                 cancelSmartWakeReminder(context)
                 cancelAutoRepeatComplete(context)
                 cancelMissedAlarmNotification(context)
@@ -48,17 +47,12 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 cancelAutoRepeatComplete(context)
                 cancelMissedAlarmNotification(context)
                 recordAlarmFire(context, alarmTime)
-                // Snooze adalah one-shot: JANGAN rangkai auto-repeat di belakangnya.
-                // Dulu snooze memakai action yang sama sehingga tiap snooze memicu rantai
-                // auto-repeat tak berujung (spam + bunyi ganda).
                 if (!isSnooze) {
                     scheduleReTrigger(context, alarmTime, attempt, alarmId)
                 }
                 showAlarm(context, alarmTime, intent)
             }
             ACTION_CHECK_USAGE -> {
-                // DataStore/UsageStats reads must not block onReceive's main thread:
-                // handle async with goAsync so firing stays exact even under load.
                 val pending = goAsync()
                 CoroutineScope(Dispatchers.Default).launch {
                     try {
@@ -78,8 +72,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         val attempt = intent.getIntExtra(EXTRA_RETRIGGER_COUNT, 0)
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, 0L)
         val dismissAt = intent.getLongExtra(EXTRA_DISMISS_AT, 0L)
-        // Another overlay showing (e.g. another alarm firing) = user clearly
-        // interacting with the phone -> assume awake, don't repeat.
         if (AlarmOverlayActivity.isShowing) {
             cancelSmartWakeReminder(context)
             sendAutoRepeatCompleteNotification(context, alarmTime)
@@ -89,8 +81,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         val awake = isUserAwake(context, dismissAt)
         if (!awake) {
             scheduleReTrigger(context, alarmTime, attempt, alarmId)
-            // Leave the reminder posted at dismiss alive until the next
-            // re-trigger fires (then cancelled in onReceive).
         } else {
             cancelSmartWakeReminder(context)
             sendAutoRepeatCompleteNotification(context, alarmTime)
@@ -110,26 +100,14 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             }
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
         }
-
-        // 1. Audio first, directly from receiver: on Android 12+ background activity
-        //    launch from receiver while screen is off/locked is blocked by the system, so
-        //    relying on the Activity to play sound = totally silent alarm.
-        //    If FGS-start is denied by the system (not exemption), ignore — the Activity
-        //    opened via full-screen intent will replay.
         try {
             com.etrisad.zenith.service.AlarmPlaybackService.start(context, alarmTime)
         } catch (e: Exception) {
         }
-
-        // 2. Best-effort direct launch: works when screen is on/unlocked, blocked by
-        //    the system when locked — path (3) takes over for that case.
         try {
             context.startActivity(activityIntent)
         } catch (e: Exception) {
         }
-
-        // 3. Official lockscreen path: full-screen intent. The system decides
-        //    opening the overlay above the keyguard — not us via requestDismiss.
         fireAlarmNotification(context, alarmTime, snoozeCount, activityIntent, alarmId)
     }
 
@@ -138,28 +116,17 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             val channelId = CHANNEL_ID_FIRING
             val manager = context.getSystemService(NotificationManager::class.java)
             ensureFiringChannel(context)
-
-            // Android 14+: user bisa mencabut izin full-screen intent per-app; kalau
-            // dicabut, sistem mengabaikan setFullScreenIntent dan overlay tidak akan
-            // muncul di atas lockscreen (hanya heads-up/notif biasa).
             if (Build.VERSION.SDK_INT >= 34) {
                 try {
                     if (manager != null && !manager.canUseFullScreenIntent()) {
                     }
                 } catch (_: Exception) { }
             }
-
-            // Request code unik per alarm agar tap notif membuka jam yang benar.
-            // Dulu requestCode=0 untuk semua alarm sehingga PendingIntent saling timpa.
             val contentRequestCode = notificationRequestCode(alarmTime, alarmId, 11)
             val pendingIntent = PendingIntent.getActivity(
                 context, contentRequestCode, activityIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-
-            // Ongoing + tidak auto-cancel: notif adalah pintu darurat membuka
-            // overlay (kasus sistem menahan FSI). Dihapus eksplisit saat alarm
-            // di-dismiss/snooze via cancelFiringNotification, jadi tidak nyangkut.
             val builder = NotificationCompat.Builder(context, channelId)
                 .setContentTitle(if (snoozeCount > 0) "Snoozed Alarm" else "Alarm")
                 .setContentText("It's $alarmTime!")
@@ -200,36 +167,11 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 .setAutoCancel(true)
                 .setOngoing(false)
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                // Relevan sesaat saja; jangan menumpuk di shade.
                 builder.setTimeoutAfter(120_000L)
             }
             manager.notify(NOTIFICATION_ID_COMPLETE, builder.build())
         } catch (_: Exception) { }
     }
-
-    /**
-     * Smart-wake check: "is the user really using the phone after dismiss?"
-     *
-     * Lessons from two previous iterations:
-     * - v1 (any single event = awake): SystemUI/keyguard at dismiss counted
-     *   too -> false positive.
-     * - v2 (total foreground duration >= 15s = awake): launcher left showing
-     *   after overlay close counted its tail up to 60s -> ALWAYS
-     *   considered awake -> repeat NEVER fired. Presence duration != interaction.
-     *
-     * v3 (current), layered:
-     * 1. Screen off -> asleep -> REPEAT. (Put down, screen timeout.)
-     * 2. Keyguard locked -> asleep -> REPEAT. (Power button / back to sleep.)
-     * 3. Screen on + unlocked -> needs proof of REAL interaction after
-     *    5s grace (overlay-close transition ignored):
-     *    - a non-launcher app opened, OR
-     *    - a non-launcher app staying >= 20s (e.g. reading before
-     *      the alarm fired and continuing), OR
-     *    - launcher entering foreground >= 2x (back-and-forth nav/home).
-     *    Sitting idle on home screen with screen on does NOT count as using.
-     * - Without PACKAGE_USAGE_STATS permission: fail-safe = assume awake (stop repeat,
-     *   avoid 12x spam).
-     */
     internal fun hasRecentUsage(context: Context, dismissAtMs: Long): Boolean {
         return isUserAwake(context, dismissAtMs)
     }

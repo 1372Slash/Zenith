@@ -20,11 +20,6 @@ data class AlarmItem(
     val gradualVolumeEnabled: Boolean = false,
     val gradualVolumeDurationSeconds: Int = 30,
     val mathChallengeEnabled: Boolean = false,
-    // Pause-Point dismiss missions: PausePointTaskType.name values chosen as the
-    // ways to dismiss this alarm (one random task per firing). Empty = dismiss
-    // directly, unless legacy mathChallengeEnabled is true (mapped to MATH at
-    // read time, see AlarmDismissTasks.effectiveTypes). Stored as names (not the
-    // enum) so old app versions and Moshi codegen never break on new types.
     val dismissTaskTypeNames: Set<String> = emptySet(),
     val alarmVolume: Float = 1.0f,
     val ttsEnabled: Boolean = false,

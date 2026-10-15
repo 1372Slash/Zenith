@@ -87,8 +87,6 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            // Appearance-only slice: theme/font changes recompose, unrelated
-            // prefs writes (usage timestamps, streaks, alarms) don't.
             val appearance by userPreferencesRepository.appearanceFlow.collectAsState(
                 initial = com.etrisad.zenith.data.preferences.UserPreferencesRepository.AppearancePrefs()
             )

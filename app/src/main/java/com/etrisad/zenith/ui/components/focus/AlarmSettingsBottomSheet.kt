@@ -316,10 +316,6 @@ private fun AlarmSettingsSheetContent(
             alarmSoundUri = it.toString()
         }
     }
-
-    // Menyimpan draf apa adanya agar Test Alarm memakai setup yang sama
-    // persis dengan item alarm yang sedang diedit (overlay + playback
-    // selalu membaca alarm tersimpan, bukan draf).
     suspend fun saveDraft() {
         onSave(
             alarmName,
@@ -944,9 +940,6 @@ private fun AlarmSettingsSheetContent(
                                         }
 
                                         Spacer(modifier = Modifier.height(12.dp))
-
-                                        // Without Usage Access, app verification stays stuck at 0 forever.
-                                        // Remind here (at setting time), not when the alarm fires.
                                         val hasUsageAccessForWakeUp = remember(useCertainAppEnabled) {
                                             hasWakeUpUsageAccess(context)
                                         }
@@ -1119,10 +1112,6 @@ private fun AlarmSettingsSheetContent(
                                         color = MaterialTheme.colorScheme.error
                                     )
                                 }
-
-                                // Test memakai draf saat ini tanpa menyimpan: overlay
-                                // berjalan dalam mode test yang read-only sehingga
-                                // alarm nyata tidak tersentuh sama sekali.
                                 ZenithButton(
                                     onClick = {
                                         val parts = (currentTimeText ?: "07:00").split(":")
@@ -1315,7 +1304,6 @@ private fun AlarmSettingsSheetContent(
                                                                     .build()
                                                             )
                                                             previewPlayer.setOnPreparedListener {
-                                                                // Preview mengikuti slider volume alarm.
                                                                 it.setVolume(alarmVolume, alarmVolume)
                                                                 it.start()
                                                                 isPlayingPreview = true
@@ -1471,7 +1459,6 @@ private fun AlarmSettingsSheetContent(
                                     value = alarmVolume,
                                     onValueChange = {
                                         alarmVolume = it
-                                        // Geser saat preview bunyi: volumenya ikut live.
                                         if (isPlayingPreview) {
                                             try { previewPlayer.setVolume(it, it) } catch (_: Exception) { }
                                         }

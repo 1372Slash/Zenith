@@ -481,8 +481,6 @@ class UsageHistoryManager(
 
     suspend fun updateGlobalFallbackInternal(forceFull: Boolean = false) = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        // Battery: throttle today-refresh to 5 min unless forced. Previously every
-        // Room/prefs emit triggered a full UsageEvents parse for today.
         if (!forceFull && now - lastTodayFallbackRefresh < 300_000L && _globalFallbackMap.value.isNotEmpty()) {
             return@withContext
         }

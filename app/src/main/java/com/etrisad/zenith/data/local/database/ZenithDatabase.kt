@@ -123,8 +123,6 @@ abstract class ZenithDatabase : RoomDatabase() {
         }
 
         private val MIGRATION_34_35 = object : Migration(34, 35) {
-            // Index-only migration: no data changes, no data loss. Names must match
-            // Room's generated names (index_<table>_<columns>) for schema validation.
             override fun migrate(db: SupportSQLiteDatabase) {
                 try {
                     db.execSQL("CREATE INDEX IF NOT EXISTS `index_schedules_isActive` ON `schedules` (`isActive`)")

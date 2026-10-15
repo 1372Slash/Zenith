@@ -1,6 +1,8 @@
 package com.etrisad.zenith.ui.screens.settings
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -26,6 +28,8 @@ import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.preferences.detectPreset
 import com.etrisad.zenith.data.remote.model.GitHubRelease
 import com.etrisad.zenith.ui.navigation.Screen
+import com.etrisad.zenith.util.DiagnosticReportUtils
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @Composable
@@ -48,6 +52,24 @@ fun SettingsScreen(
     var allReleases by remember { mutableStateOf<List<GitHubRelease>>(emptyList()) }
     var showWhitelistSheet by remember { mutableStateOf(false) }
     var showExcludeFromTrackingSheet by remember { mutableStateOf(false) }
+    var showDiagnosticSheet by remember { mutableStateOf(false) }
+    var diagnosticTargetUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var diagnosticDisplayName by remember { mutableStateOf<String?>(null) }
+    var diagnosticExporting by remember { mutableStateOf(false) }
+    var diagnosticError by remember { mutableStateOf<String?>(null) }
+    var diagnosticSuccess by remember { mutableStateOf(false) }
+
+    val diagnosticFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip"),
+        onResult = { uri ->
+            uri?.let {
+                diagnosticTargetUri = it
+                diagnosticDisplayName = DiagnosticReportUtils.getDisplayName(context, it) ?: "diagnostic.zip"
+                diagnosticError = null
+                diagnosticSuccess = false
+            }
+        }
+    )
 
     LaunchedEffect(Unit) {
         if (preferences.checkUpdateOnStart) {
@@ -219,7 +241,13 @@ fun SettingsScreen(
                     onCheckUpdateOnStartChange = { enabled -> coroutineScope.launch { preferencesRepository.setCheckUpdateOnStart(enabled) } },
                     isCheckingForUpdate = checkingForUpdate,
                     onCheckForUpdate = onCheckForUpdate,
-                    onViewChangelog = onViewChangelog
+                    onViewChangelog = onViewChangelog,
+                    onExportDiagnostics = {
+                        diagnosticError = null
+                        diagnosticSuccess = false
+                        diagnosticExporting = false
+                        showDiagnosticSheet = true
+                    }
                 )
             }
         }
@@ -280,6 +308,50 @@ fun SettingsScreen(
                     preferencesRepository.setExcludedFromTrackingPackages(packages)
                 }
                 showExcludeFromTrackingSheet = false
+            }
+        )
+    }
+
+    if (showDiagnosticSheet) {
+        DiagnosticExportBottomSheet(
+            targetDisplayName = diagnosticDisplayName,
+            isExporting = diagnosticExporting,
+            exportError = diagnosticError,
+            exportSuccess = diagnosticSuccess,
+            onPickFile = { diagnosticFileLauncher.launch(DiagnosticReportUtils.defaultFileName()) },
+            onExport = {
+                val target = diagnosticTargetUri ?: return@DiagnosticExportBottomSheet
+                if (diagnosticExporting) return@DiagnosticExportBottomSheet
+                coroutineScope.launch {
+                    diagnosticExporting = true
+                    diagnosticError = null
+                    try {
+                        val prefs = preferencesRepository.userPreferencesFlow.first()
+                        DiagnosticReportUtils.export(context, target, prefs)
+                            .onSuccess {
+                                diagnosticExporting = false
+                                diagnosticSuccess = true
+                            }
+                            .onFailure { e ->
+                                diagnosticExporting = false
+                                diagnosticError = e.message ?: "Export failed"
+                                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+                            }
+                    } catch (e: Exception) {
+                        diagnosticExporting = false
+                        diagnosticError = e.message ?: "Export failed"
+                    }
+                }
+            },
+            onOpenGitHub = {
+                val intent = android.content.Intent(
+                    android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse(DiagnosticReportUtils.GITHUB_ISSUES_URL)
+                )
+                context.startActivity(intent)
+            },
+            onDismiss = {
+                if (!diagnosticExporting) showDiagnosticSheet = false
             }
         )
     }

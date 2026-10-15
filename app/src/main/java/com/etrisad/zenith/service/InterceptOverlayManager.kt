@@ -115,11 +115,6 @@ class InterceptOverlayManager(
         var retainedPauseTask: com.etrisad.zenith.ui.components.pausepoint.PausePointTask? = null
         @Volatile
         var retainedPauseTaskForPackage: String? = null
-
-        /**
-         * Hide the currently showing overlay so the NFC scanner activity is
-         * visible and touchable. Returns true if an overlay was hidden.
-         */
         fun hideActiveOverlayForNfcScan(): Boolean {
             val manager = activeInstance ?: return false
             if (!isShowing) return false

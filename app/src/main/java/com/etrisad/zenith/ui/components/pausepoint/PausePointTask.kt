@@ -175,8 +175,6 @@ data class PausePointVariant(
     val levers: Int = 0,
     val maxOperand: Int = 0,
     val target: Int = 0,
-    // Math operator sub-task: "+", "-", "*", ":" (normalized, see MathOperator).
-    // Default "+" keeps legacy variants (penjumlahan) working.
     val mathOperator: String = "+"
 ) {
     val resolvedMathOperator: MathOperator get() = MathOperator.fromSymbol(mathOperator)

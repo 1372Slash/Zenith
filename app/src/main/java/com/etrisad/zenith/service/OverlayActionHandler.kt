@@ -55,12 +55,6 @@ class OverlayActionHandler(
     private companion object {
         private const val WEBSITE_DISMISS_GRACE_MS = 60_000L
     }
-
-    // Single synchronous truth for shield objects: Room write is async and each
-    // service keeps its own currentShieldCache, so without this the OTHER
-    // detector (polling vs accessibility) shows stale currentPeriodUses on the
-    // next overlay open (e.g. 2/2, then 1/2, then 2/2). Publish here so both
-    // services and the overlay trigger read the fresh value immediately.
     private fun publishShieldUpdate(
         updated: ShieldEntity?,
         updateShieldCache: (ShieldEntity?) -> Unit
@@ -410,8 +404,6 @@ class OverlayActionHandler(
                 val sessionDomain = packageName.removePrefix("zenith-web:")
                 if (activeDomain != sessionDomain) {
                     allowedApps.remove(packageName)
-                    // Session ended: ensure stale HUD cannot be resurrected on re-entry.
-                    // Silent: this path had no overlay follow-up before, keep it that way.
                     sessionUsageOverlayManager.hideHUD(packageName, invokeOnSessionEnd = false)
                     return@Runnable
                 }
@@ -437,17 +429,9 @@ class OverlayActionHandler(
             val mindful = mindfulGatewayStates[packageName]
             val shield = s ?: mindful
             if (shield == null) {
-                // No shield to re-block, but the allowed session is over: drop stale HUD.
-                // Silent: preserve the old early-return behavior (no extra callbacks).
                 sessionUsageOverlayManager.hideHUD(packageName, invokeOnSessionEnd = false)
                 return@Runnable
             }
-            // The allowed session has expired. The HUD runs on its own coarse timer
-            // (10s/20s/30s/60s ticks) so its secondsLeft is typically still > 0 here
-            // (e.g. 30s left). If we don't hide it now, going to home cancels the HUD
-            // timer via updateForegroundApp() and freezes that stale value; on re-entry
-            // the stale HUD is resurrected next to the correctly reshown block overlay.
-            // Silent: goToHomeScreen()/showShieldOverlay below is the follow-up.
             sessionUsageOverlayManager.hideHUD(packageName, invokeOnSessionEnd = false)
             if (shield.isAutoQuitEnabled) {
                 goToHomeScreen()

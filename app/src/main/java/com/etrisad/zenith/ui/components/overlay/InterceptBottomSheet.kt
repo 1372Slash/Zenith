@@ -69,10 +69,6 @@ fun InterceptBottomSheet(
 
         when {
             paletteId == "dynamic" -> {
-                // Samakan dengan palette lain agar hierarki kontras flat berlaku juga
-                // untuk warna sistem (Material You). Seed = primary sistem sehingga
-                // ungu sistem tidak lagi menyatu (sheet 0.95 vs tombol 0.87 light,
-                // sheet 0.17 vs tombol 0.33 dark).
                 generateDynamicColorScheme(currentScheme.primary, isDark, currentScheme, isForPreview = false)
             }
             paletteId == "custom" -> {

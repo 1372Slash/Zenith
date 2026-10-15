@@ -58,9 +58,6 @@ fun QrScanner(
     val lastReportedCode = remember { AtomicReference("") }
     val lastReportedTime = remember { AtomicReference(0L) }
     var bindError by remember { mutableStateOf<String?>(null) }
-
-    // Battery: when inactive, do not bind camera preview at all.
-    // Previously preview kept streaming even with active=false (only decode skipped).
     DisposableEffect(lifecycleOwner, permissionGranted, active) {
         if (permissionGranted && active) {
             val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor()

@@ -78,9 +78,6 @@ fun AlarmOverlayContent(
     fun handleMissionCompleted() {
         dismissTaskDone = true
         showDismissTask = false
-        // Math + wake-up app bisa aktif bersamaan. Dulu solve math langsung
-        // dismiss dan melewati verifikasi app sepenuhnya. Sekarang lanjutkan
-        // ke wake-up sheet bila verifikasi app masih belum lengkap.
         if (wakeUpAppPackageNames.isNotEmpty() && !wakeUpComplete) {
             showWakeUpSheet = true
         } else {

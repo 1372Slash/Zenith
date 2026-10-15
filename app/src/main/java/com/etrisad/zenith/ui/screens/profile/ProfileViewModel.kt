@@ -137,12 +137,6 @@ class ProfileViewModel(
             list.filterNot { it.defId == defId && it.tierValue == tierValue }
         }
     }
-
-    /**
-     * Banner keys enqueued by the developer test hook. They must never
-     * pollute the persistent seen-set, otherwise testing would silently
-     * burn the real future notification for those achievement ids.
-     */
     private val testBannerKeys = mutableSetOf<String>()
 
     fun consumeBanner(key: String) {

@@ -43,10 +43,6 @@ class AlarmPlaybackService : Service() {
     private var isAlarmActive = false
 
     private var alarmTime: String = "07:00"
-
-    // Override draf untuk mode test: suara memakai setup draf tanpa
-    // membaca/menulis alarm tersimpan. Selalu di-reset tiap start agar
-    // tidak bocor ke alarm nyata berikutnya.
     private var testAlarmJson: String? = null
 
     private fun resolveTestAlarm(): com.etrisad.zenith.data.model.AlarmItem? {
@@ -73,9 +69,6 @@ class AlarmPlaybackService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // START_STICKY dulu menyebabkan service yang di-kill sistem restart dengan
-        // intent=null lalu memutar suara alarm basi tanpa overlay. Sekarang NOT_STICKY
-        // + guard null-intent agar tidak ada replay hantu.
         if (intent == null) {
             stopSelf()
             return START_NOT_STICKY
@@ -88,8 +81,6 @@ class AlarmPlaybackService : Service() {
 
         isAlarmActive = true
         _isPlaying.value = true
-        // Battery: hard auto-stop so looping audio + infinite vibrate + TTS
-        // cannot run forever if overlay is killed without stopPlayback().
         autoStopJob?.cancel()
         autoStopJob = serviceScope.launch {
             delay(PLAYBACK_AUTO_STOP_MS)
@@ -104,9 +95,6 @@ class AlarmPlaybackService : Service() {
                 val alarms = app.userPreferencesRepository.parseAlarms(prefs.alarmsJson)
                 val testOverride = resolveTestAlarm()
                 val alarm = testOverride ?: alarms.find { it.timeString == alarmTime }
-                // Mode test tidak boleh mengubah volume perangkat (side effect):
-                // slider draf dipetakan langsung ke volume perangkat saat ini.
-                // Paksaan max/floor tetap berlaku saat alarm nyata berbunyi.
                 if (testOverride == null) {
                     forceAlarmVolume(preventVolumeDrop = alarm?.preventVolumeDrop ?: false)
                 }
@@ -138,8 +126,6 @@ class AlarmPlaybackService : Service() {
 
         val openAlarmIntent = Intent(this, AlarmOverlayActivity::class.java).apply {
             putExtra(AlarmOverlayActivity.EXTRA_ALARM_TIME, alarmTime)
-            // Tanpa ini, mengetuk notif saat test diam-diam menurunkan
-            // overlay ke mode normal (setup tersimpan).
             testAlarmJson?.let { putExtra(AlarmOverlayActivity.EXTRA_TEST_ALARM_JSON, it) }
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
         }
@@ -226,9 +212,6 @@ class AlarmPlaybackService : Service() {
                                 if (!isAlarmActive) return@setOnPreparedListener
                                 it.start()
                                 if (vibrateEnabled) startVibration()
-                                // Mode test: padatkan ramp gradual (maks 5 dtk) agar
-                                // target volume cepat terverifikasi dan kurva ramp
-                                // tetap terdengar; alarm nyata memakai durasi penuh.
                                 if (gradualVolume) rampUpVolume(
                                     if (testOverride != null) gradualVolumeDuration.coerceAtMost(5)
                                     else gradualVolumeDuration,
@@ -268,8 +251,6 @@ class AlarmPlaybackService : Service() {
 
             tts?.stop()
             tts?.shutdown()
-            // Ducking diskalakan dari slider volume alarm (bukan 1.0/0.3 mentah)
-            // agar slider tetap berlaku selama TTS berbicara.
             val duckedVolume = (musicVolume * 0.3f).coerceIn(0f, 1f)
             tts = android.speech.tts.TextToSpeech(this@AlarmPlaybackService) { status ->
                 if (status == android.speech.tts.TextToSpeech.SUCCESS && isAlarmActive) {
@@ -284,7 +265,6 @@ class AlarmPlaybackService : Service() {
                         tts?.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "alarm_tts")
 
                         var speakCount = 1
-                        // Battery: previously Int.MAX_VALUE = infinite TTS loop.
                         val maxSpeaks = if (repeatCount > 0) repeatCount.coerceAtMost(MAX_TTS_SPEAKS)
                         else MAX_TTS_SPEAKS
                         val intervalMs = intervalSeconds.coerceAtLeast(1) * 1000L
@@ -317,8 +297,6 @@ class AlarmPlaybackService : Service() {
                                 return@launch
                             }
                         }
-                        // Kuota TTS habis: kembalikan musik ke level slider,
-                        // jangan biarkan nyangkut di level ducked.
                         if (isAlarmActive) {
                             withContext(Dispatchers.Main) { mediaPlayer?.setVolume(musicVolume, musicVolume) }
                         }
@@ -429,11 +407,6 @@ class AlarmPlaybackService : Service() {
                 context.startService(intent)
             }
         }
-
-        /**
-         * Starts playback for a test fire using a draft alarm setup without
-         * touching stored alarms.
-         */
         fun startTest(context: Context, alarmTime: String, alarmJson: String) {
             val intent = Intent(context, AlarmPlaybackService::class.java).apply {
                 putExtra(EXTRA_ALARM_TIME, alarmTime)

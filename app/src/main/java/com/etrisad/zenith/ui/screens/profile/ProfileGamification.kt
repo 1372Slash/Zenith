@@ -85,11 +85,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 const val PROFILE_XP_BASE = 500
-/**
- * Gentle exponential curve exponent. Each level costs more than the last,
- * but softly: 1.35 keeps early levels within days and level 30 within
- * roughly a year of steady use.
- */
 const val PROFILE_XP_CURVE = 1.35
 enum class ProfileTier(val value: Int, val icon: ImageVector, val title: String) {
     I(1, Icons.Outlined.StarOutline, "Spark"),

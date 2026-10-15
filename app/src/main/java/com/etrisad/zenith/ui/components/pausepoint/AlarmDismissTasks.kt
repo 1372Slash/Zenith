@@ -1,14 +1,4 @@
 package com.etrisad.zenith.ui.components.pausepoint
-
-/**
- * Bridges alarm dismissal with Pause Point tasks.
- *
- * Each alarm stores its chosen dismiss missions as [com.etrisad.zenith.data.model.AlarmItem.dismissTaskTypeNames]
- * (a set of [PausePointTaskType.name] values). When the alarm fires, one random
- * task is generated from those types via [PausePointEngine.generateTask] using
- * the global Pause Point config (variants, saved QR codes / NFC tags), and the
- * alarm can only be dismissed by completing it.
- */
 object AlarmDismissTasks {
 
     /**

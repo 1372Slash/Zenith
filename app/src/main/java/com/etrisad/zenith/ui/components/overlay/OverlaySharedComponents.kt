@@ -68,9 +68,6 @@ val PREDEFINED_PALETTES = listOf(
     OverlayColorPalette("lavender", Color(0xFF6750A4), "Lavender"),
     OverlayColorPalette("mint", Color(0xFF006B5D), "Mint")
 )
-
-// Single source of truth untuk uses pill: 0 jika periode sudah expired,
-// selain itu currentPeriodUses mentah. Dipakai semua overlay agar sama.
 fun effectivePeriodUses(
     currentPeriodUses: Int,
     lastPeriodResetTimestamp: Long,
@@ -109,20 +106,12 @@ fun generateDynamicColorScheme(seed: Color, isDark: Boolean, currentScheme: Colo
         if (isDark) {
             if (isForPreview) 0.88f else 0.65f
         } else {
-            // Diturunkan 0.45 -> 0.40 agar spinner/angka waiting tetap terbaca
-            // di atas tombol disabled yang terang (flat, tanpa outline).
             if (isForPreview) 0.75f else 0.40f
         }
     }
     val tertiaryHue = if (isMonochrome) hue else (hue + 60f) % 360f
     val tertiarySat = if (isMonochrome) 0f else (sat * 0.4f).coerceIn(0.1f, 0.4f)
     val tertiary = Color(android.graphics.Color.HSVToColor(floatArrayOf(tertiaryHue, tertiarySat, tertiaryV)))
-
-    // Hierarki flat (tanpa outline) agar tidak menyatu seperti bug ungu:
-    // light: surface (1.00, paling putih) > sheet/surfaceContainer (0.95)
-    //        > disabled/surfaceVariant (0.90) > enabled/secondaryContainer (0.87).
-    // dark:  surface (0.12) < sheet (0.17) < disabled (0.22) < enabled (0.33).
-    // Delta sheet vs enabled light >= 0.08, dark >= 0.16.
     val surfaceV = if (isDark) 0.12f else if (isForPreview) 0.98f else 1.0f
     val surfaceSat = if (isMonochrome) 0f else if (isDark) (sat * 0.45f).coerceIn(0.12f, 0.32f) else if (isForPreview) (sat * 0.05f).coerceAtMost(0.04f) else (sat * 0.05f).coerceAtMost(0.04f)
     val surface = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, surfaceSat, surfaceV)))
@@ -132,7 +121,6 @@ fun generateDynamicColorScheme(seed: Color, isDark: Boolean, currentScheme: Colo
     val surfaceContainer = if (isForPreview) {
         Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isMonochrome) 0f else sat * 0.25f, if (isDark) 0.18f else 0.94f)))
     } else {
-        // Sheet dipisah dari surface agar tidak menyatu (dulu = surface).
         Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isMonochrome) 0f else (sat * 0.20f).coerceIn(0.05f, 0.16f), if (isDark) 0.17f else 0.95f)))
     }
     val surfaceContainerHigh = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isMonochrome) 0f else (sat * 0.40f).coerceIn(0.12f, 0.30f), if (isDark) 0.24f else 0.88f)))
@@ -164,8 +152,6 @@ fun generateDynamicColorScheme(seed: Color, isDark: Boolean, currentScheme: Colo
         secondary = secondary,
         onSecondary = if (isDark) Color.Black else Color.White,
         secondaryContainer = if (isForPreview) secondary.copy(alpha = if (isDark) 0.25f else 0.2f) else secondaryContainer,
-        // Teks di atas tombol enabled digelapkan (V 0.30 -> 0.22, S min 0.40)
-        // agar kontras >= 4.5:1 di atas secondaryContainer baru yang lebih gelap.
         onSecondaryContainer = if (isForPreview) secondary else (if (isDark) secondary else Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, (secondaryContainerSat * 2f).coerceIn(0.40f, 0.85f), 0.22f)))),
         tertiary = tertiary,
         onTertiary = if (isDark) Color.Black else Color.White,
@@ -325,10 +311,6 @@ fun OverlayDragHandleWithIndicators(
     ) {
         Box(modifier = Modifier.weight(1f)) {
             val hasUses = currentUses != null && maxUses != null
-            // Standar tunggal: pill tampil sebagai SISA/MAX (menurun),
-            // selaras dengan fill progress ((max - current) / max).
-            // Bonus incentive tetap ditampilkan di sheet content, bukan bergantian di drag handle
-            // agar tidak flicker antara "bertambah" dan "berkurang".
             if (hasUses) {
                 ZenithButton(
                     onClick = { },
@@ -465,8 +447,6 @@ fun TotalUsagePill(totalGlobalUsageToday: Long, userPrefs: UserPreferences, modi
                 bottomEnd = cornerRadiusLarge
             )
         ) {
-            // Putih penuh agar garis pemisah tetap terlihat di atas primary/tertiary
-            // untuk semua seed (ungu, mint, dll). Tetap flat, bukan outline tombol.
             val separatorColor = MaterialTheme.colorScheme.surfaceContainerLowest
             Box(
                 modifier = Modifier.drawBehind {
@@ -752,14 +732,12 @@ fun CurrentEventPill(
     val eventProgress = remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(currentEvent) {
-        // Battery: was 100ms (10Hz) for a slow calendar progress bar. 1s is enough.
         while (true) {
             val now = System.currentTimeMillis()
             val duration = currentEvent.eventEndMillis - currentEvent.eventStartMillis
             eventProgress.floatValue = if (duration > 0) {
                 ((now - currentEvent.eventStartMillis).toFloat() / duration).coerceIn(0f, 1f)
             } else 0f
-            // Auto-stop when event ends to avoid infinite ticker.
             if (now >= currentEvent.eventEndMillis) break
             delay(1000)
         }

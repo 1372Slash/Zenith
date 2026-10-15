@@ -42,7 +42,8 @@ fun AboutSettings(
     onCheckUpdateOnStartChange: (Boolean) -> Unit,
     isCheckingForUpdate: Boolean,
     onCheckForUpdate: () -> Unit,
-    onViewChangelog: () -> Unit
+    onViewChangelog: () -> Unit,
+    onExportDiagnostics: () -> Unit
 ) {
     val context = LocalContext.current
     val versionName = BuildConfig.VERSION_NAME
@@ -101,6 +102,14 @@ fun AboutSettings(
                 context.startActivity(intent)
             },
             shape = RoundedCornerShape(8.dp)
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+        AboutActionCard(
+            title = "Report a Bug",
+            icon = Icons.Outlined.BugReport,
+            shape = RoundedCornerShape(8.dp),
+            onClick = onExportDiagnostics
         )
 
         Spacer(modifier = Modifier.height(4.dp))

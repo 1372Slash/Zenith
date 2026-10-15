@@ -253,7 +253,6 @@ fun ShieldOverlaySheetContent(
         var cachedOfDay = 0L
         val pollStart = System.currentTimeMillis()
         while (true) {
-            // Battery: cap overlay polling to 10 min max per overlay instance.
             if (System.currentTimeMillis() - pollStart > 10 * 60 * 1000L) break
             val now = System.currentTimeMillis()
             if (now - lastOfDay > 60000) {
@@ -330,10 +329,6 @@ fun ShieldOverlaySheetContent(
     val isPeriodExpired = remember(currentShield) {
         currentShield != null && (System.currentTimeMillis() - currentShield.lastPeriodResetTimestamp > currentShield.refreshPeriodMinutes * 60 * 1000L)
     }
-
-    // Agree with the drag-handle pill: live Room Flow can lag behind a
-    // just-committed Allow (same overlay session). Within one period DB uses
-    // only move up, so take the max; on period change trust live.
     val currentUses = remember(currentShield, isPeriodExpired, shield) {
         val liveUses = if (isPeriodExpired) 0 else (currentShield?.currentPeriodUses ?: 0)
         val snapUses = shield?.let {
