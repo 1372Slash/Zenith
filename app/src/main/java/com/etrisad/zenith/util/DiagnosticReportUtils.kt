@@ -64,8 +64,16 @@ object DiagnosticReportUtils {
     suspend fun export(
         context: Context,
         targetUri: Uri,
-        preferences: UserPreferences
+        preferences: UserPreferences,
+        userConfirmed: Boolean = false
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        // Consent is enforced in the data layer, not just the UI checkbox:
+        // programmatic callers without explicit confirmation get a failure.
+        if (!userConfirmed) {
+            return@withContext Result.failure(
+                IllegalStateException("Export consent not confirmed")
+            )
+        }
         try {
             val info = buildDiagnosticInfo(context)
             val settings = buildSanitizedSettings(preferences)

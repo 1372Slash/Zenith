@@ -48,6 +48,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -92,10 +93,14 @@ fun PausePointNfcManagerContent(
 
     val supported = remember { isNfcSupported(context) }
     var nfcOn by remember { mutableStateOf(isNfcEnabled(context)) }
-    LaunchedEffect(Unit) {
+    val settingsWindowFocused = LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(settingsWindowFocused) {
+        nfcOn = isNfcEnabled(context)
+        // Poll only while this screen is focused; single check otherwise.
+        if (!settingsWindowFocused) return@LaunchedEffect
         while (true) {
-            nfcOn = isNfcEnabled(context)
             delay(3000)
+            nfcOn = isNfcEnabled(context)
         }
     }
     val enabled = nfcOn
@@ -131,7 +136,18 @@ fun PausePointNfcManagerContent(
 
     val removeTag: (String) -> Unit = { tag ->
         tags = tags - tag
-        coroutineScope.launch { preferencesRepository.setPausePointNfcTagIds(tags) }
+        coroutineScope.launch {
+            preferencesRepository.setPausePointNfcTagIds(tags)
+            // No usable tags left: auto-disable the type so it can't become
+            // a zombie that looks enabled but never generates tasks.
+            if (tags.none { it.isNotBlank() } &&
+                com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType.NFC_SCAN in preferences.pausePointTaskTypes
+            ) {
+                preferencesRepository.setPausePointTaskTypes(
+                    preferences.pausePointTaskTypes - com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType.NFC_SCAN
+                )
+            }
+        }
         if (justAdded == tag) justAdded = null
     }
 

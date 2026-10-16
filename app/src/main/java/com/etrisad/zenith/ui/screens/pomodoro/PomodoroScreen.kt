@@ -122,7 +122,10 @@ fun PomodoroScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item(key = "status") {
-                val isLongBreak = uiState.isBreakActive && uiState.currentSessionNumber % uiState.sessionsBeforeLongBreak == 0
+                // Guarded: corrupt prefs (sessionsBeforeLongBreak = 0) must not
+                // crash the screen with ArithmeticException.
+                val longBreakEvery = uiState.sessionsBeforeLongBreak.coerceAtLeast(1)
+                val isLongBreak = uiState.isBreakActive && uiState.currentSessionNumber % longBreakEvery == 0
                 val heroSize by animateDpAsState(
                     targetValue = if (uiState.isSessionActive) 320.dp else 240.dp,
                     animationSpec = spring(
@@ -967,25 +970,36 @@ fun PomodoroStatusProgress(
         label = "PomodoroProgress"
     )
 
-    val infiniteTransition = rememberInfiniteTransition(label = "Pomodoro_wavy")
-    val waveAmplitude by infiniteTransition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1.2f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3000, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "amplitude"
-    )
-    val iconScale by infiniteTransition.animateFloat(
-        initialValue = 0.9f,
-        targetValue = 1.1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3000, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "iconScale"
-    )
+    // The wavy/icon breathing only runs outside preview: an infinite
+    // transition in an idle preview invalidates every frame for nothing.
+    val waveAmplitude: Float
+    val iconScale: Float
+    if (!isPreview) {
+        val infiniteTransition = rememberInfiniteTransition(label = "Pomodoro_wavy")
+        val amp by infiniteTransition.animateFloat(
+            initialValue = 0.8f,
+            targetValue = 1.2f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(3000, easing = EaseInOutSine),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "amplitude"
+        )
+        val scl by infiniteTransition.animateFloat(
+            initialValue = 0.9f,
+            targetValue = 1.1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(3000, easing = EaseInOutSine),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "iconScale"
+        )
+        waveAmplitude = amp
+        iconScale = scl
+    } else {
+        waveAmplitude = 1f
+        iconScale = 1f
+    }
 
     val density = LocalDensity.current
     val strokeWidthPx = remember(density) { with(density) { 4.dp.toPx() } }
@@ -1054,7 +1068,8 @@ fun PomodoroStatusProgress(
                 SessionDots(
                     currentSession = currentSession,
                     totalSessions = totalSessions,
-                    accentColor = accentColor
+                    accentColor = accentColor,
+                    isPreview = isPreview
                 )
             }
         }
@@ -1065,9 +1080,11 @@ fun PomodoroStatusProgress(
 private fun SessionDots(
     currentSession: Int,
     totalSessions: Int,
-    accentColor: Color
+    accentColor: Color,
+    isPreview: Boolean = false
 ) {
-    val completed = (currentSession - 1).coerceIn(0, totalSessions.coerceAtLeast(1))
+    // Preview hasn't started: no dot highlighted. -1 keeps every dot dim.
+    val completed = if (isPreview) -1 else (currentSession - 1).coerceIn(0, totalSessions.coerceAtLeast(1))
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically

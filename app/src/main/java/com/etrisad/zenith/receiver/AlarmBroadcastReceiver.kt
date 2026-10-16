@@ -71,6 +71,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         val alarmTime = intent.getStringExtra(AlarmOverlayActivity.EXTRA_ALARM_TIME) ?: "07:00"
         val isOnce = intent.getBooleanExtra(EXTRA_IS_ONCE, false)
         val attempt = intent.getIntExtra(EXTRA_RETRIGGER_COUNT, 0)
+        val waitCount = intent.getIntExtra(EXTRA_WAIT_COUNT, 0)
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, 0L)
         val dismissAt = intent.getLongExtra(EXTRA_DISMISS_AT, 0L)
         val checkKey = AlarmChainHelper.alarmKey(alarmId, alarmTime)
@@ -86,7 +87,12 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             AlarmChainHelper.UsageCheckOutcome.KEEP_WAITING_SAME_ALARM -> {
                 // Alarm yang sama masih bunyi di layar: belum ada hasil dismiss
                 // yang bisa dinilai, jadi tunggu dan cek lagi 60 detik.
-                scheduleUsageCheck(context, alarmTime, isOnce, attempt, alarmId, dismissAt)
+                // Bounded: berhenti setelah MAX_KEEP_WAITING_CHECKS agar tidak
+                // jadi exact alarm tiap menit selamanya bila overlay nyangkut
+                // (kasus normal selesai jauh sebelum cap via auto-dismiss).
+                if (waitCount < MAX_KEEP_WAITING_CHECKS) {
+                    scheduleUsageCheck(context, alarmTime, isOnce, attempt, alarmId, dismissAt, waitCount + 1)
+                }
                 return
             }
             AlarmChainHelper.UsageCheckOutcome.RE_TRIGGER -> {
@@ -392,6 +398,26 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             return 20000 + salt * 100000 + base + idPart
         }
 
+        /**
+         * Cancels an existing PendingIntent without creating one when absent.
+         * The old code used FLAG_UPDATE_CURRENT (create-if-absent) just to
+         * cancel, manufacturing thousands of PendingIntents per full sweep
+         * (1440 x 3 in cancelAlarm(null)) for zero effect.
+         */
+        private fun cancelPendingIfExists(context: Context, requestCode: Int, action: String) {
+            val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
+                this.action = action
+            }
+            val pi = PendingIntent.getBroadcast(
+                context, requestCode, intent,
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            ) ?: return
+            try {
+                (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(pi)
+            } catch (_: Exception) { }
+            try { pi.cancel() } catch (_: Exception) { }
+        }
+
         fun hasExactAlarmPermission(context: Context): Boolean {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -453,32 +479,18 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         }
 
         fun cancelAlarm(context: Context, alarmTime: String?, alarmId: Long = 0L) {
-            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             if (alarmTime != null) {
                 val parsed = parseHourMinute(alarmTime)
                 if (parsed != null) {
                     val (hour, minute) = parsed
-                    val requestCode = REQUEST_CODE_ALARM_BASE + hour * 100 + minute
-                    val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
-                        action = ACTION_FIRE_ALARM
-                    }
-                    val pendingIntent = PendingIntent.getBroadcast(
-                        context, requestCode, intent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    cancelPendingIfExists(
+                        context, REQUEST_CODE_ALARM_BASE + hour * 100 + minute, ACTION_FIRE_ALARM
                     )
-                    alarmManager.cancel(pendingIntent)
-                    pendingIntent.cancel()
                 }
                 if (alarmId > 0L) {
-                    val idIntent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
-                        action = ACTION_FIRE_ALARM
-                    }
-                    val idPendingIntent = PendingIntent.getBroadcast(
-                        context, requestCodeForId(REQUEST_CODE_ALARM_BASE, alarmTime, alarmId), idIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    cancelPendingIfExists(
+                        context, requestCodeForId(REQUEST_CODE_ALARM_BASE, alarmTime, alarmId), ACTION_FIRE_ALARM
                     )
-                    alarmManager.cancel(idPendingIntent)
-                    idPendingIntent.cancel()
                     // Migrasi: batalkan juga kode lama ((id % 200000) * 2400) agar tidak
                     // ada exact alarm hantu yang lolos setelah update aplikasi.
                     try {
@@ -487,12 +499,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                         val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
                         val legacyIdCode = REQUEST_CODE_ALARM_BASE + h * 100 + m +
                             ((alarmId % 200000L) * 2400L).toInt()
-                        val legacyPi = PendingIntent.getBroadcast(
-                            context, legacyIdCode, idIntent,
-                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                        )
-                        alarmManager.cancel(legacyPi)
-                        legacyPi.cancel()
+                        cancelPendingIfExists(context, legacyIdCode, ACTION_FIRE_ALARM)
                     } catch (_: Exception) { }
                 }
                 cancelReTrigger(context, alarmTime, alarmId)
@@ -504,38 +511,15 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             } else {
                 for (h in 0..23) {
                     for (m in 0..59) {
-                        val requestCode = REQUEST_CODE_ALARM_BASE + h * 100 + m
-                        val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
-                            action = ACTION_FIRE_ALARM
-                        }
-                        val pendingIntent = PendingIntent.getBroadcast(
-                            context, requestCode, intent,
-                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                        cancelPendingIfExists(
+                            context, REQUEST_CODE_ALARM_BASE + h * 100 + m, ACTION_FIRE_ALARM
                         )
-                        alarmManager.cancel(pendingIntent)
-                        pendingIntent.cancel()
-
-                        val reTriggerIntent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
-                            action = ACTION_RE_TRIGGER
-                        }
-                        val reTriggerCode = REQUEST_CODE_RE_TRIGGER_BASE + h * 100 + m
-                        val reTriggerPi = PendingIntent.getBroadcast(
-                            context, reTriggerCode, reTriggerIntent,
-                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                        cancelPendingIfExists(
+                            context, REQUEST_CODE_RE_TRIGGER_BASE + h * 100 + m, ACTION_RE_TRIGGER
                         )
-                        alarmManager.cancel(reTriggerPi)
-                        reTriggerPi.cancel()
-
-                        val usageIntent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
-                            action = ACTION_CHECK_USAGE
-                        }
-                        val usageCode = REQUEST_CODE_CHECK_BASE + h * 100 + m
-                        val usagePi = PendingIntent.getBroadcast(
-                            context, usageCode, usageIntent,
-                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                        cancelPendingIfExists(
+                            context, REQUEST_CODE_CHECK_BASE + h * 100 + m, ACTION_CHECK_USAGE
                         )
-                        alarmManager.cancel(usagePi)
-                        usagePi.cancel()
                     }
                 }
                 cancelAllAlarmNotifications(context)
@@ -549,7 +533,8 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             isOnce: Boolean = false,
             retriggerAttempt: Int = 0,
             alarmId: Long = 0L,
-            dismissAtMs: Long = System.currentTimeMillis()
+            dismissAtMs: Long = System.currentTimeMillis(),
+            waitCount: Int = 0
         ) {
             val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
                 action = ACTION_CHECK_USAGE
@@ -557,6 +542,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 putExtra(EXTRA_IS_ONCE, isOnce)
                 putExtra(EXTRA_RETRIGGER_COUNT, retriggerAttempt)
                 putExtra(EXTRA_DISMISS_AT, dismissAtMs)
+                putExtra(EXTRA_WAIT_COUNT, waitCount)
                 if (alarmId > 0L) putExtra(EXTRA_ALARM_ID, alarmId)
             }
 
@@ -614,29 +600,25 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
 
         @JvmOverloads
         fun cancelUsageCheck(context: Context, alarmTime: String, alarmId: Long = 0L) {
-            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
-                action = ACTION_CHECK_USAGE
-            }
-            val requestCode = requestCodeFor(REQUEST_CODE_CHECK_BASE, alarmTime)
-            val pendingIntent = PendingIntent.getBroadcast(
-                context, requestCode, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            cancelPendingIfExists(
+                context, requestCodeFor(REQUEST_CODE_CHECK_BASE, alarmTime), ACTION_CHECK_USAGE
             )
-            alarmManager.cancel(pendingIntent)
-            pendingIntent.cancel()
             if (alarmId > 0L) {
-                val idPi = PendingIntent.getBroadcast(
-                    context, requestCodeForId(REQUEST_CODE_CHECK_BASE, alarmTime, alarmId), intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                cancelPendingIfExists(
+                    context, requestCodeForId(REQUEST_CODE_CHECK_BASE, alarmTime, alarmId), ACTION_CHECK_USAGE
                 )
-                alarmManager.cancel(idPi)
-                idPi.cancel()
             }
         }
 
         const val EXTRA_RETRIGGER_COUNT = "retrigger_count"
         private const val MAX_RE_TRIGGER_ATTEMPTS = 12
+        const val EXTRA_WAIT_COUNT = "wait_count"
+        /**
+         * Cap for KEEP_WAITING re-checks (60s apart ~= overlay 10-min
+         * auto-dismiss). Without this a stuck overlay would schedule exact
+         * alarms forever with an unchanged attempt counter.
+         */
+        private const val MAX_KEEP_WAITING_CHECKS = 10
 
         @JvmOverloads
         fun scheduleReTrigger(context: Context, alarmTime: String, attempt: Int = 0, alarmId: Long = 0L) {
@@ -667,49 +649,28 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
 
         @JvmOverloads
         fun cancelReTrigger(context: Context, alarmTime: String, alarmId: Long = 0L) {
-            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
-                action = ACTION_RE_TRIGGER
-            }
-            val requestCode = requestCodeFor(REQUEST_CODE_RE_TRIGGER_BASE, alarmTime)
-            val pendingIntent = PendingIntent.getBroadcast(
-                context, requestCode, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            cancelPendingIfExists(
+                context, requestCodeFor(REQUEST_CODE_RE_TRIGGER_BASE, alarmTime), ACTION_RE_TRIGGER
             )
-            alarmManager.cancel(pendingIntent)
-            pendingIntent.cancel()
             if (alarmId > 0L) {
-                val idPi = PendingIntent.getBroadcast(
-                    context, requestCodeForId(REQUEST_CODE_RE_TRIGGER_BASE, alarmTime, alarmId), intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                cancelPendingIfExists(
+                    context, requestCodeForId(REQUEST_CODE_RE_TRIGGER_BASE, alarmTime, alarmId), ACTION_RE_TRIGGER
                 )
-                alarmManager.cancel(idPi)
-                idPi.cancel()
             }
             // Snooze memakai action yang sama dengan base berbeda; sapu juga agar
             // tidak ada snooze basi yang ikut berbunyi setelah repeat dibatalkan.
             for (i in 0..50) {
-                try {
-                    val snoozeLegacy = PendingIntent.getBroadcast(
-                        context,
-                        REQUEST_CODE_SNOOZE_BASE + (alarmTime.hashCode() and 0x7fffffff) % 1000 + i,
-                        intent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
-                    alarmManager.cancel(snoozeLegacy)
-                    snoozeLegacy.cancel()
-                } catch (_: Exception) { }
+                cancelPendingIfExists(
+                    context,
+                    REQUEST_CODE_SNOOZE_BASE + (alarmTime.hashCode() and 0x7fffffff) % 1000 + i,
+                    ACTION_RE_TRIGGER
+                )
                 if (alarmId > 0L) {
-                    try {
-                        val snoozeId = PendingIntent.getBroadcast(
-                            context,
-                            requestCodeForId(REQUEST_CODE_SNOOZE_BASE, alarmTime, alarmId) + i,
-                            intent,
-                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                        )
-                        alarmManager.cancel(snoozeId)
-                        snoozeId.cancel()
-                    } catch (_: Exception) { }
+                    cancelPendingIfExists(
+                        context,
+                        requestCodeForId(REQUEST_CODE_SNOOZE_BASE, alarmTime, alarmId) + i,
+                        ACTION_RE_TRIGGER
+                    )
                 }
             }
         }

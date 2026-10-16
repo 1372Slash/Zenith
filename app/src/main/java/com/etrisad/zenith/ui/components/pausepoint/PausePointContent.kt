@@ -87,6 +87,10 @@ fun PausePointTaskContent(
             color = MaterialTheme.colorScheme.onSurface
         )
 
+        // Keyed by the full task: a new task instance (different duration,
+        // rounds, grid, target...) must restart all remember/LaunchedEffect
+        // state instead of reusing the previous task's progress.
+        key(task) {
         when (task) {
             is PausePointTask.Waiting -> WaitingTask(task, onTaskCompleted)
             is PausePointTask.Breathing -> BreathingTask(task, onTaskCompleted)
@@ -99,6 +103,7 @@ fun PausePointTaskContent(
             is PausePointTask.Typing -> TypingTask(task, onTaskCompleted, onUserActivity, onKeyboardFocusChange)
             is PausePointTask.Math -> MathTask(task, onTaskCompleted, onUserActivity, onKeyboardFocusChange)
             is PausePointTask.ChooseApp -> ChooseAppTask(task, onTaskCompleted, onOpenApp)
+        }
         }
     }
 }
@@ -355,10 +360,15 @@ private fun QrScanTask(
     val showScanner = hasValidCodes || task.acceptAny
     var showError by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val cameraGranted = androidx.core.content.ContextCompat.checkSelfPermission(
-        context,
-        android.Manifest.permission.CAMERA
-    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    // Re-checked on every window-focus change so granting Camera from
+    // Settings (then returning) refreshes without reopening the overlay.
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
+    val cameraGranted = remember(windowFocused) {
+        androidx.core.content.ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.CAMERA
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -447,14 +457,19 @@ private fun NfcScanTask(
     var handledTimestamp by remember { mutableStateOf<Long?>(null) }
     val lastScan by NfcScanResultBus.lastScan.collectAsState()
     val currentOnCompleted by rememberUpdatedState(onTaskCompleted)
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
     val normalizedValid = remember(task.validTagIds) {
         task.validTagIds.map { normalizeNfcTagId(it) }.filter { it.isNotEmpty() }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(windowFocused) {
+        nfcEnabled = isNfcEnabled(context)
+        // Poll only while the overlay window is focused; a single check
+        // otherwise (saves battery when NFC settings is on top).
+        if (!windowFocused) return@LaunchedEffect
         while (true) {
-            nfcEnabled = isNfcEnabled(context)
             delay(3000)
+            nfcEnabled = isNfcEnabled(context)
         }
     }
 
@@ -767,7 +782,9 @@ private fun SwitchTask(
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            // No center alignment: with overflow content, centered
+            // arrangement clips the leading badges out of scroll reach.
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             targetSequence.forEach { isOn ->
@@ -1049,12 +1066,21 @@ private fun MathTask(
     val correctAnswer = problem.third
     var answer by remember(task.maxOperand, task.operator) { mutableStateOf("") }
     val isCorrect = answer.toIntOrNull() == correctAnswer
+    // Idempotent completion: auto-fire, IME Done and the Continue button all
+    // converge here so a correct answer advances exactly once.
+    var fired by remember(task.maxOperand, task.operator) { mutableStateOf(false) }
+    fun fireOnce() {
+        if (!fired) {
+            fired = true
+            onCompleted()
+        }
+    }
     val focusRequester = remember { FocusRequester() }
     var fieldFocused by remember { mutableStateOf(false) }
     val windowFocused = LocalWindowInfo.current.isWindowFocused
 
     LaunchedEffect(isCorrect) {
-        if (isCorrect) onCompleted()
+        if (isCorrect) fireOnce()
     }
 
     LaunchedEffect(Unit) {
@@ -1110,7 +1136,7 @@ private fun MathTask(
                     }
                 },
                 onDone = {
-                    if (isCorrect) onCompleted()
+                    if (isCorrect) fireOnce()
                 }
             )
         }
@@ -1131,7 +1157,7 @@ private fun MathTask(
                 color = MaterialTheme.colorScheme.primary
             )
             ZenithButton(
-                onClick = onCompleted,
+                onClick = { fireOnce() },
                 text = "Continue",
                 type = ZenithButtonType.Filled,
                 size = ZenithButtonSize.Large,
@@ -1142,7 +1168,13 @@ private fun MathTask(
 }
 
 private fun generateMathProblem(maxOperand: Int, operator: MathOperator): Triple<Int, Int, Int> {
-    val max = maxOperand.coerceAtLeast(1)
+    // x and : grow quadratically (100x100, dividend = divisor x quotient),
+    // so cap them at 12 regardless of the settings slider (which clamps too,
+    // but defense-in-depth for stored/legacy values).
+    val max = when (operator) {
+        MathOperator.MULTIPLY, MathOperator.DIVIDE -> maxOperand.coerceIn(1, 12)
+        else -> maxOperand.coerceAtLeast(1)
+    }
     return when (operator) {
         MathOperator.ADD -> {
             val a = Random.nextInt(1, max + 1)

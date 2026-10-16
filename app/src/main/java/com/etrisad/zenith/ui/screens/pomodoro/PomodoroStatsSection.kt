@@ -96,6 +96,7 @@ fun PomodoroStatsSection(viewModel: PomodoroViewModel) {
                 dailyHistory = dailyHistory,
                 heatmapEmptyText = "No sessions yet - complete a focus session",
                 formatDuration = ::formatPomodoroDuration,
+                higherIsBetter = true,
                 periodDays = periodDays,
                 detailExtraLine = { dayMillis ->
                     val count = dayCountByMillis[dayMillis] ?: 0

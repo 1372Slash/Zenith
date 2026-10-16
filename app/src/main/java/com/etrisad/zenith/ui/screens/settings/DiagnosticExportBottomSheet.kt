@@ -76,6 +76,8 @@ fun DiagnosticExportBottomSheet(
     isExporting: Boolean,
     exportError: String?,
     exportSuccess: Boolean,
+    understandChecked: Boolean,
+    onUnderstandChange: (Boolean) -> Unit,
     onPickFile: () -> Unit,
     onExport: () -> Unit,
     onOpenGitHub: () -> Unit,
@@ -85,7 +87,6 @@ fun DiagnosticExportBottomSheet(
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
 
-    var understandChecked by remember { mutableStateOf(false) }
     var showError by remember { mutableStateOf(false) }
 
     val hasTarget = !targetDisplayName.isNullOrEmpty()
@@ -489,7 +490,7 @@ fun DiagnosticExportBottomSheet(
                             Checkbox(
                                 checked = understandChecked,
                                 onCheckedChange = {
-                                    understandChecked = it
+                                    onUnderstandChange(it)
                                     showError = false
                                 }
                             )

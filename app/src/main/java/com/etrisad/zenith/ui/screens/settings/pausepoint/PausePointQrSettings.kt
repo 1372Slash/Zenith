@@ -97,7 +97,18 @@ fun PausePointQrManagerContent(
 
     val removeCode: (String) -> Unit = { code ->
         codes = codes - code
-        coroutineScope.launch { preferencesRepository.setPausePointQrCodes(codes) }
+        coroutineScope.launch {
+            preferencesRepository.setPausePointQrCodes(codes)
+            // No usable codes left: auto-disable the type so it can't become
+            // a zombie that looks enabled but never generates tasks.
+            if (codes.none { it.isNotBlank() } &&
+                com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType.QR_SCAN in preferences.pausePointTaskTypes
+            ) {
+                preferencesRepository.setPausePointTaskTypes(
+                    preferences.pausePointTaskTypes - com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType.QR_SCAN
+                )
+            }
+        }
     }
 
     Column(

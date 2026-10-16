@@ -21,6 +21,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
@@ -153,18 +154,27 @@ class AlarmOverlayActivity : ComponentActivity() {
                         alarmId, alarmTime
                     )
                 }
-                val wakeUpAppPackageNames = remember(currentAlarm) {
+                val wakeUpAppPackageNames by produceState(
+                    initialValue = emptyList<String>(),
+                    key1 = currentAlarm
+                ) {
                     val raw = currentAlarm?.wakeUpAppPackageNames ?: emptyList()
-                    filterLaunchablePackages(raw)
+                    value = withContext(Dispatchers.IO) { filterLaunchablePackages(raw) }
                 }
 
-                val wakeUpAppNames = remember(wakeUpAppPackageNames) {
-                    wakeUpAppPackageNames.associateWith { pkg ->
-                        try {
-                            packageManager.getApplicationLabel(
-                                packageManager.getApplicationInfo(pkg, 0)
-                            ).toString()
-                        } catch (_: Exception) { pkg }
+                val wakeUpAppNames by produceState(
+                    initialValue = emptyMap<String, String>(),
+                    key1 = wakeUpAppPackageNames
+                ) {
+                    val pkgs = wakeUpAppPackageNames
+                    value = withContext(Dispatchers.IO) {
+                        pkgs.associateWith { pkg ->
+                            try {
+                                packageManager.getApplicationLabel(
+                                    packageManager.getApplicationInfo(pkg, 0)
+                                ).toString()
+                            } catch (_: Exception) { pkg }
+                        }
                     }
                 }
 
@@ -179,13 +189,18 @@ class AlarmOverlayActivity : ComponentActivity() {
                         currentAlarm?.mathChallengeEnabled ?: false
                     )
                 }
-                val dismissTask = remember(dismissTaskTypes, alarmTime, userPreferences.pausePointConfig) {
+                val pausePointQrCodes = userPreferences.pausePointQrCodes
+                val pausePointNfcTagIds = userPreferences.pausePointNfcTagIds
+                val dismissTask = remember(
+                    dismissTaskTypes, alarmId, alarmTime,
+                    userPreferences.pausePointConfig, pausePointQrCodes, pausePointNfcTagIds
+                ) {
                     if (dismissTaskTypes.isEmpty()) null
                     else PausePointEngine.generateTask(
                         enabledTypes = dismissTaskTypes,
                         config = userPreferences.pausePointConfig,
-                        qrCodes = userPreferences.pausePointQrCodes,
-                        nfcTagIds = userPreferences.pausePointNfcTagIds
+                        qrCodes = pausePointQrCodes,
+                        nfcTagIds = pausePointNfcTagIds
                     )
                 }
 

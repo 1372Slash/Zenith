@@ -58,6 +58,7 @@ fun SettingsScreen(
     var diagnosticExporting by remember { mutableStateOf(false) }
     var diagnosticError by remember { mutableStateOf<String?>(null) }
     var diagnosticSuccess by remember { mutableStateOf(false) }
+    var diagnosticUnderstood by remember { mutableStateOf(false) }
 
     val diagnosticFileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip"),
@@ -318,16 +319,18 @@ fun SettingsScreen(
             isExporting = diagnosticExporting,
             exportError = diagnosticError,
             exportSuccess = diagnosticSuccess,
+            understandChecked = diagnosticUnderstood,
+            onUnderstandChange = { diagnosticUnderstood = it },
             onPickFile = { diagnosticFileLauncher.launch(DiagnosticReportUtils.defaultFileName()) },
             onExport = {
                 val target = diagnosticTargetUri ?: return@DiagnosticExportBottomSheet
-                if (diagnosticExporting) return@DiagnosticExportBottomSheet
+                if (diagnosticExporting || !diagnosticUnderstood) return@DiagnosticExportBottomSheet
                 coroutineScope.launch {
                     diagnosticExporting = true
                     diagnosticError = null
                     try {
                         val prefs = preferencesRepository.userPreferencesFlow.first()
-                        DiagnosticReportUtils.export(context, target, prefs)
+                        DiagnosticReportUtils.export(context, target, prefs, userConfirmed = diagnosticUnderstood)
                             .onSuccess {
                                 diagnosticExporting = false
                                 diagnosticSuccess = true
@@ -335,7 +338,7 @@ fun SettingsScreen(
                             .onFailure { e ->
                                 diagnosticExporting = false
                                 diagnosticError = e.message ?: "Export failed"
-                                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "Export failed. Please try again.", Toast.LENGTH_LONG).show()
                             }
                     } catch (e: Exception) {
                         diagnosticExporting = false

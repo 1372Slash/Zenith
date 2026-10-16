@@ -610,7 +610,7 @@ fun SnapshotCard(
                                             modifier = Modifier.size(28.dp).clip(CircleShape),
                                             contentScale = ContentScale.Crop
                                         )
-                                    } else if (app.packageName.isNotEmpty()) {
+                                    } else if (app.appName.isNotEmpty()) {
                                         Box(
                                             modifier = Modifier
                                                 .size(28.dp)

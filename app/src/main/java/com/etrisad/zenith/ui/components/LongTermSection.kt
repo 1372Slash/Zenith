@@ -59,6 +59,12 @@ fun LongTermSection(
     dailyHistory: List<DailyUsage>,
     heatmapEmptyText: String,
     formatDuration: (Long) -> String,
+    /**
+     * Best-day semantics: false = least usage wins (screen time),
+     * true = most focus wins (Pomodoro). The shared tiles can't be right
+     * for both without this flag.
+     */
+    higherIsBetter: Boolean = false,
     periodDays: List<Long> = emptyList(),
     dayAppLoader: (suspend (Long) -> List<AppUsageInfo>)? = null,
     onAppClick: (String) -> Unit = {},
@@ -172,12 +178,19 @@ fun LongTermSection(
             val totals = if (weekMode) weekStatTotals else periodStatTotals
             val total = totals.sum()
             val avg = if (totals.isNotEmpty()) total / totals.size else 0L
-            val bestIdx = totals.indices.filter { totals[it] > 0L }.minByOrNull { totals[it] }
+            val bestIdx = totals.indices.filter { totals[it] > 0L }.let { nonZero ->
+                if (nonZero.isEmpty()) null
+                else if (higherIsBetter) nonZero.maxByOrNull { totals[it] }
+                else nonZero.minByOrNull { totals[it] }
+            }
             val bestVal = bestIdx?.let { totals[it] } ?: 0L
             val bestMillis = bestIdx?.let {
                 if (weekMode) selectedWeek?.getOrNull(it) else periodDays.getOrNull(it)
             }
-            val deltaPct = if (prevTotal != null && prevTotal > 0L) {
+            // "vs last" compares whole periods; in week-drilldown the other
+            // tiles show the week, so a period delta would be incoherent.
+            val deltaPct = if (weekMode) null
+            else if (prevTotal != null && prevTotal > 0L) {
                 (totalMillis - prevTotal).toFloat() / prevTotal
             } else null
             Row(
