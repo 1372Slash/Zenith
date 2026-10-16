@@ -433,115 +433,171 @@ fun GoalProgressSection(shield: ShieldEntity, totalUsageToday: Long, totalGlobal
             shield = shield
         )
     } else {
-        val estimateTime = remember(remainingMillis) {
-            val finishTime = System.currentTimeMillis() + remainingMillis
-            SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(finishTime))
-        }
+        GoalCompactProgress(
+            shield = shield,
+            progress = progress,
+            remainingMillis = remainingMillis,
+            totalGlobalUsageToday = totalGlobalUsageToday,
+            userPrefs = userPrefs
+        )
+    }
+}
 
-        val achievedMessages = remember {
-            listOf(
-                "Target reached! Keep the momentum going.",
-                "Goal achieved! You're doing great.",
-                "Mission accomplished! Stay focused.",
-                "Limit reached! Time to level up.",
-                "You made it! Keep up the good work.",
-                "Goal unlocked! Stay productive.",
-                "Outstanding! You've met your target."
-            )
-        }
-        val randomAchievedMessage = remember { achievedMessages.random() }
+@Composable
+private fun GoalCompactProgress(
+    shield: ShieldEntity,
+    progress: Float,
+    remainingMillis: Long,
+    totalGlobalUsageToday: Long,
+    userPrefs: UserPreferences
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        GoalProgressHeaderRow(
+            progress = progress,
+            shield = shield,
+            totalGlobalUsageToday = totalGlobalUsageToday,
+            userPrefs = userPrefs
+        )
+        GoalAnimatedWavyBar(progress = progress)
+        Spacer(modifier = Modifier.height(24.dp))
+        GoalResultSection(
+            progress = progress,
+            remainingMillis = remainingMillis
+        )
+    }
+}
 
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (progress >= 1f) "Goal Achieved" else "${(progress * 100).toInt()}% Done",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.align(Alignment.CenterStart)
-                )
-                TotalUsagePill(totalGlobalUsageToday, userPrefs)
-                Text(
-                    text = "Target: ${shield.timeLimitMinutes}m",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.CenterEnd)
-                )
-            }
+@Composable
+private fun GoalProgressHeaderRow(
+    progress: Float,
+    shield: ShieldEntity,
+    totalGlobalUsageToday: Long,
+    userPrefs: UserPreferences
+) {
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = if (progress >= 1f) "Goal Achieved" else "${(progress * 100).toInt()}% Done",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.align(Alignment.CenterStart)
+        )
+        TotalUsagePill(totalGlobalUsageToday, userPrefs)
+        Text(
+            text = "Target: ${shield.timeLimitMinutes}m",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.align(Alignment.CenterEnd)
+        )
+    }
+}
 
-            val animatedProgressState = animateFloatAsState(
-                targetValue = progress.coerceIn(0f, 1f),
-                animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
-                label = "goalProgress"
-            )
-            LinearWavyProgressIndicator(
-                progress = { animatedProgressState.value },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp)
-                    .height(10.dp),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                wavelength = 40.dp
-            )
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun GoalAnimatedWavyBar(progress: Float) {
+    val animatedProgressState = animateFloatAsState(
+        targetValue = progress.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 1000, easing = LinearOutSlowInEasing),
+        label = "goalProgress"
+    )
+    LinearWavyProgressIndicator(
+        progress = { animatedProgressState.value },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .height(10.dp),
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+        wavelength = 40.dp
+    )
+}
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                if (progress >= 1f) {
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.tertiaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Outlined.Lightbulb,
-                            contentDescription = null,
-                            modifier = Modifier.size(36.dp),
-                            tint = MaterialTheme.colorScheme.onTertiaryContainer
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = randomAchievedMessage,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                } else {
-                    Icon(
-                        Icons.Outlined.Timer,
-                        contentDescription = null,
-                        modifier = Modifier.size(28.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Estimated finish",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = estimateTime,
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
+@Composable
+private fun GoalResultSection(
+    progress: Float,
+    remainingMillis: Long
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        if (progress >= 1f) {
+            GoalAchievedMessage()
+        } else {
+            GoalEstimatedFinish(remainingMillis = remainingMillis)
         }
     }
+}
+
+@Composable
+private fun GoalAchievedMessage() {
+    val achievedMessages = remember {
+        listOf(
+            "Target reached! Keep the momentum going.",
+            "Goal achieved! You're doing great.",
+            "Mission accomplished! Stay focused.",
+            "Limit reached! Time to level up.",
+            "You made it! Keep up the good work.",
+            "Goal unlocked! Stay productive.",
+            "Outstanding! You've met your target."
+        )
+    }
+    val randomAchievedMessage = remember { achievedMessages.random() }
+
+    Box(
+        modifier = Modifier
+            .size(72.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.tertiaryContainer),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            Icons.Outlined.Lightbulb,
+            contentDescription = null,
+            modifier = Modifier.size(36.dp),
+            tint = MaterialTheme.colorScheme.onTertiaryContainer
+        )
+    }
+    Spacer(modifier = Modifier.height(16.dp))
+    Text(
+        text = randomAchievedMessage,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurface,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.padding(horizontal = 16.dp)
+    )
+}
+
+@Composable
+private fun GoalEstimatedFinish(remainingMillis: Long) {
+    val estimateTime = remember(remainingMillis) {
+        val finishTime = System.currentTimeMillis() + remainingMillis
+        SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(finishTime))
+    }
+
+    Icon(
+        Icons.Outlined.Timer,
+        contentDescription = null,
+        modifier = Modifier.size(28.dp),
+        tint = MaterialTheme.colorScheme.primary
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        text = "Estimated finish",
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = FontWeight.Medium
+    )
+    Text(
+        text = estimateTime,
+        style = MaterialTheme.typography.headlineLarge,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurface
+    )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
