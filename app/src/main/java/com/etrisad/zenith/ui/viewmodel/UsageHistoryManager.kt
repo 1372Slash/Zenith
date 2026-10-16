@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
+import com.etrisad.zenith.data.local.database.DbLogBuffer
 import com.etrisad.zenith.data.local.entity.DailyUsageEntity
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
@@ -262,6 +263,7 @@ class UsageHistoryManager(
 
     fun fetchSystemOnlyUsageHistory() {
         scope.launch(Dispatchers.Default) {
+            try {
             val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val (launcherApps, launcherPackage) = getLauncherInfo()
             val excludePackages = setOfNotNull(context.packageName, launcherPackage) + com.etrisad.zenith.service.SharedMonitoringState.excludedFromTrackingPackages
@@ -365,6 +367,11 @@ class UsageHistoryManager(
                 ))
             }
             _systemOnlyUsageHistory.value = history.reversed()
+            val nonZero = history.count { it.totalTime > 0 }
+            DbLogBuffer.d("ZenithDB", "SYS_HISTORY_DONE: days=${history.size} nonZero=$nonZero")
+            } catch (e: Exception) {
+                DbLogBuffer.e("ZenithDB", "SYS_HISTORY_FAILED: ${e::class.simpleName}: ${e.message}")
+            }
         }
     }
 
@@ -394,7 +401,10 @@ class UsageHistoryManager(
             dbAppRecords.map { UsageRecord.Live(it.packageName, it.usageTimeMillis) }
         }
 
-        if (recordsToUse.isNullOrEmpty()) return
+        if (recordsToUse.isNullOrEmpty()) {
+            DbLogBuffer.w("ZenithDB", "REPAIR_SKIP: date=$date mode=${mode.name} reason=no_source_records")
+            return
+        }
 
         _isRepairing.value = true
         try {
@@ -459,7 +469,10 @@ class UsageHistoryManager(
 
             shieldRepository.insertAllDailyUsage(entitiesToInsert)
             userPreferencesRepository.refreshGlobalStreak(shieldRepository)
+            val appCount = (entitiesToInsert.size - 4).coerceAtLeast(0)
+            DbLogBuffer.d("ZenithDB", "REPAIR_DONE: date=$date mode=${mode.name} apps=$appCount total=${finalTotal}ms")
         } catch (e: Exception) {
+            DbLogBuffer.e("ZenithDB", "REPAIR_FAILED: date=$date mode=${mode.name} ${e::class.simpleName}: ${e.message}")
         } finally {
             _isRepairing.value = false
         }
@@ -482,6 +495,7 @@ class UsageHistoryManager(
     suspend fun updateGlobalFallbackInternal(forceFull: Boolean = false) = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         if (!forceFull && now - lastTodayFallbackRefresh < 300_000L && _globalFallbackMap.value.isNotEmpty()) {
+            DbLogBuffer.d("ZenithDB", "FALLBACK_THROTTLED: forceFull=false cacheDays=${_globalFallbackMap.value.size}")
             return@withContext
         }
         lastTodayFallbackRefresh = now
@@ -533,10 +547,17 @@ class UsageHistoryManager(
         _globalFallbackMap.update { current ->
             current + results.toMap()
         }
+        val todayRecords = results.firstOrNull()?.second.orEmpty()
+        val todayApps = todayRecords.count { it.packageName != "TOTAL" }
+        val todayTotal = todayRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
+        DbLogBuffer.d("ZenithDB", "FALLBACK_TODAY: date=$todayStr apps=$todayApps total=${todayTotal}ms fullNeeded=$isFullNeeded")
     }
 
     private suspend fun updateFullHistoryFallbackInternal() {
-        if (isUpdatingFullHistory) return
+        if (isUpdatingFullHistory) {
+            DbLogBuffer.d("ZenithDB", "FALLBACK_FULL_SKIP: reason=already_running")
+            return
+        }
         isUpdatingFullHistory = true
         try {
             val now = System.currentTimeMillis()
@@ -544,7 +565,11 @@ class UsageHistoryManager(
             val (launcherApps, launcherPackage) = getLauncherInfo()
             val excludePackages = setOfNotNull(context.packageName, launcherPackage) + com.etrisad.zenith.service.SharedMonitoringState.excludedFromTrackingPackages
             val results = fetchFallbackForDays(1..7, usm, launcherApps, excludePackages, now)
+            val filled = results.count { it.second.isNotEmpty() }
             _globalFallbackMap.update { current -> current + results.toMap().filterValues { it.isNotEmpty() } }
+            DbLogBuffer.d("ZenithDB", "FALLBACK_FULL_DONE: filled=$filled/7 days=${_globalFallbackMap.value.size}")
+        } catch (e: Exception) {
+            DbLogBuffer.e("ZenithDB", "FALLBACK_FULL_FAILED: ${e::class.simpleName}: ${e.message}")
         } finally {
             isUpdatingFullHistory = false
         }
@@ -564,7 +589,12 @@ class UsageHistoryManager(
                 val end = if (i == 0) now else getMidnight(i - 1)
                 val dateStr = dateFormat.format(Date(start))
                 val usageMap = mutableMapOf<String, Long>()
-                val events = try { usm.queryEvents(start - 1800000L, end) } catch (e: Exception) { null }
+                val events = try {
+                    usm.queryEvents(start - 1800000L, end)
+                } catch (e: Exception) {
+                    DbLogBuffer.w("ZenithDB", "FALLBACK_DAY_QUERY_FAILED: date=$dateStr ${e::class.simpleName}: ${e.message}")
+                    null
+                }
                 if (events == null) return@async dateStr to emptyList<UsageRecord.Live>()
                 val event = UsageEvents.Event()
                 var activePkg: String? = null

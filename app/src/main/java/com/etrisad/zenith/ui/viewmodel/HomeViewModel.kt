@@ -335,7 +335,7 @@ class HomeViewModel(
         val dateFormat = usageHistoryManager.getDateFormat()
         val preferSystem = preferSystemUsageHistory
         val fallback = usageHistoryManager.globalFallbackMap.value
-        (6 downTo 0).map { k ->
+        val result = (6 downTo 0).map { k ->
             val daysAgo = chunkOffset * 7 + k
             val dStart = usageHistoryManager.getMidnight(daysAgo)
             val dStr = dateFormat.format(Date(dStart))
@@ -350,6 +350,10 @@ class HomeViewModel(
                 isLive = false
             )
         }
+        val filled = result.count { it.totalTime > 0 }
+        val withDb = result.count { it.hasDatabaseRecord }
+        DbLogBuffer.d("ZenithDB", "HIST_CHUNK_GLOBAL: offset=$chunkOffset filled=$filled/7 withDb=$withDb")
+        result
     }
 
     /**
@@ -360,7 +364,7 @@ class HomeViewModel(
         val dateFormat = usageHistoryManager.getDateFormat()
         val isWebsite = com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(packageName)
         val domain = if (isWebsite) com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(packageName) else null
-        (6 downTo 0).map { k ->
+        val result = (6 downTo 0).map { k ->
             val daysAgo = chunkOffset * 7 + k
             val dStart = usageHistoryManager.getMidnight(daysAgo)
             val dStr = dateFormat.format(Date(dStart))
@@ -372,6 +376,9 @@ class HomeViewModel(
                 DailyUsage(dStart, row?.usageTimeMillis ?: 0L, row != null, false, false)
             }
         }
+        val filled = result.count { it.totalTime > 0 }
+        DbLogBuffer.d("ZenithDB", "HIST_CHUNK_APP: offset=$chunkOffset filled=$filled/7 isWebsite=$isWebsite")
+        result
     }
 
     /**
@@ -382,7 +389,7 @@ class HomeViewModel(
         val dateFormat = usageHistoryManager.getDateFormat()
         val preferSystem = preferSystemUsageHistory
         val fallback = usageHistoryManager.globalFallbackMap.value
-        (6 downTo 0).map { k ->
+        val result = (6 downTo 0).map { k ->
             val daysAgo = chunkOffset * 7 + k
             val dStart = usageHistoryManager.getMidnight(daysAgo)
             val dStr = dateFormat.format(Date(dStart))
@@ -396,6 +403,9 @@ class HomeViewModel(
                 AppUsageInfo("", "", 0L, hasDatabaseRecord = entities.isNotEmpty(), hasSystemData = hasSys, isLive = false)
             }
         }
+        val filled = result.count { it.totalTimeVisible > 0 }
+        DbLogBuffer.d("ZenithDB", "HIST_CHUNK_SNAPSHOT: offset=$chunkOffset filled=$filled/7")
+        result
     }
 
     private val appInfoCache = java.util.concurrent.ConcurrentHashMap<String, String>()
@@ -784,7 +794,16 @@ class HomeViewModel(
         } else {
             com.etrisad.zenith.util.DateTimeUtils.getDayStartTime(now, dayStartHour, dayStartMinute)
         }
-        if (_uiState.value.selectedDateMillis == date && refreshJob?.isActive == true) return
+        val dateStr = try {
+            usageHistoryManager.getDateFormat().format(Date(date))
+        } catch (_: Exception) {
+            date.toString()
+        }
+        if (_uiState.value.selectedDateMillis == date && refreshJob?.isActive == true) {
+            DbLogBuffer.d("ZenithDB", "SELECT_DATE_SKIP: date=$dateStr refreshActive=true")
+            return
+        }
+        DbLogBuffer.d("ZenithDB", "SELECT_DATE: date=$dateStr tapped=${dateMillis != null}")
         // Keep the previous lists on screen while reloading: clearing them
         // here leaves the UI permanently empty if the refresh is cancelled
         // or returns a transient empty snapshot (intermittent all-zero UI).
@@ -1851,13 +1870,20 @@ class HomeViewModel(
     }
 
     fun onVisibleWeekChanged(chunkOffset: Int) {
+        DbLogBuffer.d("ZenithDB", "VISIBLE_WEEK: offset=$chunkOffset")
         viewModelScope.launch {
             val history = _uiState.value.dailyUsageHistory
             if (chunkOffset <= 2) {
-                if (history.isEmpty()) return@launch
+                if (history.isEmpty()) {
+                    DbLogBuffer.d("ZenithDB", "VISIBLE_WEEK_SKIP: offset=$chunkOffset reason=history_empty")
+                    return@launch
+                }
                 val pages = history.chunked(7)
                 val pageIndex = (pages.size - 1) - chunkOffset
-                if (pageIndex !in pages.indices) return@launch
+                if (pageIndex !in pages.indices) {
+                    DbLogBuffer.d("ZenithDB", "VISIBLE_WEEK_SKIP: offset=$chunkOffset reason=page_out_of_range pages=${pages.size}")
+                    return@launch
+                }
                 val weekDays = pages[pageIndex]; val avg = if (weekDays.isNotEmpty()) weekDays.map { it.totalTime }.average().toLong() else 0L
                 val dateFormat = usageHistoryManager.getDateFormat(); val appUsageMap = mutableMapOf<String, Long>()
                 val preferSystem = userPreferencesRepository.userPreferencesFlow.first().preferSystemUsageHistory
@@ -1873,6 +1899,7 @@ class HomeViewModel(
                     AppUsageInfo(pkg, cached ?: pkg, time)
                 }
                 _uiState.update { it.copy(weeklyAvgTime = avg, weeklyTopApps = topApps) }
+                DbLogBuffer.d("ZenithDB", "VISIBLE_WEEK_DONE: offset=$chunkOffset avg=${avg}ms topApps=${topApps.size}")
             } else {
                 val dateFormat = usageHistoryManager.getDateFormat()
                 val appUsageMap = mutableMapOf<String, Long>()
@@ -1894,6 +1921,7 @@ class HomeViewModel(
                     AppUsageInfo(pkg, appInfoCache[pkg] ?: pkg, time)
                 }
                 _uiState.update { it.copy(weeklyAvgTime = avg, weeklyTopApps = topApps) }
+                DbLogBuffer.d("ZenithDB", "VISIBLE_WEEK_DONE: offset=$chunkOffset avg=${avg}ms apps=${appUsageMap.size} total=${total}ms")
             }
         }
     }
