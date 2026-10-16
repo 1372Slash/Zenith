@@ -1,5 +1,6 @@
 *.iml
 .gradle
+/.kotlin/errors
 /local.properties
 /.idea/caches
 /.idea/libraries
@@ -16,6 +17,8 @@ local.properties
 # build APK
 /app/release/
 /app/build/
+/app/full/
+/app/store/
 *.apk
 *.aab
 *.dm

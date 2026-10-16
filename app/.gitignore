@@ -1,5 +1,7 @@
 /build
 /app/release/
 /app/build/
+/full/
+/store/
 /*.apk
 /*.aab
