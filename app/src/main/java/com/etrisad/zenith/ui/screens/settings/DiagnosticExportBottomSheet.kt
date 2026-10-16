@@ -12,12 +12,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.background
@@ -377,8 +375,19 @@ fun DiagnosticExportBottomSheet(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                Spacer(modifier = Modifier.height(300.dp))
+                Spacer(modifier = Modifier.height(120.dp))
             }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(24.dp)
+                    .align(Alignment.TopCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(MaterialTheme.colorScheme.surface, Color.Transparent)
+                        )
+                    )
+            )
 
             Column(
                 modifier = Modifier
@@ -388,12 +397,11 @@ fun DiagnosticExportBottomSheet(
                         Brush.verticalGradient(
                             listOf(Color.Transparent, MaterialTheme.colorScheme.surface),
                             startY = 0f,
-                            endY = 90f
+                            endY = 40f
                         )
                     )
-                    .padding(horizontal = 24.dp)
-                    .padding(top = 24.dp)
-                    .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 16.dp),
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
+                    .navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 if (exportSuccess) {
