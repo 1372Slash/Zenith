@@ -19,6 +19,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
 import com.etrisad.zenith.R
 import com.etrisad.zenith.ZenithApplication
+import com.etrisad.zenith.util.AlarmChainHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -43,6 +44,7 @@ class AlarmPlaybackService : Service() {
     private var isAlarmActive = false
 
     private var alarmTime: String = "07:00"
+    private var alarmId: Long = 0L
     private var testAlarmJson: String? = null
 
     private fun resolveTestAlarm(): com.etrisad.zenith.data.model.AlarmItem? {
@@ -75,9 +77,10 @@ class AlarmPlaybackService : Service() {
         }
         val newAlarmTime = intent.getStringExtra(EXTRA_ALARM_TIME) ?: alarmTime
         alarmTime = newAlarmTime
+        alarmId = intent.getLongExtra(EXTRA_ALARM_ID, 0L)
         testAlarmJson = intent.getStringExtra(EXTRA_TEST_ALARM_JSON)
 
-        startForeground(NOTIFICATION_ID, buildForegroundNotification(alarmTime))
+        startForeground(NOTIFICATION_ID, buildForegroundNotification(alarmTime, alarmId))
 
         isAlarmActive = true
         _isPlaying.value = true
@@ -94,7 +97,7 @@ class AlarmPlaybackService : Service() {
                 val prefs = app.userPreferencesRepository.userPreferencesFlow.first()
                 val alarms = app.userPreferencesRepository.parseAlarms(prefs.alarmsJson)
                 val testOverride = resolveTestAlarm()
-                val alarm = testOverride ?: alarms.find { it.timeString == alarmTime }
+                val alarm = testOverride ?: AlarmChainHelper.findAlarm(alarms, alarmId, alarmTime)
                 if (testOverride == null) {
                     forceAlarmVolume(preventVolumeDrop = alarm?.preventVolumeDrop ?: false)
                 }
@@ -109,7 +112,7 @@ class AlarmPlaybackService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun buildForegroundNotification(alarmTime: String): android.app.Notification {
+    private fun buildForegroundNotification(alarmTime: String, alarmId: Long = 0L): android.app.Notification {
         val channelId = "zenith_alarm_playback_channel"
         val manager = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -126,6 +129,7 @@ class AlarmPlaybackService : Service() {
 
         val openAlarmIntent = Intent(this, AlarmOverlayActivity::class.java).apply {
             putExtra(AlarmOverlayActivity.EXTRA_ALARM_TIME, alarmTime)
+            if (alarmId > 0L) putExtra(EXTRA_ALARM_ID, alarmId)
             testAlarmJson?.let { putExtra(AlarmOverlayActivity.EXTRA_TEST_ALARM_JSON, it) }
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
         }
@@ -152,7 +156,7 @@ class AlarmPlaybackService : Service() {
                 val prefs = app.userPreferencesRepository.userPreferencesFlow.first()
                 val alarms = app.userPreferencesRepository.parseAlarms(prefs.alarmsJson)
                 val testOverride = resolveTestAlarm()
-                val currentAlarm = testOverride ?: alarms.find { it.timeString == alarmTime }
+                val currentAlarm = testOverride ?: AlarmChainHelper.findAlarm(alarms, alarmId, alarmTime)
                 val gradualVolume = currentAlarm?.gradualVolumeEnabled ?: false
                 val gradualVolumeDuration = currentAlarm?.gradualVolumeDurationSeconds ?: 30
                 val alarmVolumeLevel = currentAlarm?.alarmVolume ?: 1.0f
@@ -390,6 +394,7 @@ class AlarmPlaybackService : Service() {
     companion object {
         const val EXTRA_ALARM_TIME = "extra_alarm_time"
         const val EXTRA_TEST_ALARM_JSON = "extra_test_alarm_json"
+        const val EXTRA_ALARM_ID = "alarm_id"
         const val PLAYBACK_AUTO_STOP_MS = 10 * 60 * 1000L
         const val MAX_TTS_SPEAKS = 60
         private const val NOTIFICATION_ID = 2010
@@ -397,9 +402,10 @@ class AlarmPlaybackService : Service() {
         private val _isPlaying = MutableStateFlow(false)
         val isPlaying: StateFlow<Boolean> = _isPlaying
 
-        fun start(context: Context, alarmTime: String) {
+        fun start(context: Context, alarmTime: String, alarmId: Long = 0L) {
             val intent = Intent(context, AlarmPlaybackService::class.java).apply {
                 putExtra(EXTRA_ALARM_TIME, alarmTime)
+                if (alarmId > 0L) putExtra(EXTRA_ALARM_ID, alarmId)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)

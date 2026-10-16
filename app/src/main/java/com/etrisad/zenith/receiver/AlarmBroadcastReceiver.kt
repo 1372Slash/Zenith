@@ -16,6 +16,7 @@ import com.etrisad.zenith.R
 import com.etrisad.zenith.ZenithApplication
 import com.etrisad.zenith.data.model.AlarmItem
 import com.etrisad.zenith.service.AlarmOverlayActivity
+import com.etrisad.zenith.util.AlarmChainHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -72,19 +73,30 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         val attempt = intent.getIntExtra(EXTRA_RETRIGGER_COUNT, 0)
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, 0L)
         val dismissAt = intent.getLongExtra(EXTRA_DISMISS_AT, 0L)
-        if (AlarmOverlayActivity.isShowing) {
-            cancelSmartWakeReminder(context)
-            sendAutoRepeatCompleteNotification(context, alarmTime)
-            if (isOnce) disableAlarm(context, alarmTime)
-            return
-        }
-        val awake = isUserAwake(context, dismissAt)
-        if (!awake) {
-            scheduleReTrigger(context, alarmTime, attempt, alarmId)
-        } else {
-            cancelSmartWakeReminder(context)
-            sendAutoRepeatCompleteNotification(context, alarmTime)
-            if (isOnce) disableAlarm(context, alarmTime)
+        val checkKey = AlarmChainHelper.alarmKey(alarmId, alarmTime)
+        when (
+            AlarmChainHelper.decideUsageCheck(
+                AlarmOverlayActivity.isShowing,
+                AlarmOverlayActivity.showingAlarmKey,
+                checkKey
+            ) {
+                isUserAwake(context, dismissAt)
+            }
+        ) {
+            AlarmChainHelper.UsageCheckOutcome.KEEP_WAITING_SAME_ALARM -> {
+                // Alarm yang sama masih bunyi di layar: belum ada hasil dismiss
+                // yang bisa dinilai, jadi tunggu dan cek lagi 60 detik.
+                scheduleUsageCheck(context, alarmTime, isOnce, attempt, alarmId, dismissAt)
+                return
+            }
+            AlarmChainHelper.UsageCheckOutcome.RE_TRIGGER -> {
+                scheduleReTrigger(context, alarmTime, attempt, alarmId)
+            }
+            AlarmChainHelper.UsageCheckOutcome.COMPLETE -> {
+                cancelSmartWakeReminder(context)
+                sendAutoRepeatCompleteNotification(context, alarmTime, alarmId)
+                if (isOnce) disableAlarm(context, alarmTime, alarmId)
+            }
         }
     }
 
@@ -101,7 +113,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
         }
         try {
-            com.etrisad.zenith.service.AlarmPlaybackService.start(context, alarmTime)
+            com.etrisad.zenith.service.AlarmPlaybackService.start(context, alarmTime, alarmId)
         } catch (e: Exception) {
         }
         try {
@@ -148,12 +160,13 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         }
     }
 
-    private suspend fun sendAutoRepeatCompleteNotification(context: Context, alarmTime: String) {
+    private suspend fun sendAutoRepeatCompleteNotification(context: Context, alarmTime: String, alarmId: Long = 0L) {
         try {
             val alarmName = try {
                 val app = context.applicationContext as ZenithApplication
-                app.userPreferencesRepository.getAlarmsSnapshot()
-                    .find { it.timeString == alarmTime }?.name
+                AlarmChainHelper.findAlarm(
+                    app.userPreferencesRepository.getAlarmsSnapshot(), alarmId, alarmTime
+                )?.name
             } catch (_: Exception) { null }
             val display = alarmName?.let { "$it at $alarmTime" } ?: alarmTime
             ensureInfoChannel(context)
@@ -705,15 +718,13 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             }
         }
 
-        suspend fun disableAlarm(context: Context, alarmTime: String) {
+        suspend fun disableAlarm(context: Context, alarmTime: String, alarmId: Long = 0L) {
             try {
                 val app = context.applicationContext as ZenithApplication
-                var alarmId = 0L
                 val repo = app.userPreferencesRepository
-                val alarm = repo.getAlarmsSnapshot().find { it.timeString == alarmTime } ?: return
-                alarmId = alarm.id
+                val alarm = AlarmChainHelper.findAlarm(repo.getAlarmsSnapshot(), alarmId, alarmTime) ?: return
                 repo.updateAlarm(alarm.copy(enabled = false))
-                cancelAlarm(context, alarmTime, alarmId)
+                cancelAlarm(context, alarmTime, alarm.id)
             } catch (e: Exception) {
             }
         }
@@ -839,8 +850,9 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
 
                 val alarmName = try {
                     val app = context.applicationContext as ZenithApplication
-                    app.userPreferencesRepository.getAlarmsSnapshot()
-                        .find { it.timeString == alarmTime }?.name
+                    AlarmChainHelper.findAlarm(
+                        app.userPreferencesRepository.getAlarmsSnapshot(), alarmId, alarmTime
+                    )?.name
                 } catch (_: Exception) { null }
                 val namePart = alarmName?.let { "\"$it\" " } ?: ""
 

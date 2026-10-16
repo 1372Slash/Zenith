@@ -28,6 +28,7 @@ import com.etrisad.zenith.ZenithApplication
 import com.etrisad.zenith.data.preferences.ThemeConfig
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.receiver.AlarmBroadcastReceiver
+import com.etrisad.zenith.util.AlarmChainHelper
 import com.etrisad.zenith.ui.components.AlarmOverlayContent
 import com.etrisad.zenith.ui.components.pausepoint.AlarmDismissTasks
 import com.etrisad.zenith.ui.components.pausepoint.PausePointEngine
@@ -63,11 +64,27 @@ class AlarmOverlayActivity : ComponentActivity() {
     private var isAlarmActive = false
 
     private var alarmTime: String = "07:00"
+    private var alarmId: Long = 0L
     private var snoozeCount: Int = 0
     private var testMathChallenge: Boolean = false
     private var testAlarmJson: String? = null
     private var testGradualVolume: Boolean = false
     private var restartKey by mutableIntStateOf(0)
+
+    /**
+     * Progres wake-up per alarm. Satu-satunya state yang bertahan saat alarm
+     * lain preempt overlay (singleInstance): offsetMs menampung akumulasi yang
+     * sudah dikunci dari window sebelumnya, windowStartMs menandai awal window
+     * yang sedang berjalan (0 = tidak ada window terbuka), packages dipakai
+     * untuk mengunci window yang tertunda saat preempt terjadi.
+     */
+    private data class WakeUpSlot(
+        var offsetMs: Long = 0L,
+        var windowStartMs: Long = 0L,
+        var packages: List<String> = emptyList(),
+        var complete: Boolean = false
+    )
+    private val wakeUpSlots = mutableMapOf<String, WakeUpSlot>()
 
     private var wakeUpTrackingActive by mutableStateOf(false)
     private var wakeUpStartTime by mutableLongStateOf(0L)
@@ -92,6 +109,8 @@ class AlarmOverlayActivity : ComponentActivity() {
         isAlarmActive = true
 
         alarmTime = intent?.getStringExtra(EXTRA_ALARM_TIME) ?: "07:00"
+        alarmId = intent?.getLongExtra(AlarmBroadcastReceiver.EXTRA_ALARM_ID, 0L) ?: 0L
+        showingAlarmKey = AlarmChainHelper.alarmKey(alarmId, alarmTime)
         snoozeCount = intent?.getIntExtra(EXTRA_SNOOZE_COUNT, 0) ?: 0
         testMathChallenge = intent?.getBooleanExtra(EXTRA_TEST_MATH_CHALLENGE, false) ?: false
         testAlarmJson = intent?.getStringExtra(EXTRA_TEST_ALARM_JSON)
@@ -99,7 +118,7 @@ class AlarmOverlayActivity : ComponentActivity() {
 
         val testJson = testAlarmJson
         if (testJson != null) AlarmPlaybackService.startTest(this, alarmTime, testJson)
-        else AlarmPlaybackService.start(this, alarmTime)
+        else AlarmPlaybackService.start(this, alarmTime, alarmId)
         bindService(Intent(this, AlarmPlaybackService::class.java), connection, Context.BIND_AUTO_CREATE)
 
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -112,13 +131,7 @@ class AlarmOverlayActivity : ComponentActivity() {
         )
         wakeLock?.acquire(10 * 60 * 1000L)
         startWakeLockRenewal()
-        autoDismissJob?.cancel()
-        autoDismissJob = lifecycleScope.launch {
-            delay(ALARM_AUTO_DISMISS_MS)
-            if (isAlarmActive) {
-                stopAlarmAndFinish()
-            }
-        }
+        scheduleAutoDismiss()
 
         setContent {
             key(restartKey) {
@@ -133,9 +146,11 @@ class AlarmOverlayActivity : ComponentActivity() {
                     }
                 }
 
-                val currentAlarm = remember(userPreferences.alarmsJson, testAlarm) {
-                    testAlarm ?: userPreferencesRepository.parseAlarms(userPreferences.alarmsJson)
-                        .find { it.timeString == alarmTime }
+                val currentAlarm = remember(userPreferences.alarmsJson, testAlarm, alarmId, alarmTime) {
+                    testAlarm ?: AlarmChainHelper.findAlarm(
+                        userPreferencesRepository.parseAlarms(userPreferences.alarmsJson),
+                        alarmId, alarmTime
+                    )
                 }
                 val wakeUpAppPackageNames = remember(currentAlarm) {
                     val raw = currentAlarm?.wakeUpAppPackageNames ?: emptyList()
@@ -178,12 +193,10 @@ class AlarmOverlayActivity : ComponentActivity() {
                     ThemeConfig.LIGHT -> false
                     ThemeConfig.DARK -> true
                 }
-                androidx.compose.runtime.LaunchedEffect(wakeUpAppPackageNames, alarmTime) {
+                androidx.compose.runtime.LaunchedEffect(wakeUpAppPackageNames, alarmTime, alarmId) {
                     wakeUpNeedsPermission = wakeUpAppPackageNames.isNotEmpty() && !hasUsageAccess()
                     if (wakeUpAppPackageNames.isNotEmpty() && !wakeUpTrackingActive && !wakeUpComplete) {
-                        wakeUpStartTime = System.currentTimeMillis()
-                        wakeUpTrackingActive = true
-                        startWakeUpTracking(wakeUpAppPackageNames, wakeUpAppDurationSeconds)
+                        resumeWakeUpTracking(wakeUpAppPackageNames, wakeUpAppDurationSeconds)
                     }
                 }
 
@@ -241,23 +254,37 @@ class AlarmOverlayActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         val newAlarmTime = intent.getStringExtra(EXTRA_ALARM_TIME) ?: return
+        val newAlarmId = intent.getLongExtra(AlarmBroadcastReceiver.EXTRA_ALARM_ID, 0L)
         setShowWhenLocked(true)
         setTurnScreenOn(true)
 
-        if (newAlarmTime != alarmTime) {
-            stopWakeUpTracking()
+        val newKey = AlarmChainHelper.alarmKey(newAlarmId, newAlarmTime)
+        if (newKey != AlarmChainHelper.alarmKey(alarmId, alarmTime)) {
+            // Alarm lain preempt overlay: kunci window wake-up yang berjalan ke
+            // offset agar progres tidak hilang, slot dipertahankan per alarm.
+            suspendWakeUpForSwitch()
         }
         alarmTime = newAlarmTime
+        alarmId = newAlarmId
+        showingAlarmKey = newKey
+        isShowing = true
         snoozeCount = intent.getIntExtra(EXTRA_SNOOZE_COUNT, 0)
         testMathChallenge = intent.getBooleanExtra(EXTRA_TEST_MATH_CHALLENGE, false)
         testAlarmJson = intent.getStringExtra(EXTRA_TEST_ALARM_JSON)
         testGradualVolume = intent.getBooleanExtra(EXTRA_TEST_GRADUAL_VOLUME, false)
+        // Prefill UI dari slot yang dipertahankan agar progres tidak berkedip ke nol;
+        // LaunchedEffect setelah recompose akan me-resume window tracking-nya.
+        val slot = wakeUpSlots[newKey]
+        wakeUpAccumulatedSeconds = ((slot?.offsetMs ?: 0L) / 1000).toInt()
+        wakeUpComplete = slot?.complete ?: false
+        wakeUpTrackingActive = false
         restartKey++
 
         isAlarmActive = true
+        scheduleAutoDismiss()
         val retestJson = testAlarmJson
         if (retestJson != null) AlarmPlaybackService.startTest(this, alarmTime, retestJson)
-        else AlarmPlaybackService.start(this, alarmTime)
+        else AlarmPlaybackService.start(this, alarmTime, alarmId)
     }
 
     private fun dismissWithAutoRepeat() {
@@ -266,23 +293,23 @@ class AlarmOverlayActivity : ComponentActivity() {
             return
         }
         val dismissAt = System.currentTimeMillis()
+        val wantId = alarmId
+        val wantTime = alarmTime
         lifecycleScope.launch(Dispatchers.IO) {
             val userPreferencesRepository = (application as ZenithApplication).userPreferencesRepository
             val prefs = userPreferencesRepository.userPreferencesFlow.first()
 
             val alarms = userPreferencesRepository.parseAlarms(prefs.alarmsJson)
-            val currentAlarm = alarms.find {
-                it.timeString == alarmTime
-            }
-            val alarmId = currentAlarm?.id ?: 0L
+            val currentAlarm = AlarmChainHelper.findAlarm(alarms, wantId, wantTime)
+            val resolvedId = currentAlarm?.id ?: wantId
 
             val autoRepeat = currentAlarm?.autoRepeatEnabled ?: prefs.alarmAutoRepeatEnabled
             val isOnce = currentAlarm?.days?.isEmpty() ?: true
             val isRecurring = !isOnce
 
-            AlarmBroadcastReceiver.recordAlarmDismiss(this@AlarmOverlayActivity, alarmTime)
+            AlarmBroadcastReceiver.recordAlarmDismiss(this@AlarmOverlayActivity, wantTime)
             AlarmBroadcastReceiver.cancelFiringNotification(this@AlarmOverlayActivity)
-            AlarmBroadcastReceiver.cancelReTrigger(this@AlarmOverlayActivity, alarmTime, alarmId)
+            AlarmBroadcastReceiver.cancelReTrigger(this@AlarmOverlayActivity, wantTime, resolvedId)
             if (isRecurring && currentAlarm != null) {
                 AlarmBroadcastReceiver.scheduleAlarm(
                     this@AlarmOverlayActivity, currentAlarm.timeString, currentAlarm.days, currentAlarm.id
@@ -291,19 +318,19 @@ class AlarmOverlayActivity : ComponentActivity() {
 
             if (autoRepeat) {
                 AlarmBroadcastReceiver.scheduleUsageCheck(
-                    this@AlarmOverlayActivity, alarmTime, isOnce, 0, alarmId, dismissAt
+                    this@AlarmOverlayActivity, wantTime, isOnce, 0, resolvedId, dismissAt
                 )
                 AlarmBroadcastReceiver.showAutoRepeatReminderNotification(
-                    this@AlarmOverlayActivity, alarmTime, alarmId
+                    this@AlarmOverlayActivity, wantTime, resolvedId
                 )
             } else {
-                AlarmBroadcastReceiver.cancelUsageCheck(this@AlarmOverlayActivity, alarmTime, alarmId)
+                AlarmBroadcastReceiver.cancelUsageCheck(this@AlarmOverlayActivity, wantTime, resolvedId)
                 AlarmBroadcastReceiver.cancelSmartWakeReminder(this@AlarmOverlayActivity)
                 if (isOnce && currentAlarm != null) {
                     try {
                         userPreferencesRepository.updateAlarm(currentAlarm.copy(enabled = false))
                     } catch (_: Exception) { }
-                    AlarmBroadcastReceiver.cancelAlarm(this@AlarmOverlayActivity, alarmTime, alarmId)
+                    AlarmBroadcastReceiver.cancelAlarm(this@AlarmOverlayActivity, wantTime, resolvedId)
                 }
             }
 
@@ -317,17 +344,19 @@ class AlarmOverlayActivity : ComponentActivity() {
             stopAlarmAndFinish()
             return
         }
+        val wantId = alarmId
+        val wantTime = alarmTime
         lifecycleScope.launch(Dispatchers.IO) {
             val userPreferencesRepository = (application as ZenithApplication).userPreferencesRepository
             val alarms = userPreferencesRepository.parseAlarms(
                 userPreferencesRepository.userPreferencesFlow.first().alarmsJson
             )
-            val currentAlarm = alarms.find { it.timeString == alarmTime }
-            val alarmId = currentAlarm?.id ?: 0L
+            val currentAlarm = AlarmChainHelper.findAlarm(alarms, wantId, wantTime)
+            val resolvedId = currentAlarm?.id ?: wantId
             val isOnce = currentAlarm?.days?.isEmpty() ?: true
 
-            AlarmBroadcastReceiver.recordAlarmDismiss(this@AlarmOverlayActivity, alarmTime)
-            AlarmBroadcastReceiver.cancelSmartChain(this@AlarmOverlayActivity, alarmTime, alarmId)
+            AlarmBroadcastReceiver.recordAlarmDismiss(this@AlarmOverlayActivity, wantTime)
+            AlarmBroadcastReceiver.cancelSmartChain(this@AlarmOverlayActivity, wantTime, resolvedId)
 
             if (!isOnce && currentAlarm != null) {
                 AlarmBroadcastReceiver.scheduleAlarm(
@@ -337,11 +366,10 @@ class AlarmOverlayActivity : ComponentActivity() {
                 try {
                     userPreferencesRepository.updateAlarm(currentAlarm.copy(enabled = false))
                 } catch (_: Exception) { }
-                AlarmBroadcastReceiver.cancelAlarm(this@AlarmOverlayActivity, alarmTime, alarmId)
+                AlarmBroadcastReceiver.cancelAlarm(this@AlarmOverlayActivity, wantTime, resolvedId)
             }
 
             withContext(Dispatchers.Main) {
-                stopWakeUpTracking()
                 stopAlarmAndFinish()
             }
         }
@@ -353,33 +381,46 @@ class AlarmOverlayActivity : ComponentActivity() {
             stopAlarmAndFinish()
             return
         }
+        val wantId = alarmId
+        val wantTime = alarmTime
+        val wantSnoozeCount = snoozeCount
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val userPreferencesRepository = (application as ZenithApplication).userPreferencesRepository
                 val prefs = userPreferencesRepository.userPreferencesFlow.first()
                 val alarms = userPreferencesRepository.parseAlarms(prefs.alarmsJson)
-                val alarm = alarms.find { it.timeString == alarmTime }
-                val alarmId = alarm?.id ?: 0L
+                val alarm = AlarmChainHelper.findAlarm(alarms, wantId, wantTime)
+                val resolvedId = alarm?.id ?: wantId
                 val snoozeDuration = alarm?.snoozeDurationMinutes ?: 5
                 val snoozeMax = alarm?.snoozeMaxCount ?: 3
 
-                AlarmBroadcastReceiver.recordAlarmDismiss(this@AlarmOverlayActivity, alarmTime)
+                AlarmBroadcastReceiver.recordAlarmDismiss(this@AlarmOverlayActivity, wantTime)
 
-                if (snoozeMax == Int.MAX_VALUE || snoozeCount < snoozeMax) {
+                if (snoozeMax == Int.MAX_VALUE || wantSnoozeCount < snoozeMax) {
                     AlarmBroadcastReceiver.scheduleSnoozeAlarm(
                         this@AlarmOverlayActivity,
-                        alarmTime,
+                        wantTime,
                         snoozeDuration,
-                        snoozeCount + 1,
-                        alarmId
+                        wantSnoozeCount + 1,
+                        resolvedId
                     )
                 } else {
                     // Snooze quota spent: don't hang; fall back to the normal smart chain.
-                    AlarmBroadcastReceiver.cancelSmartChain(this@AlarmOverlayActivity, alarmTime, alarmId)
+                    AlarmBroadcastReceiver.cancelSmartChain(this@AlarmOverlayActivity, wantTime, resolvedId)
                 }
             } catch (_: Exception) { }
 
             withContext(Dispatchers.Main) {
+                stopAlarmAndFinish()
+            }
+        }
+    }
+
+    private fun scheduleAutoDismiss() {
+        autoDismissJob?.cancel()
+        autoDismissJob = lifecycleScope.launch {
+            delay(ALARM_AUTO_DISMISS_MS)
+            if (isAlarmActive) {
                 stopAlarmAndFinish()
             }
         }
@@ -415,6 +456,8 @@ class AlarmOverlayActivity : ComponentActivity() {
         autoDismissJob = null
         wakeLockRenewalJob?.cancel()
         wakeLockRenewalJob = null
+        wakeUpJob?.cancel()
+        wakeUpJob = null
         try {
             AlarmBroadcastReceiver.cancelFiringNotification(this)
         } catch (_: Exception) { }
@@ -438,7 +481,8 @@ class AlarmOverlayActivity : ComponentActivity() {
     override fun onDestroy() {
         isAlarmActive = false
         isShowing = false
-        stopWakeUpTracking()
+        showingAlarmKey = null
+        clearAllWakeUpState()
 
         if (bound) {
             try { unbindService(connection) } catch (_: Exception) {}
@@ -514,9 +558,7 @@ class AlarmOverlayActivity : ComponentActivity() {
         } catch (_: Exception) { null }
         if (intent != null) {
             if (!wakeUpTrackingActive) {
-                wakeUpStartTime = System.currentTimeMillis()
-                wakeUpTrackingActive = true
-                startWakeUpTracking(appPackages, durationSeconds)
+                resumeWakeUpTracking(appPackages, durationSeconds)
             }
             // Opening another app from above the lockscreen needs an unlock first.
             requestUnlockForExternalLaunch()
@@ -539,31 +581,108 @@ class AlarmOverlayActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * (Re)starts wake-up tracking for the currently displayed alarm, resuming
+     * from the preserved per-alarm offset instead of zero. Called from the
+     * compose LaunchedEffect and from explicit "open app" taps.
+     */
+    private fun resumeWakeUpTracking(appPackages: List<String>, durationSeconds: Int) {
+        val key = AlarmChainHelper.alarmKey(alarmId, alarmTime)
+        val slot = wakeUpSlots.getOrPut(key) { WakeUpSlot() }
+        if (slot.complete) {
+            wakeUpAccumulatedSeconds = (slot.offsetMs / 1000).toInt()
+            wakeUpComplete = true
+            wakeUpTrackingActive = false
+            return
+        }
+        // Kunci window yang mungkin masih terbuka (mis. retrigger alarm yang
+        // sama me-recompose) sebelum membuka window baru, agar tidak hilang.
+        rollWakeUpWindowIntoOffset()
+        val now = System.currentTimeMillis()
+        slot.packages = appPackages
+        slot.windowStartMs = now
+        wakeUpStartTime = now
+        wakeUpAccumulatedSeconds = (slot.offsetMs / 1000).toInt()
+        wakeUpComplete = false
+        wakeUpTrackingActive = true
+        startWakeUpTracking(appPackages, durationSeconds)
+    }
+
+    /**
+     * Preempt oleh alarm lain: hentikan job, kunci window yang berjalan ke
+     * offset via query [start, now) yang disjoint dengan window berikutnya.
+     * Slot dipertahankan sehingga kembali ke alarm ini akan me-resume.
+     */
+    private fun suspendWakeUpForSwitch() {
+        wakeUpJob?.cancel()
+        wakeUpJob = null
+        wakeUpTrackingActive = false
+        rollWakeUpWindowIntoOffset()
+    }
+
+    private fun rollWakeUpWindowIntoOffset() {
+        val key = AlarmChainHelper.alarmKey(alarmId, alarmTime)
+        val slot = wakeUpSlots[key] ?: return
+        val start = slot.windowStartMs
+        val pkgs = slot.packages.toSet()
+        if (start <= 0L || pkgs.isEmpty()) return
+        // Tutup window secara sinkron; snapshot async di bawah hanya menambahkan
+        // window yang persis ini satu kali, tidak peduli kapan ia selesai.
+        slot.windowStartMs = 0L
+        val end = System.currentTimeMillis()
+        lifecycleScope.launch(Dispatchers.IO) {
+            val windowMs = getAccumulatedForegroundMs(pkgs, start, end)
+            if (windowMs > 0L) {
+                slot.offsetMs = AlarmChainHelper.mergeWakeUpOffset(slot.offsetMs, windowMs)
+            }
+        }
+    }
+
+    private fun clearAllWakeUpState() {
+        wakeUpJob?.cancel()
+        wakeUpJob = null
+        wakeUpSlots.clear()
+        wakeUpTrackingActive = false
+        wakeUpAccumulatedSeconds = 0
+        wakeUpComplete = false
+        wakeUpStartTime = 0L
+    }
+
     private fun startWakeUpTracking(appPackages: List<String> = emptyList(), durationSeconds: Int = 120) {
+        val wantId = alarmId
+        val wantTime = alarmTime
+        val key = AlarmChainHelper.alarmKey(wantId, wantTime)
+        val slot = wakeUpSlots.getOrPut(key) { WakeUpSlot() }
+        if (slot.complete) {
+            if (AlarmChainHelper.alarmKey(alarmId, alarmTime) == key) {
+                wakeUpComplete = true
+                wakeUpTrackingActive = false
+            }
+            return
+        }
         wakeUpJob?.cancel()
         wakeUpJob = lifecycleScope.launch(Dispatchers.IO) {
             val repo = (application as ZenithApplication).userPreferencesRepository
-            val packages = appPackages.ifEmpty {
-                try {
-                    repo.getAlarmsSnapshot()
-                        .find { it.timeString == alarmTime }
-                        ?.wakeUpAppPackageNames ?: emptyList()
-                } catch (_: Exception) { emptyList() }
-            }
-            val duration = if (durationSeconds != 120 || appPackages.isNotEmpty()) durationSeconds else {
-                try {
-                    repo.getAlarmsSnapshot()
-                        .find { it.timeString == alarmTime }
-                        ?.wakeUpAppDurationSeconds ?: 120
-                } catch (_: Exception) { 120 }
-            }
+            val snapshot = try {
+                repo.getAlarmsSnapshot()
+            } catch (_: Exception) { emptyList() }
+            val configured = AlarmChainHelper.findAlarm(snapshot, wantId, wantTime)
+            val packages = appPackages.ifEmpty { configured?.wakeUpAppPackageNames ?: emptyList() }
+            val duration = if (durationSeconds != 120 || appPackages.isNotEmpty()) durationSeconds
+            else configured?.wakeUpAppDurationSeconds ?: 120
             if (packages.isEmpty() || duration <= 0) {
                 // Invalid config (e.g. all apps uninstalled): don't gate.
                 withContextForMainSync {
-                    wakeUpComplete = true
-                    wakeUpTrackingActive = false
+                    if (AlarmChainHelper.alarmKey(alarmId, alarmTime) == key) {
+                        wakeUpComplete = true
+                        wakeUpTrackingActive = false
+                    }
                 }
                 return@launch
+            }
+            slot.packages = packages
+            if (slot.windowStartMs <= 0L) {
+                slot.windowStartMs = System.currentTimeMillis()
             }
             while (true) {
                 delay(3000)
@@ -571,13 +690,18 @@ class AlarmOverlayActivity : ComponentActivity() {
                     withContext(Dispatchers.Main) { wakeUpNeedsPermission = true }
                     continue
                 }
-                val accumulated = getAccumulatedForegroundMs(
+                val windowMs = getAccumulatedForegroundMs(
                     packages.toSet(),
-                    wakeUpStartTime
+                    slot.windowStartMs
                 )
+                val totalMs = AlarmChainHelper.mergeWakeUpOffset(slot.offsetMs, windowMs)
                 withContext(Dispatchers.Main) {
-                    wakeUpAccumulatedSeconds = (accumulated / 1000).toInt()
-                    if (wakeUpAccumulatedSeconds >= duration) {
+                    // Abaikan hasil basi: overlay sudah pindah ke alarm lain.
+                    if (AlarmChainHelper.alarmKey(alarmId, alarmTime) != key) return@withContext
+                    wakeUpAccumulatedSeconds = (totalMs / 1000).toInt()
+                    if (AlarmChainHelper.isWakeUpComplete(totalMs, duration)) {
+                        slot.complete = true
+                        slot.offsetMs = totalMs
                         wakeUpComplete = true
                         wakeUpTrackingActive = false
                         wakeUpNeedsPermission = false
@@ -598,19 +722,15 @@ class AlarmOverlayActivity : ComponentActivity() {
         }
     }
 
-    private fun stopWakeUpTracking() {
-        wakeUpJob?.cancel()
-        wakeUpJob = null
-        wakeUpTrackingActive = false
-        wakeUpAccumulatedSeconds = 0
-        wakeUpComplete = false
-        wakeUpStartTime = 0L
-    }
-
-    private fun getAccumulatedForegroundMs(packageNames: Set<String>, sinceMs: Long): Long {
+    private fun getAccumulatedForegroundMs(
+        packageNames: Set<String>,
+        sinceMs: Long,
+        endMs: Long = System.currentTimeMillis()
+    ): Long {
         return try {
+            if (sinceMs >= endMs) return 0L
             val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-            val events = usm.queryEvents(sinceMs, System.currentTimeMillis())
+            val events = usm.queryEvents(sinceMs, endMs)
             val activeStart = mutableMapOf<String, Long>()
             var total = 0L
             while (events.hasNextEvent()) {
@@ -632,7 +752,7 @@ class AlarmOverlayActivity : ComponentActivity() {
                     }
                 }
             }
-            val now = System.currentTimeMillis()
+            val now = endMs
             for (start in activeStart.values) {
                 total += now - start
             }
@@ -653,9 +773,19 @@ class AlarmOverlayActivity : ComponentActivity() {
         @Volatile
         var isShowing = false
 
-        fun start(context: Context, alarmTime: String) {
+        /**
+         * Identitas alarm yang sedang ditampilkan overlay
+         * ([AlarmChainHelper.alarmKey]), agar usage-check bisa membedakan
+         * "alarm yang sama masih bunyi" vs "alarm lain yang preempt".
+         */
+        @Volatile
+        var showingAlarmKey: String? = null
+            private set
+
+        fun start(context: Context, alarmTime: String, alarmId: Long = 0L) {
             val intent = Intent(context, AlarmOverlayActivity::class.java).apply {
                 putExtra(EXTRA_ALARM_TIME, alarmTime)
+                if (alarmId > 0L) putExtra(AlarmBroadcastReceiver.EXTRA_ALARM_ID, alarmId)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             }
             context.startActivity(intent)
