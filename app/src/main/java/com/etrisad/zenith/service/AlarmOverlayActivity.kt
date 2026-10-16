@@ -85,6 +85,7 @@ class AlarmOverlayActivity : ComponentActivity() {
         var complete: Boolean = false
     )
     private val wakeUpSlots = mutableMapOf<String, WakeUpSlot>()
+    private var wakeUpRollJob: kotlinx.coroutines.Job? = null
 
     private var wakeUpTrackingActive by mutableStateOf(false)
     private var wakeUpStartTime by mutableLongStateOf(0L)
@@ -589,20 +590,24 @@ class AlarmOverlayActivity : ComponentActivity() {
     private fun resumeWakeUpTracking(appPackages: List<String>, durationSeconds: Int) {
         val key = AlarmChainHelper.alarmKey(alarmId, alarmTime)
         val slot = wakeUpSlots.getOrPut(key) { WakeUpSlot() }
-        if (slot.complete) {
-            wakeUpAccumulatedSeconds = (slot.offsetMs / 1000).toInt()
-            wakeUpComplete = true
-            wakeUpTrackingActive = false
-            return
+        synchronized(slot) {
+            if (slot.complete) {
+                wakeUpAccumulatedSeconds = (slot.offsetMs / 1000).toInt()
+                wakeUpComplete = true
+                wakeUpTrackingActive = false
+                return
+            }
         }
         // Kunci window yang mungkin masih terbuka (mis. retrigger alarm yang
         // sama me-recompose) sebelum membuka window baru, agar tidak hilang.
         rollWakeUpWindowIntoOffset()
         val now = System.currentTimeMillis()
-        slot.packages = appPackages
-        slot.windowStartMs = now
+        synchronized(slot) {
+            slot.packages = appPackages
+            slot.windowStartMs = now
+            wakeUpAccumulatedSeconds = (slot.offsetMs / 1000).toInt()
+        }
         wakeUpStartTime = now
-        wakeUpAccumulatedSeconds = (slot.offsetMs / 1000).toInt()
         wakeUpComplete = false
         wakeUpTrackingActive = true
         startWakeUpTracking(appPackages, durationSeconds)
@@ -623,17 +628,27 @@ class AlarmOverlayActivity : ComponentActivity() {
     private fun rollWakeUpWindowIntoOffset() {
         val key = AlarmChainHelper.alarmKey(alarmId, alarmTime)
         val slot = wakeUpSlots[key] ?: return
-        val start = slot.windowStartMs
-        val pkgs = slot.packages.toSet()
-        if (start <= 0L || pkgs.isEmpty()) return
-        // Tutup window secara sinkron; snapshot async di bawah hanya menambahkan
-        // window yang persis ini satu kali, tidak peduli kapan ia selesai.
-        slot.windowStartMs = 0L
+        val start: Long
+        val pkgs: Set<String>
+        synchronized(slot) {
+            start = slot.windowStartMs
+            pkgs = slot.packages.toSet()
+            if (start <= 0L || pkgs.isEmpty()) return
+            // Tutup window secara sinkron; snapshot async di bawah hanya menambahkan
+            // window yang persis ini satu kali, tidak peduli kapan ia selesai.
+            slot.windowStartMs = 0L
+        }
+        val slotRef = slot
         val end = System.currentTimeMillis()
-        lifecycleScope.launch(Dispatchers.IO) {
+        wakeUpRollJob = lifecycleScope.launch(Dispatchers.IO) {
             val windowMs = getAccumulatedForegroundMs(pkgs, start, end)
             if (windowMs > 0L) {
-                slot.offsetMs = AlarmChainHelper.mergeWakeUpOffset(slot.offsetMs, windowMs)
+                // Merging into a discarded slot object is harmless (it becomes
+                // garbage after clear); all live-slot coordination is via the
+                // synchronized block, never via map reads off the main thread.
+                synchronized(slotRef) {
+                    slotRef.offsetMs = AlarmChainHelper.mergeWakeUpOffset(slotRef.offsetMs, windowMs)
+                }
             }
         }
     }
@@ -641,7 +656,11 @@ class AlarmOverlayActivity : ComponentActivity() {
     private fun clearAllWakeUpState() {
         wakeUpJob?.cancel()
         wakeUpJob = null
-        wakeUpSlots.clear()
+        wakeUpRollJob?.cancel()
+        wakeUpRollJob = null
+        synchronized(wakeUpSlots) {
+            wakeUpSlots.clear()
+        }
         wakeUpTrackingActive = false
         wakeUpAccumulatedSeconds = 0
         wakeUpComplete = false
@@ -653,12 +672,14 @@ class AlarmOverlayActivity : ComponentActivity() {
         val wantTime = alarmTime
         val key = AlarmChainHelper.alarmKey(wantId, wantTime)
         val slot = wakeUpSlots.getOrPut(key) { WakeUpSlot() }
-        if (slot.complete) {
-            if (AlarmChainHelper.alarmKey(alarmId, alarmTime) == key) {
-                wakeUpComplete = true
-                wakeUpTrackingActive = false
+        synchronized(slot) {
+            if (slot.complete) {
+                if (AlarmChainHelper.alarmKey(alarmId, alarmTime) == key) {
+                    wakeUpComplete = true
+                    wakeUpTrackingActive = false
+                }
+                return
             }
-            return
         }
         wakeUpJob?.cancel()
         wakeUpJob = lifecycleScope.launch(Dispatchers.IO) {
@@ -680,9 +701,11 @@ class AlarmOverlayActivity : ComponentActivity() {
                 }
                 return@launch
             }
-            slot.packages = packages
-            if (slot.windowStartMs <= 0L) {
-                slot.windowStartMs = System.currentTimeMillis()
+            synchronized(slot) {
+                slot.packages = packages
+                if (slot.windowStartMs <= 0L) {
+                    slot.windowStartMs = System.currentTimeMillis()
+                }
             }
             while (true) {
                 delay(3000)
@@ -690,18 +713,26 @@ class AlarmOverlayActivity : ComponentActivity() {
                     withContext(Dispatchers.Main) { wakeUpNeedsPermission = true }
                     continue
                 }
+                val windowStart: Long
+                val savedOffset: Long
+                synchronized(slot) {
+                    windowStart = slot.windowStartMs
+                    savedOffset = slot.offsetMs
+                }
                 val windowMs = getAccumulatedForegroundMs(
                     packages.toSet(),
-                    slot.windowStartMs
+                    windowStart
                 )
-                val totalMs = AlarmChainHelper.mergeWakeUpOffset(slot.offsetMs, windowMs)
+                val totalMs = AlarmChainHelper.mergeWakeUpOffset(savedOffset, windowMs)
                 withContext(Dispatchers.Main) {
                     // Abaikan hasil basi: overlay sudah pindah ke alarm lain.
                     if (AlarmChainHelper.alarmKey(alarmId, alarmTime) != key) return@withContext
                     wakeUpAccumulatedSeconds = (totalMs / 1000).toInt()
                     if (AlarmChainHelper.isWakeUpComplete(totalMs, duration)) {
-                        slot.complete = true
-                        slot.offsetMs = totalMs
+                        synchronized(slot) {
+                            slot.complete = true
+                            slot.offsetMs = totalMs
+                        }
                         wakeUpComplete = true
                         wakeUpTrackingActive = false
                         wakeUpNeedsPermission = false

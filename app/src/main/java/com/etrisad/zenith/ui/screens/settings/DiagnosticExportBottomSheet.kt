@@ -250,9 +250,9 @@ fun DiagnosticExportBottomSheet(
                             Spacer(modifier = Modifier.height(12.dp))
                             DiagnosticIncludedRow("6.", "Log summary (counts per category and time range).")
                             Spacer(modifier = Modifier.height(12.dp))
-                            DiagnosticIncludedRow("7.", "In-memory app logs (DB and overlay buffers).")
+                            DiagnosticIncludedRow("7.", "In-memory app logs (DB and overlay buffers, app names redacted).")
                             Spacer(modifier = Modifier.height(12.dp))
-                            DiagnosticIncludedRow("8.", "Best-effort app logcat (may be empty on some devices).")
+                            DiagnosticIncludedRow("8.", "Best-effort app logcat (may be empty on some devices, app names redacted).")
 
                             Spacer(modifier = Modifier.height(16.dp))
 
@@ -266,7 +266,7 @@ fun DiagnosticExportBottomSheet(
                             Text(
                                 text = buildAnnotatedString {
                                     withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Why does this help? ") }
-                                    append("Version, device and sanitized settings plus recent logs are usually enough to reproduce and fix a bug without seeing any personal data.")
+                                    append("Version, device and sanitized settings plus recent logs are usually enough to reproduce and fix a bug. App package names in logs are redacted before export.")
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
@@ -297,7 +297,7 @@ fun DiagnosticExportBottomSheet(
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Your name, bio, avatar or banner \u2022 Raw QR / NFC values \u2022 Raw app package lists (counts only) \u2022 Raw backup folder URI",
+                                text = "Your name, bio, avatar or banner \u2022 Raw QR / NFC values \u2022 App package names (redacted as <redacted>) \u2022 Raw backup folder URI",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

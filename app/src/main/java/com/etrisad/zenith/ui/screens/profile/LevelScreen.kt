@@ -315,7 +315,8 @@ fun LevelScreen(
                                                     border, 4.dp,
                                                     SolidColor(
                                                         MaterialTheme.colorScheme.surfaceContainerHighest
-                                                    )
+                                                    ),
+                                                    animate = false
                                                 )
                                                 else Modifier.border(
                                                     4.dp,

@@ -361,6 +361,20 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             return base + hour * 100 + minute
         }
 
+        /**
+         * Strict HH:mm parse. Returns null for corrupt/draft strings instead
+         * of throwing NumberFormatException (one bad alarmsJson entry must not
+         * crash reschedule of all other alarms).
+         */
+        private fun parseHourMinute(alarmTime: String): Pair<Int, Int>? {
+            val parts = alarmTime.split(":")
+            if (parts.size != 2) return null
+            val hour = parts[0].toIntOrNull() ?: return null
+            val minute = parts[1].toIntOrNull() ?: return null
+            if (hour !in 0..23 || minute !in 0..59) return null
+            return hour to minute
+        }
+
         private fun requestCodeForId(base: Int, alarmTime: String, alarmId: Long): Int {
             val parts = alarmTime.split(":")
             val hour = parts.getOrNull(0)?.toIntOrNull() ?: 0
@@ -414,7 +428,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         }
 
         fun scheduleAlarm(context: Context, alarmTime: String, days: Set<Int> = emptySet(), alarmId: Long = 0L) {
-            val (hour, minute) = alarmTime.split(":").map { it.toInt() }
+            val (hour, minute) = parseHourMinute(alarmTime) ?: return
             val requestCode = if (alarmId > 0L) requestCodeForId(REQUEST_CODE_ALARM_BASE, alarmTime, alarmId)
             else REQUEST_CODE_ALARM_BASE + hour * 100 + minute
 
@@ -441,17 +455,20 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         fun cancelAlarm(context: Context, alarmTime: String?, alarmId: Long = 0L) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             if (alarmTime != null) {
-                val (hour, minute) = alarmTime.split(":").map { it.toInt() }
-                val requestCode = REQUEST_CODE_ALARM_BASE + hour * 100 + minute
-                val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
-                    action = ACTION_FIRE_ALARM
+                val parsed = parseHourMinute(alarmTime)
+                if (parsed != null) {
+                    val (hour, minute) = parsed
+                    val requestCode = REQUEST_CODE_ALARM_BASE + hour * 100 + minute
+                    val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
+                        action = ACTION_FIRE_ALARM
+                    }
+                    val pendingIntent = PendingIntent.getBroadcast(
+                        context, requestCode, intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    alarmManager.cancel(pendingIntent)
+                    pendingIntent.cancel()
                 }
-                val pendingIntent = PendingIntent.getBroadcast(
-                    context, requestCode, intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                alarmManager.cancel(pendingIntent)
-                pendingIntent.cancel()
                 if (alarmId > 0L) {
                     val idIntent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
                         action = ACTION_FIRE_ALARM
@@ -909,7 +926,12 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         }
 
         private fun calculateTriggerMillis(alarmTime: String, days: Set<Int> = emptySet()): Long {
-            val time = LocalTime.parse(alarmTime, DateTimeFormatter.ofPattern("HH:mm"))
+            val parsed = try {
+                LocalTime.parse(alarmTime, DateTimeFormatter.ofPattern("HH:mm"))
+            } catch (_: Exception) {
+                return System.currentTimeMillis() + 24 * 60 * 60 * 1000L
+            }
+            val time = parsed
             val now = LocalTime.now()
 
             val calendar = Calendar.getInstance().apply {

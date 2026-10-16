@@ -693,7 +693,8 @@ fun MainScreen(
                                                                             headerBorder, 2.dp,
                                                                             SolidColor(
                                                                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                                                                            )
+                                                                            ),
+                                                                            animate = false
                                                                         )
                                                                         .padding(2.dp)
                                                                 } else {

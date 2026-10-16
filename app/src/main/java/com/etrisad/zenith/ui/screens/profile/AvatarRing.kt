@@ -23,10 +23,17 @@ import androidx.compose.ui.unit.Dp
 fun Modifier.avatarRing(
     border: AvatarBorder?,
     width: Dp,
-    fallback: Brush
+    fallback: Brush,
+    animate: Boolean = true
 ): Modifier = composed {
     if (border == null) {
         return@composed then(Modifier.border(width, fallback, CircleShape))
+    }
+    // Static fallback saves battery/CPU in lists and persistent headers:
+    // multiple simultaneous infinite transitions (one per visible border
+    // preview) keep the RenderThread invalidating every frame.
+    if (!animate || border.effect == BorderEffect.NONE) {
+        return@composed then(Modifier.border(width, borderBrushFor(border), CircleShape))
     }
     when (border.effect) {
         BorderEffect.NONE -> then(Modifier.border(width, borderBrushFor(border), CircleShape))

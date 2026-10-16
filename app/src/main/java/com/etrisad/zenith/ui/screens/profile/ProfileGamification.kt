@@ -166,8 +166,11 @@ fun xpForLevel(level: Int): Long {
 }
 
 fun levelForXp(xp: Long): Int {
+    if (xp < 0L) return 1
     var level = 1
-    while (xp >= xpForLevel(level + 1)) level++
+    // Bounded: xpForLevel can saturate at Long.MAX_VALUE on corrupt/huge XP
+    // (debug override), which would loop forever without a cap.
+    while (level < 10000 && xp >= xpForLevel(level + 1)) level++
     return level
 }
 

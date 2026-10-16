@@ -24,6 +24,27 @@ import java.util.zip.ZipOutputStream
 object DiagnosticReportUtils {
     const val GITHUB_ISSUES_URL = "https://github.com/1372Slash/Zenith/issues/new"
 
+    private val PII_KEY_VALUE = Regex(
+        "(pkg|appName|packageName|actualPkg|currentApp|newPackage|target|shield)\\s*[:=]\\s*([^\\s,\\)\\]]+)"
+    )
+    private val PACKAGE_URI = Regex("package:([^\\s,\\)\\]]+)")
+    private val GENERIC_PKG_ID = Regex(
+        "\\b(?!com\\.etrisad\\.zenith\\b)(?!android\\b)(?!java\\b)(?!kotlin\\b)(?!androidx\\b)" +
+            "[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+\\b"
+    )
+
+    /**
+     * Redacts installed-app identifiers from free-text logs before they leave
+     * the device. Keeps tags, levels, counts and own package (stack traces)
+     * so the report stays debuggable without leaking which apps are installed.
+     */
+    fun sanitizeLogText(text: String): String {
+        var out = PII_KEY_VALUE.replace(text) { "${it.groupValues[1]}=<redacted>" }
+        out = PACKAGE_URI.replace(out) { "package:<redacted>" }
+        out = GENERIC_PKG_ID.replace(out, "<pkg>")
+        return out
+    }
+
     fun defaultFileName(): String {
         val sdf = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
         return "zenith_diagnostic_${sdf.format(Date())}.zip"
@@ -52,16 +73,16 @@ object DiagnosticReportUtils {
             val systemStatus = buildSystemStatus(context)
             val logSummary = buildLogSummary()
             val dbLogs = try {
-                DbLogBuffer.copyAll()
+                sanitizeLogText(DbLogBuffer.copyAll())
             } catch (e: Exception) {
                 "Log unavailable: ${e.message}"
             }
             val overlayLogs = try {
-                OverlayLogBuffer.copyAll()
+                sanitizeLogText(OverlayLogBuffer.copyAll())
             } catch (e: Exception) {
                 "Log unavailable: ${e.message}"
             }
-            val logcat = collectAppLogcat()
+            val logcat = sanitizeLogText(collectAppLogcat())
 
             context.contentResolver.openOutputStream(targetUri)?.use { output ->
                 ZipOutputStream(output).use { zip ->
