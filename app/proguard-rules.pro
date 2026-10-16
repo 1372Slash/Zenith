@@ -1,4 +1,4 @@
-keepclasseswithmembernames class * {
+-keepclasseswithmembernames class * {
     @com.squareup.moshi.JsonQualifier <methods>;
 }
 -keep @com.squareup.moshi.JsonClass class *
