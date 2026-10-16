@@ -90,6 +90,13 @@ fun PausePointNfcManagerContent(
     var scanError by remember { mutableStateOf<String?>(null) }
     var scanningEnabled by remember { mutableStateOf(true) }
     var manualInput by remember { mutableStateOf("") }
+    // Auto-dismiss the confirmation so it can't stick around forever.
+    LaunchedEffect(justAdded) {
+        if (justAdded != null) {
+            delay(3000)
+            justAdded = null
+        }
+    }
 
     val supported = remember { isNfcSupported(context) }
     var nfcOn by remember { mutableStateOf(isNfcEnabled(context)) }
@@ -187,7 +194,11 @@ fun PausePointNfcManagerContent(
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = manualInput,
-                    onValueChange = { manualInput = it },
+                    onValueChange = {
+                        manualInput = it
+                        // Stale duplicate warning clears as soon as the user edits.
+                        if (scanError != null) scanError = null
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Tag ID") },
                     placeholder = { Text("e.g. 04A13B8C5D80") },

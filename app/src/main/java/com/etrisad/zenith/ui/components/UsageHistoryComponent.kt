@@ -222,9 +222,15 @@ fun WeekStepperIndicator(
                 modifier = Modifier.size(28.dp).offset(x = (-1).dp),
                 contentAlignment = Alignment.Center
             ) {
-                FilledTonalIconButton(
-                    onClick = { if (showNext) onNext() },
-                    enabled = showNext,
+                if (isLoading && !showNext) {
+                    LoadingIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                } else {
+                    FilledTonalIconButton(
+                        onClick = { if (showNext) onNext() },
+                        enabled = showNext,
                     modifier = Modifier
                         .size(28.dp)
                         .graphicsLayer {
@@ -239,6 +245,7 @@ fun WeekStepperIndicator(
                         contentDescription = "Next week",
                         modifier = Modifier.size(20.dp)
                     )
+                }
                 }
             }
         }

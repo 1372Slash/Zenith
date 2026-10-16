@@ -310,7 +310,9 @@ class NfcScanActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         runOnUiThread {
             restartKickTimer()
             lastScannedId.value = normalized
-            val matches = acceptAny || expectedIds.isEmpty() || normalized in expectedIds
+            // Fail closed: an empty expected list without acceptAny is a
+            // misconfiguration and must reject, never accept any tag.
+            val matches = acceptAny || (expectedIds.isNotEmpty() && normalized in expectedIds)
             if (matches) {
                 lastError.value = null
                 successId.value = normalized

@@ -31,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +57,7 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalPermissionsApi::class)
@@ -70,6 +72,13 @@ fun PausePointQrManagerContent(
     val cameraPermissionState = rememberPermissionState(android.Manifest.permission.CAMERA)
     var codes by remember(preferences.pausePointQrCodes) { mutableStateOf(preferences.pausePointQrCodes) }
     var justAdded by remember { mutableStateOf<String?>(null) }
+    // Auto-dismiss the confirmation so it can't stick around forever.
+    LaunchedEffect(justAdded) {
+        if (justAdded != null) {
+            delay(3000)
+            justAdded = null
+        }
+    }
     var cameraAsked by remember { mutableStateOf(false) }
     val cameraPermanentlyDenied = !cameraPermissionState.status.isGranted &&
         !cameraPermissionState.status.shouldShowRationale && cameraAsked
@@ -97,6 +106,7 @@ fun PausePointQrManagerContent(
 
     val removeCode: (String) -> Unit = { code ->
         codes = codes - code
+        if (justAdded == code) justAdded = null
         coroutineScope.launch {
             preferencesRepository.setPausePointQrCodes(codes)
             // No usable codes left: auto-disable the type so it can't become

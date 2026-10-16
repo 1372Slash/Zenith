@@ -54,7 +54,11 @@ fun PausePointScreen(
 
     fun hideWarningSheet(afterHide: () -> Unit = {}) {
         coroutineScope.launch {
-            sheetState.hide()
+            // hide() throws when the sheet is already hidden/hiding (e.g.
+            // swipe-dismiss fires onDismissRequest after hide completed).
+            try {
+                if (sheetState.isVisible) sheetState.hide()
+            } catch (_: Exception) { }
             showExitWarning = false
             afterHide()
         }

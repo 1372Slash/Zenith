@@ -1639,9 +1639,11 @@ fun AchievementProgressBanner(
     onOpen: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var started by remember { mutableStateOf(false) }
-    var starsShown by remember { mutableStateOf(!isFull) }
-    LaunchedEffect(Unit) {
+    // Keyed by banner identity: inside AnimatedContent reuse, Unit would
+    // leave a stale animation running (or never restart) for the next banner.
+    var started by remember(title, beforeFraction, afterFraction) { mutableStateOf(false) }
+    var starsShown by remember(title, afterFraction, isFull) { mutableStateOf(!isFull) }
+    LaunchedEffect(title, beforeFraction, afterFraction) {
         delay(900)
         started = true
         if (isFull) {
