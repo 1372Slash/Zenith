@@ -1,5 +1,6 @@
 package com.etrisad.zenith.service
 
+import android.Manifest
 import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
@@ -19,11 +20,13 @@ import android.os.Build
 import android.os.IBinder
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.etrisad.zenith.R
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.receiver.AlarmBroadcastReceiver
 import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.local.entity.ShieldEntity
+import com.etrisad.zenith.data.local.database.DbLogBuffer
 import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.preferences.ForegroundNotificationStatusMode
 import com.etrisad.zenith.data.preferences.UserPreferences
@@ -35,6 +38,7 @@ import com.etrisad.zenith.service.earlykick.EarlyKickHandler
 import com.etrisad.zenith.service.earlykick.EarlyKickManager
 import com.etrisad.zenith.ui.components.overlay.SessionUsageOverlayManager
 import com.etrisad.zenith.ui.components.overlay.UsageGlimpseOverlayManager
+import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -128,6 +132,13 @@ class AppUsageMonitorService : Service() {
     private var lastNotificationRefreshTime = 0L
     private var lastNotificationText: String? = null
 
+    // Whether the current foreground notification was posted with
+    // ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA attached. Sticky for the
+    // lifetime of the service instance so later refreshes never silently
+    // drop a required type.
+    @Volatile
+    private var cameraTypeActive = false
+
     private var cachedBypassPackage: String? = null
     private var cachedBypassResult = false
     private var cachedBypassTime = 0L
@@ -155,7 +166,10 @@ class AppUsageMonitorService : Service() {
                     cachedForegroundAppTime = 0L
                     cancelScreenOffGoalAlarm()
                     try {
-                        startForegroundSafely()
+                        // Re-assert the existing foreground state after screen-on.
+                        // Never fall back to specialUse here: that would silently
+                        // drop an already-active camera type.
+                        tryStartForeground(createNotification(), cameraTypeActive)
                     } catch (e: Exception) {
                     }
                     overlayManager.hideOverlay()
@@ -212,6 +226,12 @@ class AppUsageMonitorService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!foregroundNotificationStarted) {
+            // onCreate failed to enter the foreground state (or already stopped
+            // the service). Do no work so the system cannot flag a
+            // startForeground() timeout / ForegroundServiceDidNotStartInTimeException.
+            return START_NOT_STICKY
+        }
         when (intent?.action) {
             "SEND_TEST_NOTIFICATION" -> sendTestNotification()
             "com.etrisad.zenith.action.MIDNIGHT_RESET_SERVICE" -> onMidnightReset()
@@ -466,6 +486,19 @@ class AppUsageMonitorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        createMonitorNotificationChannel()
+
+        // Post the foreground notification before any heavy initialization.
+        // The system expects startForeground() shortly after
+        // startForegroundService() (e.g. from ZenithHeartbeatReceiver) and
+        // otherwise kills the app with ForegroundServiceDidNotStartInTimeException.
+        if (!startForegroundSafely()) {
+            DbLogBuffer.e("ZenithAUMS", "startForeground() failed on all attempts; stopping service")
+            stopSelf()
+            return
+        }
+        foregroundNotificationStarted = true
+
         val app = application as com.etrisad.zenith.ZenithApplication
         shieldRepository = app.shieldRepository
         preferencesRepository = app.userPreferencesRepository
@@ -491,10 +524,6 @@ class AppUsageMonitorService : Service() {
         usageGlimpseManager = UsageGlimpseOverlayManager(this)
 
         launchCollectors()
-        createMonitorNotificationChannel()
-
-        startForegroundSafely()
-        foregroundNotificationStarted = true
         createGoalNotificationChannel()
         createBedtimeNotificationChannel()
 
@@ -2513,24 +2542,65 @@ class AppUsageMonitorService : Service() {
             .build()
     }
 
-    private fun startForegroundSafely() {
-        val notification = createNotification()
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+    /**
+     * The camera foreground service type may only be attached when the CAMERA
+     * runtime permission is granted, the app is (or may become) visible
+     * (while-in-use requirement on Android 14+), and a QR pause point is
+     * actually configured.
+     */
+    private fun canAddCameraType(prefs: UserPreferences): Boolean {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+            != PackageManager.PERMISSION_GRANTED
+        ) return false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+            !AppStateHolder.isAppVisible
+        ) return false
+        if (!prefs.pausePointEnabled) return false
+        return PausePointTaskType.QR_SCAN in prefs.pausePointTaskTypes
+    }
+
+    private fun tryStartForeground(notification: Notification, withCamera: Boolean): Boolean = try {
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> {
+                var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                if (withCamera) {
+                    type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
                 }
                 startForeground(NOTIFICATION_ID, notification, type)
-            } else {
-                startForeground(NOTIFICATION_ID, notification)
             }
-        } catch (e: Exception) {
-            try {
-                startForeground(NOTIFICATION_ID, notification)
-            } catch (e2: Exception) {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && withCamera -> {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
             }
+            else -> startForeground(NOTIFICATION_ID, notification)
         }
+        true
+    } catch (t: Throwable) {
+        DbLogBuffer.e("ZenithAUMS", "startForeground failed (withCamera=$withCamera): ${t.message}")
+        false
+    }
+
+    /**
+     * Starts the foreground notification with explicit service types. Never
+     * requests the camera type on a background-started service (Android 14+
+     * rejects it and the service would never reach the foreground state).
+     * Falls back to specialUse-only, and returns false when every attempt
+     * fails so the caller can stopSelf() before the system times out.
+     */
+    private fun startForegroundSafely(): Boolean {
+        val notification = createNotification("Protecting your focus...")
+        val prefs = SharedMonitoringState.currentPreferences
+        val wantCamera = cameraTypeActive || (prefs != null && canAddCameraType(prefs))
+        if (tryStartForeground(notification, wantCamera)) {
+            cameraTypeActive = wantCamera
+            return true
+        }
+        if (wantCamera && tryStartForeground(notification, false)) {
+            // Camera type was rejected (permission revoked, app not visible...):
+            // degrade to specialUse only so monitoring keeps running.
+            cameraTypeActive = false
+            return true
+        }
+        return false
     }
 
     private fun createNotificationStatusText(): String {
