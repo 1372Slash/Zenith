@@ -1,7 +1,9 @@
 package com.etrisad.zenith
 
+import android.app.Activity
 import android.app.Application
 import android.content.res.Configuration
+import android.os.Bundle
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
@@ -27,6 +29,7 @@ import kotlinx.coroutines.launch
 class ZenithApplication : Application(), ImageLoaderFactory {
 
     private var lastUiMode: Int = 0
+    private var startedActivityCount = 0
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     companion object {
@@ -73,6 +76,25 @@ class ZenithApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         lastUiMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityStarted(activity: Activity) {
+                startedActivityCount++
+                com.etrisad.zenith.service.AppStateHolder.isAppVisible = true
+            }
+
+            override fun onActivityStopped(activity: Activity) {
+                startedActivityCount = (startedActivityCount - 1).coerceAtLeast(0)
+                com.etrisad.zenith.service.AppStateHolder.isAppVisible = startedActivityCount > 0
+            }
+
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+            override fun onActivityResumed(activity: Activity) {}
+            override fun onActivityPaused(activity: Activity) {}
+            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+            override fun onActivityDestroyed(activity: Activity) {}
+        })
+
         if (!workersEnqueued) {
             workersEnqueued = true
             applicationScope.launch {

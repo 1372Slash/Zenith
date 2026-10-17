@@ -119,6 +119,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // App is visible now: allow the monitor service to attach the camera FGS
+        // type (needed only for QR pause points shown over other apps).
+        AppUsageMonitorService.requestCameraTypeUpgrade(this)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)

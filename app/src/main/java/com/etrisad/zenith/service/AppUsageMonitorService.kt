@@ -234,6 +234,7 @@ class AppUsageMonitorService : Service() {
         }
         when (intent?.action) {
             "SEND_TEST_NOTIFICATION" -> sendTestNotification()
+            ACTION_ENSURE_CAMERA_FGS -> ensureCameraForegroundType()
             "com.etrisad.zenith.action.MIDNIGHT_RESET_SERVICE" -> onMidnightReset()
             "com.etrisad.zenith.action.HEARTBEAT" -> {
                 scheduleHeartbeatAlarm()
@@ -2603,6 +2604,36 @@ class AppUsageMonitorService : Service() {
         return false
     }
 
+    /**
+     * Upgrades the already-foreground service to include the camera type.
+     * Called when the app becomes visible, because QR pause points are scanned
+     * from an overlay window shown over other apps and Android 14+ only grants
+     * while-in-use camera access while the app itself is visible.
+     */
+    private fun ensureCameraForegroundType() {
+        if (cameraTypeActive || !foregroundNotificationStarted) return
+        serviceScope.launch {
+            val prefs = SharedMonitoringState.currentPreferences
+                ?: kotlinx.coroutines.withTimeoutOrNull(2000) {
+                    preferencesRepository.userPreferencesFlow.first()
+                }
+            if (prefs == null || !canAddCameraType(prefs)) return@launch
+            val notification = createNotification()
+            var upgraded = false
+            withContext(Dispatchers.Main) {
+                if (!cameraTypeActive && foregroundNotificationStarted &&
+                    tryStartForeground(notification, true)
+                ) {
+                    cameraTypeActive = true
+                    upgraded = true
+                }
+            }
+            if (upgraded) {
+                refreshForegroundNotification(force = true)
+            }
+        }
+    }
+
     private fun createNotificationStatusText(): String {
         val prefs = SharedMonitoringState.currentPreferences ?: UserPreferences()
         val mode = prefs.foregroundNotificationStatusMode
@@ -2650,5 +2681,26 @@ class AppUsageMonitorService : Service() {
         private const val NOTIFICATION_UPDATE_INTERVAL = 60000L
         private const val BEDTIME_CHANNEL_ID = "zenith_bedtime_channel"
         private const val WIND_DOWN_NOTIFICATION_ID = 2006
+
+        const val ACTION_ENSURE_CAMERA_FGS = "com.etrisad.zenith.action.ENSURE_CAMERA_FGS"
+
+        /**
+         * Asks a running monitor service to (re)attach the camera foreground
+         * service type. Only effective while the app is visible and the QR pause
+         * point is enabled + camera permission granted; otherwise it is a no-op.
+         * Safe to call on every resume: uses startService(), which does not
+         * create a foreground-service start obligation for a running service.
+         */
+        fun requestCameraTypeUpgrade(context: Context) {
+            try {
+                context.startService(
+                    Intent(context, AppUsageMonitorService::class.java).apply {
+                        action = ACTION_ENSURE_CAMERA_FGS
+                    }
+                )
+            } catch (_: Exception) {
+                // App in background / service not allowed to start: nothing to do.
+            }
+        }
     }
 }
