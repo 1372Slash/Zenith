@@ -95,6 +95,15 @@ class ZenithApplication : Application(), ImageLoaderFactory {
             override fun onActivityDestroyed(activity: Activity) {}
         })
 
+        // Warm up the database off the main thread so a first-launch-after-update
+        // migration (e.g. v28 -> v35) never blocks service onCreate/startForeground.
+        applicationScope.launch(Dispatchers.IO) {
+            try {
+                shieldRepository
+            } catch (_: Exception) {
+            }
+        }
+
         if (!workersEnqueued) {
             workersEnqueued = true
             applicationScope.launch {
