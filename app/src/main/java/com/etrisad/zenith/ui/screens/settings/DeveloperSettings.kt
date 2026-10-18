@@ -83,6 +83,13 @@ fun DeveloperSettings(
     var bottomSheetExpandValue by remember { mutableFloatStateOf(0f) }
     var showTtsTestSheet by remember { mutableStateOf(false) }
 
+    // Crash-handler test hook: throwing during recomposition must land on the
+    // crash screen like any other uncaught main-thread exception.
+    var triggerComposeCrash by remember { mutableStateOf(false) }
+    if (triggerComposeCrash) {
+        throw IllegalStateException("Zenith test crash (composition)")
+    }
+
     if (preferences.developerModeEnabled) {
         Column {
             PreferenceCategory(title = "Database Editor")
@@ -335,7 +342,7 @@ fun DeveloperSettings(
                 summary = "Immediately trigger the alarm full screen overlay",
                 onClick = { showTestAlarmDialog = true },
                 icon = Icons.Outlined.Alarm,
-                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
             )
 
             if (showTestAlarmDialog) {
@@ -349,6 +356,71 @@ fun DeveloperSettings(
                     onDismiss = { showTtsTestSheet = false }
                 )
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            PreferenceCategory(title = "Crash & Safety")
+
+            val crashContext = LocalContext.current
+            SettingsActionItem(
+                title = "Test Crash (Main Thread)",
+                summary = "Throw an uncaught exception on the UI thread and open the crash screen",
+                onClick = { throw RuntimeException("Zenith test crash (main thread)") },
+                icon = Icons.Outlined.BugReport,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+            SettingsActionItem(
+                title = "Test Crash (Background Thread)",
+                summary = "Throw an uncaught exception on a worker thread and open the crash screen",
+                onClick = {
+                    Thread { throw RuntimeException("Zenith test crash (background thread)") }.start()
+                },
+                icon = Icons.Outlined.BugReport,
+                shape = RoundedCornerShape(8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+            SettingsActionItem(
+                title = "Test Crash (Composition)",
+                summary = "Throw while this screen recomposes and open the crash screen",
+                onClick = { triggerComposeCrash = true },
+                icon = Icons.Outlined.Warning,
+                shape = RoundedCornerShape(8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+            SettingsActionItem(
+                title = "Open Last Crash Report",
+                summary = if (com.etrisad.zenith.crash.CrashStore.hasAnyCrash(crashContext)) {
+                    "View the most recent crash caught by Zenith"
+                } else {
+                    "No crash has been caught yet"
+                },
+                onClick = {
+                    crashContext.startActivity(
+                        android.content.Intent(
+                            crashContext,
+                            com.etrisad.zenith.crash.CrashActivity::class.java
+                        )
+                    )
+                },
+                icon = Icons.Outlined.ReportProblem,
+                shape = RoundedCornerShape(8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+            SettingsActionItem(
+                title = "Restart in Safe Mode",
+                summary = "Bootstrap without loading user data; useful when the app keeps crashing",
+                onClick = {
+                    com.etrisad.zenith.crash.SafeMode.setEnabled(crashContext, true)
+                    com.etrisad.zenith.crash.SafeMode.restartApp(crashContext)
+                },
+                icon = Icons.Outlined.HealthAndSafety,
+                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
         }

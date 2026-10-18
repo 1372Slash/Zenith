@@ -115,6 +115,15 @@
         </provider>
 
         <activity
+            android:name=".crash.CrashActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.etrisad.zenith.crash"
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode|locale|density|fontScale"
+            android:theme="@style/Theme.Zenith" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"

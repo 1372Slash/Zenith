@@ -22,6 +22,7 @@ class DatabaseBackupWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        if (com.etrisad.zenith.crash.SafeMode.isEnabled(applicationContext)) return@withContext Result.success()
         val directoryUriString = inputData.getString("directory_uri") ?: return@withContext Result.failure()
         val directoryUri = Uri.parse(directoryUriString)
         

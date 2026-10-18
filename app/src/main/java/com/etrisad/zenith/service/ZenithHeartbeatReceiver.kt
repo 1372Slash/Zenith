@@ -11,6 +11,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 class ZenithHeartbeatReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        // Safe Mode: heartbeat/boot alarms are ignored so the monitor stays down
+        // and no user data is touched between restarts.
+        if (com.etrisad.zenith.crash.SafeMode.isEnabled(context)) return
+
         val action = intent.action ?: return
         
         val validActions = setOf(

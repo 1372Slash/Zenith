@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModelProvider
+import com.etrisad.zenith.crash.SafeMode
 import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.repository.ShieldRepository
 import androidx.compose.runtime.collectAsState
@@ -49,7 +50,13 @@ class MainActivity : ComponentActivity() {
         val shieldRepository = app.shieldRepository
         val userPreferencesRepository = app.userPreferencesRepository
 
-        DailyUsageWorker.schedule(applicationContext)
+        // Safe Mode: no monitoring, no background workers - just a shell of the
+        // app so the crash can be reported and retried.
+        val safeMode = SafeMode.isEnabled(this)
+
+        if (!safeMode) {
+            DailyUsageWorker.schedule(applicationContext)
+        }
 
         lifecycleScope.launch {
             val prefs = userPreferencesRepository.userPreferencesFlow.first()
@@ -80,10 +87,12 @@ class MainActivity : ComponentActivity() {
             }
         })
 
-        try {
-            val serviceIntent = Intent(this, AppUsageMonitorService::class.java)
-            startForegroundService(serviceIntent)
-        } catch (e: Exception) {
+        if (!safeMode) {
+            try {
+                val serviceIntent = Intent(this, AppUsageMonitorService::class.java)
+                startForegroundService(serviceIntent)
+            } catch (e: Exception) {
+            }
         }
 
         setContent {
@@ -123,7 +132,9 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // App is visible now: allow the monitor service to attach the camera FGS
         // type (needed only for QR pause points shown over other apps).
-        AppUsageMonitorService.requestCameraTypeUpgrade(this)
+        if (!SafeMode.isEnabled(this)) {
+            AppUsageMonitorService.requestCameraTypeUpgrade(this)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

@@ -24,6 +24,7 @@ class AlarmWatchdogWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        if (com.etrisad.zenith.crash.SafeMode.isEnabled(applicationContext)) return Result.success()
         return try {
             val app = applicationContext as ZenithApplication
             val prefs = app.userPreferencesRepository.userPreferencesFlow.first()

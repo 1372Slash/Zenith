@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit
 class DailyUsageWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        if (com.etrisad.zenith.crash.SafeMode.isEnabled(applicationContext)) return Result.success()
         val prefsRepo = UserPreferencesRepository(applicationContext)
         val prefs = prefsRepo.userPreferencesFlow.first()
         val dayStartHour = prefs.dayStartHour

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.first
 
 class MidnightResetWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        if (com.etrisad.zenith.crash.SafeMode.isEnabled(applicationContext)) return Result.success()
         SharedPrefsHelper.setShortsScreenTimeMs(applicationContext, 0L)
 
         val prefsRepo = UserPreferencesRepository(applicationContext)

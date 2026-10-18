@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit
 class NotificationInsightsWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        if (com.etrisad.zenith.crash.SafeMode.isEnabled(applicationContext)) return Result.success()
         val pm = applicationContext.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
         if (!pm.isInteractive) {
             return Result.success()

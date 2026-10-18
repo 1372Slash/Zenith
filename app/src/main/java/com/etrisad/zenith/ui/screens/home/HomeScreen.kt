@@ -1622,8 +1622,8 @@ fun ShieldItem(
             value = System.currentTimeMillis()
         }
     }
-    val totalLimitMillis = remember(shield.timeLimitMinutes) { shield.timeLimitMinutes * 60 * 1000L }
-    val remainingMillis = shield.remainingTimeMillis.coerceIn(0L, totalLimitMillis)
+    val totalLimitMillis = remember(shield.timeLimitMinutes) { shield.timeLimitMinutes.toLong() * 60 * 1000L }
+    val remainingMillis = shield.remainingTimeMillis.coerceAtMost(totalLimitMillis.coerceAtLeast(0L))
     val progress = if (totalLimitMillis > 0) remainingMillis.toFloat() / totalLimitMillis else 0f
 
     val isEffectivelyPaused = remember(shield.isPaused, shield.pauseEndTimestamp, nowMillis) {

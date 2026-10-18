@@ -487,6 +487,14 @@ class AppUsageMonitorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // Safe Mode runs without user data: never hold the monitor alive.
+        if (com.etrisad.zenith.crash.SafeMode.isEnabled(this)) {
+            DbLogBuffer.w("ZenithAUMS", "SAFE_MODE: monitor service start skipped")
+            stopSelf()
+            return
+        }
+
         createMonitorNotificationChannel()
 
         // Post the foreground notification before any heavy initialization.

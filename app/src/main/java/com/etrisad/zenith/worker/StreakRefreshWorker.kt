@@ -17,6 +17,7 @@ class StreakRefreshWorker(
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
+        if (com.etrisad.zenith.crash.SafeMode.isEnabled(applicationContext)) return Result.success()
         return try {
             val app = applicationContext as ZenithApplication
             app.userPreferencesRepository.refreshGlobalStreak(app.shieldRepository)

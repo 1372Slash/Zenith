@@ -7,6 +7,7 @@ import android.os.PowerManager
 import android.provider.OpenableColumns
 import android.provider.Settings
 import com.etrisad.zenith.BuildConfig
+import com.etrisad.zenith.crash.CrashStore
 import com.etrisad.zenith.data.local.database.DbLogBuffer
 import com.etrisad.zenith.data.local.database.OverlayLogBuffer
 import com.etrisad.zenith.data.local.database.ZenithDatabase
@@ -102,6 +103,13 @@ object DiagnosticReportUtils {
                     addTextEntry(zip, "db_logs.txt", dbLogs)
                     addTextEntry(zip, "overlay_logs.txt", overlayLogs)
                     addTextEntry(zip, "logcat.txt", logcat)
+                    try {
+                        // Caught crashes, so the report always explains an abrupt stop.
+                        for ((name, content) in CrashStore.reportEntries(context)) {
+                            addTextEntry(zip, name, sanitizeLogText(content))
+                        }
+                    } catch (_: Exception) {
+                    }
                 }
             } ?: return@withContext Result.failure(IllegalStateException("Could not open save location"))
 

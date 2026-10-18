@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -14,7 +15,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
+import androidx.datastore.preferences.preferencesDataStoreFile
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.model.AlarmItem
@@ -23,13 +24,16 @@ import com.etrisad.zenith.ui.components.pausepoint.PausePointDefaults
 import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
 import com.etrisad.zenith.ui.components.pausepoint.PausePointVariant
 import com.etrisad.zenith.data.repository.ShieldRepository
+import com.etrisad.zenith.crash.SafeMode
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import com.etrisad.zenith.util.DateTimeUtils
 import com.etrisad.zenith.ui.theme.FontAxes
 import com.etrisad.zenith.ui.theme.GSFlexSettings
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
@@ -42,8 +46,52 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
 
-val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
-val Context.runtimeDataStore: DataStore<Preferences> by preferencesDataStore(name = "runtime_state")
+/**
+ * Settings / runtime DataStore access with Safe Mode support. Normally the
+ * regular files are used; while Safe Mode is active a separate throwaway file
+ * is used instead: reads return defaults and writes never reach the user's
+ * real preferences. Toggling Safe Mode therefore requires an app restart
+ * (repositories cache their DataStore).
+ */
+private class SafeAwarePreferencesDelegate(
+    private val normalFileName: String,
+    private val safeFileName: String
+) {
+    @Volatile
+    private var normal: DataStore<Preferences>? = null
+
+    @Volatile
+    private var safe: DataStore<Preferences>? = null
+
+    fun get(context: Context): DataStore<Preferences> {
+        val useSafe = SafeMode.isEnabled(context)
+        val cached = if (useSafe) safe else normal
+        if (cached != null) return cached
+        return synchronized(this) {
+            val current = if (useSafe) safe else normal
+            if (current != null) {
+                current
+            } else {
+                val created = PreferenceDataStoreFactory.create(
+                    scope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
+                    produceFile = {
+                        context.applicationContext.preferencesDataStoreFile(
+                            if (useSafe) safeFileName else normalFileName
+                        )
+                    }
+                )
+                if (useSafe) safe = created else normal = created
+                created
+            }
+        }
+    }
+}
+
+private val settingsStoreDelegate = SafeAwarePreferencesDelegate("settings", "settings_safe_mode")
+private val runtimeStoreDelegate = SafeAwarePreferencesDelegate("runtime_state", "runtime_state_safe_mode")
+
+val Context.dataStore: DataStore<Preferences> get() = settingsStoreDelegate.get(this)
+val Context.runtimeDataStore: DataStore<Preferences> get() = runtimeStoreDelegate.get(this)
 
 enum class ThemeConfig {
     FOLLOW_SYSTEM, LIGHT, DARK

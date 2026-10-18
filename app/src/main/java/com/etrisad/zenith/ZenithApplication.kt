@@ -9,6 +9,8 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 
+import com.etrisad.zenith.crash.CrashHandler
+import com.etrisad.zenith.crash.SafeMode
 import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.local.database.DbLogBuffer
 import com.etrisad.zenith.data.repository.ShieldRepository
@@ -75,6 +77,12 @@ class ZenithApplication : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+
+        // Install the crash handler first: everything below (and everything the
+        // app does afterwards) should end up on the crash screen, not a silent
+        // process death.
+        CrashHandler.install(this)
+
         lastUiMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
 
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
@@ -94,6 +102,18 @@ class ZenithApplication : Application(), ImageLoaderFactory {
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
             override fun onActivityDestroyed(activity: Activity) {}
         })
+
+        // Safe Mode: boot without user data. The repositories already resolve to
+        // their throwaway stores (UserPreferencesRepository / ZenithDatabase) and
+        // the monitoring stack checks the same flag, so skip everything here that
+        // touches persisted state or schedules background work.
+        if (SafeMode.isEnabled(this)) {
+            DbLogBuffer.w(
+                "ZenithApp",
+                "SAFE_MODE: booting without user data; workers and monitoring stay off"
+            )
+            return
+        }
 
         // Warm up the database off the main thread so a first-launch-after-update
         // migration (e.g. v28 -> v35) never blocks service onCreate/startForeground.

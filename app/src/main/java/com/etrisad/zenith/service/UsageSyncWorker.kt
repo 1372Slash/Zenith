@@ -11,6 +11,7 @@ class UsageSyncWorker(
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
+        if (com.etrisad.zenith.crash.SafeMode.isEnabled(applicationContext)) return Result.success()
         val application = applicationContext as ZenithApplication
         val repository = application.shieldRepository
         val preferencesRepository = application.userPreferencesRepository

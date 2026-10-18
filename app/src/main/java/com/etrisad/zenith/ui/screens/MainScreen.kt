@@ -68,6 +68,7 @@ import com.etrisad.zenith.ui.screens.profile.achievementTrackingKey
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.etrisad.zenith.crash.CrashSafetyOverlay
 import com.etrisad.zenith.ui.components.PermissionBottomSheet
 import com.etrisad.zenith.ui.components.onboarding.OnboardingStatsBottomSheet
 import com.etrisad.zenith.ui.components.onboarding.OnboardingUpdateBottomSheet
@@ -1481,6 +1482,8 @@ fun MainScreen(
                     },
                     modifier = Modifier.align(Alignment.TopCenter)
                 )
+
+                CrashSafetyOverlay()
             }
         }
     }
