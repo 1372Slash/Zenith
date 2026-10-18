@@ -383,6 +383,23 @@ fun DeveloperSettings(
 
             Spacer(modifier = Modifier.height(4.dp))
             SettingsActionItem(
+                title = "Test Crash (Background, 5s)",
+                summary = "Crashes 5 seconds after you leave the app; verifies the background notification fallback",
+                onClick = {
+                    Thread {
+                        try {
+                            Thread.sleep(5000)
+                        } catch (_: InterruptedException) {
+                        }
+                        throw RuntimeException("Zenith test crash (delayed background)")
+                    }.start()
+                },
+                icon = Icons.Outlined.BugReport,
+                shape = RoundedCornerShape(8.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+            SettingsActionItem(
                 title = "Test Crash (Composition)",
                 summary = "Throw while this screen recomposes and open the crash screen",
                 onClick = { triggerComposeCrash = true },
