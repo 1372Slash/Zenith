@@ -570,8 +570,6 @@ private fun AddVariantEditor(
                         steps = 98,
                         unit = "",
                         onValueChange = {
-                            // x and : grow quadratically: enforce the 12 cap
-                            // live, not only when the operator is (re)selected.
                             sliderValue =
                                 if (mathOperator == MathOperator.MULTIPLY || mathOperator == MathOperator.DIVIDE) {
                                     it.coerceAtMost(12f)

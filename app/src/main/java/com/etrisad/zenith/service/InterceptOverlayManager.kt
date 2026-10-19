@@ -750,10 +750,6 @@ class InterceptOverlayManager(
         if (animated) animateOutAndRemove(viewToRemove, lOwnerToDestroy, vStoreToClear)
         else removeOverlayViewImmediate(viewToRemove, lOwnerToDestroy, vStoreToClear)
     }
-
-    // Fade-only: sheet meluncur via exit-animation konten, scrim memudar via
-    // backgroundAlpha konten + fade ini. TIDAK slide whole-view agar scrim
-    // tidak ikut turun. withLayer agar tidak lag.
     private fun animateOutAndRemove(
         view: ComposeView,
         lOwner: MyLifecycleOwner?,

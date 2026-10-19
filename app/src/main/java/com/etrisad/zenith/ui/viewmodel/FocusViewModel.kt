@@ -447,8 +447,6 @@ class FocusViewModel(
                 selectedAppForFocus = app,
                 selectedFocusType = type,
                 isSettingsSheetOpen = true,
-                // Same app re-opened: keep the last known value until the
-                // refresh lands instead of flashing 0.
                 selectedAppUsageToday =
                     if (it.selectedAppForFocus?.packageName == app.packageName) it.selectedAppUsageToday else 0L,
                 isSchedulePickerOpen = false,
@@ -463,7 +461,6 @@ class FocusViewModel(
             } catch (_: Exception) {
                 0L
             }
-            // Stale guard: don't overwrite a newer selection's value.
             if (_uiState.value.selectedAppForFocus?.packageName == app.packageName) {
                 _uiState.update { it.copy(selectedAppUsageToday = usage) }
             }

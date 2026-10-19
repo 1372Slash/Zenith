@@ -131,11 +131,6 @@ class AppUsageMonitorService : Service() {
     private var foregroundNotificationStarted = false
     private var lastNotificationRefreshTime = 0L
     private var lastNotificationText: String? = null
-
-    // Whether the current foreground notification was posted with
-    // ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA attached. Sticky for the
-    // lifetime of the service instance so later refreshes never silently
-    // drop a required type.
     @Volatile
     private var cameraTypeActive = false
 
@@ -166,9 +161,6 @@ class AppUsageMonitorService : Service() {
                     cachedForegroundAppTime = 0L
                     cancelScreenOffGoalAlarm()
                     try {
-                        // Re-assert the existing foreground state after screen-on.
-                        // Never fall back to specialUse here: that would silently
-                        // drop an already-active camera type.
                         tryStartForeground(createNotification(), cameraTypeActive)
                     } catch (e: Exception) {
                     }
@@ -227,9 +219,6 @@ class AppUsageMonitorService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (!foregroundNotificationStarted) {
-            // onCreate failed to enter the foreground state (or already stopped
-            // the service). Do no work so the system cannot flag a
-            // startForeground() timeout / ForegroundServiceDidNotStartInTimeException.
             return START_NOT_STICKY
         }
         when (intent?.action) {
@@ -487,8 +476,6 @@ class AppUsageMonitorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-
-        // Safe Mode runs without user data: never hold the monitor alive.
         if (com.etrisad.zenith.crash.SafeMode.isEnabled(this)) {
             DbLogBuffer.w("ZenithAUMS", "SAFE_MODE: monitor service start skipped")
             stopSelf()
@@ -496,11 +483,6 @@ class AppUsageMonitorService : Service() {
         }
 
         createMonitorNotificationChannel()
-
-        // Post the foreground notification before any heavy initialization.
-        // The system expects startForeground() shortly after
-        // startForegroundService() (e.g. from ZenithHeartbeatReceiver) and
-        // otherwise kills the app with ForegroundServiceDidNotStartInTimeException.
         if (!startForegroundSafely()) {
             DbLogBuffer.e("ZenithAUMS", "startForeground() failed on all attempts; stopping service")
             stopSelf()
@@ -2552,13 +2534,6 @@ class AppUsageMonitorService : Service() {
             .setOngoing(true)
             .build()
     }
-
-    /**
-     * The camera foreground service type may only be attached when the CAMERA
-     * runtime permission is granted, the app is (or may become) visible
-     * (while-in-use requirement on Android 14+), and a QR pause point is
-     * actually configured.
-     */
     private fun canAddCameraType(prefs: UserPreferences): Boolean {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             != PackageManager.PERMISSION_GRANTED

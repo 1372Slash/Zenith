@@ -3,12 +3,6 @@ package com.etrisad.zenith.util
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-
-/**
- * Tests for the schedule-window math used by the extended goal lock:
- * goal-linked schedules keep blocking after their window ends for the rest
- * of the day while the linked goal is incomplete.
- */
 class ScheduleWindowTest {
 
     @Test

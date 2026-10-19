@@ -26,12 +26,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-/**
- * Standalone screen shown after a crash (or opened from the in-app pill).
- * Deliberately self-contained: default Material colors, no repository reads
- * except on demand, so it can render even when the rest of the app cannot.
- */
 class CrashActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {

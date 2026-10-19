@@ -85,8 +85,6 @@ fun InterceptBottomSheet(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val dragOffset = remember { Animatable(0f) }
-    // Reset after a close-fling (which leaves a large value behind) so the
-    // next open doesn't combine a stale translationY with the enter slide.
     LaunchedEffect(visible) {
         if (visible) dragOffset.snapTo(0f)
     }

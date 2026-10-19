@@ -100,13 +100,6 @@ object DateTimeUtils {
             "${dayMonthFmt.format(Date(startMillis))} - ${fullFmt.format(Date(endMillis))}"
         }
     }
-
-    /**
-     * True when the current minute-of-day is past the end of a schedule window that has
-     * already started. Used by the extended goal lock: a goal-linked schedule keeps
-     * blocking after its window ends until the linked goal is completed or the day
-     * rolls over.
-     */
     fun isPastScheduleEnd(startMinutes: Int, endMinutes: Int, currentTotalMinutes: Int): Boolean = when {
         startMinutes == endMinutes -> false
         startMinutes < endMinutes -> currentTotalMinutes >= endMinutes

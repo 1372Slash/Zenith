@@ -122,8 +122,6 @@ fun PomodoroScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item(key = "status") {
-                // Guarded: corrupt prefs (sessionsBeforeLongBreak = 0) must not
-                // crash the screen with ArithmeticException.
                 val longBreakEvery = uiState.sessionsBeforeLongBreak.coerceAtLeast(1)
                 val isLongBreak = uiState.isBreakActive && uiState.currentSessionNumber % longBreakEvery == 0
                 val heroSize by animateDpAsState(
@@ -969,9 +967,6 @@ fun PomodoroStatusProgress(
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label = "PomodoroProgress"
     )
-
-    // The wavy/icon breathing only runs outside preview: an infinite
-    // transition in an idle preview invalidates every frame for nothing.
     val waveAmplitude: Float
     val iconScale: Float
     if (!isPreview) {
@@ -1083,7 +1078,6 @@ private fun SessionDots(
     accentColor: Color,
     isPreview: Boolean = false
 ) {
-    // Preview hasn't started: no dot highlighted. -1 keeps every dot dim.
     val completed = if (isPreview) -1 else (currentSession - 1).coerceIn(0, totalSessions.coerceAtLeast(1))
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),

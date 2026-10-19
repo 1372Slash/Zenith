@@ -1087,14 +1087,7 @@ class OverlayActionHandler(
             ?.takeIf { it.type == FocusType.GOAL } ?: return true
         val target = goal.timeLimitMinutes * 60000L
         if (target <= 0L) return true
-
-        // Once either service has marked the goal as achieved ("Goal Achieved"
-        // notification), the linked schedule counts as finished for the period.
         if (SharedMonitoringState.notifiedGoals.contains(goalPkg)) return false
-
-        // Compare against live usage (session-tracked, falls back to system stats).
-        // dailyUsageCache alone can stay stale for up to usageStatsCacheMs (~15 min
-        // on BALANCED), which made completed goals keep blocking their schedules.
         val usage = getTotalUsageToday(goalPkg)
         return usage < target
     }

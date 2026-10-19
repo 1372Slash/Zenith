@@ -1,16 +1,6 @@
 package com.etrisad.zenith.util
 
 import com.etrisad.zenith.data.model.AlarmItem
-
-/**
- * Pure alarm-chain logic kept free of Android framework imports so it can be
- * covered by plain JVM unit tests.
- *
- * Background: the alarm overlay is a singleInstance activity, so when alarm B
- * fires while alarm A is still on screen, B preempts A in the same instance.
- * All helpers here exist to keep per-alarm identity and progress intact across
- * that preemption instead of letting the newest firing clobber the older one.
- */
 object AlarmChainHelper {
 
     /**

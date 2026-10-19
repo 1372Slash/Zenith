@@ -76,16 +76,6 @@ class StreakCalculator(
         val stat = stats[packageName] ?: return null
         return stat.totalTimeVisible.coerceAtLeast(stat.totalTimeInForeground)
     }
-
-    /**
-     * Absolute creation-day bound ("yyyy-MM-dd"). Never null, never in the
-     * future. Shields created before the timeAdded column existed (or restored
-     * from backups without it) have timeAdded == 0, those fall back to the
-     * last streak update, otherwise to today so such a shield can only ever
-     * count today. Every streak loop must break at this bound: days before the
-     * shield existed must never count, no matter what the DB or the OS
-     * usage history claims.
-     */
     private fun creationDateStr(
         timeAdded: Long,
         lastStreakUpdateTimestamp: Long,

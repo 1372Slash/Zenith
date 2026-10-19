@@ -422,8 +422,6 @@ abstract class ZenithDatabase : RoomDatabase() {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: run {
                     if (com.etrisad.zenith.crash.SafeMode.isEnabled(context)) {
-                        // Safe Mode: run on an empty in-memory database so the app
-                        // is usable for diagnostics without touching user data.
                         DbLogBuffer.w("ZenithDB", "SAFE_MODE: using in-memory database (user data not loaded)")
                         val instance = Room.inMemoryDatabaseBuilder(
                             context.applicationContext,

@@ -112,12 +112,6 @@ fun toCustomRoman(value: Int): String {
     }
     return parts.joinToString(" ")
 }
-
-/**
- * Tier level as a row of real icons, roman style: level 3 -> three stars,
- * level 7 -> moon + two stars. Additive on purpose so every level is
- * readable at a glance.
- */
 fun tierIconsForLevel(level: Int): List<ImageVector> {
     if (level <= 0) return emptyList()
     var rest = level

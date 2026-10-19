@@ -45,13 +45,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-
-/**
- * App-wide crash affordances drawn on top of the main UI:
- *  - a small pill at the bottom while a crash report has not been looked at,
- *    tapping it reopens [CrashActivity];
- *  - a banner while Safe Mode is active, offering one tap back to normal mode.
- */
 @Composable
 fun CrashSafetyOverlay(modifier: Modifier = Modifier) {
     val context = LocalContext.current

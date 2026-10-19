@@ -178,9 +178,6 @@ fun ScheduleOverlaySheetContent(
             delay(30_000)
         }
     }
-
-    // Extended goal lock: the goal is still incomplete and the schedule window has
-    // already ended, yet blocking continues until the goal is completed.
     val isGoalLockExtended = isGoalLocked && isPastScheduleEndNow
 
     val currentTotalGlobalUsageTodayState = produceState(

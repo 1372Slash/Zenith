@@ -82,9 +82,6 @@ fun DeveloperSettings(
     var showBottomSheetTest by remember { mutableStateOf(false) }
     var bottomSheetExpandValue by remember { mutableFloatStateOf(0f) }
     var showTtsTestSheet by remember { mutableStateOf(false) }
-
-    // Crash-handler test hook: throwing during recomposition must land on the
-    // crash screen like any other uncaught main-thread exception.
     var triggerComposeCrash by remember { mutableStateOf(false) }
     if (triggerComposeCrash) {
         throw IllegalStateException("Zenith test crash (composition)")

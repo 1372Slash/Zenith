@@ -11,19 +11,6 @@ import androidx.core.app.NotificationCompat
 import com.etrisad.zenith.R
 import com.etrisad.zenith.data.local.database.DbLogBuffer
 import com.etrisad.zenith.service.AppStateHolder
-
-/**
- * Global uncaught-exception handler. On a crash it:
- *  1. writes a durable crash report (CrashStore),
- *  2. relaunches [CrashActivity] so the user sees what happened and can pick
- *     Retry / Safe Mode / report instead of the app silently closing,
- *  3. kills the process without delegating to the platform handler, so the
- *     "keeps stopping" system dialog does not appear.
- *
- * If the app crashes repeatedly within a minute the relaunch is suppressed
- * (CrashStore.isRapidCrashLoop) to avoid an endless crash-screen loop; the
- * user can still reach the report from the in-app pill or a notification.
- */
 object CrashHandler {
     private const val ALARM_REQUEST_CODE = 9931
     private const val NOTIFICATION_REQUEST_CODE = 9932

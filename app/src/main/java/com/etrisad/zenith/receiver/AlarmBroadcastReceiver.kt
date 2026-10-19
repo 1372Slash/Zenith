@@ -85,11 +85,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             }
         ) {
             AlarmChainHelper.UsageCheckOutcome.KEEP_WAITING_SAME_ALARM -> {
-                // Alarm yang sama masih bunyi di layar: belum ada hasil dismiss
-                // yang bisa dinilai, jadi tunggu dan cek lagi 60 detik.
-                // Bounded: berhenti setelah MAX_KEEP_WAITING_CHECKS agar tidak
-                // jadi exact alarm tiap menit selamanya bila overlay nyangkut
-                // (kasus normal selesai jauh sebelum cap via auto-dismiss).
                 if (waitCount < MAX_KEEP_WAITING_CHECKS) {
                     scheduleUsageCheck(context, alarmTime, isOnce, attempt, alarmId, dismissAt, waitCount + 1)
                 }
@@ -220,9 +215,7 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         try {
             val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val now = System.currentTimeMillis()
-            // Jangkar ke momen dismiss; fallback 60s ke belakang untuk intent lama.
             val since = if (dismissAtMs > 0L) dismissAtMs.coerceAtMost(now) else now - 60_000L
-            // Grace: abaikan transisi tutup-overlay (~launcher muncul) sesaat setelah dismiss.
             val windowStart = since + USAGE_GRACE_MS
             if (windowStart >= now) return false
             val events = usm.queryEvents(since, now)
@@ -268,7 +261,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                     }
                 }
             }
-            // Ekor sesi yang masih foreground saat check berjalan (dipotong window).
             for ((pkg, start) in activeStart) {
                 val overlapStart = maxOf(start, windowStart)
                 val dur = (now - overlapStart).coerceAtLeast(0L)
@@ -276,22 +268,16 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                     foregroundInWindow[pkg] = (foregroundInWindow[pkg] ?: 0L) + dur
                 }
             }
-
-            // Aturan 1: app non-launcher dibuka setelah grace = interaksi nyata.
             for ((pkg, enters) in entersAfterGrace) {
                 if (enters >= 1 && pkg != launcherPackage) {
                     return true
                 }
             }
-            // Aturan 2: app non-launcher menetap lama (sudah dibuka sebelum alarm,
-            // user lanjut memakai) = masih memakai.
             for ((pkg, total) in foregroundInWindow) {
                 if (pkg != launcherPackage && total >= MIN_SUSTAINED_FOREGROUND_MS) {
                     return true
                 }
             }
-            // Aturan 3: navigasi via launcher bolak-balik = memakai (sekali masuk
-            // saja bisa jadi cuma transisi tutup-overlay yang telat).
             val launcherEnters = launcherPackage?.let { entersAfterGrace[it] ?: 0 } ?: 0
             if (launcherEnters >= 2) {
                 return true
@@ -319,7 +305,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             }
             mode == android.app.AppOpsManager.MODE_ALLOWED
         } catch (_: Exception) {
-            // If it can't be checked, let queryEvents decide (fail-safe above).
             true
         }
     }
@@ -332,26 +317,14 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         const val EXTRA_ALARM_ID = "alarm_id"
         const val EXTRA_DISMISS_AT = "extra_dismiss_at"
         const val EXTRA_IS_SNOOZE = "extra_is_snooze"
-
-        // Satu ID per jenis notif -> tidak menumpuk, tiap jenis saling menggantikan.
-        // 2001 firing dipakai alarm utama; test-goal pakai 2005 agar tidak saling bunuh.
-        // Goal-caller normal pakai 2000, dibatalkan AppGoalOverlayActivity.cancel(2000).
         const val NOTIFICATION_ID_FIRING = 2001
         const val NOTIFICATION_ID_COMPLETE = 2002
         const val NOTIFICATION_ID_MISSED = 2003
         const val NOTIFICATION_ID_SMART_WAKE_REMINDER = 2004
         const val NOTIFICATION_ID_TEST_GOAL = 2005
-
-        // Channel dipisah: firing/missed = HIGH (boleh bunyi + full-screen),
-        // info (reminder/complete) = LOW (silent, tidak heads-up, tidak ramai).
-        // Dulu reminder+complete menumpang channel HIGH sehingga notif info ikut
-        // bunyi/heads-up dan channel LOW tak pernah terpakai (dibuat setelah HIGH ada).
         const val CHANNEL_ID_FIRING = "zenith_alarm_channel"
         const val CHANNEL_ID_INFO = "zenith_alarm_info_channel"
-
-        // Grace: abaikan transisi tutup-overlay sesaat setelah dismiss.
         internal const val USAGE_GRACE_MS = 5_000L
-        // App non-launcher yang menetap selama ini dianggap masih dipakai.
         internal const val MIN_SUSTAINED_FOREGROUND_MS = 20_000L
         private const val STATE_PREFS = "zenith_alarm_smart_state"
         private const val KEY_LAST_DISMISS_AT = "last_dismiss_at"
@@ -366,12 +339,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             val minute = parts.getOrNull(1)?.toIntOrNull() ?: 0
             return base + hour * 100 + minute
         }
-
-        /**
-         * Strict HH:mm parse. Returns null for corrupt/draft strings instead
-         * of throwing NumberFormatException (one bad alarmsJson entry must not
-         * crash reschedule of all other alarms).
-         */
         private fun parseHourMinute(alarmTime: String): Pair<Int, Int>? {
             val parts = alarmTime.split(":")
             if (parts.size != 2) return null

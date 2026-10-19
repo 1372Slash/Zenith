@@ -171,8 +171,6 @@ fun WeekStepperIndicator(
                 } else {
                     FilledTonalIconButton(
                         onClick = { if (showPrevious) onPrevious() },
-                        // Visibility-gated: an invisible-but-enabled button is
-                        // a 28dp dead-tap zone during the fade-out.
                         enabled = showPrevious,
                         modifier = Modifier
                             .size(28.dp)

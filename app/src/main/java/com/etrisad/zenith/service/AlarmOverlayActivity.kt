@@ -71,14 +71,6 @@ class AlarmOverlayActivity : ComponentActivity() {
     private var testAlarmJson: String? = null
     private var testGradualVolume: Boolean = false
     private var restartKey by mutableIntStateOf(0)
-
-    /**
-     * Progres wake-up per alarm. Satu-satunya state yang bertahan saat alarm
-     * lain preempt overlay (singleInstance): offsetMs menampung akumulasi yang
-     * sudah dikunci dari window sebelumnya, windowStartMs menandai awal window
-     * yang sedang berjalan (0 = tidak ada window terbuka), packages dipakai
-     * untuk mengunci window yang tertunda saat preempt terjadi.
-     */
     private data class WakeUpSlot(
         var offsetMs: Long = 0L,
         var windowStartMs: Long = 0L,

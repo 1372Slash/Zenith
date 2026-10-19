@@ -11,8 +11,6 @@ import java.io.StringWriter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-/** How many buffered app-log lines are embedded in a crash report. */
 private const val MAX_LOG_TAIL_LINES = 400
 
 /**

@@ -3,18 +3,6 @@ package com.etrisad.zenith.crash
 import android.content.Context
 import android.content.Intent
 import android.os.Process
-
-/**
- * Process-wide "safe mode" switch. When enabled Zenith boots without loading
- * the user's persisted preferences and database (see UserPreferencesRepository
- * and ZenithDatabase), and the monitoring service/workers stay off. The flag
- * lives in a dedicated SharedPreferences file so it stays readable even when
- * everything else is suspect.
- *
- * Repositories capture their DataStore / Room instance lazily, so toggling
- * this flag only takes effect after a full process restart - hence
- * [restartApp], which must be called from a visible Activity.
- */
 object SafeMode {
     private const val PREFS_NAME = "zenith_safety"
     private const val KEY_ENABLED = "safe_mode_enabled"
