@@ -1100,14 +1100,14 @@ private fun AlarmSettingsSheetContent(
 
                                 if (PausePointTaskType.QR_SCAN.name in dismissTaskTypeNames && pausePointQrCodeCount == 0) {
                                     Text(
-                                        text = "No saved QR codes yet — register one under Settings > Features > Pause Point, otherwise QR missions fall back to waiting.",
+                                        text = "No saved QR codes yet. Register one under Settings > Features > Pause Point, otherwise QR missions fall back to waiting.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.error
                                     )
                                 }
                                 if (PausePointTaskType.NFC_SCAN.name in dismissTaskTypeNames && pausePointNfcTagCount == 0) {
                                     Text(
-                                        text = "No saved NFC tags yet — register one under Settings > Features > Pause Point, otherwise NFC missions fall back to waiting.",
+                                        text = "No saved NFC tags yet. Register one under Settings > Features > Pause Point, otherwise NFC missions fall back to waiting.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.error
                                     )

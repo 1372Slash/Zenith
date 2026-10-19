@@ -169,20 +169,23 @@ object FeatureInfoRegistry {
 
     private val gracePeriod = FeatureInfo(
         title = "Grace Period",
-        summary = "A scheduled daily window in which every Zenith restriction is lifted, making blocking sustainable instead of absolute.",
+        summary = "A scheduled daily window (up to 2 hours) in which every Zenith restriction is lifted, making blocking sustainable instead of absolute.",
         sections = listOf(
             FeatureInfoSections.whatItDoes(
                 "During the window, shields, schedules, and bedtime will not block any app.",
-                "Outside the window, all protections return automatically, no manual re-enabling needed."
+                "Outside the window, all protections return automatically, no manual re-enabling needed.",
+                "Optional Weekly Edit Lock (off by default): when enabled, changing the window or days is limited to one change per week, and each change starts a 7-day lock on these settings only. Your app blocking is never affected."
             ),
             FeatureInfoSections.whatYoullSee(
                 "A toggle card, a pulsing countdown ring ('Grace period ends in…' / 'Starts in…'), and time pickers.",
                 "A weekday selector so the window only applies on chosen days.",
-                "An info card explaining the override behavior."
+                "A Weekly Edit Lock card (off by default) with a countdown note while it is active, and a confirmation dialog before each change that starts the lock."
             ),
             FeatureInfoSections.tips(
-                "Plan a realistic window (max 2 hours, edits limited to once per week) rather than toggling impulsively; disabling mid-session requires the 10-lever confirmation.",
+                "Plan a realistic window (max 2 hours) and repeat days, then double-check the confirmation dialog. With the edit lock enabled, even unselecting a single day counts as the weekly change.",
                 "Wrap-around times are supported, so windows can span midnight.",
+                "Enable Weekly Edit Lock once your window is settled to protect it from impulsive edits; turning the lock back off requires the 10-lever confirmation.",
+                "Disabling the window mid-session requires the 10-lever confirmation but does not consume the weekly change; only window and days edits do.",
                 "Combine with Lockdown if you want editing protected while grace period is off."
             )
         )

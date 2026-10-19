@@ -45,11 +45,17 @@ class GracePeriodViewModel(
                 val prefs = userPreferences.value
                 val remaining = userPreferencesRepository.getGracePeriodCooldownRemaining(prefs)
                 if (remaining > 0L) {
-                    _editError.value = "Grace period can only be edited once per week. ${getCooldownText(prefs)}"
+                    _editError.value = "Grace Period settings are edit-locked (one change per week). ${getCooldownText(prefs)}"
                     return@launch
                 }
             }
             userPreferencesRepository.setGracePeriodEnabled(enabled)
+        }
+    }
+
+    fun setEditLockEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setGracePeriodEditLockEnabled(enabled)
         }
     }
 
@@ -58,7 +64,7 @@ class GracePeriodViewModel(
             val prefs = userPreferences.value
             val remaining = userPreferencesRepository.getGracePeriodCooldownRemaining(prefs)
             if (remaining > 0L) {
-                _editError.value = "Grace period can only be edited once per week. ${getCooldownText(prefs)}"
+                _editError.value = "Grace Period settings are edit-locked (one change per week). ${getCooldownText(prefs)}"
                 return@launch
             }
             if (!userPreferencesRepository.isGracePeriodDurationValid(time, prefs.gracePeriodEndTime)) {
@@ -75,7 +81,7 @@ class GracePeriodViewModel(
             val prefs = userPreferences.value
             val remaining = userPreferencesRepository.getGracePeriodCooldownRemaining(prefs)
             if (remaining > 0L) {
-                _editError.value = "Grace period can only be edited once per week. ${getCooldownText(prefs)}"
+                _editError.value = "Grace Period settings are edit-locked (one change per week). ${getCooldownText(prefs)}"
                 return@launch
             }
             if (!userPreferencesRepository.isGracePeriodDurationValid(prefs.gracePeriodStartTime, time)) {
@@ -92,7 +98,7 @@ class GracePeriodViewModel(
             val prefs = userPreferences.value
             val remaining = userPreferencesRepository.getGracePeriodCooldownRemaining(prefs)
             if (remaining > 0L) {
-                _editError.value = "Grace period can only be edited once per week. ${getCooldownText(prefs)}"
+                _editError.value = "Grace Period settings are edit-locked (one change per week). ${getCooldownText(prefs)}"
                 return@launch
             }
             val ok = userPreferencesRepository.setGracePeriodDays(days)

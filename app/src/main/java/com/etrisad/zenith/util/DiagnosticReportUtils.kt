@@ -33,12 +33,6 @@ object DiagnosticReportUtils {
         "\\b(?!com\\.etrisad\\.zenith\\b)(?!android\\b)(?!java\\b)(?!kotlin\\b)(?!androidx\\b)" +
             "[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+\\b"
     )
-
-    /**
-     * Redacts installed-app identifiers from free-text logs before they leave
-     * the device. Keeps tags, levels, counts and own package (stack traces)
-     * so the report stays debuggable without leaking which apps are installed.
-     */
     fun sanitizeLogText(text: String): String {
         var out = PII_KEY_VALUE.replace(text) { "${it.groupValues[1]}=<redacted>" }
         out = PACKAGE_URI.replace(out) { "package:<redacted>" }
@@ -209,6 +203,7 @@ object DiagnosticReportUtils {
         sb.appendLine("    \"gracePeriodEnabled\": ${p.gracePeriodEnabled},")
         sb.appendLine("    \"gracePeriodWindow\": \"${esc(p.gracePeriodStartTime)}-${esc(p.gracePeriodEndTime)}\",")
         sb.appendLine("    \"gracePeriodDays\": \"${days(p.gracePeriodDays)}\",")
+        sb.appendLine("    \"gracePeriodEditLock\": ${p.gracePeriodEditLockEnabled},")
         sb.appendLine("    \"lockdownEnabled\": ${p.lockdownEnabled},")
         sb.appendLine("    \"lockdownWindow\": \"${esc(p.lockdownStartTime)}-${esc(p.lockdownEndTime)}\",")
         sb.appendLine("    \"lockdownDays\": \"${days(p.lockdownDays)}\",")

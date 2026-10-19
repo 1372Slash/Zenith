@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FreeBreakfast
 import androidx.compose.material.icons.outlined.FreeBreakfast
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.*
@@ -46,6 +47,10 @@ fun GracePeriodScreen(
     var showStartTimePicker by remember { mutableStateOf(false) }
     var showEndTimePicker by remember { mutableStateOf(false) }
     var showPauseSheet by remember { mutableStateOf(false) }
+    var showDisableLockSheet by remember { mutableStateOf(false) }
+    var pendingDays by remember { mutableStateOf<Set<Int>?>(null) }
+    var pendingStartTime by remember { mutableStateOf<String?>(null) }
+    var pendingEndTime by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(editError) {
         editError?.let {
@@ -122,9 +127,28 @@ fun GracePeriodScreen(
 
                 DaysSelectionCard(
                     selectedDays = preferences.gracePeriodDays,
-                    onDaysChange = { viewModel.setGracePeriodDays(it) },
+                    onDaysChange = { newDays ->
+                        if (preferences.gracePeriodEditLockEnabled && viewModel.canEditGracePeriod(preferences)) {
+                            pendingDays = newDays
+                        } else {
+                            viewModel.setGracePeriodDays(newDays)
+                        }
+                    },
                     containerColor = containerColor,
                     shape = RoundedCornerShape(8.dp)
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                EditLockCard(
+                    lockEnabled = preferences.gracePeriodEditLockEnabled,
+                    onToggle = { enabled ->
+                        if (enabled) {
+                            viewModel.setEditLockEnabled(true)
+                        } else {
+                            showDisableLockSheet = true
+                        }
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -134,7 +158,7 @@ fun GracePeriodScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
                         )
                     ) {
                         Row(
@@ -144,15 +168,23 @@ fun GracePeriodScreen(
                             Icon(
                                 Icons.Outlined.Schedule,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Editing locked: $cooldownText. Max duration is 2 hours.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
+                            Column {
+                                Text(
+                                    text = "Grace Period settings are locked (one change per week)",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Text(
+                                    text = "Next change available in ${cooldownText.removeSuffix(" remaining")}. Only editing these settings is paused; all app blocking keeps running exactly as configured.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
@@ -176,7 +208,11 @@ fun GracePeriodScreen(
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "Grace Period overrides all restrictions. Shields, schedules, and bedtime will not block any apps while active. Edits limited to once per week, max 2 hours.",
+                            text = if (preferences.gracePeriodEditLockEnabled) {
+                                "While the window is active, shields, schedules, and bedtime will not block any apps (up to 2 hours). With Weekly Edit Lock on, changing the window or days is limited to one change per week. Applying a change starts a 7-day edit lock. The lock only pauses editing of these settings; your app blocking outside the window is never affected."
+                            } else {
+                                "While the window is active, shields, schedules, and bedtime will not block any apps (up to 2 hours). Weekly Edit Lock is off, so these settings can be edited at any time. Turning it on restricts changes to one per week, with a confirmation before each one."
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -203,13 +239,30 @@ fun GracePeriodScreen(
         )
     }
 
+    if (showDisableLockSheet) {
+        ConfirmBottomSheet(
+            onDismiss = { showDisableLockSheet = false },
+            onConfirm = {
+                viewModel.setEditLockEnabled(false)
+                showDisableLockSheet = false
+            },
+            leverCount = 10,
+            puzzleTimeoutSeconds = 10,
+            showTimeSelection = false
+        )
+    }
+
     if (showStartTimePicker) {
         TimePickerDialog(
             initialTime = preferences.gracePeriodStartTime,
             onDismiss = { showStartTimePicker = false },
             onTimeSelected = {
-                viewModel.setGracePeriodStartTime(it)
                 showStartTimePicker = false
+                if (preferences.gracePeriodEditLockEnabled && viewModel.canEditGracePeriod(preferences)) {
+                    pendingStartTime = it
+                } else {
+                    viewModel.setGracePeriodStartTime(it)
+                }
             }
         )
     }
@@ -219,8 +272,49 @@ fun GracePeriodScreen(
             initialTime = preferences.gracePeriodEndTime,
             onDismiss = { showEndTimePicker = false },
             onTimeSelected = {
-                viewModel.setGracePeriodEndTime(it)
                 showEndTimePicker = false
+                if (preferences.gracePeriodEditLockEnabled && viewModel.canEditGracePeriod(preferences)) {
+                    pendingEndTime = it
+                } else {
+                    viewModel.setGracePeriodEndTime(it)
+                }
+            }
+        )
+    }
+
+    if (pendingDays != null || pendingStartTime != null || pendingEndTime != null) {
+        AlertDialog(
+            onDismissRequest = {
+                pendingDays = null
+                pendingStartTime = null
+                pendingEndTime = null
+            },
+            title = { Text("One change per week") },
+            text = {
+                Text(
+                    "Grace Period settings can only be edited once per week. Applying this change now locks all Grace Period settings (window and days) for 7 days, so make sure it is exactly what you want."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDays?.let { viewModel.setGracePeriodDays(it) }
+                        pendingStartTime?.let { viewModel.setGracePeriodStartTime(it) }
+                        pendingEndTime?.let { viewModel.setGracePeriodEndTime(it) }
+                        pendingDays = null
+                        pendingStartTime = null
+                        pendingEndTime = null
+                    }
+                ) { Text("Apply now") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingDays = null
+                        pendingStartTime = null
+                        pendingEndTime = null
+                    }
+                ) { Text("Cancel") }
             }
         )
     }
@@ -313,6 +407,67 @@ fun GracePeriodToggleCard(enabled: Boolean, onToggle: (Boolean) -> Unit) {
                     }
                 }
             )
+        }
+    }
+}
+
+@Composable
+fun EditLockCard(
+    lockEnabled: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    val containerColor by animateColorAsState(
+        targetValue = if (lockEnabled) MaterialTheme.colorScheme.primaryContainer
+                      else MaterialTheme.colorScheme.surfaceContainerLow,
+        label = "editLockCardColor"
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(
+                        if (lockEnabled) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f)
+                        else MaterialTheme.colorScheme.primaryContainer,
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Weekly Edit Lock",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = if (lockEnabled) {
+                        "On: every change freezes these settings for 7 days"
+                    } else {
+                        "Off: settings can be edited at any time"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(checked = lockEnabled, onCheckedChange = onToggle)
         }
     }
 }

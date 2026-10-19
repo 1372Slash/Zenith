@@ -284,7 +284,7 @@ fun FeaturesSettings(
         Spacer(modifier = Modifier.height(4.dp))
         SettingsActionItem(
             title = "Grace Period",
-            summary = "Set a time window where all apps become unblocked",
+            summary = "Set a daily window where all restrictions are lifted (max 2 h; optional weekly edit lock)",
             onClick = onNavigateToGracePeriod,
             icon = Icons.Outlined.FreeBreakfast,
             shape = RoundedCornerShape(8.dp)
@@ -347,7 +347,7 @@ fun FeaturesSettings(
         Spacer(modifier = Modifier.height(4.dp))
         SettingsToggle(
             title = "Early Kick",
-            description = "Optionally eject from apps 5 minutes before your time limit expires",
+            description = "Eject you from an app 5 minutes before its time limit expires, as an advance warning",
             checked = preferences.earlyKickEnabled,
             onCheckedChange = onEarlyKickEnabledChange,
             icon = Icons.Outlined.ExitToApp,

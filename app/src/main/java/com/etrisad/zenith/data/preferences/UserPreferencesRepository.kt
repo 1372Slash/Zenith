@@ -45,14 +45,6 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
-
-/**
- * Settings / runtime DataStore access with Safe Mode support. Normally the
- * regular files are used; while Safe Mode is active a separate throwaway file
- * is used instead: reads return defaults and writes never reach the user's
- * real preferences. Toggling Safe Mode therefore requires an app restart
- * (repositories cache their DataStore).
- */
 private class SafeAwarePreferencesDelegate(
     private val normalFileName: String,
     private val safeFileName: String
@@ -294,6 +286,7 @@ class UserPreferencesRepository(private val context: Context) {
         val GRACE_PERIOD_END_TIME = stringPreferencesKey("grace_period_end_time")
         val GRACE_PERIOD_DAYS = stringPreferencesKey("grace_period_days")
         val GRACE_PERIOD_LAST_EDIT_TIMESTAMP = longPreferencesKey("grace_period_last_edit_timestamp")
+        val GRACE_PERIOD_EDIT_LOCK_ENABLED = booleanPreferencesKey("grace_period_edit_lock_enabled")
         val USER_NAME = stringPreferencesKey("user_name")
         val USER_BIO = stringPreferencesKey("user_bio")
         val USER_AVATAR_URI = stringPreferencesKey("user_avatar_uri")
@@ -513,6 +506,7 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
             gracePeriodEndTime = settings[PreferencesKeys.GRACE_PERIOD_END_TIME] ?: "13:00",
             gracePeriodDays = settings[PreferencesKeys.GRACE_PERIOD_DAYS]?.split(",")?.filter { it.isNotEmpty() }?.map { it.toInt() }?.toSet() ?: setOf(1, 2, 3, 4, 5, 6, 7),
             gracePeriodLastEditTimestamp = settings[PreferencesKeys.GRACE_PERIOD_LAST_EDIT_TIMESTAMP] ?: 0L,
+            gracePeriodEditLockEnabled = settings[PreferencesKeys.GRACE_PERIOD_EDIT_LOCK_ENABLED] ?: false,
             bedtimeDndEnabled = settings[PreferencesKeys.BEDTIME_DND_ENABLED] ?: false,
             bedtimeWindDownEnabled = settings[PreferencesKeys.BEDTIME_WIND_DOWN_ENABLED] ?: false,
             bedtimeNotificationEnabled = settings[PreferencesKeys.BEDTIME_NOTIFICATION_ENABLED] ?: true,
@@ -1385,13 +1379,16 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
     }
 
     suspend fun isGracePeriodEditAllowed(): Boolean {
-        // Direct key read: avoid the full prefs build for one timestamp.
-        val last = context.dataStore.data.first()[PreferencesKeys.GRACE_PERIOD_LAST_EDIT_TIMESTAMP] ?: 0L
+        // Direct key reads: avoid the full prefs build for two keys.
+        val preferences = context.dataStore.data.first()
+        if (!(preferences[PreferencesKeys.GRACE_PERIOD_EDIT_LOCK_ENABLED] ?: false)) return true
+        val last = preferences[PreferencesKeys.GRACE_PERIOD_LAST_EDIT_TIMESTAMP] ?: 0L
         if (last == 0L) return true
         return System.currentTimeMillis() - last >= GRACE_PERIOD_EDIT_COOLDOWN_MILLIS
     }
 
     fun getGracePeriodCooldownRemaining(prefs: UserPreferences): Long {
+        if (!prefs.gracePeriodEditLockEnabled) return 0L
         val last = prefs.gracePeriodLastEditTimestamp
         if (last == 0L) return 0L
         val elapsed = System.currentTimeMillis() - last
@@ -1400,6 +1397,10 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 
     suspend fun setGracePeriodEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.GRACE_PERIOD_ENABLED] = enabled }
+    }
+
+    suspend fun setGracePeriodEditLockEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.GRACE_PERIOD_EDIT_LOCK_ENABLED] = enabled }
     }
 
     suspend fun setGracePeriodStartTime(time: String): Boolean {
@@ -1934,6 +1935,7 @@ data class UserPreferences(
     val gracePeriodEndTime: String = "13:00",
     val gracePeriodDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7),
     val gracePeriodLastEditTimestamp: Long = 0L,
+    val gracePeriodEditLockEnabled: Boolean = false,
     val userName: String = "User",
     val userBio: String = "",
     val userAvatarUri: String = "",
