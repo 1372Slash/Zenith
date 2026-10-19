@@ -19,7 +19,7 @@ data class DbLogEntry(
 }
 
 object DbLogBuffer {
-    private const val MAX_ENTRIES = 500
+    private const val MAX_ENTRIES = 2_000
     private val entries = CopyOnWriteArrayList<DbLogEntry>()
 
     fun d(tag: String, message: String) {

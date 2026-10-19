@@ -12,6 +12,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/** How many buffered app-log lines are embedded in a crash report. */
+private const val MAX_LOG_TAIL_LINES = 400
+
 /**
  * Snapshot of one caught crash. Kept intentionally dumb (no Android
  * dependencies) so it can be unit tested and serialized from inside the
@@ -43,7 +46,7 @@ data class CrashRecord(
             appendLine("--- Stack trace ---")
             appendLine(stackTrace)
             appendLine()
-            appendLine("--- App log (last 200 lines) ---")
+            appendLine("--- App log (last $MAX_LOG_TAIL_LINES lines) ---")
             appendLine(logTail)
             appendLine("==============================")
         }
@@ -90,7 +93,6 @@ object CrashStore {
 
     private const val MAX_HISTORY_FILES = 10
     private const val MAX_STACK_CHARS = 32_000
-    private const val MAX_LOG_TAIL_LINES = 200
 
     const val RAPID_WINDOW_MS = 60_000L
     const val RAPID_THRESHOLD = 3
