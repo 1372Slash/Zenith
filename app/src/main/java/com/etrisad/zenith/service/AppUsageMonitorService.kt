@@ -507,6 +507,8 @@ class AppUsageMonitorService : Service() {
             return
         }
         foregroundNotificationStarted = true
+        serviceInstanceRunning = true
+        DbLogBuffer.d("ZenithAUMS", "Foreground notification posted (camera=$cameraTypeActive)")
 
         val app = application as com.etrisad.zenith.ZenithApplication
         shieldRepository = app.shieldRepository
@@ -2669,6 +2671,7 @@ class AppUsageMonitorService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        serviceInstanceRunning = false
         monitoringLoopActive = false
         try {
             overlayManager.hideOverlay()
@@ -2691,6 +2694,47 @@ class AppUsageMonitorService : Service() {
         private const val WIND_DOWN_NOTIFICATION_ID = 2006
 
         const val ACTION_ENSURE_CAMERA_FGS = "com.etrisad.zenith.action.ENSURE_CAMERA_FGS"
+
+        /** True while this process holds a live, foreground monitor service. */
+        @Volatile
+        private var serviceInstanceRunning = false
+
+        /**
+         * Starts the monitor service in the safest way for the caller.
+         *
+         * A plain startService() creates no foreground-service start deadline, so
+         * it can never trigger the system crash "Context.startForegroundService()
+         * did not then call Service.startForeground()" when the main thread is
+         * busy (for example during the first composition right after launch).
+         * Only genuine background starts use startForegroundService(), where the
+         * system demands startForeground() within its deadline.
+         */
+        fun startMonitorService(
+            context: Context,
+            action: String? = null,
+            fromForeground: Boolean = false
+        ) {
+            val intent = Intent(context, AppUsageMonitorService::class.java).apply {
+                if (action != null) this.action = action
+            }
+            DbLogBuffer.d(
+                "ZenithAUMS",
+                "start request action=$action fromForeground=$fromForeground running=$serviceInstanceRunning"
+            )
+            if (fromForeground || serviceInstanceRunning) {
+                try {
+                    context.startService(intent)
+                    return
+                } catch (_: Exception) {
+                    // Background restrictions may still reject startService();
+                    // fall through to startForegroundService().
+                }
+            }
+            try {
+                ContextCompat.startForegroundService(context, intent)
+            } catch (_: Exception) {
+            }
+        }
 
         /**
          * Asks a running monitor service to (re)attach the camera foreground

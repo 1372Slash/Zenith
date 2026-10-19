@@ -88,11 +88,12 @@ class MainActivity : ComponentActivity() {
         })
 
         if (!safeMode) {
-            try {
-                val serviceIntent = Intent(this, AppUsageMonitorService::class.java)
-                startForegroundService(serviceIntent)
-            } catch (e: Exception) {
-            }
+            // The activity is visible here, so startService() is allowed and it
+            // creates no foreground-service start deadline. This prevents the
+            // system crash "Context.startForegroundService() did not then call
+            // Service.startForeground()" when the main thread is busy during
+            // startup (first composition) and cannot run the service in time.
+            AppUsageMonitorService.startMonitorService(this, fromForeground = true)
         }
 
         setContent {

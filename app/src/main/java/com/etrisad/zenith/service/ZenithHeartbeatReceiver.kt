@@ -59,19 +59,16 @@ class ZenithHeartbeatReceiver : BroadcastReceiver() {
     }
 
     private fun startMonitorLocked(context: Context, action: String) {
-        val monitorIntent = Intent(context, AppUsageMonitorService::class.java).apply {
-            this.action = when (action) {
-                "com.etrisad.zenith.action.REFRESH_SERVICES" -> "com.etrisad.zenith.action.REFRESH_DATA"
-                "com.etrisad.zenith.action.SCREEN_OFF_GOAL_CHECK" -> "com.etrisad.zenith.action.SCREEN_OFF_GOAL_CHECK"
-                "com.etrisad.zenith.action.TEST_GOAL_CALLER" -> "com.etrisad.zenith.action.TEST_GOAL_CALLER"
-                "com.etrisad.zenith.action.TEST_GOAL_CALLER_FIRE" -> "com.etrisad.zenith.action.TEST_GOAL_CALLER_FIRE"
-                else -> "com.etrisad.zenith.action.HEARTBEAT"
-            }
+        val mappedAction = when (action) {
+            "com.etrisad.zenith.action.REFRESH_SERVICES" -> "com.etrisad.zenith.action.REFRESH_DATA"
+            "com.etrisad.zenith.action.SCREEN_OFF_GOAL_CHECK" -> "com.etrisad.zenith.action.SCREEN_OFF_GOAL_CHECK"
+            "com.etrisad.zenith.action.TEST_GOAL_CALLER" -> "com.etrisad.zenith.action.TEST_GOAL_CALLER"
+            "com.etrisad.zenith.action.TEST_GOAL_CALLER_FIRE" -> "com.etrisad.zenith.action.TEST_GOAL_CALLER_FIRE"
+            else -> "com.etrisad.zenith.action.HEARTBEAT"
         }
-        try {
-            context.startForegroundService(monitorIntent)
-        } catch (e: Exception) {
-        }
+        // Reuse a live service via startService() (no foreground-start deadline);
+        // only a cold process start needs startForegroundService().
+        AppUsageMonitorService.startMonitorService(context.applicationContext, mappedAction)
         if (ZenithService.isServiceRunning) {
             val accessIntent = Intent(context, ZenithService::class.java).apply {
                 this.action = "com.etrisad.zenith.action.REFRESH_DATA"
