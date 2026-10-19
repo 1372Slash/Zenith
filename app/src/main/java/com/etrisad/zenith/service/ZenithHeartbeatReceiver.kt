@@ -11,8 +11,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 class ZenithHeartbeatReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        // Safe Mode: heartbeat/boot alarms are ignored so the monitor stays down
-        // and no user data is touched between restarts.
         if (com.etrisad.zenith.crash.SafeMode.isEnabled(context)) return
 
         val action = intent.action ?: return
@@ -66,8 +64,6 @@ class ZenithHeartbeatReceiver : BroadcastReceiver() {
             "com.etrisad.zenith.action.TEST_GOAL_CALLER_FIRE" -> "com.etrisad.zenith.action.TEST_GOAL_CALLER_FIRE"
             else -> "com.etrisad.zenith.action.HEARTBEAT"
         }
-        // Reuse a live service via startService() (no foreground-start deadline);
-        // only a cold process start needs startForegroundService().
         AppUsageMonitorService.startMonitorService(context.applicationContext, mappedAction)
         if (ZenithService.isServiceRunning) {
             val accessIntent = Intent(context, ZenithService::class.java).apply {

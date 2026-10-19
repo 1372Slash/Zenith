@@ -71,7 +71,6 @@ class AlarmChainHelperTest {
         }
 
         assertEquals(AlarmChainHelper.UsageCheckOutcome.KEEP_WAITING_SAME_ALARM, outcome)
-        // UsageStats tidak perlu di-query: hasilnya tidak tergantung pemakaian.
         assertEquals(0, providerCalls)
     }
 
@@ -125,9 +124,6 @@ class AlarmChainHelperTest {
 
     @Test
     fun preemptedAlarmProgressIsPreservedAcrossSwitch() {
-        // Regresi bug utama: alarm 1 terkumpul 90 dtk, preempt oleh alarm 2
-        // yang menyumbang window 45 dtk untuk alarm 1 sebelum switch-back.
-        // Total 135 dtk >= 120 dtk (2 menit) -> alarm 1 boleh selesai.
         val preservedOffsetMs = 90_000L
         val windowMs = 45_000L
         val merged = AlarmChainHelper.mergeWakeUpOffset(preservedOffsetMs, windowMs)

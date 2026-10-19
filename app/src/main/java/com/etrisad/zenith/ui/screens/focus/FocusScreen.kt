@@ -627,9 +627,6 @@ fun FocusScreenContent(
             )
     
             item { Spacer(modifier = Modifier.height(24.dp)) }
-    
-            // Goal-linked schedules count as finished for the period once their goal is
-            // reached: their card is dimmed and the overlay stops blocking their apps.
             val completedGoalPackages = uiState.activeGoals
                 .filter { it.remainingTimeMillis <= 0L }
                 .map { it.packageName }

@@ -176,14 +176,6 @@ class ProfileViewModel(
         testBannerKeys.addAll(testEvents.map { it.key })
         _pendingBanners.update { it + testEvents }
     }
-
-    /**
-     * Seen keys are scoped per achievement AND tier band so every new tier
-     * is still celebrated, but the same banner can never repeat:
-     * - unlock: "$defId#u#$tierLevel" (tierLevel = 1-based position)
-     * - progress: "$defId#p#$band" where band = tiers earned so far
-     *   (i.e. one progress banner per approach toward the next tier).
-     */
     private fun unlockSeenKey(defId: String, tierLevel: Int) = "$defId#u#$tierLevel"
 
     private fun progressSeenKey(defId: String, band: Int) = "$defId#p#$band"

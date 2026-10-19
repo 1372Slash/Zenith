@@ -86,10 +86,6 @@ fun PausePointTaskContent(
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurface
         )
-
-        // Keyed by the full task: a new task instance (different duration,
-        // rounds, grid, target...) must restart all remember/LaunchedEffect
-        // state instead of reusing the previous task's progress.
         key(task) {
         when (task) {
             is PausePointTask.Waiting -> WaitingTask(task, onTaskCompleted)
@@ -360,8 +356,6 @@ private fun QrScanTask(
     val showScanner = hasValidCodes || task.acceptAny
     var showError by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    // Re-checked on every window-focus change so granting Camera from
-    // Settings (then returning) refreshes without reopening the overlay.
     val windowFocused = LocalWindowInfo.current.isWindowFocused
     val cameraGranted = remember(windowFocused) {
         androidx.core.content.ContextCompat.checkSelfPermission(
@@ -464,8 +458,6 @@ private fun NfcScanTask(
 
     LaunchedEffect(windowFocused) {
         nfcEnabled = isNfcEnabled(context)
-        // Poll only while the overlay window is focused; a single check
-        // otherwise (saves battery when NFC settings is on top).
         if (!windowFocused) return@LaunchedEffect
         while (true) {
             delay(3000)
@@ -782,8 +774,6 @@ private fun SwitchTask(
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
-            // No center alignment: with overflow content, centered
-            // arrangement clips the leading badges out of scroll reach.
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1066,8 +1056,6 @@ private fun MathTask(
     val correctAnswer = problem.third
     var answer by remember(task.maxOperand, task.operator) { mutableStateOf("") }
     val isCorrect = answer.toIntOrNull() == correctAnswer
-    // Idempotent completion: auto-fire, IME Done and the Continue button all
-    // converge here so a correct answer advances exactly once.
     var fired by remember(task.maxOperand, task.operator) { mutableStateOf(false) }
     fun fireOnce() {
         if (!fired) {
@@ -1168,9 +1156,6 @@ private fun MathTask(
 }
 
 private fun generateMathProblem(maxOperand: Int, operator: MathOperator): Triple<Int, Int, Int> {
-    // x and : grow quadratically (100x100, dividend = divisor x quotient),
-    // so cap them at 12 regardless of the settings slider (which clamps too,
-    // but defense-in-depth for stored/legacy values).
     val max = when (operator) {
         MathOperator.MULTIPLY, MathOperator.DIVIDE -> maxOperand.coerceIn(1, 12)
         else -> maxOperand.coerceAtLeast(1)

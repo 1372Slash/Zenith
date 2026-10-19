@@ -1,13 +1,5 @@
 package com.etrisad.zenith.ui.components.pausepoint
 object AlarmDismissTasks {
-
-    /**
-     * Task types offered as alarm dismiss missions.
-     *
-     * CHOOSE_APP is excluded: it needs goal apps to suggest, which an alarm
-     * firing from the lock screen has no context for. App-based wake proof is
-     * already covered by the alarm's own "use certain app" verification.
-     */
     val availableTypes: List<PausePointTaskType> =
         PausePointTaskType.entries.filter { it != PausePointTaskType.CHOOSE_APP }
 

@@ -117,9 +117,6 @@ class NfcScanActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                 val success = successId.value
                 val kickP = kickProgress.value
                 val supported = remember { isNfcSupported(this@NfcScanActivity) }
-                // Re-check on window-focus change: returning from NFC Settings
-                // (which only triggers onResume, not recomposition) refreshes
-                // the stale "turned off" state.
                 val windowFocused = LocalWindowInfo.current.isWindowFocused
                 val enabled = remember(scanned, error, success, windowFocused) {
                     isNfcEnabled(this@NfcScanActivity)
@@ -310,8 +307,6 @@ class NfcScanActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         runOnUiThread {
             restartKickTimer()
             lastScannedId.value = normalized
-            // Fail closed: an empty expected list without acceptAny is a
-            // misconfiguration and must reject, never accept any tag.
             val matches = acceptAny || (expectedIds.isNotEmpty() && normalized in expectedIds)
             if (matches) {
                 lastError.value = null

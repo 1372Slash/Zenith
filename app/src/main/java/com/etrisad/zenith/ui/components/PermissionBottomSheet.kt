@@ -129,8 +129,6 @@ fun PermissionBottomSheet(
             hasCamera = isGranted
             if (!isGranted) cameraAsked = true
             if (isGranted) {
-                // Permission granted while the app is visible: let the monitor
-                // service attach the camera foreground service type.
                 AppUsageMonitorService.requestCameraTypeUpgrade(context)
             }
         }

@@ -90,7 +90,6 @@ fun PausePointNfcManagerContent(
     var scanError by remember { mutableStateOf<String?>(null) }
     var scanningEnabled by remember { mutableStateOf(true) }
     var manualInput by remember { mutableStateOf("") }
-    // Auto-dismiss the confirmation so it can't stick around forever.
     LaunchedEffect(justAdded) {
         if (justAdded != null) {
             delay(3000)
@@ -103,7 +102,6 @@ fun PausePointNfcManagerContent(
     val settingsWindowFocused = LocalWindowInfo.current.isWindowFocused
     LaunchedEffect(settingsWindowFocused) {
         nfcOn = isNfcEnabled(context)
-        // Poll only while this screen is focused; single check otherwise.
         if (!settingsWindowFocused) return@LaunchedEffect
         while (true) {
             delay(3000)
@@ -145,8 +143,6 @@ fun PausePointNfcManagerContent(
         tags = tags - tag
         coroutineScope.launch {
             preferencesRepository.setPausePointNfcTagIds(tags)
-            // No usable tags left: auto-disable the type so it can't become
-            // a zombie that looks enabled but never generates tasks.
             if (tags.none { it.isNotBlank() } &&
                 com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType.NFC_SCAN in preferences.pausePointTaskTypes
             ) {
@@ -196,7 +192,6 @@ fun PausePointNfcManagerContent(
                     value = manualInput,
                     onValueChange = {
                         manualInput = it
-                        // Stale duplicate warning clears as soon as the user edits.
                         if (scanError != null) scanError = null
                     },
                     modifier = Modifier.fillMaxWidth(),

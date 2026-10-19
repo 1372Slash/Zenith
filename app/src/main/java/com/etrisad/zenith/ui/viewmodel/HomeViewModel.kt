@@ -276,7 +276,6 @@ class HomeViewModel(
         return shieldRepository.getUsageBetween(startDate, endDate).map { entities ->
             val totals = entities.filter { it.date in startDate..endDate && it.packageName == "TOTAL" }.associate { it.date to it.usageTimeMillis }.toMutableMap()
             if (totals.isEmpty()) {
-                // fallback sum per date
                 entities.filter { it.date in startDate..endDate && it.packageName !in setOf("SHIELD_TOTAL","GOAL_TOTAL","OTHER_TOTAL") }
                     .groupBy { it.date }
                     .forEach { (date, list) -> totals[date] = list.sumOf { it.usageTimeMillis } }
@@ -323,14 +322,6 @@ class HomeViewModel(
             } else pkg
         }
     }
-
-    /**
-     * Loads one 7-day global history chunk beyond the live 21-day window.
-     * chunkOffset 3 = 21..27 days ago, 4 = 28..34, ... unbounded.
-     * Source of truth is unlimited daily_usage retention (DB rows only; live
-     * values and system fallback apply solely to the newest 21 days).
-     * Always returns exactly 7 entries, oldest first.
-     */
     suspend fun getGlobalWeekHistory(chunkOffset: Int): List<DailyUsage> = withContext(Dispatchers.IO) {
         val dateFormat = usageHistoryManager.getDateFormat()
         val preferSystem = preferSystemUsageHistory

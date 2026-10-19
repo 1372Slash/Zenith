@@ -38,12 +38,6 @@ class AlarmPlaybackService : Service() {
     private var ttsLoopJob: Job? = null
     private var gradualVolumeJob: Job? = null
     private var playbackJob: Job? = null
-    /**
-     * Monotonic id for the latest playAlarmSound() request. TTS/MediaPlayer
-     * callbacks capture the id at launch and no-op when stale, so a
-     * preempting alarm can never speak/start on the previous alarm's behalf.
-     * Only mutated on the main thread (onStartCommand path).
-     */
     private var playbackGeneration = 0
     private var ttsRetryCount = 0
     private var vibrator: Vibrator? = null

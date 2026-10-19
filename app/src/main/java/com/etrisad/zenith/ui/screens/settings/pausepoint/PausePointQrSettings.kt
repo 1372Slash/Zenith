@@ -72,7 +72,6 @@ fun PausePointQrManagerContent(
     val cameraPermissionState = rememberPermissionState(android.Manifest.permission.CAMERA)
     var codes by remember(preferences.pausePointQrCodes) { mutableStateOf(preferences.pausePointQrCodes) }
     var justAdded by remember { mutableStateOf<String?>(null) }
-    // Auto-dismiss the confirmation so it can't stick around forever.
     LaunchedEffect(justAdded) {
         if (justAdded != null) {
             delay(3000)
@@ -109,8 +108,6 @@ fun PausePointQrManagerContent(
         if (justAdded == code) justAdded = null
         coroutineScope.launch {
             preferencesRepository.setPausePointQrCodes(codes)
-            // No usable codes left: auto-disable the type so it can't become
-            // a zombie that looks enabled but never generates tasks.
             if (codes.none { it.isNotBlank() } &&
                 com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType.QR_SCAN in preferences.pausePointTaskTypes
             ) {

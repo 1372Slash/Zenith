@@ -59,11 +59,6 @@ fun LongTermSection(
     dailyHistory: List<DailyUsage>,
     heatmapEmptyText: String,
     formatDuration: (Long) -> String,
-    /**
-     * Best-day semantics: false = least usage wins (screen time),
-     * true = most focus wins (Pomodoro). The shared tiles can't be right
-     * for both without this flag.
-     */
     higherIsBetter: Boolean = false,
     periodDays: List<Long> = emptyList(),
     dayAppLoader: (suspend (Long) -> List<AppUsageInfo>)? = null,
