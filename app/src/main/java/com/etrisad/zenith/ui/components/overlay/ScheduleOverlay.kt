@@ -158,6 +158,31 @@ fun ScheduleOverlaySheetContent(
 
     val isGoalLocked = currentSchedule.linkedGoalPackageName != null && goalProgress < 1f
 
+    val isPastScheduleEndNow by produceState(
+        initialValue = false,
+        currentSchedule.startTime,
+        currentSchedule.endTime
+    ) {
+        fun toMinutes(timeStr: String): Int = try {
+            val parts = timeStr.split(":")
+            parts[0].toInt() * 60 + parts[1].toInt()
+        } catch (_: Exception) { 0 }
+        while (true) {
+            val calendar = java.util.Calendar.getInstance()
+            val nowMinutes = calendar.get(java.util.Calendar.HOUR_OF_DAY) * 60 + calendar.get(java.util.Calendar.MINUTE)
+            value = DateTimeUtils.isPastScheduleEnd(
+                toMinutes(currentSchedule.startTime),
+                toMinutes(currentSchedule.endTime),
+                nowMinutes
+            )
+            delay(30_000)
+        }
+    }
+
+    // Extended goal lock: the goal is still incomplete and the schedule window has
+    // already ended, yet blocking continues until the goal is completed.
+    val isGoalLockExtended = isGoalLocked && isPastScheduleEndNow
+
     val currentTotalGlobalUsageTodayState = produceState(
         initialValue = totalGlobalUsageToday,
         totalGlobalUsageToday
@@ -290,6 +315,7 @@ fun ScheduleOverlaySheetContent(
             isWebsite = isWebsite,
             packageName = packageName,
             isGoalLocked = isGoalLocked,
+            isGoalLockExtended = isGoalLockExtended,
             goalProgress = goalProgress,
             linkedGoal = linkedGoal
         )
@@ -312,6 +338,7 @@ fun ScheduleOverlaySheetContent(
             isWebsite = isWebsite,
             packageName = packageName,
             isGoalLocked = isGoalLocked,
+            isGoalLockExtended = isGoalLockExtended,
             goalProgress = goalProgress,
             linkedGoal = linkedGoal
         )
@@ -336,6 +363,7 @@ fun PortraitScheduleLayout(
     isWebsite: Boolean = false,
     packageName: String = "",
     isGoalLocked: Boolean = false,
+    isGoalLockExtended: Boolean = false,
     goalProgress: Float = 1f,
     linkedGoal: com.etrisad.zenith.data.local.entity.ShieldEntity? = null
 ) {
@@ -392,7 +420,7 @@ fun PortraitScheduleLayout(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = "Schedule Active: ${schedule.name}",
+                    text = if (isGoalLockExtended) "Goal Lock Active: ${schedule.name}" else "Schedule Active: ${schedule.name}",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -548,6 +576,7 @@ fun LandscapeScheduleLayout(
     isWebsite: Boolean = false,
     packageName: String = "",
     isGoalLocked: Boolean = false,
+    isGoalLockExtended: Boolean = false,
     goalProgress: Float = 1f,
     linkedGoal: com.etrisad.zenith.data.local.entity.ShieldEntity? = null
 ) {
@@ -634,7 +663,7 @@ fun LandscapeScheduleLayout(
                 )
 
                 Text(
-                    text = "Active: ${schedule.name}",
+                    text = if (isGoalLockExtended) "Goal Locked: ${schedule.name}" else "Active: ${schedule.name}",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold

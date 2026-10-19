@@ -17,6 +17,7 @@ import com.etrisad.zenith.ui.components.overlay.SessionUsageOverlayManager
 import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.data.website.WebsiteStateHolder
 import com.etrisad.zenith.service.AppStateHolder
+import com.etrisad.zenith.util.DateTimeUtils
 import com.etrisad.zenith.util.ScreenUsageHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -1050,23 +1051,29 @@ class OverlayActionHandler(
                     currentTotalMinutes >= ps.startMinutes || currentTotalMinutes < ps.endMinutes
                 }
 
-                if (isInInterval) {
-                    val originalSchedule = SharedMonitoringState.activeSchedules.find { it.id == ps.id } ?: return false
-                    if (!shouldFireSchedule(originalSchedule)) continue
-                    when (ps.mode) {
-                        ScheduleMode.BLOCK -> {
-                            if (packageName in ps.packageNames) {
-                                val totalGlobalUsageToday = getTotalGlobalUsageToday()
-                                showScheduleOverlay(packageName, originalSchedule, totalGlobalUsageToday, updateShieldCache, recheckSchedules)
-                                return true
-                            }
+                val originalSchedule = SharedMonitoringState.activeSchedules.find { it.id == ps.id }
+                val linkedGoalPkg = originalSchedule?.linkedGoalPackageName
+                val isGoalStillLinked = linkedGoalPkg != null &&
+                    SharedMonitoringState.allShieldsCache[linkedGoalPkg]?.type == FocusType.GOAL
+                val isExtendedGoalLock = !isInInterval && isGoalStillLinked &&
+                    DateTimeUtils.isPastScheduleEnd(ps.startMinutes, ps.endMinutes, currentTotalMinutes)
+
+                if (!isInInterval && !isExtendedGoalLock) continue
+                if (originalSchedule == null) return false
+                if (!shouldFireSchedule(originalSchedule)) continue
+                when (ps.mode) {
+                    ScheduleMode.BLOCK -> {
+                        if (packageName in ps.packageNames) {
+                            val totalGlobalUsageToday = getTotalGlobalUsageToday()
+                            showScheduleOverlay(packageName, originalSchedule, totalGlobalUsageToday, updateShieldCache, recheckSchedules)
+                            return true
                         }
-                        ScheduleMode.ALLOW -> {
-                            if (packageName !in ps.packageNames) {
-                                val totalGlobalUsageToday = getTotalGlobalUsageToday()
-                                showScheduleOverlay(packageName, originalSchedule, totalGlobalUsageToday, updateShieldCache, recheckSchedules)
-                                return true
-                            }
+                    }
+                    ScheduleMode.ALLOW -> {
+                        if (packageName !in ps.packageNames) {
+                            val totalGlobalUsageToday = getTotalGlobalUsageToday()
+                            showScheduleOverlay(packageName, originalSchedule, totalGlobalUsageToday, updateShieldCache, recheckSchedules)
+                            return true
                         }
                     }
                 }
@@ -1080,7 +1087,15 @@ class OverlayActionHandler(
             ?.takeIf { it.type == FocusType.GOAL } ?: return true
         val target = goal.timeLimitMinutes * 60000L
         if (target <= 0L) return true
-        val usage = SharedMonitoringState.dailyUsageCache[goalPkg] ?: 0L
+
+        // Once either service has marked the goal as achieved ("Goal Achieved"
+        // notification), the linked schedule counts as finished for the period.
+        if (SharedMonitoringState.notifiedGoals.contains(goalPkg)) return false
+
+        // Compare against live usage (session-tracked, falls back to system stats).
+        // dailyUsageCache alone can stay stale for up to usageStatsCacheMs (~15 min
+        // on BALANCED), which made completed goals keep blocking their schedules.
+        val usage = getTotalUsageToday(goalPkg)
         return usage < target
     }
 }

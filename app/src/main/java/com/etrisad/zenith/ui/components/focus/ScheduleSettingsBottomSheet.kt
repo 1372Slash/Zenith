@@ -436,7 +436,7 @@ fun ScheduleSettingsBottomSheet(
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "Apps stay blocked until goal is completed",
+                                        text = "Apps stay blocked until the goal is completed, even after the window ends",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
