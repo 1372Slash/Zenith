@@ -97,6 +97,7 @@ import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.website.WebsiteRepository
+import com.etrisad.zenith.util.DateTimeUtils
 import com.etrisad.zenith.ui.components.ShieldSortHeader
 import com.etrisad.zenith.ui.components.UninstalledAppCard
 import com.etrisad.zenith.ui.viewmodel.ShieldSortType
@@ -546,7 +547,8 @@ fun ActiveScheduleCard(
     onLongClick: ((Long) -> Unit)? = null,
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
-    onToggleSelection: (() -> Unit)? = null
+    onToggleSelection: (() -> Unit)? = null,
+    isGoalCompleted: Boolean = false
 ) {
     val haptic = LocalHapticFeedback.current
 
@@ -557,9 +559,9 @@ fun ActiveScheduleCard(
         }
     }
 
-    val (isActiveNow, progress) = remember(schedule.startTime, schedule.endTime, schedule.isActive, nowMillis) {
+    val (isActiveNow, progress, isPastEndNow) = remember(schedule.startTime, schedule.endTime, schedule.isActive, nowMillis) {
         if (!schedule.isActive) {
-            false to 0f
+            Triple(false, 0f, false)
         } else {
             val calendar = java.util.Calendar.getInstance().apply { timeInMillis = nowMillis }
             val currentMinutes = calendar.get(java.util.Calendar.HOUR_OF_DAY) * 60 + calendar.get(java.util.Calendar.MINUTE)
@@ -577,11 +579,13 @@ fun ActiveScheduleCard(
             val startSeconds = startMinutes * 60
             val endSeconds = endMinutes * 60
 
+            val pastEnd = DateTimeUtils.isPastScheduleEnd(startMinutes, endMinutes, currentMinutes)
+
             if (startMinutes <= endMinutes) {
                 val isActive = currentMinutes in startMinutes until endMinutes
                 val total = (endSeconds - startSeconds).coerceAtLeast(1)
                 val elapsed = ((currentMinutes * 60) - startSeconds).coerceIn(0, total)
-                isActive to (elapsed.toFloat() / total)
+                Triple(isActive, elapsed.toFloat() / total, pastEnd)
             } else {
                 val isActive = currentMinutes >= startMinutes || currentMinutes < endMinutes
                 val total = (24 * 3600 - startSeconds + endSeconds).coerceAtLeast(1)
@@ -591,10 +595,20 @@ fun ActiveScheduleCard(
                     (24 * 3600 - startSeconds) + (currentMinutes * 60)
                 }
                 val clampedElapsed = elapsed.coerceIn(0, total)
-                isActive to (clampedElapsed.toFloat() / total)
+                Triple(isActive, clampedElapsed.toFloat() / total, pastEnd)
             }
         }
     }
+
+    val isGoalLinked = schedule.linkedGoalPackageName != null
+    val isGoalLockActive = schedule.isActive && isGoalLinked && !isGoalCompleted && !isActiveNow && isPastEndNow
+    val isEnforcingNow = isActiveNow || isGoalLockActive
+    val isDimmed = !schedule.isActive || isGoalCompleted || !isEnforcingNow
+    val cardAlpha by animateFloatAsState(
+        targetValue = if (isDimmed) 0.5f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "ScheduleCardAlpha"
+    )
 
     val cardColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer
@@ -615,7 +629,7 @@ fun ActiveScheduleCard(
     )
 
     androidx.compose.material3.Card(
-        modifier = Modifier.fillMaxWidth().clip(shape).combinedClickable(
+        modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = cardAlpha).clip(shape).combinedClickable(
             onClick = { if (isSelectionMode) onToggleSelection?.invoke() else onEdit() },
             onLongClick = if (isHomeScreen) null else {
                 {
@@ -633,12 +647,18 @@ fun ActiveScheduleCard(
                 headlineContent = { Text(schedule.name, fontWeight = FontWeight.Bold, color = contentColor) },
                 supportingContent = {
                     val modeText = schedule.mode.name.lowercase().replaceFirstChar { it.uppercase() }
-                    val statusText = if (isActiveNow) "Active" else "Inactive"
+                    val statusText = when {
+                        !schedule.isActive -> "Inactive"
+                        isGoalCompleted -> "Completed"
+                        isActiveNow -> "Active"
+                        isGoalLockActive -> "Goal Lock"
+                        else -> "Inactive"
+                    }
                     Column {
                         Text(
                             text = "${schedule.startTime} - ${schedule.endTime} • $modeText • $statusText • ${schedule.packageNames.size} apps",
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (isActiveNow) {
+                            color = if (isEnforcingNow) {
                                 if (isSelected) contentColor else MaterialTheme.colorScheme.primary
                             } else secondaryColor
                         )
@@ -915,6 +935,7 @@ fun LazyListScope.activeScheduleSection(
     nowMillis: Long = System.currentTimeMillis(),
     isSelectionMode: Boolean = false,
     selectedSchedules: Set<Long> = emptySet(),
+    completedGoalPackages: Set<String> = emptySet(),
     onDeleteSchedule: (ScheduleEntity) -> Unit = {},
     onLongClick: (Long) -> Unit = {},
     onToggleSelection: (Long) -> Unit = {}
@@ -973,7 +994,8 @@ fun LazyListScope.activeScheduleSection(
                         schedule = schedule,
                         shape = shape,
                         isHomeScreen = true,
-                        onEdit = onEdit
+                        onEdit = onEdit,
+                        isGoalCompleted = schedule.linkedGoalPackageName?.let { it in completedGoalPackages } == true
                     )
                 } else {
                     SwipeableItemContainer(
@@ -991,7 +1013,8 @@ fun LazyListScope.activeScheduleSection(
                             onLongClick = onLongClick,
                             isSelectionMode = isSelectionMode,
                             isSelected = schedule.id in selectedSchedules,
-                            onToggleSelection = { onToggleSelection(schedule.id) }
+                            onToggleSelection = { onToggleSelection(schedule.id) },
+                            isGoalCompleted = schedule.linkedGoalPackageName?.let { it in completedGoalPackages } == true
                         )
                     }
                 }
