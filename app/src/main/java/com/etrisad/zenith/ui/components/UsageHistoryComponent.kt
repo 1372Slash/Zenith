@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.toPath
+import com.etrisad.zenith.data.local.database.UsageGraphLogBuffer
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.ui.viewmodel.DailyUsage
 import java.text.SimpleDateFormat
@@ -63,6 +64,15 @@ fun UsageHistoryCard(
     val selectedUsage = remember(history, olderDays, effectiveSelectedDate) {
         history.find { it.date == effectiveSelectedDate }
             ?: olderDays.find { it.date == effectiveSelectedDate }
+    }
+
+    LaunchedEffect(history) {
+        UsageGraphLogBuffer.d(
+            "GRAPH_CARD",
+            "RECEIVED[$title]: days=${history.size} zero=${history.count { it.totalTime == 0L }} " +
+                "withDb=${history.count { it.hasDatabaseRecord }} withSys=${history.count { it.hasSystemData }} " +
+                "maxTotal=${history.maxOfOrNull { it.totalTime } ?: 0L} target=$targetMillis selected=$effectiveSelectedDate"
+        )
     }
 
     Card(

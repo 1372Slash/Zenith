@@ -10,6 +10,7 @@ import com.etrisad.zenith.BuildConfig
 import com.etrisad.zenith.crash.CrashStore
 import com.etrisad.zenith.data.local.database.DbLogBuffer
 import com.etrisad.zenith.data.local.database.OverlayLogBuffer
+import com.etrisad.zenith.data.local.database.UsageGraphLogBuffer
 import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.preferences.UserPreferences
 import kotlinx.coroutines.Dispatchers
@@ -85,6 +86,11 @@ object DiagnosticReportUtils {
             } catch (e: Exception) {
                 "Log unavailable: ${e.message}"
             }
+            val usageGraphLogs = try {
+                sanitizeLogText(UsageGraphLogBuffer.copyAll())
+            } catch (e: Exception) {
+                "Log unavailable: ${e.message}"
+            }
             val logcat = sanitizeLogText(collectAppLogcat())
 
             context.contentResolver.openOutputStream(targetUri)?.use { output ->
@@ -96,6 +102,7 @@ object DiagnosticReportUtils {
                     addTextEntry(zip, "log_summary.json", logSummary)
                     addTextEntry(zip, "db_logs.txt", dbLogs)
                     addTextEntry(zip, "overlay_logs.txt", overlayLogs)
+                    addTextEntry(zip, "usage_graph_logs.txt", usageGraphLogs)
                     addTextEntry(zip, "logcat.txt", logcat)
                     try {
                         // Caught crashes, so the report always explains an abrupt stop.
@@ -440,6 +447,12 @@ object DiagnosticReportUtils {
     }
 
     private fun addTextEntry(zip: ZipOutputStream, name: String, text: String) {
+        zip.putNextEntry(ZipEntry(name))
+        zip.write(text.toByteArray(Charsets.UTF_8))
+        zip.closeEntry()
+    }
+}
+, name: String, text: String) {
         zip.putNextEntry(ZipEntry(name))
         zip.write(text.toByteArray(Charsets.UTF_8))
         zip.closeEntry()

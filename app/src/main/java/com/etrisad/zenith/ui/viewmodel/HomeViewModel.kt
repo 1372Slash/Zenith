@@ -16,6 +16,7 @@ import com.etrisad.zenith.data.local.entity.DailyUsageEntity
 import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.data.local.database.DbLogBuffer
+import com.etrisad.zenith.data.local.database.UsageGraphLogBuffer
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.website.WebsiteRepository
@@ -322,17 +323,26 @@ class HomeViewModel(
             } else pkg
         }
     }
+
+    private fun graphDay(dateStr: String, shownTotal: Long, dbTotal: Long?, sysTotal: Long?): String {
+        val base = "$dateStr:t=$shownTotal,db=${dbTotal ?: "-"},sys=${sysTotal ?: "-"}"
+        return if (shownTotal == 0L && (sysTotal ?: 0L) > 0L) "$base,ZERO_BUT_SYS" else base
+    }
+
     suspend fun getGlobalWeekHistory(chunkOffset: Int): List<DailyUsage> = withContext(Dispatchers.IO) {
         val dateFormat = usageHistoryManager.getDateFormat()
         val preferSystem = preferSystemUsageHistory
         val fallback = usageHistoryManager.globalFallbackMap.value
+        val dbgDays = ArrayList<String>(7)
         val result = (6 downTo 0).map { k ->
             val daysAgo = chunkOffset * 7 + k
             val dStart = usageHistoryManager.getMidnight(daysAgo)
             val dStr = dateFormat.format(Date(dStart))
             val entities = shieldRepository.getDailyUsagesForDateSync(dStr)
-            val total = entities.find { it.packageName == "TOTAL" }?.usageTimeMillis
-                ?: ((if (preferSystem) fallback[dStr]?.find { it.packageName == "TOTAL" }?.usageTimeMillis else null) ?: 0L)
+            val dbTotal = entities.find { it.packageName == "TOTAL" }?.usageTimeMillis
+            val sysTotal = if (preferSystem) fallback[dStr]?.find { it.packageName == "TOTAL" }?.usageTimeMillis else null
+            val total = dbTotal ?: sysTotal ?: 0L
+            dbgDays.add(graphDay(dStr, total, dbTotal, sysTotal))
             DailyUsage(
                 date = dStart,
                 totalTime = total,
@@ -344,6 +354,7 @@ class HomeViewModel(
         val filled = result.count { it.totalTime > 0 }
         val withDb = result.count { it.hasDatabaseRecord }
         DbLogBuffer.d("ZenithDB", "HIST_CHUNK_GLOBAL: offset=$chunkOffset filled=$filled/7 withDb=$withDb")
+        UsageGraphLogBuffer.d("GRAPH_WEEK", "OLDER_CHUNK: offset=$chunkOffset preferSystem=$preferSystem days=[${dbgDays.joinToString(" ")}]")
         result
     }
 
@@ -355,20 +366,26 @@ class HomeViewModel(
         val dateFormat = usageHistoryManager.getDateFormat()
         val isWebsite = com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(packageName)
         val domain = if (isWebsite) com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(packageName) else null
+        val dbgDays = ArrayList<String>(7)
         val result = (6 downTo 0).map { k ->
             val daysAgo = chunkOffset * 7 + k
             val dStart = usageHistoryManager.getMidnight(daysAgo)
             val dStr = dateFormat.format(Date(dStart))
             if (isWebsite) {
                 val row = shieldRepository.getWebsiteUsage(dStr, domain!!)
-                DailyUsage(dStart, row?.usageTimeMillis ?: 0L, row != null, false, false)
+                val total = row?.usageTimeMillis ?: 0L
+                dbgDays.add(graphDay(dStr, total, if (row != null) total else null, null))
+                DailyUsage(dStart, total, row != null, false, false)
             } else {
                 val row = shieldRepository.getUsageByDateAndPackage(dStr, packageName)
-                DailyUsage(dStart, row?.usageTimeMillis ?: 0L, row != null, false, false)
+                val total = row?.usageTimeMillis ?: 0L
+                dbgDays.add(graphDay(dStr, total, if (row != null) total else null, null))
+                DailyUsage(dStart, total, row != null, false, false)
             }
         }
         val filled = result.count { it.totalTime > 0 }
         DbLogBuffer.d("ZenithDB", "HIST_CHUNK_APP: offset=$chunkOffset filled=$filled/7 isWebsite=$isWebsite")
+        UsageGraphLogBuffer.d("GRAPH_WEEK", "OLDER_CHUNK_APP: offset=$chunkOffset pkg=$packageName isWebsite=$isWebsite days=[${dbgDays.joinToString(" ")}]")
         result
     }
 
@@ -790,6 +807,8 @@ class HomeViewModel(
         } catch (_: Exception) {
             date.toString()
         }
+        val shownBar = _uiState.value.dailyUsageHistory.find { it.date == date }
+        UsageGraphLogBuffer.d("GRAPH_TAP", "BAR_TAP: date=$dateStr tapped=${dateMillis != null} inWindow=${shownBar != null} shownTotal=${shownBar?.totalTime ?: -1} shownDb=${shownBar?.hasDatabaseRecord ?: false} shownSys=${shownBar?.hasSystemData ?: false} shownLive=${shownBar?.isLive ?: false} refreshActive=${refreshJob?.isActive == true}")
         if (_uiState.value.selectedDateMillis == date && refreshJob?.isActive == true) {
             DbLogBuffer.d("ZenithDB", "SELECT_DATE_SKIP: date=$dateStr refreshActive=true")
             return
@@ -1064,7 +1083,7 @@ class HomeViewModel(
         val allAppsUsage = appList.sortedByDescending { it.totalTimeVisible }
         val topApps = allAppsUsage.take(5)
 
-        val selectedDateStr = dateFormat.format(Date(selectedDate))
+        val selectedDateStr = dateFormat.format(Date(effectiveSelectedDate))
 
         val websiteUsage = try {
             val websiteEntities = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -1322,6 +1341,23 @@ class HomeViewModel(
             )
         }
 
+        val graphDbTotals = globalHistory.asSequence()
+            .filter { it.packageName == "TOTAL" }
+            .associate { it.date to it.usageTimeMillis }
+        val graphFallback = usageHistoryManager.globalFallbackMap.value
+        val graphDays = history.joinToString(" ") { day ->
+            val dayStr = dateFormat.format(Date(day.date))
+            graphDay(dayStr, day.totalTime, graphDbTotals[dayStr], graphFallback[dayStr]?.find { it.packageName == "TOTAL" }?.usageTimeMillis)
+        }
+        val zeroWithSys = history.count { day ->
+            day.totalTime == 0L &&
+                (graphFallback[dateFormat.format(Date(day.date))]?.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L) > 0L
+        }
+        UsageGraphLogBuffer.d("GRAPH_HOME", "BARS[$refreshId]: preferSystem=$preferSystemUsageHistory selected=$selectedDateStr window=${history.size} days=[$graphDays]")
+        if (zeroWithSys > 0) {
+            UsageGraphLogBuffer.w("GRAPH_HOME", "BARS_ZERO_WITH_SYS[$refreshId]: $zeroWithSys/${history.size} bar(s) show 0 while system usage has data (preferSystem=$preferSystemUsageHistory)")
+        }
+
         val percentageChange = when {
             totalYesterday > 0 -> ((actualTodayTotal - totalYesterday).toFloat() / totalYesterday) * 100
             actualTodayTotal > 0     -> 100f
@@ -1379,8 +1415,15 @@ class HomeViewModel(
 
         DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: UI_UPDATE prevTotal=${prevState.totalScreenTime} selectedDayTotal=$selectedDayTotal todayChanged=$todayChanged todayBarChanged=$todayBarChanged wasEmpty=$wasEmpty appListSize=${allAppsUsage.size} hourlySize=${hourlyUsage.size} shields=${liveShields.size} websiteSize=${websiteUsage.size}")
 
-        if (!todayChanged && !todayBarChanged && !wasEmpty) {
+        val keepHeadline = !todayChanged && !todayBarChanged && !wasEmpty
+        val barsLostAllData = history.all { it.totalTime == 0L } &&
+                prevState.dailyUsageHistory.any { it.totalTime > 0L } &&
+                allHistory.isEmpty() && globalHistory.isEmpty()
+        UsageGraphLogBuffer.d("GRAPH_UI", "DECIDE[$refreshId]: keepHeadline=$keepHeadline todayChanged=$todayChanged todayBarChanged=$todayBarChanged wasEmpty=$wasEmpty barsLostAllData=$barsLostAllData prevTodayTotal=${prevToday?.totalTime} newTodayTotal=${curToday?.totalTime} selectedDayTotal=$selectedDayTotal headline=${if (keepHeadline) "KEPT" else "REWRITTEN"} bars=${if (barsLostAllData) "KEPT" else "PUBLISHED"}")
+        if (keepHeadline) {
             _uiState.update { state -> state.copy(
+                dailyUsageHistory = if (barsLostAllData) state.dailyUsageHistory else history.reversed(),
+                snapshotStamps    = if (barsLostAllData) state.snapshotStamps else snapshotStamps.reversed(),
                 hourlyUsage      = hourlyUsage,
                 activeShields    = sortShields(liveShields.filter { it.type == FocusType.SHIELD }, state.shieldSortType),
                 activeGoals      = sortShields(liveShields.filter { it.type == FocusType.GOAL }, state.goalSortType),
@@ -1397,6 +1440,7 @@ class HomeViewModel(
             val freshIsTransientlyEmpty = isSelectedToday && allAppsUsage.isEmpty() &&
                     timeSinceMidnight > 300_000L &&
                     (prevState.totalScreenTime > 0L || prevState.allAppsUsage.isNotEmpty())
+            UsageGraphLogBuffer.d("GRAPH_UI", "COMMIT[$refreshId]: transientEmptyGuard=$freshIsTransientlyEmpty prevBars=${prevState.dailyUsageHistory.size} newBars=${history.size} prevTotal=${prevState.totalScreenTime} newTotal=$selectedDayTotal")
             _uiState.update { state -> state.copy(
                 totalScreenTime      = if (freshIsTransientlyEmpty) state.totalScreenTime else selectedDayTotal,
                 yesterdayScreenTime  = totalYesterday,
@@ -1537,6 +1581,12 @@ class HomeViewModel(
                             val yesterdayStr = dateFormat.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }.time)
                             val yesterdayU = historyDB.find { it.date == yesterdayStr }?.usageTimeMillis ?: if (prefs.preferSystemUsageHistory) detailFallbackMap[yesterdayStr] ?: 0L else 0L
                             val history = (0 until 21).map { i -> val dStart = usageHistoryManager.getMidnight(i); val dStr = dateFormat.format(Date(dStart)); val dbE = historyDB.find { it.date == dStr }; val dTotal = if (i == 0) todayU else dbE?.usageTimeMillis ?: if (prefs.preferSystemUsageHistory) detailFallbackMap[dStr] ?: 0L else 0L; DailyUsage(dStart, dTotal, dbE != null, detailFallbackMap[dStr] != null, i == 0) }
+
+                            val detailDays = history.joinToString(" ") { day ->
+                                val dayStr = dateFormat.format(Date(day.date))
+                                graphDay(dayStr, day.totalTime, historyDB.find { it.date == dayStr }?.usageTimeMillis, detailFallbackMap[dayStr])
+                            }
+                            UsageGraphLogBuffer.d("GRAPH_APP_DETAIL", "HISTORY: pkg=$packageName preferSystem=${prefs.preferSystemUsageHistory} window=${history.size} days=[$detailDays]")
 
                             val lastCharge = prefs.lastChargeTimestamp
                             val manualReset = prefs.manualResetTimestamps[packageName] ?: 0L

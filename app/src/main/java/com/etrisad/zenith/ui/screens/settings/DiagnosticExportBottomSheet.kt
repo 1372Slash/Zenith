@@ -251,7 +251,7 @@ fun DiagnosticExportBottomSheet(
                             Spacer(modifier = Modifier.height(12.dp))
                             DiagnosticIncludedRow("6.", "Log summary (counts per category and time range).")
                             Spacer(modifier = Modifier.height(12.dp))
-                            DiagnosticIncludedRow("7.", "In-memory app logs (DB and overlay buffers, app names redacted).")
+                            DiagnosticIncludedRow("7.", "In-memory app logs (DB, overlay and usage-bar-graph buffers, app names redacted).")
                             Spacer(modifier = Modifier.height(12.dp))
                             DiagnosticIncludedRow("8.", "Best-effort app logcat (may be empty on some devices, app names redacted).")
 

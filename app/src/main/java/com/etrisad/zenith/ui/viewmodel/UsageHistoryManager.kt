@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
 import com.etrisad.zenith.data.local.database.DbLogBuffer
+import com.etrisad.zenith.data.local.database.UsageGraphLogBuffer
 import com.etrisad.zenith.data.local.entity.DailyUsageEntity
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.HourlyUsageEntity
@@ -369,6 +370,8 @@ class UsageHistoryManager(
             _systemOnlyUsageHistory.value = history.reversed()
             val nonZero = history.count { it.totalTime > 0 }
             DbLogBuffer.d("ZenithDB", "SYS_HISTORY_DONE: days=${history.size} nonZero=$nonZero")
+            val sysTotals = history.joinToString(" ") { "${getDateFormat().format(Date(it.date))}=${it.totalTime}" }
+            UsageGraphLogBuffer.d("GRAPH_SYS", "SYS_ONLY_HISTORY: days=${history.size} nonZero=$nonZero totals=[$sysTotals]")
             } catch (e: Exception) {
                 DbLogBuffer.e("ZenithDB", "SYS_HISTORY_FAILED: ${e::class.simpleName}: ${e.message}")
             }
@@ -478,7 +481,17 @@ class UsageHistoryManager(
         }
     }
 
+    private fun systemFallbackSummary(): String {
+        if (_globalFallbackMap.value.isEmpty()) return "empty"
+        return _globalFallbackMap.value.entries
+            .sortedBy { it.key }
+            .joinToString(" ", limit = 14, truncated = "...") { (date, records) ->
+                "$date=${records.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L}"
+            }
+    }
+
     fun clearGlobalFallback() {
+        UsageGraphLogBuffer.d("GRAPH_SYS", "FALLBACK_CLEARED: system fallback cache dropped previous=[${systemFallbackSummary()}]")
         _globalFallbackMap.value = emptyMap()
     }
 
@@ -551,6 +564,7 @@ class UsageHistoryManager(
         val todayApps = todayRecords.count { it.packageName != "TOTAL" }
         val todayTotal = todayRecords.find { it.packageName == "TOTAL" }?.usageTimeMillis ?: 0L
         DbLogBuffer.d("ZenithDB", "FALLBACK_TODAY: date=$todayStr apps=$todayApps total=${todayTotal}ms fullNeeded=$isFullNeeded")
+        UsageGraphLogBuffer.d("GRAPH_SYS", "FALLBACK_TODAY: date=$todayStr apps=$todayApps total=${todayTotal}ms fullNeeded=$isFullNeeded cache=[${systemFallbackSummary()}]")
     }
 
     private suspend fun updateFullHistoryFallbackInternal() {
@@ -568,6 +582,7 @@ class UsageHistoryManager(
             val filled = results.count { it.second.isNotEmpty() }
             _globalFallbackMap.update { current -> current + results.toMap().filterValues { it.isNotEmpty() } }
             DbLogBuffer.d("ZenithDB", "FALLBACK_FULL_DONE: filled=$filled/7 days=${_globalFallbackMap.value.size}")
+            UsageGraphLogBuffer.d("GRAPH_SYS", "FALLBACK_FULL: filled=$filled/7 cache=[${systemFallbackSummary()}]")
         } catch (e: Exception) {
             DbLogBuffer.e("ZenithDB", "FALLBACK_FULL_FAILED: ${e::class.simpleName}: ${e.message}")
         } finally {
