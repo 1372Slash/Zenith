@@ -78,7 +78,6 @@ import com.etrisad.zenith.ui.viewmodel.FocusUiState
 import com.etrisad.zenith.ui.viewmodel.FocusViewModel
 import com.etrisad.zenith.ui.viewmodel.ShieldSortType
 import com.etrisad.zenith.ui.components.focus.*
-import com.etrisad.zenith.util.isAccessibilityServiceEnabled
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
@@ -477,7 +476,7 @@ fun FocusScreenContent(
         }
     }
 
-    val isAccessibilityEnabled = isAccessibilityServiceEnabled(LocalContext.current)
+    val isAccessibilityEnabled = rememberAccessibilityServiceEnabled()
 
     var activeTab by remember { mutableStateOf(AppTypeTab.APPS) }
 

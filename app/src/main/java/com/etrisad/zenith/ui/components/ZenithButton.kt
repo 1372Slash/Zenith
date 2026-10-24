@@ -267,21 +267,25 @@ private fun ZenithButtonCore(
     val scope = rememberCoroutineScope()
     val shakeOffset = remember { Animatable(0f) }
 
-    val delayAnim = remember(enableAfterDelayMillis) { Animatable(0f) }
-    val isDelaying = enableAfterDelayMillis > 0 && delayAnim.value < 1f
+    val delayAnim = remember(enableAfterDelayMillis) {
+        Animatable(if (enableAfterDelayMillis > 0) 0f else 1f)
+    }
+    var isDelaying by remember(enableAfterDelayMillis) {
+        mutableStateOf(enableAfterDelayMillis > 0)
+    }
     
     val bounceScale = remember { Animatable(1f) }
 
     LaunchedEffect(enableAfterDelayMillis) {
         if (enableAfterDelayMillis > 0) {
-            val startTime = System.currentTimeMillis()
-            while (true) {
-                val elapsed = System.currentTimeMillis() - startTime
-                val p = (elapsed.toFloat() / enableAfterDelayMillis).coerceIn(0f, 1f)
-                delayAnim.snapTo(p)
-                if (p >= 1f) break
-                delay(16)
-            }
+            delayAnim.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = enableAfterDelayMillis.toInt().coerceAtLeast(1),
+                    easing = LinearEasing
+                )
+            )
+            isDelaying = false
             bounceScale.animateTo(
                 targetValue = 1f,
                 initialVelocity = 2f,
@@ -309,23 +313,30 @@ private fun ZenithButtonCore(
     val holdAnim = remember { Animatable(0f) }
     val isHoldAction = onHoldComplete != null || type == ZenithButtonType.Hold
 
-    val targetProgress = if (isDelaying) delayAnim.value else maxOf(holdAnim.value, backgroundProgress ?: (backgroundProgressProvider?.invoke() ?: 0f))
+    val baseProgress = backgroundProgress ?: (backgroundProgressProvider?.invoke() ?: 0f)
     val animatedProgressState = animateFloatAsState(
-        targetValue = targetProgress,
-        animationSpec = if (targetProgress < 0.05f || isDelaying) 
-            spring(stiffness = Spring.StiffnessLow) 
-        else 
+        targetValue = if (isDelaying) 1f else baseProgress,
+        animationSpec = if (isDelaying)
+            tween(
+                durationMillis = enableAfterDelayMillis.toInt().coerceAtLeast(1),
+                easing = LinearEasing
+            )
+        else
             spring(stiffness = Spring.StiffnessHigh),
         label = "smoothProgress"
     )
+
+    val secondsLeft by remember(enableAfterDelayMillis) {
+        derivedStateOf {
+            kotlin.math.ceil((1f - delayAnim.value) * (enableAfterDelayMillis / 1000f)).toInt()
+        }
+    }
     
     val cScaleState = animateFloatAsState(
         targetValue = if (visualPressed && enabled) 0.94f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
         label = "cScale"
     )
-
-    val finalScale = if (contentScaleEnabled) cScaleState.value * bounceScale.value else 1f
 
     val animR by animateDpAsState(
         targetValue = if (!enabled || visualPressed) resPressR else resPillR,
@@ -354,14 +365,13 @@ private fun ZenithButtonCore(
         if (isPressed && enabled && !isLoading && !isDelaying) {
             try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (e: Exception) { e.printStackTrace() }
             if (isHoldAction) {
-                val startTime = System.currentTimeMillis()
-                while (true) {
-                    val elapsed = System.currentTimeMillis() - startTime
-                    val p = (elapsed.toFloat() / holdDuration).coerceIn(0f, 1f)
-                    holdAnim.snapTo(p)
-                    if (p >= 1f) break
-                    delay(16)
-                }
+                holdAnim.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(
+                        durationMillis = holdDuration.toInt().coerceAtLeast(1),
+                        easing = LinearEasing
+                    )
+                )
                 if (curPressed) {
                     try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (e: Exception) { e.printStackTrace() }
                     onHoldComplete?.invoke()
@@ -442,19 +452,19 @@ private fun ZenithButtonCore(
             modifier = Modifier.then(if (fillMaxWidth) Modifier.fillMaxSize() else Modifier),
             contentAlignment = Alignment.Center
         ) {
-            val p = animatedProgressState.value
-            if (p > 0f) {
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .drawBehind {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .drawBehind {
+                        val p = maxOf(animatedProgressState.value, holdAnim.value)
+                        if (p > 0f) {
                             drawRect(
                                 brush = progressBrush,
                                 size = this.size.copy(width = this.size.width * p)
                             )
                         }
-                )
-            }
+                    }
+            )
 
             Box(
                 modifier = Modifier
@@ -470,10 +480,12 @@ private fun ZenithButtonCore(
                     if (loadingProgress == null && !isDelaying) {
                         LoadingIndicator(color = animatedContentColor, modifier = Modifier.size(resH * 0.6f))
                     } else {
-                        val prog = if (isDelaying) delayAnim.value else (loadingProgress ?: 0f)
                         Box(contentAlignment = Alignment.Center) {
                             CircularWavyProgressIndicator(
-                                progress = { prog.coerceIn(0f, 1f) },
+                                progress = {
+                                    (if (isDelaying) delayAnim.value else (loadingProgress ?: 0f))
+                                        .coerceIn(0f, 1f)
+                                },
                                 color = animatedContentColor,
                                 trackColor = animatedContentColor.copy(alpha = 0.12f),
                                 stroke = Stroke(width = with(density) { (resH * 0.06f).toPx() }),
@@ -482,7 +494,6 @@ private fun ZenithButtonCore(
                             )
                             
                             if (isDelaying) {
-                                val secondsLeft = kotlin.math.ceil((1f - delayAnim.value) * (enableAfterDelayMillis / 1000f)).toInt()
                                 if (secondsLeft > 0) {
                                     Text(
                                         text = secondsLeft.toString(),
@@ -498,9 +509,12 @@ private fun ZenithButtonCore(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.graphicsLayer { 
-                            scaleX = finalScale
-                            scaleY = finalScale
+                        modifier = Modifier.graphicsLayer {
+                            val scale = if (contentScaleEnabled) {
+                                cScaleState.value * bounceScale.value
+                            } else 1f
+                            scaleX = scale
+                            scaleY = scale
                         }
                     ) {
                         if (content != null) { content() } else {

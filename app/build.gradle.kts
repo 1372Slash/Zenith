@@ -48,6 +48,14 @@ android {
                 "proguard-rules.pro"
             )
         }
+        create("perf") {
+            initWith(getByName("release"))
+            isDebuggable = false
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

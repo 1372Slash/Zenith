@@ -548,16 +548,10 @@ fun ActiveScheduleCard(
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onToggleSelection: (() -> Unit)? = null,
-    isGoalCompleted: Boolean = false
+    isGoalCompleted: Boolean = false,
+    nowMillis: Long = System.currentTimeMillis()
 ) {
     val haptic = LocalHapticFeedback.current
-
-    val nowMillis by produceState(initialValue = System.currentTimeMillis()) {
-        while (true) {
-            kotlinx.coroutines.delay(60000)
-            value = System.currentTimeMillis()
-        }
-    }
 
     val (isActiveNow, progress, isPastEndNow) = remember(schedule.startTime, schedule.endTime, schedule.isActive, nowMillis) {
         if (!schedule.isActive) {
@@ -995,7 +989,8 @@ fun LazyListScope.activeScheduleSection(
                         shape = shape,
                         isHomeScreen = true,
                         onEdit = onEdit,
-                        isGoalCompleted = schedule.linkedGoalPackageName?.let { it in completedGoalPackages } == true
+                        isGoalCompleted = schedule.linkedGoalPackageName?.let { it in completedGoalPackages } == true,
+                        nowMillis = nowMillis
                     )
                 } else {
                     SwipeableItemContainer(
@@ -1014,7 +1009,8 @@ fun LazyListScope.activeScheduleSection(
                             isSelectionMode = isSelectionMode,
                             isSelected = schedule.id in selectedSchedules,
                             onToggleSelection = { onToggleSelection(schedule.id) },
-                            isGoalCompleted = schedule.linkedGoalPackageName?.let { it in completedGoalPackages } == true
+                            isGoalCompleted = schedule.linkedGoalPackageName?.let { it in completedGoalPackages } == true,
+                            nowMillis = nowMillis
                         )
                     }
                 }

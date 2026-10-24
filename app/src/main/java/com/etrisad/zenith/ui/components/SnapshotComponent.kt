@@ -44,6 +44,8 @@ import java.util.*
 import kotlin.math.cos
 import kotlin.math.sin
 
+private const val WAVY_PROGRESS_SEGMENTS = 56
+
 @Composable
 fun WavyCircularProgress(
     progress: Float,
@@ -76,13 +78,13 @@ fun WavyCircularProgress(
 
         val sweepAngle = (progress.coerceIn(0.01f, 1f) * 360f)
         val path = Path()
-        val points = 100
+        val points = WAVY_PROGRESS_SEGMENTS
+        val waveAmplitude = 0.8f.dp.toPx()
+        val waveFreq = 7f
         for (i in 0..points) {
             val angleDeg = (i.toFloat() / points) * sweepAngle - 90f
             val angleRad = Math.toRadians(angleDeg.toDouble()).toFloat()
             
-            val waveAmplitude = 0.8f.dp.toPx()
-            val waveFreq = 7f
             val r = radius + sin(angleRad * waveFreq + phase) * waveAmplitude
             
             val px = centerX + r * cos(angleRad.toDouble()).toFloat()

@@ -19,16 +19,20 @@ import java.util.concurrent.TimeUnit
 
 data class FaviconData(val domain: String)
 
+internal val sharedFaviconHttpClient: OkHttpClient by lazy {
+    OkHttpClient.Builder()
+        .connectTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(5, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .build()
+}
+
 class FaviconFetcher(
     private val data: FaviconData,
     private val context: Context
 ) : Fetcher {
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .build()
+    private val client = sharedFaviconHttpClient
 
     override suspend fun fetch(): FetchResult? {
         val drawable = fetchFavicon(data.domain) ?: return null

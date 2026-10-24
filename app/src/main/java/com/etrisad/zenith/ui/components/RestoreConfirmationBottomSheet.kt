@@ -472,6 +472,19 @@ private fun PiechartDetail(preferences: UserPreferences, metadata: BackupUtils.B
     } else {
         val context = LocalContext.current
         val pm = remember { context.packageManager }
+        val appLabels = remember(metadata.latestPiechartData) {
+            metadata.latestPiechartData.keys.associateWith { pkg ->
+                if (WebsiteRepository.isWebsitePackageName(pkg)) {
+                    WebsiteRepository.extractDomainFromPackageName(pkg)
+                } else {
+                    try {
+                        pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+                    } catch (_: Exception) {
+                        pkg
+                    }
+                }
+            }
+        }
         
         Column {
             Text(
@@ -507,15 +520,7 @@ private fun PiechartDetail(preferences: UserPreferences, metadata: BackupUtils.B
                 )
                 
                 metadata.latestPiechartData.forEach { (pkg, duration) ->
-                    var appName = pkg
-                    if (WebsiteRepository.isWebsitePackageName(pkg)) {
-                        appName = WebsiteRepository.extractDomainFromPackageName(pkg)
-                    } else {
-                        try {
-                            val appInfo = pm.getApplicationInfo(pkg, 0)
-                            appName = pm.getApplicationLabel(appInfo).toString()
-                        } catch (_: Exception) {}
-                    }
+                    val appName = appLabels[pkg] ?: pkg
                     
                     Row(
                         modifier = Modifier.padding(vertical = 6.dp),

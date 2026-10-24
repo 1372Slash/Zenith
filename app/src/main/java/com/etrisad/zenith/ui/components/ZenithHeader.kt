@@ -27,6 +27,26 @@ import com.etrisad.zenith.ui.navigation.Screen
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
+private class SmoothedHeaderValues(
+    val alpha: State<Float>,
+    val offset: State<Float>
+)
+
+@Composable
+private fun rememberSmoothedHeaderValues(state: TopAppBarState): SmoothedHeaderValues {
+    val alpha = animateFloatAsState(
+        targetValue = (1f - state.collapsedFraction).coerceIn(0f, 1f),
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "SmoothedHeaderAlpha"
+    )
+    val offset = animateFloatAsState(
+        targetValue = state.heightOffset,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "SmoothedHeaderOffset"
+    )
+    return SmoothedHeaderValues(alpha, offset)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ZenithHeader(
@@ -68,22 +88,14 @@ fun ZenithHeader(
 
     val sideSlotWidth = 68.dp
 
-    val smoothedAlpha by animateFloatAsState(
-        targetValue = (1f - scrollBehavior.state.collapsedFraction).coerceIn(0f, 1f),
-        animationSpec = spring(stiffness = Spring.StiffnessLow),
-        label = "SmoothedHeaderAlpha"
-    )
-    val smoothedOffset by animateFloatAsState(
-        targetValue = scrollBehavior.state.heightOffset,
-        animationSpec = spring(stiffness = Spring.StiffnessLow),
-        label = "SmoothedHeaderOffset"
-    )
-    val smoothedFraction = 1f - smoothedAlpha
+    val smoothed = rememberSmoothedHeaderValues(scrollBehavior.state)
+    val smoothedAlpha = smoothed.alpha
+    val smoothedOffset = smoothed.offset
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer { alpha = smoothedAlpha }
+            .graphicsLayer { alpha = smoothedAlpha.value }
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
@@ -117,10 +129,11 @@ fun ZenithHeader(
                 .fillMaxWidth()
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .height(64.dp)
-                .offset { IntOffset(0, smoothedOffset.roundToInt()) }
+                .offset { IntOffset(0, smoothedOffset.value.roundToInt()) }
                 .graphicsLayer {
-                    alpha = smoothedAlpha
-                    val scale = 1f - (smoothedFraction * 0.08f)
+                    val alpha = smoothedAlpha.value
+                    this.alpha = alpha
+                    val scale = 1f - ((1f - alpha) * 0.08f)
                     scaleX = scale
                     scaleY = scale
                 }
@@ -234,13 +247,14 @@ fun ZenithHeader(
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .offset { IntOffset(0, smoothedOffset.roundToInt()) }
+                .offset { IntOffset(0, smoothedOffset.value.roundToInt()) }
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .height(64.dp)
                 .widthIn(min = sideSlotWidth)
                 .graphicsLayer {
-                    alpha = smoothedAlpha
-                    val scale = 1f - (smoothedFraction * 0.12f)
+                    val alpha = smoothedAlpha.value
+                    this.alpha = alpha
+                    val scale = 1f - ((1f - alpha) * 0.12f)
                     scaleX = scale
                     scaleY = scale
                 }
@@ -280,13 +294,14 @@ fun ZenithHeader(
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .offset { IntOffset(0, smoothedOffset.roundToInt()) }
+                .offset { IntOffset(0, smoothedOffset.value.roundToInt()) }
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .height(64.dp)
                 .widthIn(min = sideSlotWidth)
                 .graphicsLayer {
-                    alpha = smoothedAlpha
-                    val scale = 1f - (smoothedFraction * 0.12f)
+                    val alpha = smoothedAlpha.value
+                    this.alpha = alpha
+                    val scale = 1f - ((1f - alpha) * 0.12f)
                     scaleX = scale
                     scaleY = scale
                 }

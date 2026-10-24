@@ -56,8 +56,14 @@ import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import android.content.Intent
 import android.provider.Settings
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.ui.viewmodel.AppInfo
+import com.etrisad.zenith.util.isAccessibilityServiceEnabled
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -767,7 +773,20 @@ fun TimePickerDialog(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun rememberAccessibilityServiceEnabled(): Boolean {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var enabled by remember { mutableStateOf(isAccessibilityServiceEnabled(context)) }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            enabled = withContext(Dispatchers.IO) { isAccessibilityServiceEnabled(context) }
+        }
+    }
+    return enabled
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AccessibilityWarningCard(modifier: Modifier = Modifier) {
     val context = LocalContext.current

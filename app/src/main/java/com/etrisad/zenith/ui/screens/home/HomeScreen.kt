@@ -64,8 +64,8 @@ import com.etrisad.zenith.ui.components.UninstalledAppCard
 import com.etrisad.zenith.ui.components.focus.AppTypeTab
 import com.etrisad.zenith.ui.components.focus.ShieldSectionContent
 import com.etrisad.zenith.ui.components.focus.AccessibilityWarningCard
+import com.etrisad.zenith.ui.components.focus.rememberAccessibilityServiceEnabled
 import com.etrisad.zenith.ui.components.focus.activeShieldSection
-import com.etrisad.zenith.util.isAccessibilityServiceEnabled
 import com.etrisad.zenith.ui.components.focus.activeTypeTabRow
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonWeighted
@@ -198,7 +198,7 @@ fun HomeScreenContent(
             value = System.currentTimeMillis()
         }
     }
-    val isAccessibilityEnabled = isAccessibilityServiceEnabled(LocalContext.current)
+    val isAccessibilityEnabled = rememberAccessibilityServiceEnabled()
 
     PullToRefreshBox(
         isRefreshing = uiState.isLoading,

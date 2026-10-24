@@ -13,9 +13,7 @@ import coil.fetch.Fetcher
 import coil.map.Mapper
 import coil.request.Options
 import com.etrisad.zenith.data.website.WebsiteRepository
-import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.util.concurrent.TimeUnit
 
 data class AppIconData(val packageName: String)
 
@@ -24,11 +22,7 @@ class AppIconFetcher(
     private val context: Context
 ) : Fetcher {
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .build()
+    private val client = sharedFaviconHttpClient
 
     override suspend fun fetch(): FetchResult? {
         if (WebsiteRepository.isWebsitePackageName(data.packageName)) {

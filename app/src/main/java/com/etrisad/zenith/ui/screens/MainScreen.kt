@@ -262,7 +262,6 @@ fun MainScreen(
 
     val preferences = preferencesResult!!
 
-    val homeUiState by homeViewModel.uiState.collectAsState()
     val focusUiState by focusViewModel.uiState.collectAsState()
     val headerProfile by profileViewModel.uiState.collectAsState()
     val headerBorder = remember(
