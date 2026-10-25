@@ -452,9 +452,3 @@ object DiagnosticReportUtils {
         zip.closeEntry()
     }
 }
-, name: String, text: String) {
-        zip.putNextEntry(ZipEntry(name))
-        zip.write(text.toByteArray(Charsets.UTF_8))
-        zip.closeEntry()
-    }
-}
