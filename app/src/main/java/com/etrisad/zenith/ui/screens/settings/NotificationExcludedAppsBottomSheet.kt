@@ -2,10 +2,6 @@ package com.etrisad.zenith.ui.screens.settings
 
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -20,8 +16,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -32,9 +26,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ExcludeFromTrackingBottomSheet(
+fun NotificationExcludedAppsBottomSheet(
     initialExcluded: Set<String>,
     onDismiss: () -> Unit,
     onSave: (Set<String>) -> Unit
@@ -61,7 +55,7 @@ fun ExcludeFromTrackingBottomSheet(
                     @Suppress("DEPRECATION")
                     pm.getInstalledApplications(0)
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 emptyList()
             }
 
@@ -130,13 +124,13 @@ fun ExcludeFromTrackingBottomSheet(
                         .padding(top = 24.dp)
                 ) {
                     Text(
-                        text = "Exclude from Tracking",
+                        text = "Exclude Notifications",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 16.dp)
+                        modifier = Modifier.padding(bottom = 8.dp)
                     )
                     Text(
-                        text = "Excluded apps' screen time will not be tracked or shown in your usage data. Useful for media players and other apps that don't depend on screen time.",
+                        text = "Notifications from selected apps will never be intercepted, silenced, or logged by Zenith during focus sessions or schedules. Saving deletes stored intercepted notifications for newly added apps.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 12.dp)
@@ -197,7 +191,7 @@ fun ExcludeFromTrackingBottomSheet(
                                 WhitelistAppItem(
                                     app = app,
                                     isSelected = app.packageName in selectedApps,
-                                    shape = getAdaptiveShapeExclude(index, filteredApps.size),
+                                    shape = getAdaptiveShapeNotif(index, filteredApps.size),
                                     modifier = Modifier.animateItem(),
                                     onToggle = {
                                         selectedApps = if (app.packageName in selectedApps) {
@@ -226,7 +220,7 @@ fun ExcludeFromTrackingBottomSheet(
                                     WhitelistAppItem(
                                         app = app,
                                         isSelected = app.packageName in selectedApps,
-                                        shape = getAdaptiveShapeExclude(index, userApps.size),
+                                        shape = getAdaptiveShapeNotif(index, userApps.size),
                                         modifier = Modifier.animateItem(),
                                         onToggle = {
                                             selectedApps = if (app.packageName in selectedApps) {
@@ -256,7 +250,7 @@ fun ExcludeFromTrackingBottomSheet(
                                     WhitelistAppItem(
                                         app = app,
                                         isSelected = app.packageName in selectedApps,
-                                        shape = getAdaptiveShapeExclude(index, preinstalledApps.size),
+                                        shape = getAdaptiveShapeNotif(index, preinstalledApps.size),
                                         modifier = Modifier.animateItem(),
                                         onToggle = {
                                             selectedApps = if (app.packageName in selectedApps) {
@@ -309,7 +303,7 @@ fun ExcludeFromTrackingBottomSheet(
                                         WhitelistAppItem(
                                             app = app,
                                             isSelected = app.packageName in selectedApps,
-                                            shape = getAdaptiveShapeExclude(index, systemApps.size),
+                                            shape = getAdaptiveShapeNotif(index, systemApps.size),
                                             modifier = Modifier.animateItem(),
                                             onToggle = {
                                                 selectedApps = if (app.packageName in selectedApps) {
@@ -340,14 +334,14 @@ fun ExcludeFromTrackingBottomSheet(
                     .padding(24.dp),
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = "Save selection")
+                Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = "Save notification exclusions")
             }
         }
     }
 }
 
 @Composable
-private fun getAdaptiveShapeExclude(index: Int, size: Int): RoundedCornerShape {
+private fun getAdaptiveShapeNotif(index: Int, size: Int): RoundedCornerShape {
     return when {
         size == 1 -> RoundedCornerShape(24.dp)
         index == 0 -> RoundedCornerShape(

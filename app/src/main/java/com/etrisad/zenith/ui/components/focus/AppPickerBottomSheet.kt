@@ -286,7 +286,7 @@ private fun AppsContent(
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "System and whitelisted apps are hidden",
+                                    text = "System apps and apps that bypass restrictions are hidden",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.outline
                                 )

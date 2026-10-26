@@ -384,6 +384,11 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
         val DISABLE_TRACKING_START_HOUR = intPreferencesKey("disable_tracking_start_hour")
         val DISABLE_TRACKING_END_HOUR = intPreferencesKey("disable_tracking_end_hour")
         val EXCLUDED_FROM_TRACKING_PACKAGES = stringPreferencesKey("excluded_from_tracking_packages")
+        val PRIVATE_PACKAGES = stringPreferencesKey("private_packages")
+        val ACCESSIBILITY_LIMITED_MODE = booleanPreferencesKey("accessibility_limited_mode")
+        val NOTIFICATION_INTERCEPTION_ENABLED = booleanPreferencesKey("notification_interception_enabled")
+        val NOTIFICATION_EXCLUDED_PACKAGES = stringPreferencesKey("notification_excluded_packages")
+        val STORE_INTERCEPTED_NOTIFICATION_CONTENT = booleanPreferencesKey("store_intercepted_notification_content")
 
         val ALARM_ENABLED = booleanPreferencesKey("alarm_enabled")
         val ALARM_TIME = stringPreferencesKey("alarm_time")
@@ -478,6 +483,11 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
             sessionUsageOverlayOpacity = settings[PreferencesKeys.SESSION_USAGE_OVERLAY_OPACITY] ?: 90,
             whitelistedPackages = settings[PreferencesKeys.WHITELISTED_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
             excludedFromTrackingPackages = settings[PreferencesKeys.EXCLUDED_FROM_TRACKING_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
+            privatePackages = settings[PreferencesKeys.PRIVATE_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
+            accessibilityLimitedMode = settings[PreferencesKeys.ACCESSIBILITY_LIMITED_MODE] ?: false,
+            notificationInterceptionEnabled = settings[PreferencesKeys.NOTIFICATION_INTERCEPTION_ENABLED] ?: true,
+            notificationExcludedPackages = settings[PreferencesKeys.NOTIFICATION_EXCLUDED_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
+            storeInterceptedNotificationContent = settings[PreferencesKeys.STORE_INTERCEPTED_NOTIFICATION_CONTENT] ?: true,
             lastResetDate = runtime[RuntimeKeys.LAST_RESET_DATE] ?: "",
             lastWeeklyResetDate = runtime[RuntimeKeys.LAST_WEEKLY_RESET_DATE] ?: 0L,
             lastStreakCheckDate = runtime[RuntimeKeys.LAST_STREAK_CHECK_DATE] ?: "",
@@ -980,8 +990,27 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.WHITELISTED_PACKAGES] = packages.joinToString(",") }
     }
 
-    suspend fun setExcludedFromTrackingPackages(packages: Set<String>) {
-        context.dataStore.edit { preferences -> preferences[PreferencesKeys.EXCLUDED_FROM_TRACKING_PACKAGES] = packages.joinToString(",") }
+    suspend fun setAppExclusions(privatePackages: Set<String>, usageOnlyPackages: Set<String>) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.PRIVATE_PACKAGES] = privatePackages.joinToString(",")
+            preferences[PreferencesKeys.EXCLUDED_FROM_TRACKING_PACKAGES] = usageOnlyPackages.joinToString(",")
+        }
+    }
+
+    suspend fun setAccessibilityLimitedMode(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.ACCESSIBILITY_LIMITED_MODE] = enabled }
+    }
+
+    suspend fun setNotificationInterceptionEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.NOTIFICATION_INTERCEPTION_ENABLED] = enabled }
+    }
+
+    suspend fun setNotificationExcludedPackages(packages: Set<String>) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.NOTIFICATION_EXCLUDED_PACKAGES] = packages.joinToString(",") }
+    }
+
+    suspend fun setStoreInterceptedNotificationContent(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.STORE_INTERCEPTED_NOTIFICATION_CONTENT] = enabled }
     }
 
     suspend fun setIncentiveLockEnabled(enabled: Boolean) {
@@ -1142,7 +1171,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             lPkg to lApps
         }
 
-        val excludePackages = setOfNotNull(context.packageName, launcherPackage) + prefs.whitelistedPackages + prefs.bedtimeWhitelistedPackages + prefs.excludedFromTrackingPackages
+        val excludePackages = setOfNotNull(context.packageName, launcherPackage) + prefs.whitelistedPackages + prefs.bedtimeWhitelistedPackages + prefs.excludedFromTrackingPackages + prefs.privatePackages
 
         var liveStreak = 0
         var currentBest = prefs.bedtimeBestStreak
@@ -1902,6 +1931,11 @@ data class UserPreferences(
     val sessionUsageOverlayOpacity: Int = 90,
     val whitelistedPackages: Set<String> = emptySet(),
     val excludedFromTrackingPackages: Set<String> = emptySet(),
+    val privatePackages: Set<String> = emptySet(),
+    val accessibilityLimitedMode: Boolean = false,
+    val notificationInterceptionEnabled: Boolean = true,
+    val notificationExcludedPackages: Set<String> = emptySet(),
+    val storeInterceptedNotificationContent: Boolean = true,
     val lastResetDate: String = "",
     val lastWeeklyResetDate: Long = 0L,
     val lastStreakCheckDate: String = "",

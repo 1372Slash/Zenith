@@ -905,7 +905,8 @@ class HomeViewModel(
         val pm = this@HomeViewModel.context.packageManager
 
         val (launcherApps, launcherPackage) = usageHistoryManager.getLauncherInfo()
-        val excludePackages = setOfNotNull(this@HomeViewModel.context.packageName, launcherPackage) + SharedMonitoringState.excludedFromTrackingPackages
+        val excludePackages = setOfNotNull(this@HomeViewModel.context.packageName, launcherPackage) +
+            SharedMonitoringState.excludedFromTrackingPackages + SharedMonitoringState.privatePackages
 
         DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: launcherApps=${launcherApps.size} launcherPkg=$launcherPackage exclude=$excludePackages")
 

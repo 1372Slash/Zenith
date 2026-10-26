@@ -134,7 +134,7 @@ fun AllowedBedAppsBottomSheet(
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
                     Text(
-                        text = "Select apps that stay accessible during bedtime. General whitelisted apps are excluded.",
+                        text = "Select apps that stay accessible during bedtime. Apps that already bypass restrictions are excluded.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 12.dp)

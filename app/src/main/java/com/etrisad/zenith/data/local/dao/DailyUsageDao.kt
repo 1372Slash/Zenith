@@ -65,4 +65,7 @@ interface DailyUsageDao {
 
     @Query("DELETE FROM daily_usage WHERE date = :date AND packageName = :packageName")
     suspend fun deleteUsageForPackage(date: String, packageName: String)
+
+    @Query("DELETE FROM daily_usage WHERE packageName IN (:packages)")
+    suspend fun deleteByPackages(packages: List<String>)
 }

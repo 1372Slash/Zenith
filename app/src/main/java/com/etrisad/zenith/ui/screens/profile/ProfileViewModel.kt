@@ -78,7 +78,7 @@ fun com.etrisad.zenith.data.preferences.UserPreferences.achievementTrackingKey()
         sessionUsageOverlayEnabled, screenTimeTargetMinutes,
         websiteAutoTrackingEnabled, developerModeEnabled,
         performanceLevel.name, smartRepairOnRefresh,
-        excludedFromTrackingPackages.size, bedtimeWindDownEnabled,
+        excludedFromTrackingPackages.size, privatePackages.size, bedtimeWindDownEnabled,
         pausePointTaskTypes.size,
         userSharedProfile, userXpTotal,
         overlayPaletteId, floatingTabBarEnabled, totalUsagePillEnabled,
@@ -306,7 +306,7 @@ class ProfileViewModel(
                     isCustomPerf = freshPrefs.performanceLevel ==
                         com.etrisad.zenith.data.preferences.PerformanceLevel.CUSTOM,
                     hasRepair = freshPrefs.smartRepairOnRefresh,
-                    hasExcluded = freshPrefs.excludedFromTrackingPackages.isNotEmpty(),
+                    hasExcluded = freshPrefs.excludedFromTrackingPackages.isNotEmpty() || freshPrefs.privatePackages.isNotEmpty(),
                     hasWindDown = freshPrefs.bedtimeWindDownEnabled,
                     hasSharedProfile = freshPrefs.userSharedProfile,
                     globalCurrentStreak = freshPrefs.globalCurrentStreak,

@@ -146,13 +146,13 @@ fun WhitelistBottomSheet(
                         .padding(top = 24.dp)
                 ) {
                     Text(
-                        text = "Whitelist Apps",
+                        text = "Bypass Restrictions",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
                     Text(
-                        text = "Whitelisted apps will bypass all Zenith restrictions (Schedules, Shields, and Goals).",
+                        text = "Still tracked in stats, but skips schedules, shields, and goals.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 12.dp)

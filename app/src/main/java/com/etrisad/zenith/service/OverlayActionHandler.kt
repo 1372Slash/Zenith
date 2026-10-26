@@ -839,6 +839,8 @@ class OverlayActionHandler(
 
     fun shouldBypassBlocking(packageName: String): Boolean {
         if (packageName == contextPkg) return true
+        // Private apps are intentionally invisible to Zenith: never shield or block them.
+        if (SharedMonitoringState.isPrivatePackage(packageName)) return true
 
         if (SharedMonitoringState.isPomodoroActive) {
             if (packageName in SharedMonitoringState.CRITICAL_SYSTEM_PACKAGES) return true

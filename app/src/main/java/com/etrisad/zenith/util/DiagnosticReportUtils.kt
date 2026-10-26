@@ -250,6 +250,7 @@ object DiagnosticReportUtils {
         sb.appendLine("    \"developerMode\": ${p.developerModeEnabled},")
         sb.appendLine("    \"showDatabaseIndicator\": ${p.showDatabaseIndicator},")
         sb.appendLine("    \"whitelistedCount\": ${p.whitelistedPackages.size},")
+        sb.appendLine("    \"privateAppsCount\": ${p.privatePackages.size},")
         sb.appendLine("    \"excludedFromTrackingCount\": ${p.excludedFromTrackingPackages.size},")
         sb.appendLine("    \"autoBackupEnabled\": ${p.autoBackupEnabled},")
         sb.appendLine("    \"hasBackupDirectory\": ${p.backupDirectoryUri.isNotEmpty()},")

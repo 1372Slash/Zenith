@@ -267,7 +267,9 @@ class UsageHistoryManager(
             try {
             val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val (launcherApps, launcherPackage) = getLauncherInfo()
-            val excludePackages = setOfNotNull(context.packageName, launcherPackage) + com.etrisad.zenith.service.SharedMonitoringState.excludedFromTrackingPackages
+            val excludePackages = setOfNotNull(context.packageName, launcherPackage) +
+                com.etrisad.zenith.service.SharedMonitoringState.excludedFromTrackingPackages +
+                com.etrisad.zenith.service.SharedMonitoringState.privatePackages
 
             val now = System.currentTimeMillis()
             val history = mutableListOf<DailyUsage>()
@@ -516,7 +518,9 @@ class UsageHistoryManager(
 
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val (launcherApps, launcherPackage) = getLauncherInfo()
-        val excludePackages = setOfNotNull(context.packageName, launcherPackage) + com.etrisad.zenith.service.SharedMonitoringState.excludedFromTrackingPackages
+        val excludePackages = setOfNotNull(context.packageName, launcherPackage) +
+            com.etrisad.zenith.service.SharedMonitoringState.excludedFromTrackingPackages +
+            com.etrisad.zenith.service.SharedMonitoringState.privatePackages
 
         if (isFullNeeded && !isUpdatingFullHistory) {
             lastFullFallbackRefresh = now
@@ -577,7 +581,9 @@ class UsageHistoryManager(
             val now = System.currentTimeMillis()
             val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val (launcherApps, launcherPackage) = getLauncherInfo()
-            val excludePackages = setOfNotNull(context.packageName, launcherPackage) + com.etrisad.zenith.service.SharedMonitoringState.excludedFromTrackingPackages
+            val excludePackages = setOfNotNull(context.packageName, launcherPackage) +
+                com.etrisad.zenith.service.SharedMonitoringState.excludedFromTrackingPackages +
+                com.etrisad.zenith.service.SharedMonitoringState.privatePackages
             val results = fetchFallbackForDays(1..7, usm, launcherApps, excludePackages, now)
             val filled = results.count { it.second.isNotEmpty() }
             _globalFallbackMap.update { current -> current + results.toMap().filterValues { it.isNotEmpty() } }

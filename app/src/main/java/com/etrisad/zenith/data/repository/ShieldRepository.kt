@@ -15,6 +15,7 @@ import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.entity.WebsiteUsageEntity
 import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.service.SharedMonitoringState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -297,6 +298,46 @@ class ShieldRepository(
             shieldDao.updateShield(shield)
         } catch (e: Exception) {
         }
+    }
+
+    /**
+     * Removes stored usage history, intercepted notification content, and any shield
+     * configuration for apps the user marked as private.
+     */
+    suspend fun purgePrivateAppData(packages: Set<String>) {
+        if (packages.isEmpty()) return
+        val packageList = packages.toList()
+        dailyUsageDao.deleteByPackages(packageList)
+        hourlyUsageDao.deleteByPackages(packageList)
+        database.interceptedNotificationDao().deleteByPackages(packageList)
+        packages.forEach { pkg ->
+            shieldDao.getShieldByPackageName(pkg)?.let { shieldDao.deleteShield(it) }
+            allowedApps.remove(pkg)
+            SharedMonitoringState.lastKnownPackageUsage.remove(pkg)
+            SharedMonitoringState.dailyUsageCache.remove(pkg)
+            SharedMonitoringState.notifiedGoals.remove(pkg)
+            SharedMonitoringState.windDownUsedPackages.remove(pkg)
+        }
+        _allShieldsCache.value = _allShieldsCache.value.filterNot { it.packageName in packages }
+        SharedMonitoringState.allShieldsCache = SharedMonitoringState.allShieldsCache
+            .filterKeys { it !in packages }
+        SharedMonitoringState.goalShieldsCache =
+            SharedMonitoringState.goalShieldsCache.filterNot { it.packageName in packages }
+        SharedMonitoringState.updateRestrictedPackages()
+    }
+
+    /** Deletes intercepted notification rows for apps the user excluded from interception. */
+    suspend fun purgeNotificationData(packages: Set<String>) {
+        if (packages.isEmpty()) return
+        database.interceptedNotificationDao().deleteByPackages(packages.toList())
+    }
+
+    /**
+     * Removes notification title/body text while keeping package rows, so pending
+     * notifications can still be restored when "Store Notification Contents" is off.
+     */
+    suspend fun scrubInterceptedNotificationContent() {
+        database.interceptedNotificationDao().clearStoredContent()
     }
 
     suspend fun resetAllRemainingTimes() {

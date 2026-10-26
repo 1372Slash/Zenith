@@ -876,7 +876,7 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
     ),
     AchievementDef(
         id = "ghost_mode", title = "Ghost Mode",
-        desc = "Exclude an app from tracking", icon = Icons.Outlined.VisibilityOff,
+        desc = "Add an app to Private & Hidden Apps", icon = Icons.Outlined.VisibilityOff,
         category = AchievementCategory.EXPLORER,
         thresholds = listOf(TierThreshold(ProfileTier.I, 1, "1 excluded app"))
     ),

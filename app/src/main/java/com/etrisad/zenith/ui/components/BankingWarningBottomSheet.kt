@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +18,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -35,6 +39,7 @@ fun BankingWarningBottomSheet(
 ) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
 
     var understandChecked by remember { mutableStateOf(false) }
     var dontShowAgainChecked by remember { mutableStateOf(false) }
@@ -64,14 +69,20 @@ fun BankingWarningBottomSheet(
         dragHandle = { BottomSheetDefaults.DragHandle() },
         containerColor = MaterialTheme.colorScheme.surface
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .heightIn(max = screenHeight * 0.9f)
         ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 24.dp)
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
             Icon(
                 Icons.Outlined.Shield,
                 contentDescription = null,
@@ -203,6 +214,29 @@ fun BankingWarningBottomSheet(
                         )
                     }
 
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text(
+                            text = "4.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.width(24.dp)
+                        )
+                        Text(
+                            text = buildAnnotatedString {
+                                append("You can also add sensitive apps to ")
+                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Settings > Privacy & Data > Private & Hidden Apps > Private") }
+                                append(" so Zenith will completely ignore them. You can also enable ")
+                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Limited Mode") }
+                                append(" under Privacy & Data to reduce accessibility access to app-switch events only.")
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(16.dp))
 
                     HorizontalDivider(
@@ -270,8 +304,37 @@ fun BankingWarningBottomSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(260.dp))
+                }
 
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(24.dp)
+                        .align(Alignment.TopCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(MaterialTheme.colorScheme.surface, Color.Transparent)
+                            )
+                        )
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, MaterialTheme.colorScheme.surface),
+                        startY = 0f,
+                        endY = 40f
+                    )
+                )
+                .padding(16.dp)
+                .navigationBarsPadding()
+        ) {
             val surfaceColor by animateColorAsState(
                 targetValue = if (showError) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface,
                 animationSpec = spring(dampingRatio = 0.8f, stiffness = 600f),
@@ -301,13 +364,19 @@ fun BankingWarningBottomSheet(
                         text = buildAnnotatedString {
                             append("I have read and understand the above. I accept the risks of using Zenith alongside my banking apps.")
                             append(" ")
-                            withStyle(SpanStyle(color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)) { append("*") }
+                            withStyle(
+                                SpanStyle(
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            ) { append("*") }
                         },
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.weight(1f)
                     )
                 }
             }
+
             AnimatedVisibility(
                 visible = showError,
                 enter = fadeIn(animationSpec = spring(dampingRatio = 0.8f, stiffness = 600f)) + slideInVertically { it / 2 },
@@ -321,8 +390,6 @@ fun BankingWarningBottomSheet(
                 )
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -334,12 +401,12 @@ fun BankingWarningBottomSheet(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Don't show this again",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.weight(1f)
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             ZenithGroupedButton(size = ZenithButtonSize.Large) {
                 ZenithButtonWeighted(
@@ -370,8 +437,7 @@ fun BankingWarningBottomSheet(
                     onDisabledClick = { showError = true }
                 )
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
         }
     }
+}
 }

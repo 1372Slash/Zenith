@@ -922,6 +922,16 @@ class AppUsageMonitorService : Service() {
                 SharedMonitoringState.whitelistedPackages = preferences.whitelistedPackages
                 SharedMonitoringState.bedtimeWhitelistedPackages = preferences.bedtimeWhitelistedPackages
                 SharedMonitoringState.excludedFromTrackingPackages = preferences.excludedFromTrackingPackages
+                val privateAppsChanged = SharedMonitoringState.privatePackages != preferences.privatePackages
+                SharedMonitoringState.privatePackages = preferences.privatePackages
+                SharedMonitoringState.accessibilityLimitedMode = preferences.accessibilityLimitedMode
+                SharedMonitoringState.notificationInterceptionEnabled = preferences.notificationInterceptionEnabled
+                SharedMonitoringState.notificationExcludedPackages = preferences.notificationExcludedPackages
+                SharedMonitoringState.storeInterceptedNotificationContent = preferences.storeInterceptedNotificationContent
+                SharedMonitoringState.updateRestrictedPackages()
+                if (privateAppsChanged) {
+                    com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
+                }
 
                 val startParts = preferences.bedtimeStartTime.split(":")
                 val endParts = preferences.bedtimeEndTime.split(":")
@@ -1145,6 +1155,27 @@ class AppUsageMonitorService : Service() {
             refreshLauncherCache()
         }
 
+        // Private apps are never tracked, shielded, or shown in usage HUDs. Still close out
+        // the previous session so time already spent elsewhere is not attributed to them.
+        if (SharedMonitoringState.isPrivatePackage(currentApp)) {
+            lastForegroundApp?.let { oldPkg ->
+                if (oldPkg.isNotEmpty() && oldPkg != currentApp && cachedTotalUsage > 0L) {
+                    SharedMonitoringState.lastKnownPackageUsage[oldPkg] = cachedTotalUsage
+                }
+            }
+            WebsiteStateHolder.currentWebsiteDomain.value?.let { domain ->
+                overlayActionHandler.scheduleWebsiteSessionDismiss("zenith-web:$domain")
+            }
+            overlayManager.hideOverlay()
+            sessionUsageOverlayManager.pauseAllSessions()
+            currentShieldCache = null
+            currentSessionPackage = currentApp
+            cachedTotalUsage = 0L
+            lastForegroundApp = currentApp
+            AppStateHolder.foregroundApp.value = currentApp
+            return
+        }
+
         val isLauncher = SharedMonitoringState.launcherPackages.contains(currentApp) ||
             currentApp == packageName ||
             currentApp.contains("launcher", ignoreCase = true) ||
@@ -1298,6 +1329,7 @@ class AppUsageMonitorService : Service() {
 
     private suspend fun monitoringTick(currentApp: String) {
         val currentTime = System.currentTimeMillis()
+        if (SharedMonitoringState.isPrivatePackage(currentApp)) return
         val isLauncher = currentApp == packageName ||
             SharedMonitoringState.launcherPackages.contains(currentApp) ||
             currentApp.contains("launcher", ignoreCase = true) ||
@@ -2137,7 +2169,8 @@ class AppUsageMonitorService : Service() {
             refreshLauncherCache()
         }
 
-        val excludePackages = setOfNotNull(packageName, SharedMonitoringState.defaultLauncherPackage) + SharedMonitoringState.excludedFromTrackingPackages
+        val excludePackages = setOfNotNull(packageName, SharedMonitoringState.defaultLauncherPackage) +
+            SharedMonitoringState.excludedFromTrackingPackages + SharedMonitoringState.privatePackages
 
         var totalSum = 0L
         appUsageMap.forEach { (pkg, time) ->

@@ -26,6 +26,7 @@ import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.data.remote.model.GitHubRelease
+import com.etrisad.zenith.service.SharedMonitoringState
 import com.etrisad.zenith.service.UsageSyncManager
 import com.etrisad.zenith.ui.navigation.Screen
 import com.etrisad.zenith.ui.screens.profile.xpForLevel
@@ -256,6 +257,48 @@ fun SettingsCategoryScreen(
                         onBackup = { backupLauncher.launch("zenith_backup_${System.currentTimeMillis()}.db") },
                         onRefreshOnOpenUsageStatsChange = { enabled -> coroutineScope.launch { preferencesRepository.setRefreshOnOpenUsageStats(enabled) } },
                         onRestore = { restoreLauncher.launch(arrayOf("application/octet-stream", "*/*")) }
+                    )
+                    "privacy" -> PrivacySettings(
+                        preferences = preferences,
+                        onAppExclusionsChange = { privateApps, usageOnlyApps ->
+                            applyAppExclusions(
+                                privateApps = privateApps,
+                                usageOnlyApps = usageOnlyApps,
+                                preferencesRepository = preferencesRepository,
+                                shieldRepository = app.shieldRepository,
+                                scope = coroutineScope
+                            )
+                        },
+                        onAccessibilityLimitedModeChange = { enabled ->
+                            // Apply immediately so the accessibility service stops requesting
+                            // content events without waiting for the DataStore round-trip.
+                            SharedMonitoringState.accessibilityLimitedMode = enabled
+                            coroutineScope.launch { preferencesRepository.setAccessibilityLimitedMode(enabled) }
+                        },
+                        onNotificationInterceptionEnabledChange = { enabled ->
+                            SharedMonitoringState.notificationInterceptionEnabled = enabled
+                            coroutineScope.launch { preferencesRepository.setNotificationInterceptionEnabled(enabled) }
+                        },
+                        onNotificationExcludedPackagesChange = { pkgs ->
+                            val newlyExcluded = pkgs - SharedMonitoringState.notificationExcludedPackages
+                            SharedMonitoringState.notificationExcludedPackages = pkgs
+                            coroutineScope.launch {
+                                preferencesRepository.setNotificationExcludedPackages(pkgs)
+                                if (newlyExcluded.isNotEmpty()) {
+                                    app.shieldRepository.purgeNotificationData(newlyExcluded)
+                                }
+                            }
+                        },
+                        onStoreInterceptedNotificationContentChange = { enabled ->
+                            SharedMonitoringState.storeInterceptedNotificationContent = enabled
+                            coroutineScope.launch {
+                                preferencesRepository.setStoreInterceptedNotificationContent(enabled)
+                                if (!enabled) {
+                                    // Scrubs title/body from already-stored notifications.
+                                    app.shieldRepository.scrubInterceptedNotificationContent()
+                                }
+                            }
+                        },
                     )
                     "performance" -> {
                         PerformanceSettings(

@@ -31,6 +31,7 @@ object FeatureInfoRegistry {
             "features" -> featuresCategory
             "appearance" -> appearanceCategory
             "performance" -> performanceCategory
+            "privacy" -> privacyCategory
             "data management" -> dataManagementCategory
             "developer" -> developerCategory
             else -> null
@@ -98,7 +99,7 @@ object FeatureInfoRegistry {
             ),
             FeatureInfoSections.tips(
                 "Updates are checked automatically on open if enabled; otherwise use the manual check button.",
-                "Whitelisted apps and excluded-from-tracking apps are managed via sheets inside General Settings.",
+                "Bypass Restrictions and Private & Hidden Apps are managed via sheets inside General Settings.",
                 "Enable developer mode in About to unlock extra categories and tools."
             )
         )
@@ -465,6 +466,29 @@ object FeatureInfoRegistry {
                 "Changes here must be applied via the floating Apply Settings button before leaving, Back is intercepted until then.",
                 "If detection feels slow, raise the profile first before touching custom sliders.",
                 "Enabling Instant Detection improves accuracy but asks for the accessibility service."
+            )
+        )
+    )
+
+    private val privacyCategory = FeatureInfo(
+        title = "Privacy & Data",
+        summary = "Decide what Zenith may observe, store, and include in backups, with sensitive apps excluded before processing.",
+        sections = listOf(
+            FeatureInfoSections.whatItDoes(
+                "Private & Hidden Apps is one sheet with two levels: Private apps are fully ignored and purged; Hidden apps remain monitored but are excluded from stats.",
+                "Limited Accessibility Mode restricts the service to app-switch events only, disabling browser URL tracking and content/text inspection.",
+                "Notification privacy controls exempt apps from interception and can avoid storing message titles/body text."
+            ),
+            FeatureInfoSections.whatYoullSee(
+                "A unified Private & Hidden Apps picker with Private and Hidden tabs, both available from General Settings and Privacy.",
+                "An Accessibility Mode toggle, Notification Interception controls, excluded notification apps, and a content-storage toggle.",
+                "A notification privacy explainer plus a cloud/local backup summary."
+            ),
+            FeatureInfoSections.tips(
+                "Prefer Private for banking, authenticator, health, or messaging apps; use Hidden when you only want to hide screen time without disabling monitoring.",
+                "Bypass Restrictions only skip schedules, shields, and goals; those apps are still tracked. Use Private & Hidden Apps when you want an app ignored or hidden from stats.",
+                "Turn off Store Notification Contents if you want interception without keeping message text.",
+                "Android Auto Backup excludes the usage/notification database, but local backups you create from Data Management include it, so store them privately."
             )
         )
     )

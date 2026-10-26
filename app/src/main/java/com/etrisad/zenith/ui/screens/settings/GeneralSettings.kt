@@ -39,7 +39,7 @@ fun GeneralSettings(
     onSetDelayAppDuration: (Int) -> Unit,
     onSetDayStartTime: (Int, Int) -> Unit,
     onShowWhitelistSheetChange: (Boolean) -> Unit,
-    onShowExcludeFromTrackingSheetChange: (Boolean) -> Unit,
+    onShowAppExclusionsSheetChange: (Boolean) -> Unit,
     onOpenPermissions: () -> Unit,
     permissionsMissing: Boolean = false
 ) {
@@ -47,6 +47,10 @@ fun GeneralSettings(
     var showEmergencyRechargeSheet by remember { mutableStateOf(false) }
     var showDelayAppSheet by remember { mutableStateOf(false) }
     var showDayStartSheet by remember { mutableStateOf(false) }
+    val exclusionSummary = appExclusionSummary(
+        preferences.privatePackages,
+        preferences.excludedFromTrackingPackages
+    )
 
     Column {
         PreferenceCategory(title = "General")
@@ -131,8 +135,9 @@ fun GeneralSettings(
 
         Spacer(modifier = Modifier.height(4.dp))
         SettingsActionItem(
-            title = "Whitelist Apps",
-            summary = "${preferences.whitelistedPackages.size} apps bypassed",
+            title = "Bypass Restrictions",
+            summary = if (preferences.whitelistedPackages.isEmpty()) "No apps can skip schedules, shields, or goals"
+                      else "${preferences.whitelistedPackages.size} apps skip schedules, shields & goals (still tracked)",
             onClick = { onShowWhitelistSheetChange(true) },
             icon = Icons.Outlined.VerifiedUser,
             shape = RoundedCornerShape(8.dp)
@@ -140,11 +145,10 @@ fun GeneralSettings(
 
         Spacer(modifier = Modifier.height(4.dp))
         SettingsActionItem(
-            title = "Exclude from Tracking",
-            summary = if (preferences.excludedFromTrackingPackages.isEmpty()) "No apps excluded"
-            else "${preferences.excludedFromTrackingPackages.size} apps excluded",
-            onClick = { onShowExcludeFromTrackingSheetChange(true) },
-            icon = Icons.Outlined.VisibilityOff,
+            title = "Private & Hidden Apps",
+            summary = exclusionSummary,
+            onClick = { onShowAppExclusionsSheetChange(true) },
+            icon = Icons.Outlined.Security,
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
         )
     }

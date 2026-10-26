@@ -25,6 +25,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -108,6 +109,23 @@ class ZenithApplication : Application(), ImageLoaderFactory {
         applicationScope.launch(Dispatchers.IO) {
             try {
                 shieldRepository
+            } catch (_: Exception) {
+            }
+        }
+
+        // Keep the in-memory privacy switches available to UI queries and services even
+        // when a particular service has not started its own preference collector yet.
+        applicationScope.launch {
+            try {
+                userPreferencesRepository.userPreferencesFlow.collect { prefs ->
+                    com.etrisad.zenith.service.SharedMonitoringState.privatePackages = prefs.privatePackages
+                    com.etrisad.zenith.service.SharedMonitoringState.excludedFromTrackingPackages = prefs.excludedFromTrackingPackages
+                    com.etrisad.zenith.service.SharedMonitoringState.accessibilityLimitedMode = prefs.accessibilityLimitedMode
+                    com.etrisad.zenith.service.SharedMonitoringState.notificationInterceptionEnabled = prefs.notificationInterceptionEnabled
+                    com.etrisad.zenith.service.SharedMonitoringState.notificationExcludedPackages = prefs.notificationExcludedPackages
+                    com.etrisad.zenith.service.SharedMonitoringState.storeInterceptedNotificationContent = prefs.storeInterceptedNotificationContent
+                    com.etrisad.zenith.service.SharedMonitoringState.updateRestrictedPackages()
+                }
             } catch (_: Exception) {
             }
         }

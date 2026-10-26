@@ -31,12 +31,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.etrisad.zenith.ui.screens.settings.PrivacyInfoBottomSheet
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -100,6 +102,8 @@ fun PermissionBottomSheet(
     var stabilityExpanded by remember { mutableStateOf(false) }
     var optionalExpanded by remember { mutableStateOf(false) }
     var showBankingWarning by remember { mutableStateOf(false) }
+    var showInterceptWarning by remember { mutableStateOf(false) }
+    var showPrivacyInfoSheet by remember { mutableStateOf(false) }
 
     val installedBankingApps = remember {
         val allInstalled = context.packageManager.getInstalledApplications(0)
@@ -205,6 +209,13 @@ fun PermissionBottomSheet(
     }
 
     val allGranted = hasUsageStats && hasOverlay && hasNotifications && hasNotificationPolicy && (hasAccessibility || !preferences.accessibilityRequired)
+    val missingRequiredCount = listOf(
+        hasUsageStats,
+        hasOverlay,
+        hasNotifications,
+        hasNotificationPolicy,
+        hasAccessibility || !preferences.accessibilityRequired
+    ).count { !it }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -236,17 +247,18 @@ fun PermissionBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
         dragHandle = { BottomSheetDefaults.DragHandle() },
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
+        containerColor = MaterialTheme.colorScheme.surface
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Box(
+            modifier = Modifier.fillMaxWidth()
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
             Icon(
                 Icons.Outlined.Security,
                 contentDescription = null,
@@ -264,9 +276,23 @@ fun PermissionBottomSheet(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(vertical = 8.dp)
+                modifier = Modifier.padding(vertical = 4.dp)
             )
-            Spacer(modifier = Modifier.height(24.dp))
+            TextButton(
+                onClick = { showPrivacyInfoSheet = true }
+            ) {
+                Icon(
+                    Icons.Outlined.Info,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Privacy & Data Guarantees",
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
 
             PermissionItemRow(
                 title = "Notifications",
@@ -386,7 +412,7 @@ fun PermissionBottomSheet(
                     }
                     PermissionItemRow(
                         title = "Intercept Service",
-                        description = "Required to block schedule notifications",
+                        description = "Optional: pause notifications during focus or schedules",
                         isGranted = hasNotificationListener,
                         onClick = {
                             val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
@@ -394,6 +420,7 @@ fun PermissionBottomSheet(
                             }
                             context.startActivity(intent)
                         },
+                        onInfoClick = { showInterceptWarning = true },
                         icon = Icons.Outlined.PhonelinkErase,
                         position = if (preferences.accessibilityRequired) GroupPosition.Top else GroupPosition.Middle,
                         isInsideCollapse = true
@@ -490,34 +517,62 @@ fun PermissionBottomSheet(
                 }
             }
             
-            AnimatedVisibility(
-                visible = allGranted,
-                enter = fadeIn(
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
-                ) + expandVertically(
-                    expandFrom = Alignment.Top,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
-                ),
-                exit = fadeOut(
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
-                ) + shrinkVertically(
-                    shrinkTowards = Alignment.Top,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
-                )
-            ) {
-                Column {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    ZenithButton(
-                        onClick = {
-                            scope.launch {
-                                sheetState.hide()
-                                onAllPermissionsGranted()
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        text = "Everything is Ready!"
+                        Spacer(modifier = Modifier.height(120.dp))
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(24.dp)
+                            .align(Alignment.TopCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(MaterialTheme.colorScheme.surface, Color.Transparent)
+                                )
+                            )
                     )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, MaterialTheme.colorScheme.surface),
+                            startY = 0f,
+                            endY = 40f
+                        )
+                    )
+                    .padding(16.dp)
+                    .navigationBarsPadding()
+            ) {
+                if (!allGranted) {
+                    Text(
+                        text = "$missingRequiredCount required permission${if (missingRequiredCount == 1) "" else "s"} still missing.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
+
+                ZenithButton(
+                    onClick = {
+                        scope.launch {
+                            sheetState.hide()
+                            if (allGranted) {
+                                onAllPermissionsGranted()
+                            } else {
+                                onDismissRequest()
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    text = if (allGranted) "Everything is Ready!" else "Close for now",
+                    type = if (allGranted) ZenithButtonType.Filled else ZenithButtonType.Outlined,
+                    fillMaxWidth = true
+                )
             }
         }
     }
@@ -534,6 +589,25 @@ fun PermissionBottomSheet(
                     preferencesRepository.setBankingWarningDismissed(true)
                 }
             }
+        )
+    }
+
+    if (showInterceptWarning) {
+        InterceptServiceWarningBottomSheet(
+            onDismiss = { showInterceptWarning = false },
+            onOpenSettings = {
+                showInterceptWarning = false
+                val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            }
+        )
+    }
+
+    if (showPrivacyInfoSheet) {
+        PrivacyInfoBottomSheet(
+            onDismiss = { showPrivacyInfoSheet = false }
         )
     }
 }

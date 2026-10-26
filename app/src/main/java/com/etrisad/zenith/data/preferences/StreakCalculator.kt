@@ -237,7 +237,7 @@ class StreakCalculator(
             } catch (_: Exception) { emptySet<String>() to null }
         }
 
-        val excludePackages = setOfNotNull(context.packageName, launcherPackage) + prefs.excludedFromTrackingPackages
+        val excludePackages = setOfNotNull(context.packageName, launcherPackage) + prefs.excludedFromTrackingPackages + prefs.privatePackages
 
         val todayStart = DateTimeUtils.getDayStartTime(now, prefs.dayStartHour, prefs.dayStartMinute)
 

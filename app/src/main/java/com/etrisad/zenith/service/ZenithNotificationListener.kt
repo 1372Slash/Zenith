@@ -16,7 +16,10 @@ import com.etrisad.zenith.R
 import com.etrisad.zenith.data.local.database.ZenithDatabase
 import com.etrisad.zenith.data.local.entity.InterceptedNotificationEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -26,10 +29,20 @@ class ZenithNotificationListener : NotificationListenerService() {
     private lateinit var database: ZenithDatabase
     private var cachedActiveSchedules: List<com.etrisad.zenith.data.local.entity.ScheduleEntity>? = null
     private var lastScheduleCacheTime = 0L
+    private var preferencesJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
         database = ZenithDatabase.getDatabase(this)
+        // Keep privacy settings available even when the accessibility service is not running.
+        preferencesJob = serviceScope.launch {
+            UserPreferencesRepository(applicationContext).userPreferencesFlow.collectLatest { prefs ->
+                SharedMonitoringState.privatePackages = prefs.privatePackages
+                SharedMonitoringState.notificationInterceptionEnabled = prefs.notificationInterceptionEnabled
+                SharedMonitoringState.notificationExcludedPackages = prefs.notificationExcludedPackages
+                SharedMonitoringState.storeInterceptedNotificationContent = prefs.storeInterceptedNotificationContent
+            }
+        }
     }
 
     private suspend fun getActiveSchedulesCached(): List<com.etrisad.zenith.data.local.entity.ScheduleEntity> {
@@ -47,6 +60,9 @@ class ZenithNotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (sbn.packageName == packageName) return
         if (sbn.isOngoing) return
+        if (!SharedMonitoringState.notificationInterceptionEnabled) return
+        // Private and explicitly excluded apps are never inspected or stored.
+        if (SharedMonitoringState.isNotificationExcluded(sbn.packageName)) return
         if (!AppStateHolder.isScreenOn.value) {
             return
         }
@@ -59,9 +75,11 @@ class ZenithNotificationListener : NotificationListenerService() {
                     pkg in SharedMonitoringState.whitelistedPackages
                 if (!isAllowed) {
                     cancelNotification(sbn.key)
-                    val extras = sbn.notification.extras
-                    val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
-                    val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
+                    // Only read notification content when the user allows it to be stored.
+                    val storeContent = SharedMonitoringState.storeInterceptedNotificationContent
+                    val extras = if (storeContent) sbn.notification.extras else null
+                    val title = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString()
+                    val text = extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString()
                     database.interceptedNotificationDao().insert(
                         InterceptedNotificationEntity(
                             packageName = pkg,
@@ -109,6 +127,7 @@ class ZenithNotificationListener : NotificationListenerService() {
     override fun onDestroy() {
         super.onDestroy()
         cachedActiveSchedules = null
+        preferencesJob?.cancel()
         serviceScope.cancel()
     }
 
@@ -118,8 +137,18 @@ class ZenithNotificationListener : NotificationListenerService() {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
             CoroutineScope(Dispatchers.IO).launch {
-                val notifications = database.interceptedNotificationDao().getNotificationsByScheduleId(-1L)
-                if (notifications.isEmpty()) return@launch
+                val prefs = UserPreferencesRepository(context).userPreferencesFlow.first()
+                val excluded = prefs.privatePackages + prefs.notificationExcludedPackages
+                if (excluded.isNotEmpty()) {
+                    database.interceptedNotificationDao().deleteByPackages(excluded.toList())
+                }
+                val notifications = database.interceptedNotificationDao()
+                    .getNotificationsByScheduleId(-1L)
+                    .filterNot { it.packageName in excluded }
+                if (notifications.isEmpty()) {
+                    database.interceptedNotificationDao().deleteByScheduleId(-1L)
+                    return@launch
+                }
 
                 val channelId = "zenith_restored_notifications"
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -189,8 +218,15 @@ class ZenithNotificationListener : NotificationListenerService() {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             
             CoroutineScope(Dispatchers.IO).launch {
-                val notifications = database.interceptedNotificationDao().getNotificationsByScheduleId(scheduleId)
-                
+                val prefs = UserPreferencesRepository(context).userPreferencesFlow.first()
+                val excluded = prefs.privatePackages + prefs.notificationExcludedPackages
+                if (excluded.isNotEmpty()) {
+                    database.interceptedNotificationDao().deleteByPackages(excluded.toList())
+                }
+                val notifications = database.interceptedNotificationDao()
+                    .getNotificationsByScheduleId(scheduleId)
+                    .filterNot { it.packageName in excluded }
+
                 val channelId = "zenith_restored_notifications"
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                     val channel = NotificationChannel(

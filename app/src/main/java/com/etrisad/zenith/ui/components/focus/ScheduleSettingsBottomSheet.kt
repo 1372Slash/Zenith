@@ -349,7 +349,7 @@ fun ScheduleSettingsBottomSheet(
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = if (mode == ScheduleMode.ALLOW) "Uses for non-whitelisted apps" else "Uses for blocked apps",
+                                        text = if (mode == ScheduleMode.ALLOW) "Uses for restricted apps" else "Uses for blocked apps",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )

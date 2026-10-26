@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import com.etrisad.zenith.ZenithApplication
 import com.etrisad.zenith.data.manager.GitHubUpdateManager
 import com.etrisad.zenith.data.preferences.PerformanceConfig
 import com.etrisad.zenith.data.preferences.ThemeConfig
@@ -43,6 +44,7 @@ fun SettingsScreen(
     val preferences by preferencesRepository.userPreferencesFlow.collectAsState(initial = UserPreferences())
     val coroutineScope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val app = context.applicationContext as ZenithApplication
     
     val updateManager = remember { GitHubUpdateManager(context) }
     var checkingForUpdate by remember { mutableStateOf(false) }
@@ -51,7 +53,7 @@ fun SettingsScreen(
     var latestRelease by remember { mutableStateOf<GitHubRelease?>(null) }
     var allReleases by remember { mutableStateOf<List<GitHubRelease>>(emptyList()) }
     var showWhitelistSheet by remember { mutableStateOf(false) }
-    var showExcludeFromTrackingSheet by remember { mutableStateOf(false) }
+    var showAppExclusionsSheet by remember { mutableStateOf(false) }
     var showDiagnosticSheet by remember { mutableStateOf(false) }
     var diagnosticTargetUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var diagnosticDisplayName by remember { mutableStateOf<String?>(null) }
@@ -157,7 +159,7 @@ fun SettingsScreen(
                     onSetDelayAppDuration = { secs -> coroutineScope.launch { preferencesRepository.setDelayAppDuration(secs) } },
                     onSetDayStartTime = { hour, minute -> coroutineScope.launch { preferencesRepository.setDayStartTime(hour, minute) } },
                     onShowWhitelistSheetChange = { showWhitelistSheet = it },
-                    onShowExcludeFromTrackingSheetChange = { showExcludeFromTrackingSheet = it },
+                    onShowAppExclusionsSheetChange = { showAppExclusionsSheet = it },
                     onOpenPermissions = onOpenPermissions,
                     permissionsMissing = permissionsMissing
                 )
@@ -206,6 +208,15 @@ fun SettingsScreen(
                             )
                         }
                     }
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+                SettingsActionItem(
+                    title = "Privacy & Data",
+                    summary = "Private & hidden apps, accessibility mode, notification privacy",
+                    onClick = { navController.navigate(Screen.SettingsCategory.createRoute("Privacy")) },
+                    icon = Icons.Outlined.Security,
+                    shape = RoundedCornerShape(8.dp)
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -300,15 +311,20 @@ fun SettingsScreen(
         )
     }
 
-    if (showExcludeFromTrackingSheet) {
-        ExcludeFromTrackingBottomSheet(
-            initialExcluded = preferences.excludedFromTrackingPackages,
-            onDismiss = { showExcludeFromTrackingSheet = false },
-            onSave = { packages ->
-                coroutineScope.launch {
-                    preferencesRepository.setExcludedFromTrackingPackages(packages)
-                }
-                showExcludeFromTrackingSheet = false
+    if (showAppExclusionsSheet) {
+        AppExclusionsBottomSheet(
+            initialPrivateApps = preferences.privatePackages,
+            initialUsageOnlyApps = preferences.excludedFromTrackingPackages,
+            onDismiss = { showAppExclusionsSheet = false },
+            onSave = { privateApps, usageOnlyApps ->
+                applyAppExclusions(
+                    privateApps = privateApps,
+                    usageOnlyApps = usageOnlyApps,
+                    preferencesRepository = preferencesRepository,
+                    shieldRepository = app.shieldRepository,
+                    scope = coroutineScope
+                )
+                showAppExclusionsSheet = false
             }
         )
     }

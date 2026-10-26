@@ -186,18 +186,7 @@ class ZenithService : AccessibilityService() {
         instance = this
         lastEventTime = System.currentTimeMillis()
 
-        val info = android.accessibilityservice.AccessibilityServiceInfo().apply {
-            flags = android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
-                    android.accessibilityservice.AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
-                    android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
-                    android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
-            eventTypes = android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
-                    android.view.accessibility.AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED or
-                    android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
-            feedbackType = android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_GENERIC
-            notificationTimeout = 100
-        }
-        setServiceInfo(info)
+        applyAccessibilityServiceInfo(SharedMonitoringState.accessibilityLimitedMode)
 
         isServiceRunning = true
 
@@ -272,7 +261,18 @@ class ZenithService : AccessibilityService() {
                 SharedMonitoringState.whitelistedPackages = preferences.whitelistedPackages
                 SharedMonitoringState.bedtimeWhitelistedPackages = preferences.bedtimeWhitelistedPackages
                 SharedMonitoringState.excludedFromTrackingPackages = preferences.excludedFromTrackingPackages
-                
+                val privateAppsChanged = SharedMonitoringState.privatePackages != preferences.privatePackages
+                SharedMonitoringState.privatePackages = preferences.privatePackages
+                SharedMonitoringState.accessibilityLimitedMode = preferences.accessibilityLimitedMode
+                SharedMonitoringState.notificationInterceptionEnabled = preferences.notificationInterceptionEnabled
+                SharedMonitoringState.notificationExcludedPackages = preferences.notificationExcludedPackages
+                SharedMonitoringState.storeInterceptedNotificationContent = preferences.storeInterceptedNotificationContent
+                applyAccessibilityServiceInfo(preferences.accessibilityLimitedMode)
+                SharedMonitoringState.updateRestrictedPackages()
+                if (privateAppsChanged) {
+                    com.etrisad.zenith.util.ScreenUsageHelper.clearCache()
+                }
+
                 val isFirstLoad = SharedMonitoringState.lastBankingAppsCount == -1
                 if (isFirstLoad) {
                     SharedMonitoringState.lastBankingAppsCount = preferences.lastBankingAppsCount
@@ -317,7 +317,9 @@ class ZenithService : AccessibilityService() {
         serviceScope.launch {
             delay(200)
             val pkg = queryCurrentForegroundApp()
-            if (pkg != null && pkg != packageName && lastForegroundApp == null) {
+            if (pkg != null && pkg != packageName && lastForegroundApp == null &&
+                !SharedMonitoringState.isPrivatePackage(pkg)
+            ) {
                 if (SharedMonitoringState.isFinancialApp(pkg)) {
                     return@launch
                 }
@@ -325,11 +327,14 @@ class ZenithService : AccessibilityService() {
                 AppStateHolder.foregroundApp.value = pkg
                 packageChangeFlow.tryEmit(pkg)
             }
-            if (lastForegroundApp == null) {
+            if (lastForegroundApp == null && !SharedMonitoringState.accessibilityLimitedMode) {
                 val windowPkg = withContext(Dispatchers.Main) {
                     rootInActiveWindow?.packageName?.toString()
                 }
-                if (windowPkg != null && windowPkg != packageName && !shouldBypassBlocking(windowPkg)) {
+                if (windowPkg != null && windowPkg != packageName &&
+                    !SharedMonitoringState.isPrivatePackage(windowPkg) &&
+                    !shouldBypassBlocking(windowPkg)
+                ) {
                     if (SharedMonitoringState.isFinancialApp(windowPkg)) {
                         return@launch
                     }
@@ -341,6 +346,38 @@ class ZenithService : AccessibilityService() {
         }
 
         startEventDrivenMonitoring()
+    }
+
+    @Volatile
+    private var appliedLimitedMode: Boolean? = null
+
+    /**
+     * Applies the accessibility event/flag set the user asked for.
+     *
+     * Limited mode subscribes to window-state changes only. It does not request content
+     * change events, text change events, interactive windows, or key-event filtering, so
+     * Zenith only learns which app came to the foreground.
+     */
+    private fun applyAccessibilityServiceInfo(limited: Boolean) {
+        if (appliedLimitedMode == limited) return
+        appliedLimitedMode = limited
+        val info = android.accessibilityservice.AccessibilityServiceInfo().apply {
+            if (limited) {
+                flags = 0
+                eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+            } else {
+                flags = android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                        android.accessibilityservice.AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
+                        android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+                        android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
+                eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
+                        AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED or
+                        AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+            }
+            feedbackType = android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_GENERIC
+            notificationTimeout = 100
+        }
+        setServiceInfo(info)
     }
 
     private fun startEventDrivenMonitoring() {
@@ -356,6 +393,13 @@ class ZenithService : AccessibilityService() {
                 delay(cfgDelay.coerceIn(2_500L, 15_000L))
                 try {
                     val realPkg = queryCurrentForegroundApp()
+                    if (realPkg != null && SharedMonitoringState.isPrivatePackage(realPkg)) {
+                        lastForegroundApp = realPkg
+                        AppStateHolder.foregroundApp.value = realPkg
+                        sessionUsageOverlayManager.pauseAllSessions()
+                        overlayManager.hideOverlay()
+                        continue
+                    }
                     if (realPkg != null && realPkg != lastForegroundApp && !InterceptOverlayManager.isSystemUiPackage(realPkg) && !isKeyboardApp(realPkg)) {
                         OverlayLogBuffer.d("Monitor", "Stale detection: $lastForegroundApp -> $realPkg")
                         lastForegroundApp = realPkg
@@ -406,6 +450,19 @@ class ZenithService : AccessibilityService() {
 
         val packageName = event.packageName?.toString() ?: return
         if (packageName == this.packageName) return
+
+        // Private apps are skipped before any inspection, tracking, or blocking.
+        // Still publish the foreground app so the monitor service can close out the
+        // previous session and hide any usage HUD without recording this app.
+        if (SharedMonitoringState.isPrivatePackage(packageName)) {
+            lastForegroundApp = packageName
+            AppStateHolder.foregroundApp.value = packageName
+            overlayManager.hideOverlay()
+            return
+        }
+
+        // Limited mode only reacts to app switches, never to screen content or text input.
+        if (SharedMonitoringState.accessibilityLimitedMode && !isWindowState) return
 
         val className = event.className?.toString() ?: ""
         if (className.contains("Toast") || className.contains("Notification") || className.contains("Tooltip")) {
@@ -463,7 +520,9 @@ class ZenithService : AccessibilityService() {
         }
         AppStateHolder.foregroundApp.value = packageName
 
-        if (com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(packageName)) {
+        if (!SharedMonitoringState.accessibilityLimitedMode &&
+            com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(packageName)
+        ) {
             WebsiteStateHolder.currentWebsiteDomain.value?.let { domain ->
                 overlayActionHandler.cancelWebsiteSessionDismiss("zenith-web:$domain")
             }
@@ -685,8 +744,13 @@ class ZenithService : AccessibilityService() {
 
     private suspend fun handlePackageChange(currentApp: String) {
         OverlayLogBuffer.d("Zenith_HPC", "handlePackageChange: $currentApp (lfga=$lastForegroundApp, isShowing=${InterceptOverlayManager.isShowing})")
-        val actualPkg = withContext(Dispatchers.Main) {
-            rootInActiveWindow?.packageName?.toString()
+        if (SharedMonitoringState.isPrivatePackage(currentApp)) return
+        val actualPkg = if (SharedMonitoringState.accessibilityLimitedMode) {
+            null
+        } else {
+            withContext(Dispatchers.Main) {
+                rootInActiveWindow?.packageName?.toString()
+            }
         }
         if (actualPkg != null && actualPkg != currentApp && actualPkg != packageName && 
             !InterceptOverlayManager.isSystemUiPackage(actualPkg) && !isKeyboardApp(actualPkg)) {
@@ -747,6 +811,7 @@ class ZenithService : AccessibilityService() {
             val bypassedPkg = currentApp
             bypassCheckRunnable?.let { mainHandler.removeCallbacks(it) }
             bypassCheckRunnable = Runnable {
+                if (SharedMonitoringState.accessibilityLimitedMode) return@Runnable
                 if (!AppStateHolder.isScreenOn.value) {
                     return@Runnable
                 }
@@ -1216,7 +1281,8 @@ class ZenithService : AccessibilityService() {
             refreshLauncherCache()
         }
 
-        val excludePackages = setOfNotNull(packageName, SharedMonitoringState.defaultLauncherPackage) + SharedMonitoringState.excludedFromTrackingPackages
+        val excludePackages = setOfNotNull(packageName, SharedMonitoringState.defaultLauncherPackage) +
+            SharedMonitoringState.excludedFromTrackingPackages + SharedMonitoringState.privatePackages
 
         val detailedUsage = com.etrisad.zenith.util.ScreenUsageHelper.fetchDetailedUsageToday(usageStatsManager, dayStartHour = SharedMonitoringState.cachedDayStartHour, dayStartMinute = SharedMonitoringState.cachedDayStartMinute)
         val accurateUsageMap = detailedUsage.appUsageMap
@@ -1545,6 +1611,7 @@ class ZenithService : AccessibilityService() {
         )
     }
     override fun onKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (SharedMonitoringState.accessibilityLimitedMode) return false
         if (event.keyCode == android.view.KeyEvent.KEYCODE_BACK &&
             event.action == android.view.KeyEvent.ACTION_DOWN &&
             InterceptOverlayManager.isShowing

@@ -3,6 +3,7 @@ package com.etrisad.zenith.util
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.util.SparseArray
+import com.etrisad.zenith.service.SharedMonitoringState
 import java.time.Instant
 import java.time.ZoneId
 
@@ -102,11 +103,12 @@ object ScreenUsageHelper {
                 null
             }
             val lastUsedMap = mutableMapOf<String, Long>()
-            aggregatedStats?.forEach { (pkg, stats) ->
+            val visibleStats = aggregatedStats?.filterKeys { !SharedMonitoringState.isPrivatePackage(it) }
+            visibleStats?.forEach { (pkg, stats) ->
                 lastUsedMap[pkg] = stats.lastTimeUsed
             }
 
-            val rawResult = buildResult(currentTime, todayStart, zoneId, includeHourly, lastUsedMap, aggregatedStats)
+            val rawResult = buildResult(currentTime, todayStart, zoneId, includeHourly, lastUsedMap, visibleStats)
             val rounded = rawResult.copy(
                 appUsageMap = rawResult.appUsageMap.mapValues { (it.value / 1000L) * 1000L },
                 hourlyUsageMap = rawResult.hourlyUsageMap.mapValues { hEntry ->
@@ -129,6 +131,29 @@ object ScreenUsageHelper {
         zoneId: ZoneId,
         includeHourly: Boolean
     ) {
+        // Drop any active segment that belongs to an app now marked private without
+        // committing its duration to the in-memory totals.
+        if (currentActivePkg?.let { SharedMonitoringState.isPrivatePackage(it) } == true) {
+            currentActivePkg = null
+            currentActiveStartTime = 0L
+        }
+        val isAppTransition = event.eventType == UsageEvents.Event.ACTIVITY_RESUMED ||
+            event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND ||
+            event.eventType == UsageEvents.Event.ACTIVITY_PAUSED ||
+            event.eventType == UsageEvents.Event.MOVE_TO_BACKGROUND
+        // Private apps are dropped before their events affect any cached totals.
+        if (isAppTransition && SharedMonitoringState.isPrivatePackage(pkg)) {
+            if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED ||
+                event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND
+            ) {
+                currentActivePkg?.let { active ->
+                    commitSegment(active, currentActiveStartTime, time, todayStart, endQuery, zoneId, includeHourly)
+                }
+                currentActivePkg = null
+                currentActiveStartTime = 0L
+            }
+            return
+        }
         when (event.eventType) {
             UsageEvents.Event.SCREEN_INTERACTIVE -> currentIsScreenOn = true
             UsageEvents.Event.SCREEN_NON_INTERACTIVE -> {
@@ -404,7 +429,7 @@ object ScreenUsageHelper {
             }
         }
 
-        return usageMap
+        return usageMap.filterKeys { !SharedMonitoringState.isPrivatePackage(it) }
     }
 
     fun clearCache() {

@@ -42,7 +42,7 @@ fun DataManagementSettings(
 
         SettingsToggle(
             title = "Auto Backup",
-            description = "Periodically backup your database to a folder",
+            description = "Periodically copy the full database (history included) to a folder",
             checked = preferences.autoBackupEnabled,
             onCheckedChange = onAutoBackupEnabledChange,
             icon = Icons.Outlined.AutoMode,
@@ -73,7 +73,7 @@ fun DataManagementSettings(
         Spacer(modifier = Modifier.height(4.dp))
         SettingsActionItem(
             title = "Manual Backup",
-            summary = "Save your settings and schedules to a file now",
+            summary = "Save a full local copy (usage history + settings) to a file now",
             onClick = onBackup,
             icon = Icons.Outlined.Backup,
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 8.dp, bottomEnd = 8.dp)

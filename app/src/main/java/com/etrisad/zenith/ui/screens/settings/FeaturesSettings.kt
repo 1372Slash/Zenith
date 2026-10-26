@@ -185,7 +185,7 @@ fun FeaturesSettings(
 
         SettingsToggle(
             title = "Mindful Gateway",
-            description = "Interrupt every non-whitelisted app with a mindful pause, even without a specific shield",
+            description = "Interrupt every restricted app with a mindful pause, even without a specific shield",
             checked = preferences.mindfulGatewayEnabled,
             onCheckedChange = onMindfulGatewayEnabledChange,
             icon = Icons.Outlined.AutoFixHigh,

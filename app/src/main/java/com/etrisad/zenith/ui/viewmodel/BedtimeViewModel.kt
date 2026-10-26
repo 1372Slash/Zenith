@@ -101,7 +101,9 @@ class BedtimeViewModel(
             val now = System.currentTimeMillis()
             
             val (launcherApps, launcherPackage) = getLauncherInfo()
-            val excludePackages = setOfNotNull(context.packageName, launcherPackage) + com.etrisad.zenith.service.SharedMonitoringState.excludedFromTrackingPackages
+            val excludePackages = setOfNotNull(context.packageName, launcherPackage) +
+                com.etrisad.zenith.service.SharedMonitoringState.excludedFromTrackingPackages +
+                com.etrisad.zenith.service.SharedMonitoringState.privatePackages
 
             val startH = try { prefs.bedtimeStartTime.split(":")[0].toInt() } catch(_: Exception) { 22 }
             val startM = try { prefs.bedtimeStartTime.split(":")[1].toInt() } catch(_: Exception) { 0 }
