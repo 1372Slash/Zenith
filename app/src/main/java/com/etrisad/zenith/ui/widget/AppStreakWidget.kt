@@ -149,7 +149,7 @@ class AppStreakWidget : GlanceAppWidget() {
 
                 Box(
                     modifier = GlanceModifier.fillMaxSize()
-                        .cornerRadius(100.dp)
+                        .cornerRadius(with(LocalSize.current) { minOf(width, height) / 10f })
                         .clickable(mainAction)
                 ) {
                     if (!packageToDisplay.isNullOrEmpty()) {

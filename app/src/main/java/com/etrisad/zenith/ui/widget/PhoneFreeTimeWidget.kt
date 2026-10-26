@@ -85,7 +85,7 @@ class PhoneFreeTimeWidget : GlanceAppWidget() {
                 val intent = Intent(context, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
                 val action = actionStartActivity(intent)
                 Box(
-                    modifier = GlanceModifier.fillMaxSize().cornerRadius(100.dp).clickable(action),
+                    modifier = GlanceModifier.fillMaxSize().cornerRadius(with(LocalSize.current) { minOf(width, height) / 10f }).clickable(action),
                     contentAlignment = Alignment.Center
                 ) {
                     PhoneFreeContent(
