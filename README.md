@@ -151,7 +151,7 @@ These are optional, but they make Zenith much more reliable and powerful.
 
 ## Support the Project
 
-If you find Zenith helpful and would like to support its development, you can support me on Ko-fi. Your contribution helps keep the project alive and improving!
+If you find Zenith helpful and would like to support its development, you can support me on Ko-fi. Your contribution helps keep the project alive and improving! :)
 
 <p align="left">
   <a href="https://ko-fi.com/1372slash">
