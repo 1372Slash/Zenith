@@ -27,8 +27,6 @@ object SharedMonitoringState {
     @Volatile var bedtimeWhitelistedPackages = emptySet<String>()
     @Volatile var excludedFromTrackingPackages = emptySet<String>()
     @Volatile var privatePackages = emptySet<String>()
-    // Privacy-first until the persisted preferences arrive: only app-switch events
-    // and no notification content are processed in the meantime.
     @Volatile var accessibilityLimitedMode = true
     @Volatile var notificationInterceptionEnabled = false
     @Volatile var notificationExcludedPackages = emptySet<String>()
@@ -131,8 +129,6 @@ object SharedMonitoringState {
 
     fun isFinancialApp(packageName: String): Boolean =
         packageName in FINANCIAL_APPS
-
-    /** Packages the user marked as private: never inspected, stored, or blocked. */
     fun isPrivatePackage(packageName: String): Boolean =
         packageName.isNotEmpty() && packageName in privatePackages
 

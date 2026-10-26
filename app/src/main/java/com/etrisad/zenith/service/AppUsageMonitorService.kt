@@ -1154,9 +1154,6 @@ class AppUsageMonitorService : Service() {
         if (SharedMonitoringState.launcherPackages.isEmpty() || currentTime - lastLauncherRefreshTime > 3600000) {
             refreshLauncherCache()
         }
-
-        // Private apps are never tracked, shielded, or shown in usage HUDs. Still close out
-        // the previous session so time already spent elsewhere is not attributed to them.
         if (SharedMonitoringState.isPrivatePackage(currentApp)) {
             lastForegroundApp?.let { oldPkg ->
                 if (oldPkg.isNotEmpty() && oldPkg != currentApp && cachedTotalUsage > 0L) {
@@ -2597,14 +2594,6 @@ class AppUsageMonitorService : Service() {
         DbLogBuffer.e("ZenithAUMS", "startForeground failed (withCamera=$withCamera): ${t.message}")
         false
     }
-
-    /**
-     * Starts the foreground notification with explicit service types. Never
-     * requests the camera type on a background-started service (Android 14+
-     * rejects it and the service would never reach the foreground state).
-     * Falls back to specialUse-only, and returns false when every attempt
-     * fails so the caller can stopSelf() before the system times out.
-     */
     private fun startForegroundSafely(): Boolean {
         val notification = createNotification("Protecting your focus...")
         val prefs = SharedMonitoringState.currentPreferences

@@ -103,7 +103,8 @@ fun InterceptOverlayContent(
         return
     }
 
-    val pausePointEnabled = forcedTaskType != null || userPrefs.pausePointEnabled
+    val pausePointEnabled = forcedTaskType != null ||
+        (userPrefs.pausePointEnabled && (shield == null || shield.isPausePointEnabled))
     val enabledTypes = forcedTaskType?.let { setOf(it) } ?: userPrefs.pausePointTaskTypes
     var currentPauseTask by remember(packageName, forcedTaskType) { mutableStateOf<PausePointTask?>(null) }
     var pauseTaskCompleted by remember { mutableStateOf(false) }

@@ -44,13 +44,6 @@ object SafeMode {
         } catch (_: Throwable) {
         }
     }
-
-    /**
-     * Relaunches the app in a completely fresh process. Needed after toggling
-     * safe mode because repositories are bound to their store/database at
-     * first access. The queued activity start is handed to ActivityManager
-     * (synchronous binder call) before the process is killed.
-     */
     fun restartApp(context: Context) {
         try {
             val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)

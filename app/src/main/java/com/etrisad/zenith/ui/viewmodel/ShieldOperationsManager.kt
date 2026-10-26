@@ -18,6 +18,8 @@ class ShieldOperationsManager(
     fun saveFocus(
         packageName: String, appName: String, timeLimitMinutes: Int, maxEmergencyUses: Int,
         isRemindersEnabled: Boolean, isStrictModeEnabled: Boolean, isAutoQuitEnabled: Boolean,
+        isEndOverlayEnabled: Boolean = true,
+        isPausePointEnabled: Boolean = true,
         maxUsesPerPeriod: Int, refreshPeriodMinutes: Int, goalReminderPeriodMinutes: Int,
         isDelayAppEnabled: Boolean, isGoalCallerEnabled: Boolean = false,
         isGoalCallerSoundEnabled: Boolean = true, goalCallerSoundUri: String? = null,
@@ -34,6 +36,7 @@ class ShieldOperationsManager(
                 val existing = shieldRepository.getShieldByPackageName(packageName)
                 DbLogBuffer.d("ZenithGoalShield", "OPS_SAVE_EXISTING: ${if (existing != null) "UPDATE existing ${existing.type}" else "NEW insert"}")
                 val periodChanged = existing != null && existing.limitPeriod != limitPeriod
+                val effectiveAutoQuit = isAutoQuitEnabled || !isEndOverlayEnabled
                 val newRemainingMillis = if (periodChanged) timeLimitMinutes * 60 * 1000L else (existing?.remainingTimeMillis ?: (timeLimitMinutes * 60 * 1000L))
                 val shield = existing?.copy(
                     appName = appName,
@@ -41,7 +44,9 @@ class ShieldOperationsManager(
                     timeLimitMinutes = timeLimitMinutes, limitPeriod = limitPeriod,
                     remainingTimeMillis = newRemainingMillis, maxEmergencyUses = maxEmergencyUses,
                     isRemindersEnabled = isRemindersEnabled, isStrictModeEnabled = isStrictModeEnabled,
-                    isAutoQuitEnabled = isAutoQuitEnabled, maxUsesPerPeriod = maxUsesPerPeriod,
+                    isAutoQuitEnabled = effectiveAutoQuit, isEndOverlayEnabled = isEndOverlayEnabled,
+                    isPausePointEnabled = isPausePointEnabled,
+                    maxUsesPerPeriod = maxUsesPerPeriod,
                     refreshPeriodMinutes = refreshPeriodMinutes, goalReminderPeriodMinutes = goalReminderPeriodMinutes,
                     isDelayAppEnabled = isDelayAppEnabled, isGoalCallerEnabled = isGoalCallerEnabled,
                     isGoalCallerSoundEnabled = isGoalCallerSoundEnabled, goalCallerSoundUri = goalCallerSoundUri,
@@ -52,7 +57,9 @@ class ShieldOperationsManager(
                     timeLimitMinutes = timeLimitMinutes, limitPeriod = limitPeriod,
                     remainingTimeMillis = newRemainingMillis, maxEmergencyUses = maxEmergencyUses,
                     isRemindersEnabled = isRemindersEnabled, isStrictModeEnabled = isStrictModeEnabled,
-                    isAutoQuitEnabled = isAutoQuitEnabled, maxUsesPerPeriod = maxUsesPerPeriod,
+                    isAutoQuitEnabled = effectiveAutoQuit, isEndOverlayEnabled = isEndOverlayEnabled,
+                    isPausePointEnabled = isPausePointEnabled,
+                    maxUsesPerPeriod = maxUsesPerPeriod,
                     refreshPeriodMinutes = refreshPeriodMinutes, goalReminderPeriodMinutes = goalReminderPeriodMinutes,
                     isDelayAppEnabled = isDelayAppEnabled, isGoalCallerEnabled = isGoalCallerEnabled,
                     isGoalCallerSoundEnabled = isGoalCallerSoundEnabled, goalCallerSoundUri = goalCallerSoundUri,

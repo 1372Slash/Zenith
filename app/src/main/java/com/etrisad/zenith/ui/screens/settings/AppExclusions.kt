@@ -6,12 +6,6 @@ import com.etrisad.zenith.service.SharedMonitoringState
 import com.etrisad.zenith.util.ScreenUsageHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-
-/**
- * Pushes an App Exclusions selection through the in-memory privacy state first so
- * services stop observing newly private apps immediately, then persists it and
- * purges data that was stored before the app became private.
- */
 internal fun applyAppExclusions(
     privateApps: Set<String>,
     usageOnlyApps: Set<String>,

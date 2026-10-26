@@ -2,12 +2,6 @@ package com.etrisad.zenith.util
 
 import com.etrisad.zenith.data.model.AlarmItem
 object AlarmChainHelper {
-
-    /**
-     * Stable identity key for one firing alarm. Prefers the database id;
-     * falls back to the HH:mm string for legacy intents scheduled before the
-     * id was carried end-to-end (those always use alarmId = 0).
-     */
     fun alarmKey(alarmId: Long, alarmTime: String): String =
         if (alarmId > 0L) "id:$alarmId" else "time:$alarmTime"
 

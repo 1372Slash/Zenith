@@ -268,8 +268,6 @@ class AlarmOverlayActivity : ComponentActivity() {
 
         val newKey = AlarmChainHelper.alarmKey(newAlarmId, newAlarmTime)
         if (newKey != AlarmChainHelper.alarmKey(alarmId, alarmTime)) {
-            // Alarm lain preempt overlay: kunci window wake-up yang berjalan ke
-            // offset agar progres tidak hilang, slot dipertahankan per alarm.
             suspendWakeUpForSwitch()
         }
         alarmTime = newAlarmTime
@@ -280,8 +278,6 @@ class AlarmOverlayActivity : ComponentActivity() {
         testMathChallenge = intent.getBooleanExtra(EXTRA_TEST_MATH_CHALLENGE, false)
         testAlarmJson = intent.getStringExtra(EXTRA_TEST_ALARM_JSON)
         testGradualVolume = intent.getBooleanExtra(EXTRA_TEST_GRADUAL_VOLUME, false)
-        // Prefill UI dari slot yang dipertahankan agar progres tidak berkedip ke nol;
-        // LaunchedEffect setelah recompose akan me-resume window tracking-nya.
         val slot = wakeUpSlots[newKey]
         wakeUpAccumulatedSeconds = ((slot?.offsetMs ?: 0L) / 1000).toInt()
         wakeUpComplete = slot?.complete ?: false
@@ -384,7 +380,6 @@ class AlarmOverlayActivity : ComponentActivity() {
     }
 
     private fun snooze() {
-        // Test mode: snooze only closes the test, doesn't schedule a real alarm.
         if (testAlarmJson != null) {
             stopAlarmAndFinish()
             return
@@ -413,7 +408,6 @@ class AlarmOverlayActivity : ComponentActivity() {
                         resolvedId
                     )
                 } else {
-                    // Snooze quota spent: don't hang; fall back to the normal smart chain.
                     AlarmBroadcastReceiver.cancelSmartChain(this@AlarmOverlayActivity, wantTime, resolvedId)
                 }
             } catch (_: Exception) { }
@@ -475,8 +469,6 @@ class AlarmOverlayActivity : ComponentActivity() {
             bound = false
         } else {
             playbackService?.stopPlayback()
-            // Service may not have bound yet (e.g. overlay opened via notif);
-            // make sure sound stops with an explicit stopService.
             try { stopService(Intent(this, AlarmPlaybackService::class.java)) } catch (_: Exception) { }
         }
         if (wakeLock?.isHeld == true) {
@@ -503,12 +495,6 @@ class AlarmOverlayActivity : ComponentActivity() {
         }
         wakeLock = null
     }
-
-    /**
-     * Ask the system to show the unlock screen so startActivity to another
-     * app/Settings can run from above the lockscreen. Only called from explicit
-     * user action — never automatically when the alarm fires.
-     */
     private fun requestUnlockForExternalLaunch() {
         try {
             val keyguardManager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager

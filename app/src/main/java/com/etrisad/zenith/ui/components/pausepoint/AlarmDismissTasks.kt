@@ -2,8 +2,6 @@ package com.etrisad.zenith.ui.components.pausepoint
 object AlarmDismissTasks {
     val availableTypes: List<PausePointTaskType> =
         PausePointTaskType.entries.filter { it != PausePointTaskType.CHOOSE_APP }
-
-    /** Lenient parse: unknown or unavailable names are dropped, never crash. */
     fun parseNames(names: Set<String>): Set<PausePointTaskType> =
         names.mapNotNull { runCatching { PausePointTaskType.valueOf(it) }.getOrNull() }
             .filter { it in availableTypes }

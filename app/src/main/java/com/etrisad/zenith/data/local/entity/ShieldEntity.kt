@@ -31,6 +31,10 @@ data class ShieldEntity(
     val isRemindersEnabled: Boolean = true,
     val isStrictModeEnabled: Boolean = false,
     val isAutoQuitEnabled: Boolean = false,
+    @androidx.room.ColumnInfo(defaultValue = "1")
+    val isEndOverlayEnabled: Boolean = true,
+    @androidx.room.ColumnInfo(defaultValue = "1")
+    val isPausePointEnabled: Boolean = true,
     val remainingTimeMillis: Long = 0L,
     val lastUsedTimestamp: Long = 0L,
     val maxUsesPerPeriod: Int = 5,

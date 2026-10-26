@@ -188,12 +188,6 @@ class ProfileViewModel(
             progressSeenKey(event.defId, band)
         }
     }
-
-    /**
-     * Persists banner-seen keys so the same banner never shows twice:
-     * re-entry, resume, and Clear all can never resurrect it, while a
-     * newly reached tier still earns its own celebration.
-     */
     private fun markBannersSeen(defIds: List<String>) {
         val fresh = defIds.filter { it.isNotBlank() }.toSet()
         if (fresh.isEmpty()) return

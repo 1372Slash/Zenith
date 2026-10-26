@@ -285,7 +285,7 @@ fun MainScreen(
         currentRoute == Screen.GracePeriod.route && preferences.gracePeriodEnabled -> "grace"
         currentRoute == Screen.EyeCare.route && preferences.eyeCareEnabled -> "eye"
         currentRoute == Screen.Lockdown.route && preferences.lockdownEnabled -> "lockdown"
-        currentRoute == Screen.PausePoint.route && preferences.pausePointEnabled -> "pause"
+        currentRoute == Screen.PausePoint.route -> "pause"
         currentRoute == Screen.Alarm.route -> "alarm"
         else -> null
     }

@@ -41,16 +41,12 @@ object CrashHandler {
                         false
                     }
                     if (looping || !visible) {
-                        // The activity start above can be blocked for background
-                        // apps on some devices; the notification is the guaranteed
-                        // way back to the report.
                         postCrashNotification(app)
                     }
                 }
             } catch (_: Throwable) {
             }
             if (!handled) {
-                // Could not write anything: let the platform handle it as usual.
                 try {
                     previous?.uncaughtException(thread, throwable)
                 } catch (_: Throwable) {
@@ -66,8 +62,6 @@ object CrashHandler {
             context.startActivity(intent)
         } catch (_: Throwable) {
         }
-        // Backup launch: the direct start is issued right before the process
-        // dies, which some OEMs drop. CrashActivity cancels this alarm on open.
         try {
             val pending = PendingIntent.getActivity(
                 context,

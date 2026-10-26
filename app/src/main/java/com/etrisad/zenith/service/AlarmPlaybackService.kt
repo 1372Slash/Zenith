@@ -41,7 +41,6 @@ class AlarmPlaybackService : Service() {
     private var playbackGeneration = 0
     private var ttsRetryCount = 0
     private var vibrator: Vibrator? = null
-    /** Pre-alarm STREAM_ALARM level, restored on stop. -1 = nothing to restore. */
     private var originalAlarmVolume = -1
 
     @Volatile

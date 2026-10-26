@@ -182,8 +182,6 @@ fun LongTermSection(
             val bestMillis = bestIdx?.let {
                 if (weekMode) selectedWeek?.getOrNull(it) else periodDays.getOrNull(it)
             }
-            // "vs last" compares whole periods; in week-drilldown the other
-            // tiles show the week, so a period delta would be incoherent.
             val deltaPct = if (weekMode) null
             else if (prevTotal != null && prevTotal > 0L) {
                 (totalMillis - prevTotal).toFloat() / prevTotal

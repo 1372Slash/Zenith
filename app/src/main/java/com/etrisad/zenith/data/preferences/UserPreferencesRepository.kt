@@ -953,8 +953,6 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
     }
 
     suspend fun setScreenTimeTarget(minutes: Int) {
-        // Direct key read: avoids building the full ~150-field UserPreferences
-        // (with Moshi parses) just to compare one int.
         val currentTarget = context.dataStore.data.first()[PreferencesKeys.SCREEN_TIME_TARGET] ?: 0
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.SCREEN_TIME_TARGET] = minutes
@@ -1086,7 +1084,6 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
     }
 
     suspend fun initializeDefaultWhitelist() {
-        // Direct key reads: this runs at startup, avoid the full prefs build.
         val initialized = context.runtimeDataStore.data.first()[RuntimeKeys.WHITELIST_INITIALIZED] ?: false
         val existing = context.dataStore.data.first()[PreferencesKeys.WHITELISTED_PACKAGES]
             ?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet()
@@ -1408,7 +1405,6 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
     }
 
     suspend fun isGracePeriodEditAllowed(): Boolean {
-        // Direct key reads: avoid the full prefs build for two keys.
         val preferences = context.dataStore.data.first()
         if (!(preferences[PreferencesKeys.GRACE_PERIOD_EDIT_LOCK_ENABLED] ?: false)) return true
         val last = preferences[PreferencesKeys.GRACE_PERIOD_LAST_EDIT_TIMESTAMP] ?: 0L
@@ -1434,7 +1430,6 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 
     suspend fun setGracePeriodStartTime(time: String): Boolean {
         if (!isGracePeriodEditAllowed()) return false
-        // Direct key read for the paired value: avoid the full prefs build.
         val endTime = context.dataStore.data.first()[PreferencesKeys.GRACE_PERIOD_END_TIME] ?: "13:00"
         if (!isGracePeriodDurationValid(time, endTime)) return false
         context.dataStore.edit { preferences ->
@@ -1446,7 +1441,6 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 
     suspend fun setGracePeriodEndTime(time: String): Boolean {
         if (!isGracePeriodEditAllowed()) return false
-        // Direct key read for the paired value: avoid the full prefs build.
         val startTime = context.dataStore.data.first()[PreferencesKeys.GRACE_PERIOD_START_TIME] ?: "12:00"
         if (!isGracePeriodDurationValid(startTime, time)) return false
         context.dataStore.edit { preferences ->
@@ -1841,22 +1835,14 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
     suspend fun setAlarmMasterEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.ALARM_MASTER_ENABLED] = enabled }
     }
-
-    // Cold flow of the parsed alarm list: subscribe instead of building the full
-    // ~150-field UserPreferences + re-parsing at every call site.
     val alarmsListFlow: Flow<List<AlarmItem>> = context.dataStore.data
         .map { prefs -> parseAlarms(prefs[PreferencesKeys.ALARMS_JSON] ?: "[]") }
         .distinctUntilChanged()
 
     suspend fun getAlarmsSnapshot(): List<AlarmItem> {
-        // Single-key read + cached adapter: callers must use this instead of
-        // building the full UserPreferences just to parse one JSON string.
         val json = context.dataStore.data.first()[PreferencesKeys.ALARMS_JSON] ?: "[]"
         return parseAlarms(json)
     }
-
-    // Serializes concurrent read-modify-writes of ALARMS_JSON (UI actions +
-    // watchdog/boot/overlay can interleave) so no update is silently lost.
     private val alarmsMutex = kotlinx.coroutines.sync.Mutex()
 
     suspend fun addAlarm(alarm: AlarmItem) {

@@ -350,14 +350,6 @@ class ZenithService : AccessibilityService() {
 
     @Volatile
     private var appliedLimitedMode: Boolean? = null
-
-    /**
-     * Applies the accessibility event/flag set the user asked for.
-     *
-     * Limited mode subscribes to window-state changes only. It does not request content
-     * change events, text change events, interactive windows, or key-event filtering, so
-     * Zenith only learns which app came to the foreground.
-     */
     private fun applyAccessibilityServiceInfo(limited: Boolean) {
         if (appliedLimitedMode == limited) return
         appliedLimitedMode = limited

@@ -131,8 +131,6 @@ object ScreenUsageHelper {
         zoneId: ZoneId,
         includeHourly: Boolean
     ) {
-        // Drop any active segment that belongs to an app now marked private without
-        // committing its duration to the in-memory totals.
         if (currentActivePkg?.let { SharedMonitoringState.isPrivatePackage(it) } == true) {
             currentActivePkg = null
             currentActiveStartTime = 0L
@@ -141,7 +139,6 @@ object ScreenUsageHelper {
             event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND ||
             event.eventType == UsageEvents.Event.ACTIVITY_PAUSED ||
             event.eventType == UsageEvents.Event.MOVE_TO_BACKGROUND
-        // Private apps are dropped before their events affect any cached totals.
         if (isAppTransition && SharedMonitoringState.isPrivatePackage(pkg)) {
             if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED ||
                 event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND

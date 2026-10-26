@@ -92,24 +92,8 @@ class StreakCalculator(
         } catch (_: Exception) {
             return todayStr
         }
-        // Clamp future-dated anchors (clock changes, restore anomalies).
         return if (s > todayStr) todayStr else s
     }
-
-    /**
-     * Resolves verified usage of one app for one past day.
-     * Returns null when there is NO trustworthy evidence either way:
-     * - no Zenith row for the package that day, AND
-     * - no TOTAL row proving the tracker even ran that day, AND
-     * - (optionally) no OS entry for the package.
-     * Callers must treat null as "unknown" and stop the streak run, a missing
-     * row alone is not proof of zero usage (fresh install, permission gap,
-     * pruned DB), and assuming success is exactly what fabricated streaks.
-     * The one safe inference: when the tracker provably ran (TOTAL row
-     * exists) but recorded nothing for this package, SHIELD usage was 0.
-     * For GOAL the same 0 is returned and the type comparison fails it, since
-     * a goal needs affirmative usage to count.
-     */
     private suspend fun resolvePastDayUsage(
         pkg: String,
         dStr: String,

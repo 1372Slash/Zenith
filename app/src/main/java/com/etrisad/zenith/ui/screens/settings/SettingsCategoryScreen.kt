@@ -270,8 +270,6 @@ fun SettingsCategoryScreen(
                             )
                         },
                         onAccessibilityLimitedModeChange = { enabled ->
-                            // Apply immediately so the accessibility service stops requesting
-                            // content events without waiting for the DataStore round-trip.
                             SharedMonitoringState.accessibilityLimitedMode = enabled
                             coroutineScope.launch { preferencesRepository.setAccessibilityLimitedMode(enabled) }
                         },
@@ -294,7 +292,6 @@ fun SettingsCategoryScreen(
                             coroutineScope.launch {
                                 preferencesRepository.setStoreInterceptedNotificationContent(enabled)
                                 if (!enabled) {
-                                    // Scrubs title/body from already-stored notifications.
                                     app.shieldRepository.scrubInterceptedNotificationContent()
                                 }
                             }

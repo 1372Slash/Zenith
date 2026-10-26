@@ -357,11 +357,6 @@ class HomeViewModel(
         UsageGraphLogBuffer.d("GRAPH_WEEK", "OLDER_CHUNK: offset=$chunkOffset preferSystem=$preferSystem days=[${dbgDays.joinToString(" ")}]")
         result
     }
-
-    /**
-     * Loads one 7-day per-app history chunk beyond the live 21-day window.
-     * Same chunking as [getGlobalWeekHistory]. Always returns exactly 7 entries.
-     */
     suspend fun getPerAppWeekHistory(packageName: String, chunkOffset: Int): List<DailyUsage> = withContext(Dispatchers.IO) {
         val dateFormat = usageHistoryManager.getDateFormat()
         val isWebsite = com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(packageName)
@@ -1853,7 +1848,7 @@ class HomeViewModel(
 
     fun saveFocus(
         packageName: String, appName: String, timeLimitMinutes: Int, maxEmergencyUses: Int, isRemindersEnabled: Boolean,
-        isStrictModeEnabled: Boolean, isAutoQuitEnabled: Boolean, maxUsesPerPeriod: Int, refreshPeriodMinutes: Int,
+        isStrictModeEnabled: Boolean, isAutoQuitEnabled: Boolean, isEndOverlayEnabled: Boolean = true, isPausePointEnabled: Boolean = true, maxUsesPerPeriod: Int, refreshPeriodMinutes: Int,
         goalReminderPeriodMinutes: Int, isDelayAppEnabled: Boolean, isGoalCallerEnabled: Boolean = false,
         isGoalCallerSoundEnabled: Boolean = true, goalCallerSoundUri: String? = null,
         limitPeriod: LimitPeriod = LimitPeriod.DAILY,
@@ -1863,7 +1858,7 @@ class HomeViewModel(
         val type = _appDetailUiState.value.type ?: FocusType.SHIELD
         shieldOperationsManager.saveFocus(
             packageName, appName, timeLimitMinutes, maxEmergencyUses, isRemindersEnabled,
-            isStrictModeEnabled, isAutoQuitEnabled, maxUsesPerPeriod, refreshPeriodMinutes,
+            isStrictModeEnabled, isAutoQuitEnabled, isEndOverlayEnabled, isPausePointEnabled, maxUsesPerPeriod, refreshPeriodMinutes,
             goalReminderPeriodMinutes, isDelayAppEnabled, isGoalCallerEnabled, isGoalCallerSoundEnabled,
             goalCallerSoundUri, limitPeriod, type, viewModelScope, ::closeSettingsSheet,
             isHUDEnabled = isHUDEnabled, activeDays = activeDays

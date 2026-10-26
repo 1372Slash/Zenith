@@ -34,7 +34,6 @@ class ZenithNotificationListener : NotificationListenerService() {
     override fun onCreate() {
         super.onCreate()
         database = ZenithDatabase.getDatabase(this)
-        // Keep privacy settings available even when the accessibility service is not running.
         preferencesJob = serviceScope.launch {
             UserPreferencesRepository(applicationContext).userPreferencesFlow.collectLatest { prefs ->
                 SharedMonitoringState.privatePackages = prefs.privatePackages
@@ -61,7 +60,6 @@ class ZenithNotificationListener : NotificationListenerService() {
         if (sbn.packageName == packageName) return
         if (sbn.isOngoing) return
         if (!SharedMonitoringState.notificationInterceptionEnabled) return
-        // Private and explicitly excluded apps are never inspected or stored.
         if (SharedMonitoringState.isNotificationExcluded(sbn.packageName)) return
         if (!AppStateHolder.isScreenOn.value) {
             return
@@ -75,7 +73,6 @@ class ZenithNotificationListener : NotificationListenerService() {
                     pkg in SharedMonitoringState.whitelistedPackages
                 if (!isAllowed) {
                     cancelNotification(sbn.key)
-                    // Only read notification content when the user allows it to be stored.
                     val storeContent = SharedMonitoringState.storeInterceptedNotificationContent
                     val extras = if (storeContent) sbn.notification.extras else null
                     val title = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString()

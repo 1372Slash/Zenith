@@ -63,8 +63,6 @@ object DiagnosticReportUtils {
         preferences: UserPreferences,
         userConfirmed: Boolean = false
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        // Consent is enforced in the data layer, not just the UI checkbox:
-        // programmatic callers without explicit confirmation get a failure.
         if (!userConfirmed) {
             return@withContext Result.failure(
                 IllegalStateException("Export consent not confirmed")
@@ -105,7 +103,6 @@ object DiagnosticReportUtils {
                     addTextEntry(zip, "usage_graph_logs.txt", usageGraphLogs)
                     addTextEntry(zip, "logcat.txt", logcat)
                     try {
-                        // Caught crashes, so the report always explains an abrupt stop.
                         for ((name, content) in CrashStore.reportEntries(context)) {
                             addTextEntry(zip, name, sanitizeLogText(content))
                         }
@@ -319,13 +316,6 @@ object DiagnosticReportUtils {
             appendLine("}")
         }
     }
-
-    /**
-     * Granted / not-granted states only, no details. Explains whole classes
-     * of bugs at a glance: shields never firing (accessibility/overlay off),
-     * stats stuck at zero (usage access off), bedtime DND not working,
-     * alarms inexact, service killed (battery optimization), Go-device limits.
-     */
     private fun buildSystemStatus(context: Context): String {
         fun check(block: () -> Boolean): Boolean = try {
             block()

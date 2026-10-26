@@ -299,11 +299,6 @@ class ShieldRepository(
         } catch (e: Exception) {
         }
     }
-
-    /**
-     * Removes stored usage history, intercepted notification content, and any shield
-     * configuration for apps the user marked as private.
-     */
     suspend fun purgePrivateAppData(packages: Set<String>) {
         if (packages.isEmpty()) return
         val packageList = packages.toList()

@@ -54,7 +54,7 @@ fun ShieldSettingsBottomSheet(
     usageToday: Long,
     existingShield: ShieldEntity?,
     onDismiss: () -> Unit,
-    onSave: (Int, Int, Boolean, Boolean, Boolean, Int, Int, Boolean, LimitPeriod, Set<Int>) -> Unit
+    onSave: (Int, Int, Boolean, Boolean, Boolean, Boolean, Boolean, Int, Int, Boolean, LimitPeriod, Set<Int>) -> Unit
 ) {
     val configuration = LocalConfiguration.current
     val context = LocalContext.current
@@ -76,6 +76,8 @@ fun ShieldSettingsBottomSheet(
     var remindersEnabled by remember { mutableStateOf(existingShield?.isRemindersEnabled ?: true) }
     var strictModeEnabled by remember { mutableStateOf(existingShield?.isStrictModeEnabled ?: false) }
     var autoQuitEnabled by remember { mutableStateOf(existingShield?.isAutoQuitEnabled ?: false) }
+    var endOverlayEnabled by remember { mutableStateOf(existingShield?.isEndOverlayEnabled ?: true) }
+    var pausePointEnabled by remember { mutableStateOf(existingShield?.isPausePointEnabled ?: true) }
     var isDelayAppEnabled by remember { mutableStateOf(existingShield?.isDelayAppEnabled ?: false) }
     var maxUses by remember { mutableStateOf(existingShield?.maxUsesPerPeriod?.toString() ?: "5") }
     var refreshPeriodMinutes by remember { mutableIntStateOf(existingShield?.refreshPeriodMinutes ?: 60) }
@@ -545,10 +547,42 @@ fun ShieldSettingsBottomSheet(
 
                 CardGroup(shape = middleShape, containerColor = containerColor) {
                     SettingsToggle(
+                        title = "Pause Point",
+                        description = "Guard this app with a Pause Point task",
+                        checked = pausePointEnabled,
+                        onCheckedChange = { pausePointEnabled = it },
+                        icon = Icons.Outlined.PauseCircle,
+                        shape = middleShape
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                CardGroup(shape = middleShape, containerColor = containerColor) {
+                    SettingsToggle(
+                        title = "End Overlay",
+                        description = "Show shield screen when a session ends",
+                        checked = endOverlayEnabled,
+                        onCheckedChange = { value ->
+                            endOverlayEnabled = value
+                            if (!value) autoQuitEnabled = true
+                        },
+                        icon = Icons.Outlined.Layers,
+                        shape = middleShape
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                CardGroup(shape = middleShape, containerColor = containerColor) {
+                    SettingsToggle(
                         title = "Auto Quit",
                         description = "Exit app automatically when session ends",
                         checked = autoQuitEnabled,
-                        onCheckedChange = { autoQuitEnabled = it },
+                        onCheckedChange = { value ->
+                            autoQuitEnabled = value
+                            if (!value) endOverlayEnabled = true
+                        },
                         icon = Icons.AutoMirrored.Outlined.ExitToApp,
                         shape = middleShape
                     )
@@ -589,8 +623,8 @@ fun ShieldSettingsBottomSheet(
 
             val canSave = remember(
                 existingShield, isPreventEdit, currentLimit, currentMaxUses, currentMaxEmergency,
-                remindersEnabled, strictModeEnabled, autoQuitEnabled, isDelayAppEnabled,
-                refreshPeriodMinutes, selectedPeriod
+                remindersEnabled, strictModeEnabled, pausePointEnabled, autoQuitEnabled, endOverlayEnabled,
+                isDelayAppEnabled, refreshPeriodMinutes, selectedPeriod
             ) {
                 if (existingShield == null) {
                     currentLimit > 0
@@ -611,6 +645,14 @@ fun ShieldSettingsBottomSheet(
                     val autoQuitEnabledNew = !existingShield.isAutoQuitEnabled && autoQuitEnabled
                     val autoQuitDisabled = existingShield.isAutoQuitEnabled && !autoQuitEnabled
 
+                    val endOverlayChanged = endOverlayEnabled != existingShield.isEndOverlayEnabled
+                    val endOverlayDisabled = existingShield.isEndOverlayEnabled && !endOverlayEnabled
+                    val endOverlayEnabledNew = !existingShield.isEndOverlayEnabled && endOverlayEnabled
+
+                    val pausePointChanged = pausePointEnabled != existingShield.isPausePointEnabled
+                    val pausePointEnabledNew = !existingShield.isPausePointEnabled && pausePointEnabled
+                    val pausePointDisabled = existingShield.isPausePointEnabled && !pausePointEnabled
+
                     val delayEnabledNew = !existingShield.isDelayAppEnabled && isDelayAppEnabled
                     val delayDisabled = existingShield.isDelayAppEnabled && !isDelayAppEnabled
 
@@ -620,12 +662,12 @@ fun ShieldSettingsBottomSheet(
                     val daysChanged = activeDays != existingShield.activeDays
 
                     val hasPositiveChange = limitDecreased || usesDecreased || emergencyDecreased ||
-                            strictEnabled || autoQuitEnabledNew || delayEnabledNew || remindersEnabledNew || daysChanged
+                            strictEnabled || autoQuitEnabledNew || pausePointEnabledNew || endOverlayDisabled || delayEnabledNew || remindersEnabledNew || daysChanged
 
                     val hasNegativeChange = limitIncreased || usesIncreased || emergencyIncreased ||
-                            strictDisabled || autoQuitDisabled || delayDisabled || (!remindersEnabledNew && remindersChanged)
+                            strictDisabled || autoQuitDisabled || endOverlayEnabledNew || pausePointDisabled || delayDisabled || (!remindersEnabledNew && remindersChanged)
 
-                    val hasAnyChange = hasPositiveChange || hasNegativeChange || remindersChanged || refreshChanged || periodChanged || daysChanged
+                    val hasAnyChange = hasPositiveChange || hasNegativeChange || remindersChanged || pausePointChanged || endOverlayChanged || refreshChanged || periodChanged || daysChanged
 
                     if (isPreventEdit) {
                         hasPositiveChange && !hasNegativeChange
@@ -701,6 +743,8 @@ fun ShieldSettingsBottomSheet(
                             currentMaxEmergency,
                             remindersEnabled,
                             strictModeEnabled,
+                            pausePointEnabled,
+                            endOverlayEnabled,
                             autoQuitEnabled,
                             currentMaxUses,
                             refreshPeriodMinutes,

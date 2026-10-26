@@ -112,9 +112,6 @@ class ZenithApplication : Application(), ImageLoaderFactory {
             } catch (_: Exception) {
             }
         }
-
-        // Keep the in-memory privacy switches available to UI queries and services even
-        // when a particular service has not started its own preference collector yet.
         applicationScope.launch {
             try {
                 userPreferencesRepository.userPreferencesFlow.collect { prefs ->

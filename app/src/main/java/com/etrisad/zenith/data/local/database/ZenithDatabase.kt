@@ -35,7 +35,7 @@ import com.etrisad.zenith.data.local.Converters
         WebsiteUsageEntity::class,
         PomodoroSessionEntity::class
     ],
-    version = 35,
+    version = 37,
     exportSchema = true,
     autoMigrations = [
         androidx.room.AutoMigration(from = 12, to = 13),
@@ -118,6 +118,22 @@ abstract class ZenithDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 try {
                     db.execSQL("ALTER TABLE schedules ADD COLUMN activeDays TEXT NOT NULL DEFAULT '1,2,3,4,5,6,7'")
+                } catch (_: Exception) {}
+            }
+        }
+
+        private val MIGRATION_36_37 = object : Migration(36, 37) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN isPausePointEnabled INTEGER NOT NULL DEFAULT 1")
+                } catch (_: Exception) {}
+            }
+        }
+
+        private val MIGRATION_35_36 = object : Migration(35, 36) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                try {
+                    db.execSQL("ALTER TABLE shields ADD COLUMN isEndOverlayEnabled INTEGER NOT NULL DEFAULT 1")
                 } catch (_: Exception) {}
             }
         }
@@ -433,7 +449,7 @@ abstract class ZenithDatabase : RoomDatabase() {
                         INSTANCE = instance
                         return@run instance
                     }
-                    DbLogBuffer.d("ZenithDB", "Creating database instance (version=35, journal=WAL)")
+                    DbLogBuffer.d("ZenithDB", "Creating database instance (version=37, journal=WAL)")
                     val instance = Room.databaseBuilder(
                         context.applicationContext,
                         ZenithDatabase::class.java,
@@ -445,7 +461,7 @@ abstract class ZenithDatabase : RoomDatabase() {
                             MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
                             MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18,
                             MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21,
-                            MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25,                             MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35
+                            MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25,                             MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37
                         )
                         .setQueryExecutor(Executors.newFixedThreadPool(4))
                         .setTransactionExecutor(Executors.newSingleThreadExecutor())

@@ -1038,7 +1038,7 @@ private fun SnapshotShieldSheets(focusViewModel: FocusViewModel) {
                 usageToday = focusUiState.selectedAppUsageToday,
                 existingShield = existingShield,
                 onDismiss = { focusViewModel.closeSettingsSheet() },
-                onSave = { limit, emergency, reminders, strict, autoQuit, maxUses, refresh, delayApp, period, days ->
+                onSave = { limit, emergency, reminders, strict, pausePoint, endOverlay, autoQuit, maxUses, refresh, delayApp, period, days ->
                     focusViewModel.saveFocus(
                         packageName = appInfo.packageName,
                         appName = appInfo.appName,
@@ -1046,7 +1046,9 @@ private fun SnapshotShieldSheets(focusViewModel: FocusViewModel) {
                         maxEmergencyUses = emergency,
                         isRemindersEnabled = reminders,
                         isStrictModeEnabled = strict,
+                        isPausePointEnabled = pausePoint,
                         isAutoQuitEnabled = autoQuit,
+                        isEndOverlayEnabled = endOverlay,
                         maxUsesPerPeriod = maxUses,
                         refreshPeriodMinutes = refresh,
                         goalReminderPeriodMinutes = 120,

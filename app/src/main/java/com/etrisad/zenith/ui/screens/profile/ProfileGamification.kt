@@ -124,11 +124,6 @@ fun tierIconsForLevel(level: Int): List<ImageVector> {
         }
     }
 }
-
-/**
- * Shield XP: staying under the limit earns XP, the less usage vs the limit
- * the more XP. Over the limit earns nothing.
- */
 fun calcShieldXp(limitMillis: Long, usageMillis: Long): Int {
     if (limitMillis <= 0L) return 0
     if (usageMillis > limitMillis) return 0

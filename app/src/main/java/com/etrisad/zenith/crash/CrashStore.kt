@@ -12,12 +12,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 private const val MAX_LOG_TAIL_LINES = 400
-
-/**
- * Snapshot of one caught crash. Kept intentionally dumb (no Android
- * dependencies) so it can be unit tested and serialized from inside the
- * uncaught-exception handler without risking another failure.
- */
 data class CrashRecord(
     val timestamp: Long = System.currentTimeMillis(),
     val versionName: String = "",

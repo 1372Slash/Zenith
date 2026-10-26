@@ -352,9 +352,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             val parts = alarmTime.split(":")
             val hour = parts.getOrNull(0)?.toIntOrNull() ?: 0
             val minute = parts.getOrNull(1)?.toIntOrNull() ?: 0
-            // Aman dari overflow: id dipadatkan ke 0..99999 lalu digeser 3000.
-            // Dulu (id % 200000) * 2400 bisa mendekati/melampaui batas int dan
-            // menabrak base lain untuk id besar.
             val idPart = ((alarmId % 100000L + 100000L) % 100000L).toInt() * 3000
             return base + idPart + hour * 100 + minute
         }
@@ -364,13 +361,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             val idPart = (((alarmId % 1000L + 1000L) % 1000L).toInt() * 100) % 100000
             return 20000 + salt * 100000 + base + idPart
         }
-
-        /**
-         * Cancels an existing PendingIntent without creating one when absent.
-         * The old code used FLAG_UPDATE_CURRENT (create-if-absent) just to
-         * cancel, manufacturing thousands of PendingIntents per full sweep
-         * (1440 x 3 in cancelAlarm(null)) for zero effect.
-         */
         private fun cancelPendingIfExists(context: Context, requestCode: Int, action: String) {
             val intent = Intent(context, AlarmBroadcastReceiver::class.java).apply {
                 this.action = action
