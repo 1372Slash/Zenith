@@ -42,6 +42,30 @@ class ShieldRepository(
 ) {
     val allowedApps = ConcurrentHashMap<String, Long>()
     val mindfulGatewayStates = ConcurrentHashMap<String, ShieldEntity>()
+    fun applyMindfulGatewayDefaults(
+        maxUsesPerPeriod: Int,
+        refreshPeriodMinutes: Int,
+        maxEmergencyUses: Int,
+        isRemindersEnabled: Boolean,
+        isStrictModeEnabled: Boolean,
+        isPausePointEnabled: Boolean,
+        isEndOverlayEnabled: Boolean,
+        isAutoQuitEnabled: Boolean,
+    ) {
+        mindfulGatewayStates.replaceAll { _, shield ->
+            shield.copy(
+                maxUsesPerPeriod = maxUsesPerPeriod,
+                refreshPeriodMinutes = refreshPeriodMinutes,
+                maxEmergencyUses = maxEmergencyUses,
+                emergencyUseCount = shield.emergencyUseCount.coerceAtMost(maxEmergencyUses),
+                isRemindersEnabled = isRemindersEnabled,
+                isStrictModeEnabled = isStrictModeEnabled,
+                isPausePointEnabled = isPausePointEnabled,
+                isEndOverlayEnabled = isEndOverlayEnabled,
+                isAutoQuitEnabled = isAutoQuitEnabled || !isEndOverlayEnabled
+            )
+        }
+    }
 
     private val repositoryScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -324,11 +348,6 @@ class ShieldRepository(
         if (packages.isEmpty()) return
         database.interceptedNotificationDao().deleteByPackages(packages.toList())
     }
-
-    /**
-     * Removes notification title/body text while keeping package rows, so pending
-     * notifications can still be restored when "Store Notification Contents" is off.
-     */
     suspend fun scrubInterceptedNotificationContent() {
         database.interceptedNotificationDao().clearStoredContent()
     }

@@ -534,9 +534,23 @@ class PomodoroViewModel(
 
                     installedApps
                         .filter { app ->
-                            val isSystem = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                            val hasLauncher = pm.getLaunchIntentForPackage(app.packageName) != null
-                            hasLauncher && !isSystem
+                            val pkg = app.packageName
+                            val hasLauncher = pm.getLaunchIntentForPackage(pkg) != null
+                            if (!hasLauncher) return@filter false
+                            val isSystemFlag = (app.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
+                            val isCoreComponent = pkg == "android" ||
+                                    pkg.startsWith("com.android.settings") ||
+                                    pkg.startsWith("com.android.systemui") ||
+                                    pkg.startsWith("com.android.shell") ||
+                                    pkg.startsWith("com.android.phone") ||
+                                    pkg.startsWith("com.android.angle") ||
+                                    pkg.startsWith("com.android.providers") ||
+                                    pkg.startsWith("com.google.android.angle") ||
+                                    pkg.startsWith("com.google.android.setupwizard") ||
+                                    pkg.contains("restore") ||
+                                    pkg.contains("overlay") ||
+                                    pkg.contains("documentsui")
+                            !(isSystemFlag && isCoreComponent)
                         }
                         .filter { it.packageName != context.packageName }
                         .map {

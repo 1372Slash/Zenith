@@ -491,9 +491,6 @@ class HomeViewModel(
             }
         }
     }
-
-    // Factories (not one-time vals): the self-healing observer re-collects after
-    // a DB rebind, so each attempt must build streams from current DAO handles.
     private fun recentUsageFlow() = shieldRepository.getRecentUsage(21).onEach {
         DbLogBuffer.d("ZenithDB", "DATA_OBSERVER: recentUsageFlow emitted ${it.size} items")
     }
@@ -609,11 +606,6 @@ class HomeViewModel(
         }
 
         viewModelScope.launch(Dispatchers.IO) {
-            // Self-healing collection: if an upstream Room stream dies (e.g. the
-            // DB instance was closed by backup/restore while this process kept
-            // stale DAO handles), the whole combine dies silently and the UI is
-            // stuck on empty snapshots forever. Rebind to a fresh instance and
-            // re-collect instead of staying blind.
             var observerAttempt = 0
             while (currentCoroutineContext().isActive) {
                 try {
@@ -656,8 +648,6 @@ class HomeViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun observeWebsiteUsage() {
         viewModelScope.launch {
-            // Same self-healing as the main observer: a dead Room stream must
-            // rebind and retry instead of going silent forever.
             var attempt = 0
             while (currentCoroutineContext().isActive) {
                 try {
@@ -727,11 +717,6 @@ class HomeViewModel(
                 kotlinx.coroutines.withTimeoutOrNull(25000) {
                     syncManager.syncUsageData()
                 }
-
-                // NOTE: do NOT clear ScreenUsageHelper's incremental cache here.
-                // It self-resets on day change; a mid-day clear forces a full
-                // re-parse where a transient empty queryEvents yields an empty
-                // snapshot and flashes the UI to zero.
                 usageHistoryManager.updateGlobalFallbackInternal(forceFull = isInitial)
                 performUsageStatsRefresh(showLoading = false)
 
@@ -804,9 +789,6 @@ class HomeViewModel(
             return
         }
         DbLogBuffer.d("ZenithDB", "SELECT_DATE: date=$dateStr tapped=${dateMillis != null}")
-        // Keep the previous lists on screen while reloading: clearing them
-        // here leaves the UI permanently empty if the refresh is cancelled
-        // or returns a transient empty snapshot (intermittent all-zero UI).
         _uiState.update { it.copy(
             selectedDateMillis = date,
             isLoading = true
@@ -818,9 +800,6 @@ class HomeViewModel(
         val previousJob = refreshJob
         refreshJob = viewModelScope.launch(Dispatchers.Default) {
             previousJob?.cancel()
-            // join() rethrows the victim's CancellationException into the joiner,
-            // killing every refresh that supersedes a still-running one. Swallow it:
-            // the mutex below is the real serializer.
             try {
                 previousJob?.join()
             } catch (_: kotlinx.coroutines.CancellationException) {
@@ -830,13 +809,6 @@ class HomeViewModel(
             }
         }
     }
-
-    /**
-     * One-shot Room reads used when the observer snapshots are still empty.
-     * On a closed-pool IllegalStateException (DB was closed under us by
-     * backup/restore) rebinds to a fresh instance and retries once, so a
-     * single bad state can't blind the UI until process restart.
-     */
     private suspend fun loadRecentUsageFallback(days: Int): List<DailyUsageEntity> {
         return try {
             withContext(Dispatchers.IO) { shieldRepository.getRecentUsage(days).first() }
@@ -1399,9 +1371,6 @@ class HomeViewModel(
         val prevToday = prevState.dailyUsageHistory.firstOrNull()
         val curToday = history.reversed().firstOrNull()
         val todayBarChanged = prevToday?.totalTime != curToday?.totalTime
-        // If the previous frame was empty (e.g. cleared before first load or a
-        // transient empty refresh), always take the full update path so the UI
-        // can recover instead of staying stuck on zeros.
         val wasEmpty = prevState.allAppsUsage.isEmpty() || prevState.dailyUsageHistory.isEmpty()
 
         DbLogBuffer.d("ZenithDB", "REFRESH[$refreshId]: UI_UPDATE prevTotal=${prevState.totalScreenTime} selectedDayTotal=$selectedDayTotal todayChanged=$todayChanged todayBarChanged=$todayBarChanged wasEmpty=$wasEmpty appListSize=${allAppsUsage.size} hourlySize=${hourlyUsage.size} shields=${liveShields.size} websiteSize=${websiteUsage.size}")
@@ -1423,11 +1392,6 @@ class HomeViewModel(
                 isLoading        = false
             ) }
         } else {
-            // Guard against transient empty system snapshots: if today produced
-            // no apps at all while the clock is well past midnight and the
-            // previous frame had data, keep the previous totals/history instead
-            // of flashing everything to zero (the 15s realtime loop + deferred
-            // repair will fill in the real values on the next pass).
             val freshIsTransientlyEmpty = isSelectedToday && allAppsUsage.isEmpty() &&
                     timeSinceMidnight > 300_000L &&
                     (prevState.totalScreenTime > 0L || prevState.allAppsUsage.isNotEmpty())
@@ -1553,10 +1517,6 @@ class HomeViewModel(
                     combine(shieldRepository.getLastNDaysUsageForPackage(packageName, 21), shieldRepository.getShieldByPackageNameFlow(packageName), userPreferencesRepository.userPreferencesFlow) { historyDB, shield, prefs ->
                         try {
                             val detailed = withContext(Dispatchers.IO) { kotlinx.coroutines.withTimeoutOrNull(5000) { ScreenUsageHelper.fetchDetailedUsageToday(usm, includeHourly = true, dayStartHour = dayStartHour, dayStartMinute = dayStartMinute) } }
-                            // Cold full-day system parses can exceed the 5s timeout (detailed==null).
-                            // Fall back to the DB-synced hourly/daily rows so the card still
-                            // shows data instead of disappearing (hourlyUsage.all==0 hides it).
-                            // The realtime refresher overwrites with live system data afterwards.
                             val todayStrForDetail = dateFormat.format(Date())
                             val dbFallbackHourly = if (detailed == null) {
                                 withContext(Dispatchers.IO) { shieldRepository.getHourlyUsageForDateSync(todayStrForDetail) }
@@ -1719,7 +1679,6 @@ class HomeViewModel(
             while (true) {
                 try {
                     if (!isActive) {
-                        // Battery: background/inactive must sleep 30s, not 5s.
                         delay(30_000L)
                         continue
                     }
@@ -1751,8 +1710,6 @@ class HomeViewModel(
                         }
                     }
                     val remainingToTarget = (currentTargetMinutes * 60 * 1000L - _uiState.value.totalScreenTime).coerceAtLeast(0L)
-                    // Battery: throttled 15s/30s/60s (was 5s/8s/15s). Each tick does
-                    // full UsageStats parse + Room reads, so 5s interval = drain.
                     val interval = when {
                         remainingToTarget < 30_000L -> 15_000L
                         remainingToTarget < 300_000L -> 30_000L
@@ -1876,16 +1833,6 @@ class HomeViewModel(
 
     fun formatDuration(millis: Long): String = shieldOperationsManager.formatDuration(millis)
     fun formatLongDuration(millis: Long): String = shieldOperationsManager.formatLongDuration(millis)
-
-    /**
-     * chunkOffset 0 = newest 7-day chunk (contains today), increasing into the past.
-     * Offsets 0..2 are served from the live in-memory 21-day window; older offsets
-     * aggregate the weekly average and top apps from unlimited daily_usage retention.
-     */
-    /**
-     * Per-app breakdown of a single day for the heatmap detail panel.
-     * Source of truth is unlimited daily_usage retention, plus website rows.
-     */
     suspend fun getDayAppBreakdown(dateMillis: Long): List<AppUsageInfo> = withContext(Dispatchers.IO) {
         val dateStr = usageHistoryManager.getDateFormat().format(Date(dateMillis))
         val apps = shieldRepository.getDailyUsagesForDateSync(dateStr)

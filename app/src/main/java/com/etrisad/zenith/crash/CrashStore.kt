@@ -82,13 +82,6 @@ object CrashStore {
 
     const val RAPID_WINDOW_MS = 60_000L
     const val RAPID_THRESHOLD = 3
-
-    /**
-     * True when [crashTimes] contains [RAPID_THRESHOLD] or more crashes inside
-     * [RAPID_WINDOW_MS]. Used to stop relaunching the crash screen forever
-     * when the app crashes on startup or on the crash screen itself.
-     * Pure function so it can be unit tested.
-     */
     fun isRapidCrashLoop(crashTimes: List<Long>, now: Long = System.currentTimeMillis()): Boolean =
         crashTimes.count { it <= now && now - it <= RAPID_WINDOW_MS } >= RAPID_THRESHOLD
 
@@ -150,11 +143,6 @@ object CrashStore {
     } catch (_: Throwable) {
         false
     }
-
-    /**
-     * Relative zip path -> text content for the diagnostic export, so a bug
-     * report always carries the last crash plus a bit of history.
-     */
     fun reportEntries(context: Context): List<Pair<String, String>> {
         val entries = mutableListOf<Pair<String, String>>()
         try {

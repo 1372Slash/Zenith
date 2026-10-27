@@ -139,11 +139,6 @@ fun calcGoalXp(targetMillis: Long, usageMillis: Long): Int {
         (ratio * 100).toInt().coerceIn(0, 99)
     }
 }
-
-/**
- * Cumulative XP required to REACH [level]. Level 1 starts at 0, level 2
- * costs PROFILE_XP_BASE, higher levels grow gently exponentially.
- */
 fun xpForLevel(level: Int): Long {
     if (level <= 1) return 0L
     return (PROFILE_XP_BASE * (level - 1).toDouble().pow(PROFILE_XP_CURVE)).toLong()
@@ -152,8 +147,6 @@ fun xpForLevel(level: Int): Long {
 fun levelForXp(xp: Long): Int {
     if (xp < 0L) return 1
     var level = 1
-    // Bounded: xpForLevel can saturate at Long.MAX_VALUE on corrupt/huge XP
-    // (debug override), which would loop forever without a cap.
     while (level < 10000 && xp >= xpForLevel(level + 1)) level++
     return level
 }
@@ -165,26 +158,9 @@ fun levelProgressForXp(xp: Long): Float {
     if (next <= current) return 1f
     return ((xp - current).toFloat() / (next - current)).coerceIn(0f, 1f)
 }
-
-/** XP still needed from [xpTotal] to reach the next level. */
 fun xpToNextLevel(xpTotal: Long): Long =
     (xpForLevel(levelForXp(xpTotal) + 1) - xpTotal).coerceAtLeast(0L)
-
-/**
- * Level milestone titles. Owned automatically once the level is reached,
- * equipped manually, shown under the profile name and on the share card.
- */
 data class LevelTitle(val id: String, val name: String, val requiredLevel: Int)
-
-/**
- * Level milestone avatar borders. Owned automatically once the level is
- * reached, equipped manually, drawn as a ring around the profile avatar.
- */
-/**
- * Special animated effect for pinnacle rings. NONE is static, SPIN slowly
- * rotates the gradient around the ring, SHINE sweeps a highlight arc over
- * a solid ring.
- */
 enum class BorderEffect { NONE, SPIN, SHINE }
 
 data class AvatarBorder(
@@ -209,25 +185,17 @@ val LEVEL_TITLES = listOf(
     LevelTitle("transcendent", "Transcendent", 50),
     LevelTitle("infinite", "Infinite", 55)
 )
-
-/**
- * Avatar borders, escalating in color count with level: 5 solid rings,
- * then 5 rings each blending 2, 3, 4, and finally 5 colors as a gradient.
- */
 val AVATAR_BORDERS = listOf(
-    // 1 color
     AvatarBorder("ember", "Ember", 3, listOf(Color(0xFFFF7043))),
     AvatarBorder("tide", "Tide", 5, listOf(Color(0xFF29B6F6))),
     AvatarBorder("leaf", "Leaf", 7, listOf(Color(0xFF66BB6A))),
     AvatarBorder("violet", "Violet", 9, listOf(Color(0xFF7E57C2))),
     AvatarBorder("rose", "Rose", 11, listOf(Color(0xFFEC407A)), BorderEffect.SHINE),
-    // 2 colors
     AvatarBorder("moss", "Moss", 14, listOf(Color(0xFF9CCC65), Color(0xFF2E7D32))),
     AvatarBorder("gold", "Gold", 17, listOf(Color(0xFFFFE082), Color(0xFFFF8F00))),
     AvatarBorder("frost", "Frost", 20, listOf(Color(0xFF80DEEA), Color(0xFF00838F))),
     AvatarBorder("magma", "Magma", 23, listOf(Color(0xFFFF8A65), Color(0xFFBF360C))),
     AvatarBorder("lagoon", "Lagoon", 26, listOf(Color(0xFF4DD0E1), Color(0xFF0D47A1)), BorderEffect.SPIN),
-    // 3 colors
     AvatarBorder(
         "dusk", "Dusk", 29,
         listOf(Color(0xFFCE93D8), Color(0xFF7B1FA2), Color(0xFF311B92))
@@ -249,7 +217,6 @@ val AVATAR_BORDERS = listOf(
         listOf(Color(0xFFF48FB1), Color(0xFFEC407A), Color(0xFF880E4F)),
         BorderEffect.SPIN
     ),
-    // 4 colors
     AvatarBorder(
         "treasure", "Treasure", 44,
         listOf(
@@ -286,7 +253,6 @@ val AVATAR_BORDERS = listOf(
         ),
         BorderEffect.SPIN
     ),
-    // 5 colors
     AvatarBorder(
         "prism", "Prism", 59,
         listOf(
@@ -324,8 +290,6 @@ val AVATAR_BORDERS = listOf(
         BorderEffect.SPIN
     )
 )
-
-/** Next locked reward (title or border) above [level], or null when maxed. */
 fun nextLevelReward(level: Int): Pair<Int, String>? {
     val upcoming = (LEVEL_TITLES.map { it.requiredLevel to it.name } +
         AVATAR_BORDERS.map { it.requiredLevel to it.name })
@@ -348,14 +312,8 @@ data class AchievementDef(
     val icon: ImageVector,
     val category: AchievementCategory,
     val thresholds: List<TierThreshold>,
-    /** Unique name per tier level, index 0 = tier 1. Falls back to [title]. */
     val tierNames: List<String> = emptyList(),
-    /**
-     * Explicit opt-in for infinite tiers. When false (default), [isUnlimited]
-     * still extends ACCUMULATION ladders, which are counters by nature.
-     */
     val unlimited: Boolean = false,
-    /** Multiplier applied per generated tier beyond the handcrafted list. */
     val curveGrowth: Double = 2.0
 )
 
@@ -363,11 +321,9 @@ data class AchievementState(
     val def: AchievementDef,
     val current: Long,
     val earnedTier: ProfileTier?,
-    /** How many tier thresholds are met (unbounded for unlimited ladders). */
     val earnedLevel: Int,
     val next: TierThreshold?,
     val progressFraction: Float,
-    /** Tier position (1-based) -> yyyy-MM-dd unlock date. See [historyKeyFor]. */
     val unlockedDates: Map<Int, String> = emptyMap()
 )
 
@@ -459,8 +415,6 @@ private fun hoursLabel(millis: Long): String {
     val h = millis / 3_600_000L
     return if (h < 1) "${millis / 60_000L}m" else "${h}h"
 }
-
-/** Compact duration for big lifetime numbers, e.g. 101572988ms -> "28.21h". */
 fun formatCompactDuration(millis: Long): String {
     if (millis <= 0L) return "0m"
     val hours = millis / 3_600_000.0
@@ -473,35 +427,19 @@ private val MILLIS_ACHIEVEMENTS = setOf("focus_hours", "time_saver", "loyal_trac
 
 fun formatProgressNumber(defId: String, value: Long): String =
     if (defId in MILLIS_ACHIEVEMENTS) formatCompactDuration(value) else value.toString()
-
-/**
- * Unique name per tier level, e.g. "Streak in a Cup", "Streak Keeper".
- * Handcrafted [AchievementDef.tierNames] win; beyond them (or when missing),
- * unlimited ladders get a stable generated name; otherwise the base title.
- */
 fun tierDisplayName(def: AchievementDef, level: Int): String {
     if (level <= 0) return def.title
     def.tierNames.getOrNull(level - 1)?.let { return it }
     if (!isUnlimited(def)) return def.title
     return generatedTierName(def.id, level)
 }
-
-/**
- * Accumulation ladders whose counters are naturally bounded never extend:
- * 3 profile fields, 10 task types, 5 widget slots. Everything else with a
- * counter (or explicit opt-in) grows forever.
- */
 private val CAPPED_ACCUMULATION_IDS = setOf("profile_polisher", "taskmaster", "widget_wielder")
 
 fun isUnlimited(def: AchievementDef): Boolean =
     def.unlimited || (def.category == AchievementCategory.ACCUMULATION && def.id !in CAPPED_ACCUMULATION_IDS)
-
-/** Highest roman denomination at or below a tier position (display only). */
 fun highestDenomForLevel(level: Int): ProfileTier =
     ProfileTier.entries.sortedByDescending { it.value }.firstOrNull { level >= it.value }
         ?: ProfileTier.I
-
-/** Snap a raw curve value to a human 1-1.5-2-3-5-8-10 step. */
 fun niceNumber(v: Double): Long {
     if (!v.isFinite() || v <= 0) return Long.MAX_VALUE
     val cap = Long.MAX_VALUE / 4.0
@@ -519,12 +457,6 @@ fun niceNumber(v: Double): Long {
     }
     return (snapped * magnitude).toLong().coerceAtLeast(1L)
 }
-
-/**
- * Required value for a 1-based tier position. The handcrafted list wins;
- * beyond it (unlimited ladders only) the curve grows from the last value.
- * Returns [Long.MAX_VALUE] when no such tier exists (capped ladders).
- */
 fun requiredFor(def: AchievementDef, level: Int): Long {
     if (level < 1) return 1L
     val i = level - 1

@@ -52,8 +52,6 @@ fun TamperProtectionSettings(
     val coroutineScope = rememberCoroutineScope()
     val dpm = remember { context.getSystemService(DevicePolicyManager::class.java) }
     val adminComponent = remember { ZenithDeviceAdminReceiver.componentName(context) }
-
-    // Read state instead of binder calls in composition: refreshed in effects.
     var adminActive by remember { mutableStateOf(false) }
     var hasPin by remember { mutableStateOf(false) }
     var pinSheetMode by remember { mutableStateOf<TamperPinMode?>(null) }
@@ -82,12 +80,6 @@ fun TamperProtectionSettings(
     fun refreshAdminState() {
         adminActive = dpm.isAdminActive(adminComponent)
     }
-
-    /**
-     * Guaranteed escape hatch: opens Zenith's page in Android settings, where the
-     * device administrator can always be deactivated (and the app uninstalled)
-     * even if this screen or the PIN flow is unusable.
-     */
     fun openSystemAppSettings() {
         val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
             data = Uri.fromParts("package", context.packageName, null)
@@ -102,9 +94,6 @@ fun TamperProtectionSettings(
         adminActive = dpm.isAdminActive(adminComponent)
         hasPin = preferencesRepository.hasTamperPin()
     }
-
-    // Re-check after the user returns from system Settings or the activation dialog,
-    // so a revocation done outside the app is detected immediately.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -144,8 +133,6 @@ fun TamperProtectionSettings(
             pendingAction = TamperAction.CHANGE_PIN
             pinSheetMode = TamperPinMode.VERIFY
         } else {
-            // Protection is not active, so the PIN protects nothing right now:
-            // allow a direct reset (recovery path for a forgotten PIN).
             pendingAction = null
             pinSheetMode = TamperPinMode.SETUP
         }
@@ -454,12 +441,6 @@ private fun TamperStatusCard(active: Boolean, revoked: Boolean) {
         }
     }
 }
-
-/**
- * PIN bottom sheet used for first-time setup (enter + confirm) and for
- * verification (single entry). Returns an error message from [onSubmit], or
- * null on success; the caller owns every navigation/state transition.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TamperPinSheet(

@@ -199,6 +199,20 @@ fun SettingsCategoryScreen(
                         onUsageGlimpseEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setUsageGlimpseEnabled(enabled) } },
                         onNavigateToEyeCare = { navController.navigate(Screen.EyeCare.route) },
                         onMindfulGatewayEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setMindfulGatewayEnabled(enabled) } },
+                        onMindfulGatewayDefaultsSave = { maxUses, refreshMinutes, maxEmergencyUses, remindersEnabled, strictModeEnabled, pausePointEnabled, endOverlayEnabled, autoQuitEnabled ->
+                            coroutineScope.launch {
+                                preferencesRepository.setMindfulGatewayDefaults(
+                                    maxUses, refreshMinutes, maxEmergencyUses,
+                                    remindersEnabled, strictModeEnabled,
+                                    pausePointEnabled, endOverlayEnabled, autoQuitEnabled
+                                )
+                                app.shieldRepository.applyMindfulGatewayDefaults(
+                                    maxUses, refreshMinutes, maxEmergencyUses,
+                                    remindersEnabled, strictModeEnabled,
+                                    pausePointEnabled, endOverlayEnabled, autoQuitEnabled
+                                )
+                            }
+                        },
                         onEarlyKickEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setEarlyKickEnabled(enabled) } },
                         onInterceptAudioFocusEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setInterceptAudioFocusEnabled(enabled) } },
                         onBatteryStatsResetEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setBatteryStatsResetEnabled(enabled) } },

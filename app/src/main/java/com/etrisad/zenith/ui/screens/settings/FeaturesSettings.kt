@@ -6,28 +6,45 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ExitToApp
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.data.preferences.ForegroundNotificationStatusMode
+import com.etrisad.zenith.data.preferences.MindfulGatewayDefaults
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.util.hasCalendarPermission
 import com.etrisad.zenith.ui.components.ZenithButtonSize
+import com.etrisad.zenith.ui.components.ZenithButtonWeighted
+import com.etrisad.zenith.ui.components.ZenithButtonType
+import com.etrisad.zenith.ui.components.ZenithGroupedButton
 import com.etrisad.zenith.ui.components.ZenithToggleButtonGroup
 import com.etrisad.zenith.ui.components.ZenithToggleOption
+import com.etrisad.zenith.ui.components.focus.CardGroup
+import com.etrisad.zenith.ui.components.focus.ZenithDropdown
 import com.etrisad.zenith.ui.navigation.Screen
 import com.google.accompanist.drawablepainter.rememberDrawablePainter
 
@@ -58,11 +75,37 @@ fun FeaturesSettings(
     onNavigateToTamperProtection: () -> Unit,
     onNavigateToPomodoro: () -> Unit,
     onNavigateToPausePoint: () -> Unit = {},
+    onMindfulGatewayDefaultsSave: (
+        maxUses: Int,
+        refreshMinutes: Int,
+        maxEmergencyUses: Int,
+        remindersEnabled: Boolean,
+        strictModeEnabled: Boolean,
+        pausePointEnabled: Boolean,
+        endOverlayEnabled: Boolean,
+        autoQuitEnabled: Boolean,
+    ) -> Unit,
     goalCount: Int
 ) {
     val context = LocalContext.current
     val calendarPermissionGranted = remember { hasCalendarPermission(context) }
     var showConfirmSheet by remember { mutableStateOf(false) }
+    var showGatewayDefaultsSheet by remember { mutableStateOf(false) }
+
+    if (showGatewayDefaultsSheet) {
+        MindfulGatewayDefaultsBottomSheet(
+            initialMaxUses = preferences.mindfulGatewayMaxUses,
+            initialRefreshMinutes = preferences.mindfulGatewayRefreshMinutes,
+            initialMaxEmergencyUses = preferences.mindfulGatewayMaxEmergencyUses,
+            initialRemindersEnabled = preferences.mindfulGatewayRemindersEnabled,
+            initialStrictModeEnabled = preferences.mindfulGatewayStrictModeEnabled,
+            initialPausePointEnabled = preferences.mindfulGatewayPausePointEnabled,
+            initialEndOverlayEnabled = preferences.mindfulGatewayEndOverlayEnabled,
+            initialAutoQuitEnabled = preferences.mindfulGatewayAutoQuitEnabled,
+            onDismiss = { showGatewayDefaultsSheet = false },
+            onSave = onMindfulGatewayDefaultsSave
+        )
+    }
 
     if (showConfirmSheet) {
         com.etrisad.zenith.ui.components.ConfirmBottomSheet(
@@ -192,6 +235,23 @@ fun FeaturesSettings(
             icon = Icons.Outlined.AutoFixHigh,
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
         )
+
+        AnimatedVisibility(
+            visible = preferences.mindfulGatewayEnabled,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Column {
+                Spacer(modifier = Modifier.height(4.dp))
+                SettingsActionItem(
+                    title = "Mindful Gateway Defaults",
+                    summary = "Default uses, emergency, and pause behavior for every gateway shield",
+                    onClick = { showGatewayDefaultsSheet = true },
+                    icon = Icons.Outlined.Tune,
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(4.dp))
         val isDisablingIncentiveLock = preferences.incentiveLockDisableRequestTimestamp > 0
@@ -600,6 +660,457 @@ fun HUDAppearanceSettings(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
                         color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MindfulGatewayDefaultsBottomSheet(
+    initialMaxUses: Int,
+    initialRefreshMinutes: Int,
+    initialMaxEmergencyUses: Int,
+    initialRemindersEnabled: Boolean,
+    initialStrictModeEnabled: Boolean,
+    initialPausePointEnabled: Boolean,
+    initialEndOverlayEnabled: Boolean,
+    initialAutoQuitEnabled: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (Int, Int, Int, Boolean, Boolean, Boolean, Boolean, Boolean) -> Unit
+) {
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
+    val scope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scrollState = rememberScrollState()
+
+    val containerColor by animateColorAsState(
+        targetValue = MaterialTheme.colorScheme.surfaceContainerLow,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "containerColor"
+    )
+
+    var maxUsesText by remember { mutableStateOf(initialMaxUses.toString()) }
+    var refreshMinutes by remember { mutableIntStateOf(initialRefreshMinutes) }
+    var maxEmergencyText by remember { mutableStateOf(initialMaxEmergencyUses.toString()) }
+    var remindersEnabled by remember { mutableStateOf(initialRemindersEnabled) }
+    var strictModeEnabled by remember { mutableStateOf(initialStrictModeEnabled) }
+    var pausePointEnabled by remember { mutableStateOf(initialPausePointEnabled) }
+    var endOverlayEnabled by remember { mutableStateOf(initialEndOverlayEnabled) }
+    var autoQuitEnabled by remember { mutableStateOf(initialAutoQuitEnabled) }
+
+    val refreshOptions = listOf(
+        "Every 30 Minutes" to 30,
+        "Every 1 Hour" to 60,
+        "Every 2 Hours" to 120,
+        "Every 6 Hours" to 360,
+        "Every 12 Hours" to 720,
+        "Every 24 Hours" to 1440
+    )
+
+    val currentMaxUses = maxUsesText.toIntOrNull() ?: initialMaxUses
+    val currentMaxEmergency = maxEmergencyText.toIntOrNull() ?: initialMaxEmergencyUses
+
+    val hasChanges = currentMaxUses != initialMaxUses ||
+        refreshMinutes != initialRefreshMinutes ||
+        currentMaxEmergency != initialMaxEmergencyUses ||
+        remindersEnabled != initialRemindersEnabled ||
+        strictModeEnabled != initialStrictModeEnabled ||
+        pausePointEnabled != initialPausePointEnabled ||
+        endOverlayEnabled != initialEndOverlayEnabled ||
+        autoQuitEnabled != initialAutoQuitEnabled
+
+    val topShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+    val middleShape = RoundedCornerShape(8.dp)
+    val bottomShape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 28.dp, bottomEnd = 28.dp)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = screenHeight * 0.9f)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.AutoFixHigh,
+                                contentDescription = null,
+                                modifier = Modifier.size(36.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Mindful Gateway Defaults",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Default behavior for every mindful pause",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "Zenith ships with these defaults, so nothing changes until you edit them",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                Box(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scrollState)
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        PreferenceCategory(title = "Limits")
+
+                        CardGroup(shape = topShape, containerColor = containerColor) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Timer,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Times of Uses",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Skip allowance per refresh period",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Surface(
+                                    modifier = Modifier
+                                        .width(72.dp)
+                                        .height(40.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        BasicTextField(
+                                            value = maxUsesText,
+                                            onValueChange = { if (it.all { char -> char.isDigit() }) maxUsesText = it },
+                                            textStyle = MaterialTheme.typography.titleMedium.copy(
+                                                textAlign = TextAlign.Center,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            ),
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        CardGroup(shape = middleShape, containerColor = containerColor) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Refresh,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Refresh Period",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Usage reset interval",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                ZenithDropdown(
+                                    options = refreshOptions,
+                                    selectedOption = refreshMinutes,
+                                    onOptionSelected = { refreshMinutes = it },
+                                    width = 160.dp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        CardGroup(shape = bottomShape, containerColor = containerColor) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Bolt,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Emergency Uses",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Emergency access uses",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Surface(
+                                    modifier = Modifier
+                                        .width(72.dp)
+                                        .height(40.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        BasicTextField(
+                                            value = maxEmergencyText,
+                                            onValueChange = { if (it.all { char -> char.isDigit() }) maxEmergencyText = it },
+                                            textStyle = MaterialTheme.typography.titleMedium.copy(
+                                                textAlign = TextAlign.Center,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            ),
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        PreferenceCategory(title = "Settings")
+
+                        CardGroup(shape = topShape, containerColor = containerColor) {
+                            SettingsToggle(
+                                title = "Show Reminders",
+                                description = "Get notified before limit is reached",
+                                checked = remindersEnabled,
+                                onCheckedChange = { remindersEnabled = it },
+                                icon = Icons.Outlined.NotificationsActive,
+                                shape = topShape
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        CardGroup(shape = middleShape, containerColor = containerColor) {
+                            SettingsToggle(
+                                title = "Strict Mode",
+                                description = "No extensions allowed after limit",
+                                checked = strictModeEnabled,
+                                onCheckedChange = { strictModeEnabled = it },
+                                icon = Icons.Outlined.GppGood,
+                                shape = middleShape
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        CardGroup(shape = middleShape, containerColor = containerColor) {
+                            SettingsToggle(
+                                title = "Pause Point",
+                                description = "Guard each app open with a Pause Point task",
+                                checked = pausePointEnabled,
+                                onCheckedChange = { pausePointEnabled = it },
+                                icon = Icons.Outlined.PauseCircle,
+                                shape = middleShape
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        CardGroup(shape = middleShape, containerColor = containerColor) {
+                            SettingsToggle(
+                                title = "End Overlay",
+                                description = "Show shield screen when a session ends",
+                                checked = endOverlayEnabled,
+                                onCheckedChange = { value ->
+                                    endOverlayEnabled = value
+                                    if (!value) autoQuitEnabled = true
+                                },
+                                icon = Icons.Outlined.Layers,
+                                shape = middleShape
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        CardGroup(shape = bottomShape, containerColor = containerColor) {
+                            SettingsToggle(
+                                title = "Auto Quit",
+                                description = "Exit app automatically when session ends",
+                                checked = autoQuitEnabled,
+                                onCheckedChange = { value ->
+                                    autoQuitEnabled = value
+                                    if (!value) endOverlayEnabled = true
+                                },
+                                icon = Icons.AutoMirrored.Outlined.ExitToApp,
+                                shape = bottomShape
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(120.dp))
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(24.dp)
+                            .align(Alignment.TopCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(MaterialTheme.colorScheme.surface, Color.Transparent)
+                                )
+                            )
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, MaterialTheme.colorScheme.surface),
+                            startY = 0f,
+                            endY = 40f
+                        )
+                    )
+                    .padding(16.dp)
+                    .navigationBarsPadding()
+            ) {
+                ZenithGroupedButton {
+                    ZenithButtonWeighted(
+                        onClick = {
+                            maxUsesText = MindfulGatewayDefaults.MAX_USES_PER_PERIOD.toString()
+                            refreshMinutes = MindfulGatewayDefaults.REFRESH_PERIOD_MINUTES
+                            maxEmergencyText = MindfulGatewayDefaults.MAX_EMERGENCY_USES.toString()
+                            remindersEnabled = MindfulGatewayDefaults.REMINDERS_ENABLED
+                            strictModeEnabled = MindfulGatewayDefaults.STRICT_MODE_ENABLED
+                            pausePointEnabled = MindfulGatewayDefaults.PAUSE_POINT_ENABLED
+                            endOverlayEnabled = MindfulGatewayDefaults.END_OVERLAY_ENABLED
+                            autoQuitEnabled = MindfulGatewayDefaults.AUTO_QUIT_ENABLED
+                            onSave(
+                                MindfulGatewayDefaults.MAX_USES_PER_PERIOD,
+                                MindfulGatewayDefaults.REFRESH_PERIOD_MINUTES,
+                                MindfulGatewayDefaults.MAX_EMERGENCY_USES,
+                                MindfulGatewayDefaults.REMINDERS_ENABLED,
+                                MindfulGatewayDefaults.STRICT_MODE_ENABLED,
+                                MindfulGatewayDefaults.PAUSE_POINT_ENABLED,
+                                MindfulGatewayDefaults.END_OVERLAY_ENABLED,
+                                MindfulGatewayDefaults.AUTO_QUIT_ENABLED
+                            )
+                        },
+                        text = "Reset",
+                        type = ZenithButtonType.Tonal,
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        weight = 1f,
+                        isFirst = true,
+                        isLast = false
+                    )
+                    ZenithButtonWeighted(
+                        onClick = {
+                            scope.launch {
+                                sheetState.hide()
+                                onSave(
+                                    currentMaxUses,
+                                    refreshMinutes,
+                                    currentMaxEmergency,
+                                    remindersEnabled,
+                                    strictModeEnabled,
+                                    pausePointEnabled,
+                                    endOverlayEnabled,
+                                    autoQuitEnabled
+                                )
+                                onDismiss()
+                            }
+                        },
+                        text = "Save Defaults",
+                        weight = 1.5f,
+                        isFirst = false,
+                        isLast = true,
+                        enabled = hasChanges
                     )
                 }
             }

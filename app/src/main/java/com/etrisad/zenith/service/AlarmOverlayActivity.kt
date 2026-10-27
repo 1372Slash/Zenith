@@ -580,8 +580,6 @@ class AlarmOverlayActivity : ComponentActivity() {
                 return
             }
         }
-        // Kunci window yang mungkin masih terbuka (mis. retrigger alarm yang
-        // sama me-recompose) sebelum membuka window baru, agar tidak hilang.
         rollWakeUpWindowIntoOffset()
         val now = System.currentTimeMillis()
         synchronized(slot) {
@@ -594,12 +592,6 @@ class AlarmOverlayActivity : ComponentActivity() {
         wakeUpTrackingActive = true
         startWakeUpTracking(appPackages, durationSeconds)
     }
-
-    /**
-     * Preempt oleh alarm lain: hentikan job, kunci window yang berjalan ke
-     * offset via query [start, now) yang disjoint dengan window berikutnya.
-     * Slot dipertahankan sehingga kembali ke alarm ini akan me-resume.
-     */
     private fun suspendWakeUpForSwitch() {
         wakeUpJob?.cancel()
         wakeUpJob = null
@@ -616,8 +608,6 @@ class AlarmOverlayActivity : ComponentActivity() {
             start = slot.windowStartMs
             pkgs = slot.packages.toSet()
             if (start <= 0L || pkgs.isEmpty()) return
-            // Tutup window secara sinkron; snapshot async di bawah hanya menambahkan
-            // window yang persis ini satu kali, tidak peduli kapan ia selesai.
             slot.windowStartMs = 0L
         }
         val slotRef = slot
@@ -625,9 +615,6 @@ class AlarmOverlayActivity : ComponentActivity() {
         wakeUpRollJob = lifecycleScope.launch(Dispatchers.IO) {
             val windowMs = getAccumulatedForegroundMs(pkgs, start, end)
             if (windowMs > 0L) {
-                // Merging into a discarded slot object is harmless (it becomes
-                // garbage after clear); all live-slot coordination is via the
-                // synchronized block, never via map reads off the main thread.
                 synchronized(slotRef) {
                     slotRef.offsetMs = AlarmChainHelper.mergeWakeUpOffset(slotRef.offsetMs, windowMs)
                 }
@@ -674,7 +661,6 @@ class AlarmOverlayActivity : ComponentActivity() {
             val duration = if (durationSeconds != 120 || appPackages.isNotEmpty()) durationSeconds
             else configured?.wakeUpAppDurationSeconds ?: 120
             if (packages.isEmpty() || duration <= 0) {
-                // Invalid config (e.g. all apps uninstalled): don't gate.
                 withContextForMainSync {
                     if (AlarmChainHelper.alarmKey(alarmId, alarmTime) == key) {
                         wakeUpComplete = true
@@ -707,7 +693,6 @@ class AlarmOverlayActivity : ComponentActivity() {
                 )
                 val totalMs = AlarmChainHelper.mergeWakeUpOffset(savedOffset, windowMs)
                 withContext(Dispatchers.Main) {
-                    // Abaikan hasil basi: overlay sudah pindah ke alarm lain.
                     if (AlarmChainHelper.alarmKey(alarmId, alarmTime) != key) return@withContext
                     wakeUpAccumulatedSeconds = (totalMs / 1000).toInt()
                     if (AlarmChainHelper.isWakeUpComplete(totalMs, duration)) {
@@ -727,7 +712,6 @@ class AlarmOverlayActivity : ComponentActivity() {
     }
 
     private fun withContextForMainSync(block: () -> Unit) {
-        // Called from LaunchedEffect (Main) or IO; write state on Main.
         if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
             block()
         } else {
@@ -785,12 +769,6 @@ class AlarmOverlayActivity : ComponentActivity() {
 
         @Volatile
         var isShowing = false
-
-        /**
-         * Identitas alarm yang sedang ditampilkan overlay
-         * ([AlarmChainHelper.alarmKey]), agar usage-check bisa membedakan
-         * "alarm yang sama masih bunyi" vs "alarm lain yang preempt".
-         */
         @Volatile
         var showingAlarmKey: String? = null
             private set
@@ -803,13 +781,6 @@ class AlarmOverlayActivity : ComponentActivity() {
             }
             context.startActivity(intent)
         }
-
-        /**
-         * Fires the overlay immediately to preview a draft alarm setup without
-         * saving anything: the draft JSON is used instead of stored alarms,
-         * and dismissing/snoozing only stops the test (no reschedule, no
-         * smart-repeat, no stored-state writes).
-         */
         fun startTest(context: Context, alarmTime: String, alarmJson: String) {
             val intent = Intent(context, AlarmOverlayActivity::class.java).apply {
                 putExtra(EXTRA_ALARM_TIME, alarmTime)

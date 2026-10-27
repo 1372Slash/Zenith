@@ -10,6 +10,7 @@ import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.entity.WebsiteUsageEntity
+import com.etrisad.zenith.data.preferences.MindfulGatewayDefaults
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.ui.components.overlay.PomodoroAfterType
@@ -103,14 +104,31 @@ class OverlayActionHandler(
         val currentTime = System.currentTimeMillis()
 
         if (existing == null) {
+            val gatewayPrefs = SharedMonitoringState.currentPreferences
+            val maxEmergencyUses = gatewayPrefs?.mindfulGatewayMaxEmergencyUses
+                ?: MindfulGatewayDefaults.MAX_EMERGENCY_USES
+            val endOverlayEnabled = gatewayPrefs?.mindfulGatewayEndOverlayEnabled
+                ?: MindfulGatewayDefaults.END_OVERLAY_ENABLED
+            val autoQuitEnabled = (gatewayPrefs?.mindfulGatewayAutoQuitEnabled
+                ?: MindfulGatewayDefaults.AUTO_QUIT_ENABLED) || !endOverlayEnabled
             val newShield = ShieldEntity(
                 packageName = packageName,
                 appName = appName,
                 timeLimitMinutes = -1,
-                maxUsesPerPeriod = 5,
-                refreshPeriodMinutes = 60,
-                maxEmergencyUses = 3,
-                emergencyUseCount = 3,
+                maxUsesPerPeriod = gatewayPrefs?.mindfulGatewayMaxUses
+                    ?: MindfulGatewayDefaults.MAX_USES_PER_PERIOD,
+                refreshPeriodMinutes = gatewayPrefs?.mindfulGatewayRefreshMinutes
+                    ?: MindfulGatewayDefaults.REFRESH_PERIOD_MINUTES,
+                maxEmergencyUses = maxEmergencyUses,
+                emergencyUseCount = maxEmergencyUses,
+                isRemindersEnabled = gatewayPrefs?.mindfulGatewayRemindersEnabled
+                    ?: MindfulGatewayDefaults.REMINDERS_ENABLED,
+                isStrictModeEnabled = gatewayPrefs?.mindfulGatewayStrictModeEnabled
+                    ?: MindfulGatewayDefaults.STRICT_MODE_ENABLED,
+                isEndOverlayEnabled = endOverlayEnabled,
+                isPausePointEnabled = gatewayPrefs?.mindfulGatewayPausePointEnabled
+                    ?: MindfulGatewayDefaults.PAUSE_POINT_ENABLED,
+                isAutoQuitEnabled = autoQuitEnabled,
                 lastPeriodResetTimestamp = currentTime,
                 lastEmergencyRechargeTimestamp = currentTime,
                 lastUsedTimestamp = currentTime

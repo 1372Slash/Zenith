@@ -2682,21 +2682,8 @@ class AppUsageMonitorService : Service() {
         private const val WIND_DOWN_NOTIFICATION_ID = 2006
 
         const val ACTION_ENSURE_CAMERA_FGS = "com.etrisad.zenith.action.ENSURE_CAMERA_FGS"
-
-        /** True while this process holds a live, foreground monitor service. */
         @Volatile
         private var serviceInstanceRunning = false
-
-        /**
-         * Starts the monitor service in the safest way for the caller.
-         *
-         * A plain startService() creates no foreground-service start deadline, so
-         * it can never trigger the system crash "Context.startForegroundService()
-         * did not then call Service.startForeground()" when the main thread is
-         * busy (for example during the first composition right after launch).
-         * Only genuine background starts use startForegroundService(), where the
-         * system demands startForeground() within its deadline.
-         */
         fun startMonitorService(
             context: Context,
             action: String? = null,
@@ -2714,8 +2701,6 @@ class AppUsageMonitorService : Service() {
                     context.startService(intent)
                     return
                 } catch (_: Exception) {
-                    // Background restrictions may still reject startService();
-                    // fall through to startForegroundService().
                 }
             }
             try {
@@ -2723,14 +2708,6 @@ class AppUsageMonitorService : Service() {
             } catch (_: Exception) {
             }
         }
-
-        /**
-         * Asks a running monitor service to (re)attach the camera foreground
-         * service type. Only effective while the app is visible and the QR pause
-         * point is enabled + camera permission granted; otherwise it is a no-op.
-         * Safe to call on every resume: uses startService(), which does not
-         * create a foreground-service start obligation for a running service.
-         */
         fun requestCameraTypeUpgrade(context: Context) {
             try {
                 context.startService(
@@ -2739,7 +2716,6 @@ class AppUsageMonitorService : Service() {
                     }
                 )
             } catch (_: Exception) {
-                // App in background / service not allowed to start: nothing to do.
             }
         }
     }

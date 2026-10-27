@@ -315,6 +315,14 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
         val SMART_REPAIR_ON_REFRESH = booleanPreferencesKey("smart_repair_on_refresh")
         val ALLOW_REPAIR_NON_UNAVAILABLE = booleanPreferencesKey("allow_repair_non_unavailable")
         val MINDFUL_GATEWAY_ENABLED = booleanPreferencesKey("mindful_gateway_enabled")
+        val MINDFUL_GATEWAY_MAX_USES = intPreferencesKey("mindful_gateway_max_uses")
+        val MINDFUL_GATEWAY_REFRESH_MINUTES = intPreferencesKey("mindful_gateway_refresh_minutes")
+        val MINDFUL_GATEWAY_MAX_EMERGENCY_USES = intPreferencesKey("mindful_gateway_max_emergency_uses")
+        val MINDFUL_GATEWAY_REMINDERS_ENABLED = booleanPreferencesKey("mindful_gateway_reminders_enabled")
+        val MINDFUL_GATEWAY_STRICT_MODE_ENABLED = booleanPreferencesKey("mindful_gateway_strict_mode_enabled")
+        val MINDFUL_GATEWAY_PAUSE_POINT_ENABLED = booleanPreferencesKey("mindful_gateway_pause_point_enabled")
+        val MINDFUL_GATEWAY_END_OVERLAY_ENABLED = booleanPreferencesKey("mindful_gateway_end_overlay_enabled")
+        val MINDFUL_GATEWAY_AUTO_QUIT_ENABLED = booleanPreferencesKey("mindful_gateway_auto_quit_enabled")
         val REFRESH_ON_OPEN_USAGE_STATS = booleanPreferencesKey("refresh_on_open_usage_stats")
         val CHECK_UPDATE_ON_START = booleanPreferencesKey("check_update_on_start")
         val BATTERY_STATS_RESET_ENABLED = booleanPreferencesKey("battery_stats_reset_enabled")
@@ -565,6 +573,14 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             allowRepairNonUnavailable = settings[PreferencesKeys.ALLOW_REPAIR_NON_UNAVAILABLE] ?: false,
             shortsScreenTimeMs = runtime[RuntimeKeys.SHORTS_SCREEN_TIME_MS] ?: 0L,
             mindfulGatewayEnabled = settings[PreferencesKeys.MINDFUL_GATEWAY_ENABLED] ?: false,
+            mindfulGatewayMaxUses = settings[PreferencesKeys.MINDFUL_GATEWAY_MAX_USES] ?: MindfulGatewayDefaults.MAX_USES_PER_PERIOD,
+            mindfulGatewayRefreshMinutes = settings[PreferencesKeys.MINDFUL_GATEWAY_REFRESH_MINUTES] ?: MindfulGatewayDefaults.REFRESH_PERIOD_MINUTES,
+            mindfulGatewayMaxEmergencyUses = settings[PreferencesKeys.MINDFUL_GATEWAY_MAX_EMERGENCY_USES] ?: MindfulGatewayDefaults.MAX_EMERGENCY_USES,
+            mindfulGatewayRemindersEnabled = settings[PreferencesKeys.MINDFUL_GATEWAY_REMINDERS_ENABLED] ?: MindfulGatewayDefaults.REMINDERS_ENABLED,
+            mindfulGatewayStrictModeEnabled = settings[PreferencesKeys.MINDFUL_GATEWAY_STRICT_MODE_ENABLED] ?: MindfulGatewayDefaults.STRICT_MODE_ENABLED,
+            mindfulGatewayPausePointEnabled = settings[PreferencesKeys.MINDFUL_GATEWAY_PAUSE_POINT_ENABLED] ?: MindfulGatewayDefaults.PAUSE_POINT_ENABLED,
+            mindfulGatewayEndOverlayEnabled = settings[PreferencesKeys.MINDFUL_GATEWAY_END_OVERLAY_ENABLED] ?: MindfulGatewayDefaults.END_OVERLAY_ENABLED,
+            mindfulGatewayAutoQuitEnabled = settings[PreferencesKeys.MINDFUL_GATEWAY_AUTO_QUIT_ENABLED] ?: MindfulGatewayDefaults.AUTO_QUIT_ENABLED,
             refreshOnOpenUsageStats = settings[PreferencesKeys.REFRESH_ON_OPEN_USAGE_STATS] ?: false,
             checkUpdateOnStart = settings[PreferencesKeys.CHECK_UPDATE_ON_START] ?: false,
             batteryStatsResetEnabled = settings[PreferencesKeys.BATTERY_STATS_RESET_ENABLED] ?: false,
@@ -1543,6 +1559,28 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.MINDFUL_GATEWAY_ENABLED] = enabled }
     }
 
+    suspend fun setMindfulGatewayDefaults(
+        maxUses: Int,
+        refreshMinutes: Int,
+        maxEmergencyUses: Int,
+        remindersEnabled: Boolean,
+        strictModeEnabled: Boolean,
+        pausePointEnabled: Boolean,
+        endOverlayEnabled: Boolean,
+        autoQuitEnabled: Boolean,
+    ) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.MINDFUL_GATEWAY_MAX_USES] = maxUses
+            preferences[PreferencesKeys.MINDFUL_GATEWAY_REFRESH_MINUTES] = refreshMinutes
+            preferences[PreferencesKeys.MINDFUL_GATEWAY_MAX_EMERGENCY_USES] = maxEmergencyUses
+            preferences[PreferencesKeys.MINDFUL_GATEWAY_REMINDERS_ENABLED] = remindersEnabled
+            preferences[PreferencesKeys.MINDFUL_GATEWAY_STRICT_MODE_ENABLED] = strictModeEnabled
+            preferences[PreferencesKeys.MINDFUL_GATEWAY_PAUSE_POINT_ENABLED] = pausePointEnabled
+            preferences[PreferencesKeys.MINDFUL_GATEWAY_END_OVERLAY_ENABLED] = endOverlayEnabled
+            preferences[PreferencesKeys.MINDFUL_GATEWAY_AUTO_QUIT_ENABLED] = autoQuitEnabled
+        }
+    }
+
     suspend fun setRefreshOnOpenUsageStats(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.REFRESH_ON_OPEN_USAGE_STATS] = enabled }
     }
@@ -1937,6 +1975,16 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 
 
 }
+object MindfulGatewayDefaults {
+    const val MAX_USES_PER_PERIOD = 5
+    const val REFRESH_PERIOD_MINUTES = 60
+    const val MAX_EMERGENCY_USES = 3
+    const val REMINDERS_ENABLED = true
+    const val STRICT_MODE_ENABLED = false
+    const val PAUSE_POINT_ENABLED = true
+    const val END_OVERLAY_ENABLED = true
+    const val AUTO_QUIT_ENABLED = false
+}
 
 data class UserPreferences(
     val themeConfig: ThemeConfig = ThemeConfig.FOLLOW_SYSTEM,
@@ -2025,6 +2073,14 @@ data class UserPreferences(
     val allowRepairNonUnavailable: Boolean = false,
     val shortsScreenTimeMs: Long = 0L,
     val mindfulGatewayEnabled: Boolean = false,
+    val mindfulGatewayMaxUses: Int = MindfulGatewayDefaults.MAX_USES_PER_PERIOD,
+    val mindfulGatewayRefreshMinutes: Int = MindfulGatewayDefaults.REFRESH_PERIOD_MINUTES,
+    val mindfulGatewayMaxEmergencyUses: Int = MindfulGatewayDefaults.MAX_EMERGENCY_USES,
+    val mindfulGatewayRemindersEnabled: Boolean = MindfulGatewayDefaults.REMINDERS_ENABLED,
+    val mindfulGatewayStrictModeEnabled: Boolean = MindfulGatewayDefaults.STRICT_MODE_ENABLED,
+    val mindfulGatewayPausePointEnabled: Boolean = MindfulGatewayDefaults.PAUSE_POINT_ENABLED,
+    val mindfulGatewayEndOverlayEnabled: Boolean = MindfulGatewayDefaults.END_OVERLAY_ENABLED,
+    val mindfulGatewayAutoQuitEnabled: Boolean = MindfulGatewayDefaults.AUTO_QUIT_ENABLED,
     val refreshOnOpenUsageStats: Boolean = false,
     val checkUpdateOnStart: Boolean = false,
     val batteryStatsResetEnabled: Boolean = false,

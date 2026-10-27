@@ -562,8 +562,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         @JvmOverloads
         fun scheduleReTrigger(context: Context, alarmTime: String, attempt: Int = 0, alarmId: Long = 0L) {
             if (attempt >= MAX_RE_TRIGGER_ATTEMPTS) {
-                // Rantai habis: once-alarm harus dimatikan agar tidak nyangkut enabled
-                // tanpa jadwal; reminder basi juga dibersihkan.
                 cancelSmartWakeReminder(context)
                 return
             }
@@ -596,8 +594,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                     context, requestCodeForId(REQUEST_CODE_RE_TRIGGER_BASE, alarmTime, alarmId), ACTION_RE_TRIGGER
                 )
             }
-            // Snooze memakai action yang sama dengan base berbeda; sapu juga agar
-            // tidak ada snooze basi yang ikut berbunyi setelah repeat dibatalkan.
             for (i in 0..50) {
                 cancelPendingIfExists(
                     context,
@@ -645,8 +641,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
             }
         }
-
-        // ---- Higiene notifikasi: satu pintu cancel agar tidak menumpuk ----
         fun cancelFiringNotification(context: Context) {
             try {
                 (context.getSystemService(NotificationManager::class.java))?.cancel(NOTIFICATION_ID_FIRING)
@@ -677,8 +671,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             cancelAutoRepeatComplete(context)
             cancelMissedAlarmNotification(context)
             try {
-                // Foreground service playback (2010) hanya bisa hilang via stopService,
-                // tapi sapu notifnya juga agar tidak nyangkut bila service sudah mati.
                 (context.getSystemService(NotificationManager::class.java))?.cancel(2010)
             } catch (_: Exception) { }
         }
@@ -692,8 +684,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                     manager.createNotificationChannel(
                         NotificationChannel(CHANNEL_ID_FIRING, "Alarm", NotificationManager.IMPORTANCE_HIGH).apply {
                             description = "Alarm alerts"
-                            // Alarm harus tembus Do Not Disturb dan terlihat di lockscreen,
-                            // kalau tidak full-screen intent tidak di-fire sistem.
                             setBypassDnd(true)
                             lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
                         }
@@ -701,8 +691,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 } else if (!existing.canBypassDnd() ||
                     existing.lockscreenVisibility != android.app.Notification.VISIBILITY_PUBLIC
                 ) {
-                    // Channel dibuat versi lama tanpa bypass-DND/visibility: patch agar
-                    // alarm lama yang update aplikasi ikut tembus lockscreen + DND.
                     existing.setBypassDnd(true)
                     existing.lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
                     manager.createNotificationChannel(existing)
@@ -725,8 +713,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 }
             } catch (_: Exception) { }
         }
-
-        // ---- State kecil untuk watchdog agar tidak false "missed" ----
         fun recordAlarmFire(context: Context, alarmTime: String) {
             try {
                 context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE).edit()
@@ -794,8 +780,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                     .setOngoing(false)
                     .setContentIntent(contentIntent)
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                    // Auto-dismiss dalam ~6 menit bila rantai dibatalkan (mis. alarm
-                    // dimatikan manual) sehingga tidak jadi notif basi.
                     builder.setTimeoutAfter(360_000L)
                 }
 
@@ -803,12 +787,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
             }
         }
-
-        /**
-         * Batalkan seluruh rantai smart (retrigger + usage-check) beserta notifnya.
-         * Dipakai oleh tombol "Stop Alarm", snooze, dan wake-up-verified agar tidak ada
-         * alarm susulan basi yang tetap berbunyi.
-         */
         @JvmOverloads
         fun cancelSmartChain(context: Context, alarmTime: String, alarmId: Long = 0L) {
             cancelReTrigger(context, alarmTime, alarmId)

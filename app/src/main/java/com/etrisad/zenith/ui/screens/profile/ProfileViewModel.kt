@@ -422,11 +422,6 @@ class ProfileViewModel(
         }
         LifetimeResult(top3, sorted.sumOf { it.value }, totals.size)
     }
-
-    /**
-     * Awards today's XP once per day: shields earn for staying under the
-     * limit (less usage = more XP), goals earn for reaching/over target.
-     */
     private suspend fun awardXpIfNeeded(todayStr: String): Int {
         return try {
             val prefs = userPreferencesRepository.userPreferencesFlow.first()
@@ -475,8 +470,6 @@ class ProfileViewModel(
 
     private fun dateStr(millis: Long): String =
         SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(millis))
-
-    /** Widgets currently pinned to the launcher, counted per provider. */
     private fun placedWidgetCount(): Int {
         return try {
             val manager = appContext.getSystemService(Context.APPWIDGET_SERVICE)
@@ -493,8 +486,6 @@ class ProfileViewModel(
             }
         } catch (_: Exception) { 0 }
     }
-
-    /** Pause Point variant lists the user customized away from defaults. */
     private fun customVariantCount(
         prefs: com.etrisad.zenith.data.preferences.UserPreferences
     ): Int {
@@ -510,8 +501,6 @@ class ProfileViewModel(
             prefs.pausePointTypingVariants != defaults.typingVariants
         ).count { it }
     }
-
-    /** Days since month start with total usage at or under the target. */
     private suspend fun underBudgetDaysThisMonth(todayStr: String): Int {
         return try {
             val target = userPreferencesRepository.userPreferencesFlow.first()
@@ -556,18 +545,6 @@ class ProfileViewModel(
             }
         } catch (_: Exception) { 0 }
     }
-
-    /**
-     * Day-gated counters for day-based achievements.
-     *
-     * Each id increments at most once per calendar day, and only when that
-     * day's condition holds. Unknown ids are seeded once from the DB: if
-     * today is already counted in the seeded value, today is marked counted
-     * so it can't be counted twice; otherwise today stays uncounted so the
-     * normal gate below counts it exactly once.
-     *
-     * @return id to counted days, for every id in [conditions].
-     */
     private suspend fun refreshDailyCounts(
         todayStr: String,
         conditions: Map<String, Boolean>,
@@ -602,11 +579,6 @@ class ProfileViewModel(
             dbCounts
         }
     }
-
-    /**
-     * Records the first-observed date for every newly met achievement tier
-     * so the detail sheet can show an unlock history.
-     */
     private suspend fun recordUnlockDates(
         states: List<AchievementState>,
         todayStr: String
@@ -614,11 +586,8 @@ class ProfileViewModel(
         return try {
             val prefsSnapshot = userPreferencesRepository.userPreferencesFlow.first()
             val rawBefore = prefsSnapshot.achievementHistory
-            // Per-tier banner keys already shown, never enqueue the same one again.
             val seen = decodeSeen(prefsSnapshot.achievementBannersSeen).toMutableSet()
             var seenChanged = false
-            // First run seeds the baseline silently so existing progress
-            // never floods the unlock notification queue.
             val isBaseline = rawBefore.isBlank()
             val stored = decodeHistory(rawBefore)
                 .mapValues { it.value.toMutableMap() }.toMutableMap()
@@ -626,18 +595,9 @@ class ProfileViewModel(
             val freshUnlocks = mutableListOf<PendingUnlock>()
             val freshBannerUnlocks = mutableListOf<ProfileBannerEvent.Unlock>()
             val newlyTieredIds = mutableSetOf<String>()
-            // Snapshot before the loop so several tiers earned in the SAME
-            // refresh still stack their banners; only later refreshes are gated.
             val seenAtStart = seen.toSet()
             val enriched = states.map { state ->
                 val dates = stored.getOrPut(state.def.id) { mutableMapOf() }
-                // One-time migration: legacy keys are roman-denomination values
-                // (1, 5, 10, ...), new keys are 1-based positions. A stored map
-                // is only migrated when it does NOT already look new: new maps
-                // always hold exactly {1..k} (plus maybe negative generated
-                // keys), while no legacy map can take that shape (there is no
-                // denomination 2..4, 6..9, ...). Without this gate, a legit
-                // new key like position 5 would be mistaken for tier V.
                 val positives = dates.keys.filter { it > 0 }
                 val looksNew = positives.isEmpty() ||
                     (positives.minOrNull() == 1 && positives.size == positives.maxOrNull())
@@ -704,12 +664,6 @@ class ProfileViewModel(
             states to emptySet()
         }
     }
-
-    /**
-     * Quick progress banners for accumulation achievements: every value
-     * increase emits one unless a tier-up banner already covers it.
-     * Maxed achievements stay silent.
-     */
     private suspend fun detectProgressEvents(
         states: List<AchievementState>,
         newlyTieredIds: Set<String>,
@@ -718,7 +672,6 @@ class ProfileViewModel(
         try {
             val prefsSnapshot = userPreferencesRepository.userPreferencesFlow.first()
             val lastVals = decodeLastValues(prefsSnapshot.achievementLastValues).toMutableMap()
-            // Achievements whose banner already showed once ever stay silent.
             val seen = decodeSeen(prefsSnapshot.achievementBannersSeen).toMutableSet()
             var seenChanged = false
             var changed = false

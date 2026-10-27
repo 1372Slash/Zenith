@@ -853,7 +853,8 @@ fun ScreenTimeTargetBottomSheet(
                     Text(
                         text = "Set a goal to help you stay mindful of your device usage",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center
                     )
                 }
 
