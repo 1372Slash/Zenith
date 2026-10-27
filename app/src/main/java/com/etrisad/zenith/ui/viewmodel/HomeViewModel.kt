@@ -383,11 +383,6 @@ class HomeViewModel(
         UsageGraphLogBuffer.d("GRAPH_WEEK", "OLDER_CHUNK_APP: offset=$chunkOffset pkg=$packageName isWebsite=$isWebsite days=[${dbgDays.joinToString(" ")}]")
         result
     }
-
-    /**
-     * Loads one 7-day snapshot stamp chunk (top app per day) beyond the live
-     * 21-day window. Same chunking as [getGlobalWeekHistory].
-     */
     suspend fun getSnapshotWeekStamps(chunkOffset: Int): List<AppUsageInfo> = withContext(Dispatchers.IO) {
         val dateFormat = usageHistoryManager.getDateFormat()
         val preferSystem = preferSystemUsageHistory

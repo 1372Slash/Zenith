@@ -24,6 +24,7 @@ import com.etrisad.zenith.ui.components.pausepoint.PausePointDefaults
 import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
 import com.etrisad.zenith.ui.components.pausepoint.PausePointVariant
 import com.etrisad.zenith.data.repository.ShieldRepository
+import com.etrisad.zenith.admin.TamperPin
 import com.etrisad.zenith.crash.SafeMode
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
@@ -404,6 +405,11 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
         val LOCKDOWN_END_TIME = stringPreferencesKey("lockdown_end_time")
         val LOCKDOWN_DAYS = stringPreferencesKey("lockdown_days")
 
+        val TAMPER_PROTECTION_ENABLED = booleanPreferencesKey("tamper_protection_enabled")
+        val TAMPER_LOCK_TO_LOCKDOWN = booleanPreferencesKey("tamper_lock_to_lockdown")
+        val TAMPER_PIN_SALT = stringPreferencesKey("tamper_pin_salt")
+        val TAMPER_PIN_HASH = stringPreferencesKey("tamper_pin_hash")
+
         val POMODORO_ENABLED = booleanPreferencesKey("pomodoro_enabled")
         val POMODORO_ALLOWED_PACKAGES = stringPreferencesKey("pomodoro_allowed_packages")
         val POMODORO_BREAK_DURATION_MINUTES = intPreferencesKey("pomodoro_break_duration_minutes")
@@ -658,6 +664,8 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             lockdownStartTime = settings[PreferencesKeys.LOCKDOWN_START_TIME] ?: "22:00",
             lockdownEndTime = settings[PreferencesKeys.LOCKDOWN_END_TIME] ?: "07:00",
             lockdownDays = settings[PreferencesKeys.LOCKDOWN_DAYS]?.split(",")?.filter { it.isNotEmpty() }?.map { it.toInt() }?.toSet() ?: setOf(1, 2, 3, 4, 5, 6, 7),
+            tamperProtectionEnabled = settings[PreferencesKeys.TAMPER_PROTECTION_ENABLED] ?: false,
+            tamperLockToLockdown = settings[PreferencesKeys.TAMPER_LOCK_TO_LOCKDOWN] ?: true,
             dismissedUninstalledApps = runtime[RuntimeKeys.DISMISSED_UNINSTALLED_APPS]
                 ?.split(",")
                 ?.filter { it.isNotEmpty() }
@@ -1707,6 +1715,33 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.LOCKDOWN_DAYS] = days.joinToString(",") }
     }
 
+    suspend fun setTamperProtectionEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.TAMPER_PROTECTION_ENABLED] = enabled }
+    }
+
+    suspend fun setTamperLockToLockdown(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.TAMPER_LOCK_TO_LOCKDOWN] = enabled }
+    }
+
+    suspend fun setTamperPin(pin: String) {
+        val salt = TamperPin.newSaltHex()
+        val hash = TamperPin.hash(pin, salt)
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.TAMPER_PIN_SALT] = salt
+            preferences[PreferencesKeys.TAMPER_PIN_HASH] = hash
+        }
+    }
+
+    suspend fun hasTamperPin(): Boolean =
+        context.dataStore.data.first()[PreferencesKeys.TAMPER_PIN_HASH]?.isNotEmpty() == true
+
+    suspend fun verifyTamperPin(pin: String): Boolean {
+        val stored = context.dataStore.data.first()
+        val salt = stored[PreferencesKeys.TAMPER_PIN_SALT] ?: return false
+        val expected = stored[PreferencesKeys.TAMPER_PIN_HASH] ?: return false
+        return TamperPin.matches(pin, salt, expected)
+    }
+
     suspend fun setPomodoroEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.POMODORO_ENABLED] = enabled }
     }
@@ -2026,6 +2061,8 @@ data class UserPreferences(
     val lockdownStartTime: String = "22:00",
     val lockdownEndTime: String = "07:00",
     val lockdownDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7),
+    val tamperProtectionEnabled: Boolean = false,
+    val tamperLockToLockdown: Boolean = true,
     val dismissedUninstalledApps: Map<String, String> = emptyMap(),
     val pomodoroEnabled: Boolean = false,
     val pomodoroAllowedPackages: Set<String> = emptySet(),

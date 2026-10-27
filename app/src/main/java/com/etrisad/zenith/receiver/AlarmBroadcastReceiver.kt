@@ -448,8 +448,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                     cancelPendingIfExists(
                         context, requestCodeForId(REQUEST_CODE_ALARM_BASE, alarmTime, alarmId), ACTION_FIRE_ALARM
                     )
-                    // Migrasi: batalkan juga kode lama ((id % 200000) * 2400) agar tidak
-                    // ada exact alarm hantu yang lolos setelah update aplikasi.
                     try {
                         val parts = alarmTime.split(":")
                         val h = parts.getOrNull(0)?.toIntOrNull() ?: 0
@@ -461,8 +459,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 }
                 cancelReTrigger(context, alarmTime, alarmId)
                 cancelUsageCheck(context, alarmTime, alarmId)
-                // Alarm dimatikan/dihapus -> reminder "akan bunyi lagi" wajib hilang.
-                // Dulu notif 2004 dibiarkan basi menumpuk di shade.
                 cancelSmartWakeReminder(context)
                 cancelFiringNotification(context)
             } else {
@@ -502,10 +498,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 putExtra(EXTRA_WAIT_COUNT, waitCount)
                 if (alarmId > 0L) putExtra(EXTRA_ALARM_ID, alarmId)
             }
-
-            // Id-aware so two different alarms don't overwrite each other's usage-check.
-            // Re-schedule the legacy variant? No — id-aware + legacy is enough
-            // cancelled first so there's no stale double check.
             cancelUsageCheck(context, alarmTime, alarmId)
             val requestCode = if (alarmId > 0L) requestCodeForId(REQUEST_CODE_CHECK_BASE, alarmTime, alarmId)
             else requestCodeFor(REQUEST_CODE_CHECK_BASE, alarmTime)
@@ -542,11 +534,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
                 context, requestCode, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-
-            // IMPORTANT: clean first, THEN schedule. cancelReTrigger sweeps
-            // snooze codes 0..50 — if the order is reversed, the newly installed
-            // snooze gets cancelled too and NEVER fires.
-            // Snooze replaces smart-repeat: clean the chain + stale reminder.
             cancelReTrigger(context, alarmTime, alarmId)
             cancelUsageCheck(context, alarmTime, alarmId)
             cancelSmartWakeReminder(context)
@@ -570,11 +557,6 @@ class AlarmBroadcastReceiver : BroadcastReceiver() {
         const val EXTRA_RETRIGGER_COUNT = "retrigger_count"
         private const val MAX_RE_TRIGGER_ATTEMPTS = 12
         const val EXTRA_WAIT_COUNT = "wait_count"
-        /**
-         * Cap for KEEP_WAITING re-checks (60s apart ~= overlay 10-min
-         * auto-dismiss). Without this a stuck overlay would schedule exact
-         * alarms forever with an unchanged attempt counter.
-         */
         private const val MAX_KEEP_WAITING_CHECKS = 10
 
         @JvmOverloads

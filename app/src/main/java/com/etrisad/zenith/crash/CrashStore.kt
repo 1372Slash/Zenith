@@ -72,12 +72,6 @@ data class CrashRecord(
         )
     }
 }
-
-/**
- * File + preference storage for caught crashes. Every public method is
- * defensive: it must never throw while running inside the uncaught-exception
- * handler.
- */
 object CrashStore {
     private const val PREFS_NAME = "zenith_crash"
     private const val KEY_UNSEEN = "unseen_crash"

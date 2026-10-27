@@ -320,8 +320,6 @@ class ShieldRepository(
             SharedMonitoringState.goalShieldsCache.filterNot { it.packageName in packages }
         SharedMonitoringState.updateRestrictedPackages()
     }
-
-    /** Deletes intercepted notification rows for apps the user excluded from interception. */
     suspend fun purgeNotificationData(packages: Set<String>) {
         if (packages.isEmpty()) return
         database.interceptedNotificationDao().deleteByPackages(packages.toList())

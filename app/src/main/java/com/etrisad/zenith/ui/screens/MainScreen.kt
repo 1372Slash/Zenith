@@ -107,6 +107,7 @@ import com.etrisad.zenith.ui.screens.profile.tierDisplayName
 import com.etrisad.zenith.ui.screens.profile.tierIconsForLevel
 import com.etrisad.zenith.ui.screens.settings.EyeCareScreen
 import com.etrisad.zenith.ui.screens.settings.LockdownSettings
+import com.etrisad.zenith.ui.screens.settings.TamperProtectionSettings
 import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointScreen
 import com.etrisad.zenith.ui.screens.settings.pausepoint.PausePointTypeSettingsScreen
 import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
@@ -227,6 +228,7 @@ fun MainScreen(
                 currentRoute == Screen.GracePeriod.route ||
                 currentRoute == Screen.EyeCare.route ||
                 currentRoute == Screen.Lockdown.route ||
+                currentRoute == Screen.TamperProtection.route ||
                 currentRoute == Screen.Pomodoro.route ||
                 currentRoute == Screen.Profile.route ||
                 currentRoute == Screen.Achievements.route ||
@@ -456,6 +458,7 @@ fun MainScreen(
                     currentRoute != Screen.GracePeriod.route &&
                     currentRoute != Screen.EyeCare.route &&
                     currentRoute != Screen.Lockdown.route &&
+                    currentRoute != Screen.TamperProtection.route &&
                     currentRoute != Screen.Pomodoro.route &&
                     currentRoute != Screen.Profile.route &&
                     currentRoute != Screen.Achievements.route &&
@@ -893,6 +896,7 @@ fun MainScreen(
                                     targetRoute == Screen.GracePeriod.route ||
                                     targetRoute == Screen.EyeCare.route ||
                                     targetRoute == Screen.Lockdown.route ||
+                                    targetRoute == Screen.TamperProtection.route ||
                                     targetRoute == Screen.Pomodoro.route ||
                                     targetRoute == Screen.Profile.route ||
                                     targetRoute == Screen.Achievements.route ||
@@ -914,6 +918,7 @@ fun MainScreen(
                                     initialRoute == Screen.GracePeriod.route ||
                                     initialRoute == Screen.EyeCare.route ||
                                     initialRoute == Screen.Lockdown.route ||
+                                    initialRoute == Screen.TamperProtection.route ||
                                     initialRoute == Screen.Pomodoro.route ||
                                     initialRoute == Screen.Profile.route ||
                                     initialRoute == Screen.Achievements.route ||
@@ -967,6 +972,7 @@ fun MainScreen(
                                     targetRoute == Screen.GracePeriod.route ||
                                     targetRoute == Screen.EyeCare.route ||
                                     targetRoute == Screen.Lockdown.route ||
+                                    targetRoute == Screen.TamperProtection.route ||
                                     targetRoute == Screen.Pomodoro.route ||
                                     targetRoute == Screen.Profile.route ||
                                     targetRoute == Screen.Achievements.route ||
@@ -989,6 +995,7 @@ fun MainScreen(
                                     initialRoute == Screen.GracePeriod.route ||
                                     initialRoute == Screen.EyeCare.route ||
                                     initialRoute == Screen.Lockdown.route ||
+                                    initialRoute == Screen.TamperProtection.route ||
                                     initialRoute == Screen.Pomodoro.route ||
                                     initialRoute == Screen.Profile.route ||
                                     initialRoute == Screen.Achievements.route ||
@@ -1130,6 +1137,13 @@ fun MainScreen(
                     }
                     composable(Screen.Lockdown.route) {
                         LockdownSettings(
+                            preferences = preferences,
+                            innerPadding = innerPadding,
+                            preferencesRepository = userPreferencesRepository
+                        )
+                    }
+                    composable(Screen.TamperProtection.route) {
+                        TamperProtectionSettings(
                             preferences = preferences,
                             innerPadding = innerPadding,
                             preferencesRepository = userPreferencesRepository
@@ -1314,6 +1328,7 @@ fun MainScreen(
                             currentRoute != Screen.GracePeriod.route &&
                             currentRoute != Screen.EyeCare.route &&
                             currentRoute != Screen.Lockdown.route &&
+                            currentRoute != Screen.TamperProtection.route &&
                             currentRoute != Screen.DatabaseDebug.route &&
                             currentRoute != Screen.DataRepairment.route &&
                             currentRoute != Screen.FontTest.route &&

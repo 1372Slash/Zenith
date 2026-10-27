@@ -131,8 +131,6 @@ object SharedMonitoringState {
         packageName in FINANCIAL_APPS
     fun isPrivatePackage(packageName: String): Boolean =
         packageName.isNotEmpty() && packageName in privatePackages
-
-    /** Packages whose notifications must not be intercepted or stored. */
     fun isNotificationExcluded(packageName: String): Boolean =
         packageName.isNotEmpty() &&
             (packageName in privatePackages || packageName in notificationExcludedPackages)

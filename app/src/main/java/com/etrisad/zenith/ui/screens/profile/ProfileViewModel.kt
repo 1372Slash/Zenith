@@ -228,10 +228,6 @@ class ProfileViewModel(
                 val schedules = try {
                     shieldRepository.allSchedules.first()
                 } catch (_: Exception) { emptyList() }
-                // Day-gated counters for day-based achievements (historian,
-                // weekend_warrior, night_owl_lite, early_bird). Each id
-                // increments at most once per calendar day, and only when
-                // that day's condition holds, cold starts never inflate them.
                 val trackedDates = try {
                     shieldRepository.getAllTrackedDates().toSet()
                 } catch (_: Exception) { emptySet() }
@@ -313,10 +309,6 @@ class ProfileViewModel(
                     qrCount = freshPrefs.pausePointQrCodes.size,
                     nfcCount = freshPrefs.pausePointNfcTagIds.size,
                     taskTypeCount = freshPrefs.pausePointTaskTypes.size,
-                    // While a debug XP override is active, achievements
-                    // compute from the frozen pre-debug base so debugging
-                    // never unlocks real XP achievements. Level display
-                    // keeps following the override total.
                     userXpTotal = if (freshPrefs.userXpDebugBase >= 0L) freshPrefs.userXpDebugBase
                     else freshPrefs.userXpTotal,
                     hasCustomOverlay = freshPrefs.overlayPaletteId != "dynamic",
@@ -405,12 +397,6 @@ class ProfileViewModel(
         val total: Long,
         val appCount: Int
     )
-
-    /**
-     * Incremental lifetime compaction: only rows newer than the last sync
-     * date are aggregated and merged into the persisted snapshot, instead of
-     * re-summing the whole table on every open.
-     */
     private suspend fun syncLifetime(): LifetimeResult = withContext(Dispatchers.IO) {
         val prefs = userPreferencesRepository.userPreferencesFlow.first()
         val totals = decodeSnapshot(prefs.lifetimeSnapshot).toMutableMap()

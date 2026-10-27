@@ -4,12 +4,6 @@ import com.etrisad.zenith.data.model.AlarmItem
 object AlarmChainHelper {
     fun alarmKey(alarmId: Long, alarmTime: String): String =
         if (alarmId > 0L) "id:$alarmId" else "time:$alarmTime"
-
-    /**
-     * Finds the alarm backing a firing intent. With a known id the match is by
-     * id only (never by time, so two alarms sharing one HH:mm can't be
-     * confused); with id = 0 it falls back to the time string.
-     */
     fun findAlarm(alarms: List<AlarmItem>, alarmId: Long, alarmTime: String): AlarmItem? {
         if (alarmId > 0L) {
             return alarms.find { it.id == alarmId }

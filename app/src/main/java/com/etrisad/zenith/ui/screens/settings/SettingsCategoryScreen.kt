@@ -212,6 +212,7 @@ fun SettingsCategoryScreen(
                         onNavigateToGracePeriod = { navController.navigate(Screen.GracePeriod.route) },
                         onWebsiteAutoTrackingEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setWebsiteAutoTrackingEnabled(enabled) } },
                         onNavigateToLockdown = { navController.navigate(Screen.Lockdown.route) },
+                        onNavigateToTamperProtection = { navController.navigate(Screen.TamperProtection.route) },
                         onNavigateToPomodoro = { navController.navigate(Screen.Pomodoro.route) },
                         onNavigateToPausePoint = { navController.navigate(Screen.PausePoint.route) },
                         goalCount = goalCount

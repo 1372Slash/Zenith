@@ -15,6 +15,7 @@ object FeatureInfoRegistry {
         route == Screen.EyeCare.route -> eyeCare
         route?.startsWith("app_detail") == true -> appDetail
         route == Screen.Lockdown.route -> lockdown
+        route == Screen.TamperProtection.route -> tamperProtection
         route == Screen.Pomodoro.route -> pomodoro
         route == Screen.PausePoint.route -> pausePoint
         route == Screen.Profile.route -> profile
@@ -249,6 +250,27 @@ object FeatureInfoRegistry {
                 "Set lockdown for your most impulsive hours (e.g. late night).",
                 "Turning it on is easy on purpose; disabling takes 10 levers within 10 seconds, and time/days cannot be changed while active.",
                 "Combine with Grace Period so breaks stay planned, not improvised."
+            )
+        )
+    )
+
+    private val tamperProtection = FeatureInfo(
+        title = "Tamper Protection",
+        summary = "Anti-uninstall: Zenith becomes a device administrator, so Android asks for an extra step before it can be uninstalled.",
+        sections = listOf(
+            FeatureInfoSections.whatItDoes(
+                "Registers Zenith as a device administrator so Android requires an extra deactivation step before the app can be uninstalled.",
+                "Requires a user-set 4-8 digit PIN to turn protection off or change it.",
+                "Optionally blocks turning protection off during Lockdown hours."
+            ),
+            FeatureInfoSections.whatYoullSee(
+                "A status card showing whether protection is active or whether administrator rights were revoked outside the app.",
+                "A device administrator activation prompt when enabling, and a PIN sheet for every sensitive change."
+            ),
+            FeatureInfoSections.tips(
+                "Set the PIN before you need it, it is the only way to turn protection off inside Zenith.",
+                "If Android no longer lists Zenith as an administrator, use Re-activate to restore protection.",
+                "A factory reset or deactivating the administrator in system settings cannot be blocked; Zenith warns you if it happens."
             )
         )
     )

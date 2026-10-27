@@ -55,6 +55,7 @@ fun FeaturesSettings(
     onNavigateToGracePeriod: () -> Unit,
     onWebsiteAutoTrackingEnabledChange: (Boolean) -> Unit,
     onNavigateToLockdown: () -> Unit,
+    onNavigateToTamperProtection: () -> Unit,
     onNavigateToPomodoro: () -> Unit,
     onNavigateToPausePoint: () -> Unit = {},
     goalCount: Int
@@ -315,6 +316,17 @@ fun FeaturesSettings(
             onClick = onNavigateToLockdown,
             icon = Icons.Outlined.Lock,
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        PreferenceCategory(title = "Protection")
+
+        SettingsActionItem(
+            title = "Tamper Protection",
+            summary = if (preferences.tamperProtectionEnabled) "On. PIN required to turn it off" else "Add an extra Android step before Zenith can be uninstalled",
+            onClick = onNavigateToTamperProtection,
+            icon = Icons.Outlined.AdminPanelSettings,
+            shape = RoundedCornerShape(24.dp)
         )
 
         Spacer(modifier = Modifier.height(16.dp))

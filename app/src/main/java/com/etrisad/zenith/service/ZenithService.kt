@@ -442,18 +442,12 @@ class ZenithService : AccessibilityService() {
 
         val packageName = event.packageName?.toString() ?: return
         if (packageName == this.packageName) return
-
-        // Private apps are skipped before any inspection, tracking, or blocking.
-        // Still publish the foreground app so the monitor service can close out the
-        // previous session and hide any usage HUD without recording this app.
         if (SharedMonitoringState.isPrivatePackage(packageName)) {
             lastForegroundApp = packageName
             AppStateHolder.foregroundApp.value = packageName
             overlayManager.hideOverlay()
             return
         }
-
-        // Limited mode only reacts to app switches, never to screen content or text input.
         if (SharedMonitoringState.accessibilityLimitedMode && !isWindowState) return
 
         val className = event.className?.toString() ?: ""

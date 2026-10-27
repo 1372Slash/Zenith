@@ -518,8 +518,6 @@ class AlarmOverlayActivity : ComponentActivity() {
     }
 
     private fun openUsageAccessSettings() {
-        // Opening Settings needs the device unlocked: request unlock ONLY for this
-        // explicit user action, not automatically when the alarm fires.
         requestUnlockForExternalLaunch()
         try {
             startActivity(Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
@@ -554,7 +552,6 @@ class AlarmOverlayActivity : ComponentActivity() {
             if (!wakeUpTrackingActive) {
                 resumeWakeUpTracking(appPackages, durationSeconds)
             }
-            // Opening another app from above the lockscreen needs an unlock first.
             requestUnlockForExternalLaunch()
             try {
                 startActivity(intent)
@@ -562,8 +559,6 @@ class AlarmOverlayActivity : ComponentActivity() {
                 android.widget.Toast.makeText(this, "Couldn't open app", android.widget.Toast.LENGTH_SHORT).show()
             }
         } else {
-            // Package gone between setting and firing: don't stay silent; route to
-            // app info so the user understands, not a dead button.
             android.widget.Toast.makeText(this, "App couldn't be opened", android.widget.Toast.LENGTH_SHORT).show()
             requestUnlockForExternalLaunch()
             try {
@@ -574,12 +569,6 @@ class AlarmOverlayActivity : ComponentActivity() {
             } catch (_: Exception) { }
         }
     }
-
-    /**
-     * (Re)starts wake-up tracking for the currently displayed alarm, resuming
-     * from the preserved per-alarm offset instead of zero. Called from the
-     * compose LaunchedEffect and from explicit "open app" taps.
-     */
     private fun resumeWakeUpTracking(appPackages: List<String>, durationSeconds: Int) {
         val key = AlarmChainHelper.alarmKey(alarmId, alarmTime)
         val slot = wakeUpSlots.getOrPut(key) { WakeUpSlot() }

@@ -2603,20 +2603,11 @@ class AppUsageMonitorService : Service() {
             return true
         }
         if (wantCamera && tryStartForeground(notification, false)) {
-            // Camera type was rejected (permission revoked, app not visible...):
-            // degrade to specialUse only so monitoring keeps running.
             cameraTypeActive = false
             return true
         }
         return false
     }
-
-    /**
-     * Upgrades the already-foreground service to include the camera type.
-     * Called when the app becomes visible, because QR pause points are scanned
-     * from an overlay window shown over other apps and Android 14+ only grants
-     * while-in-use camera access while the app itself is visible.
-     */
     private fun ensureCameraForegroundType() {
         if (cameraTypeActive || !foregroundNotificationStarted) return
         serviceScope.launch {

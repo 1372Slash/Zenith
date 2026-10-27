@@ -130,11 +130,6 @@ fun calcShieldXp(limitMillis: Long, usageMillis: Long): Int {
     val savingsRatio = (limitMillis - usageMillis).toFloat() / limitMillis
     return 10 + (savingsRatio * 90).toInt().coerceIn(0, 90)
 }
-
-/**
- * Goal XP: usage at or above the target earns full XP plus a capped overage
- * bonus. Under the target earns proportional XP.
- */
 fun calcGoalXp(targetMillis: Long, usageMillis: Long): Int {
     if (targetMillis <= 0L) return 0
     val ratio = usageMillis.toFloat() / targetMillis

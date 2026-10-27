@@ -339,12 +339,6 @@ object DiagnosticReportUtils {
             appendLine("}")
         }
     }
-
-    /**
-     * Counts and time range per buffer only — no message contents, so no
-     * package names or other details leak. Shows at a glance whether the
-     * shield/overlay pipeline was active recently and where errors cluster.
-     */
     private fun buildLogSummary(): String {
         fun esc(v: String) = v.replace("\\", "\\\\").replace("\"", "\\\"")
         fun iso(ts: Long): String = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).apply {

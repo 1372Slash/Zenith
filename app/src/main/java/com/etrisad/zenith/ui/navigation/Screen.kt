@@ -64,6 +64,9 @@ sealed class Screen(
 
     object Lockdown : Screen("lockdown", "Lockdown", Icons.Filled.Settings, Icons.Outlined.Settings)
 
+    object TamperProtection :
+        Screen("tamper_protection", "Tamper Protection", Icons.Filled.Settings, Icons.Outlined.Settings)
+
     object Pomodoro :
         Screen("pomodoro", "Pomodoro", Icons.Filled.Settings, Icons.Outlined.Settings)
 

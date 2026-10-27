@@ -112,12 +112,6 @@ class StreakCalculator(
             fetchSystemAppUsageForDate(usm, pkg, dayStartMillis)
         }
     }
-
-    /**
-     * Resolves a verified week total for weekly shields, or null when any day
-     * of the week is unknown (see [resolvePastDayUsage]). A partially unknown
-     * week must break the run instead of being counted as a success week.
-     */
     private suspend fun resolvePastWeekUsage(
         pkg: String,
         weekStartMillis: Long,
