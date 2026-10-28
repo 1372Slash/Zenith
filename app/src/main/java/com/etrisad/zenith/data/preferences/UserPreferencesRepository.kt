@@ -323,6 +323,17 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
         val MINDFUL_GATEWAY_PAUSE_POINT_ENABLED = booleanPreferencesKey("mindful_gateway_pause_point_enabled")
         val MINDFUL_GATEWAY_END_OVERLAY_ENABLED = booleanPreferencesKey("mindful_gateway_end_overlay_enabled")
         val MINDFUL_GATEWAY_AUTO_QUIT_ENABLED = booleanPreferencesKey("mindful_gateway_auto_quit_enabled")
+        val REELS_SHIELD_ENABLED = booleanPreferencesKey("reels_shield_enabled")
+        val REELS_SHIELD_DAILY_LIMIT = intPreferencesKey("reels_shield_daily_limit")
+        val REELS_SHIELD_PACKAGES = stringPreferencesKey("reels_shield_packages")
+        val REELS_SHIELD_TODAY_DATE = stringPreferencesKey("reels_shield_today_date")
+        val REELS_SHIELD_TODAY_COUNT = intPreferencesKey("reels_shield_today_count")
+        val REELS_SHIELD_TODAY_BY_APP = stringPreferencesKey("reels_shield_today_by_app")
+        val REELS_SHIELD_TOTAL_COUNT = longPreferencesKey("reels_shield_total_count")
+        val REELS_SHIELD_HISTORY = stringPreferencesKey("reels_shield_history")
+        val REELS_SHIELD_HISTORY_BY_APP = stringPreferencesKey("reels_shield_history_by_app")
+        val REELS_SHIELD_APP_LIMITS = stringPreferencesKey("reels_shield_app_limits")
+        val HOME_QUICK_ACTIONS = stringPreferencesKey("home_quick_actions")
         val REFRESH_ON_OPEN_USAGE_STATS = booleanPreferencesKey("refresh_on_open_usage_stats")
         val CHECK_UPDATE_ON_START = booleanPreferencesKey("check_update_on_start")
         val BATTERY_STATS_RESET_ENABLED = booleanPreferencesKey("battery_stats_reset_enabled")
@@ -581,6 +592,33 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             mindfulGatewayPausePointEnabled = settings[PreferencesKeys.MINDFUL_GATEWAY_PAUSE_POINT_ENABLED] ?: MindfulGatewayDefaults.PAUSE_POINT_ENABLED,
             mindfulGatewayEndOverlayEnabled = settings[PreferencesKeys.MINDFUL_GATEWAY_END_OVERLAY_ENABLED] ?: MindfulGatewayDefaults.END_OVERLAY_ENABLED,
             mindfulGatewayAutoQuitEnabled = settings[PreferencesKeys.MINDFUL_GATEWAY_AUTO_QUIT_ENABLED] ?: MindfulGatewayDefaults.AUTO_QUIT_ENABLED,
+            reelsShieldEnabled = settings[PreferencesKeys.REELS_SHIELD_ENABLED] ?: false,
+            reelsShieldDailyLimit = settings[PreferencesKeys.REELS_SHIELD_DAILY_LIMIT] ?: ReelsShieldDefaults.DAILY_LIMIT,
+            reelsShieldPackages = settings[PreferencesKeys.REELS_SHIELD_PACKAGES]
+                ?.split(",")
+                ?.filter { it in ReelsShieldDefaults.SUPPORTED_PACKAGES }
+                ?.toSet()
+                ?: ReelsShieldDefaults.PACKAGES,
+            reelsShieldTodayDate = settings[PreferencesKeys.REELS_SHIELD_TODAY_DATE] ?: "",
+            reelsShieldTodayCount = settings[PreferencesKeys.REELS_SHIELD_TODAY_COUNT] ?: 0,
+            reelsShieldTodayByApp = settings[PreferencesKeys.REELS_SHIELD_TODAY_BY_APP]?.let { parseCountMap(it) } ?: emptyMap(),
+            reelsShieldTotalCount = settings[PreferencesKeys.REELS_SHIELD_TOTAL_COUNT] ?: 0L,
+            reelsShieldHistory = settings[PreferencesKeys.REELS_SHIELD_HISTORY]?.let { parseCountMap(it) } ?: emptyMap(),
+            reelsShieldHistoryByApp = settings[PreferencesKeys.REELS_SHIELD_HISTORY_BY_APP]
+                ?.let { parseHistoryByAppMap(it) }
+                ?: emptyMap(),
+            reelsShieldAppLimits = settings[PreferencesKeys.REELS_SHIELD_APP_LIMITS]
+                ?.let { parseCountMap(it) }
+                ?.filterKeys { it in ReelsShieldDefaults.SUPPORTED_PACKAGES }
+                ?.filterValues { it > 0 }
+                ?: emptyMap(),
+            homeQuickActions = settings[PreferencesKeys.HOME_QUICK_ACTIONS]
+                ?.split(",")
+                ?.filter { it in HomeQuickActionsDefaults.ALL_IDS }
+                ?.distinct()
+                ?.take(HomeQuickActionsDefaults.MAX)
+                ?.takeIf { it.size >= HomeQuickActionsDefaults.MIN }
+                ?: HomeQuickActionsDefaults.DEFAULT_ORDER,
             refreshOnOpenUsageStats = settings[PreferencesKeys.REFRESH_ON_OPEN_USAGE_STATS] ?: false,
             checkUpdateOnStart = settings[PreferencesKeys.CHECK_UPDATE_ON_START] ?: false,
             batteryStatsResetEnabled = settings[PreferencesKeys.BATTERY_STATS_RESET_ENABLED] ?: false,
@@ -1581,6 +1619,104 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         }
     }
 
+    suspend fun setReelsShieldEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.REELS_SHIELD_ENABLED] = enabled }
+    }
+
+    suspend fun setReelsShieldDailyLimit(limit: Int) {
+        val safeLimit = limit.coerceIn(0, MAX_REELS_SHIELD_DAILY_LIMIT)
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.REELS_SHIELD_DAILY_LIMIT] = safeLimit
+            // A per-app cap can never exceed the shared pool. When the pool is
+            // lowered, tighten every stored cap with it; caps that end up equal
+            // to the pool are dropped so a later pool increase is not silently
+            // capped by an old value.
+            val limits = preferences[PreferencesKeys.REELS_SHIELD_APP_LIMITS]
+                ?.let { parseCountMap(it) }
+                .orEmpty()
+                .filterKeys { it in ReelsShieldDefaults.SUPPORTED_PACKAGES }
+            if (limits.isNotEmpty() && safeLimit > 0) {
+                val tightened = limits
+                    .mapValues { (_, value) -> value.coerceIn(1, safeLimit) }
+                    .filterValues { it < safeLimit }
+                if (tightened.isEmpty()) {
+                    preferences.remove(PreferencesKeys.REELS_SHIELD_APP_LIMITS)
+                } else {
+                    preferences[PreferencesKeys.REELS_SHIELD_APP_LIMITS] = encodeCountMap(tightened)
+                }
+            }
+        }
+    }
+
+    suspend fun setReelsShieldPackages(packages: Set<String>) {
+        val supported = packages.filterTo(LinkedHashSet()) { it in ReelsShieldDefaults.SUPPORTED_PACKAGES }
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.REELS_SHIELD_PACKAGES] = supported.joinToString(",")
+        }
+    }
+
+    /**
+     * Stores a cap for one tracked app. Values above the shared pool are
+     * clamped, values below one are raised, and a value equal to the pool
+     * removes the override so the app simply uses the shared pool.
+     */
+    suspend fun setReelsShieldAppLimit(packageName: String, limit: Int) {
+        if (packageName !in ReelsShieldDefaults.SUPPORTED_PACKAGES) return
+        context.dataStore.edit { preferences ->
+            val pool = (preferences[PreferencesKeys.REELS_SHIELD_DAILY_LIMIT]
+                ?: ReelsShieldDefaults.DAILY_LIMIT)
+                .coerceIn(1, MAX_REELS_SHIELD_DAILY_LIMIT)
+            val limits = preferences[PreferencesKeys.REELS_SHIELD_APP_LIMITS]
+                ?.let { parseCountMap(it) }
+                .orEmpty()
+                .filterKeys { it in ReelsShieldDefaults.SUPPORTED_PACKAGES }
+            val safeLimit = limit.coerceIn(1, pool)
+            val updated = if (safeLimit >= pool) {
+                limits - packageName
+            } else {
+                limits + (packageName to safeLimit)
+            }
+            if (updated.isEmpty()) {
+                preferences.remove(PreferencesKeys.REELS_SHIELD_APP_LIMITS)
+            } else {
+                preferences[PreferencesKeys.REELS_SHIELD_APP_LIMITS] = encodeCountMap(updated)
+            }
+        }
+    }
+
+    /** Stores the ordered Home quick action row; never empties it, never exceeds the cap. */
+    suspend fun setHomeQuickActions(actions: List<String>) {
+        val sanitized = actions.filter { it in HomeQuickActionsDefaults.ALL_IDS }
+            .distinct()
+            .take(HomeQuickActionsDefaults.MAX)
+        if (sanitized.isEmpty()) return
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.HOME_QUICK_ACTIONS] = sanitized.joinToString(",")
+        }
+    }
+
+    /**
+     * Writes every reels-shield counter in one atomic edit so the daily pool,
+     * the per-app split, the lifetime total and the bar history never drift apart.
+     */
+    suspend fun setReelsShieldCounters(
+        todayDate: String,
+        todayCount: Int,
+        todayByApp: Map<String, Int>,
+        totalCount: Long,
+        history: Map<String, Int>,
+        historyByApp: Map<String, Map<String, Int>> = emptyMap()
+    ) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.REELS_SHIELD_TODAY_DATE] = todayDate
+            preferences[PreferencesKeys.REELS_SHIELD_TODAY_COUNT] = todayCount.coerceAtLeast(0)
+            preferences[PreferencesKeys.REELS_SHIELD_TODAY_BY_APP] = todayByApp.entries.joinToString(",") { "${it.key}:${it.value}" }
+            preferences[PreferencesKeys.REELS_SHIELD_TOTAL_COUNT] = totalCount.coerceAtLeast(0L)
+            preferences[PreferencesKeys.REELS_SHIELD_HISTORY] = history.entries.joinToString(",") { "${it.key}:${it.value}" }
+            preferences[PreferencesKeys.REELS_SHIELD_HISTORY_BY_APP] = encodeHistoryByAppMap(historyByApp)
+        }
+    }
+
     suspend fun setRefreshOnOpenUsageStats(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.REFRESH_ON_OPEN_USAGE_STATS] = enabled }
     }
@@ -1975,6 +2111,133 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 
 
 }
+const val MAX_REELS_SHIELD_DAILY_LIMIT = 200
+
+/**
+ * Defaults for the Reels Shield: which apps expose short-video feeds, and how
+ * many swipes per day the shared pool allows.
+ */
+object ReelsShieldDefaults {
+    const val DAILY_LIMIT = 30
+
+    /**
+     * Priority order matters during setup: Instagram Reels and Facebook Reels
+     * expose the most stable hierarchy, so they lead both the defaults and the
+     * picker. TikTok stays available but is marked as partial support because
+     * its node tree changes between app versions.
+     */
+    val PACKAGES: Set<String> = setOf(
+        "com.instagram.android",
+        "com.facebook.katana",
+        "com.facebook.lite",
+        "com.google.android.youtube",
+        "com.snapchat.android",
+        "com.zhiliaoapp.musically",
+        "com.zhiliaoapp.musically.go",
+        "com.ss.android.ugc.trill",
+        "com.ss.android.ugc.aweme"
+    )
+
+    /** Feed hierarchies that Reels Shield integrates with first. */
+    val PRIORITY_PACKAGES: Set<String> = setOf(
+        "com.instagram.android",
+        "com.facebook.katana",
+        "com.facebook.lite"
+    )
+
+    /** Supported, but not yet reliable across every app version. */
+    val PARTIAL_PACKAGES: Set<String> = setOf(
+        "com.zhiliaoapp.musically",
+        "com.zhiliaoapp.musically.go",
+        "com.ss.android.ugc.trill",
+        "com.ss.android.ugc.aweme"
+    )
+
+    /**
+     * Apps Zenith can recognise a short-video surface in. Instagram Reels,
+     * Facebook Reels, YouTube Shorts and Snapchat Spotlight expose a feed
+     * Zenith can detect and count. TikTok is included with partial support so
+     * the picker never hides it completely, but its hierarchy is less stable.
+     */
+    val SUPPORTED_PACKAGES: Set<String> = PACKAGES
+
+    /**
+     * Apps that are nothing but a short-video feed, so foreground entry alone
+     * is enough to confirm the surface and kick the user back at the limit.
+     */
+    val SHORT_VIDEO_ONLY_PACKAGES: Set<String> = setOf(
+        "com.zhiliaoapp.musically",
+        "com.zhiliaoapp.musically.go",
+        "com.ss.android.ugc.trill",
+        "com.ss.android.ugc.aweme"
+    )
+
+    /**
+     * Readable name used before (or instead of) PackageManager resolution.
+     * Never call PackageManager from an accessibility event.
+     */
+    fun fallbackLabel(pkg: String): String = when (pkg) {
+        "com.instagram.android" -> "Instagram"
+        "com.google.android.youtube" -> "YouTube"
+        "com.facebook.katana", "com.facebook.lite" -> "Facebook"
+        "com.snapchat.android" -> "Snapchat"
+        "com.zhiliaoapp.musically", "com.zhiliaoapp.musically.go",
+        "com.ss.android.ugc.trill", "com.ss.android.ugc.aweme" -> "TikTok"
+        else -> pkg.substringAfterLast('.')
+    }
+}
+
+/**
+ * Stored ids for the Home quick action row. `ALL_IDS` must mirror the entries of
+ * `QuickActionType` in the Home quick action editor; unknown ids are filtered on write.
+ */
+object HomeQuickActionsDefaults {
+    const val MIN = 1
+    const val MAX = 4
+
+    val DEFAULT_ORDER: List<String> = listOf("alarm", "pomodoro", "stats", "bedtime")
+
+    val ALL_IDS: List<String> = DEFAULT_ORDER + listOf(
+        "reels_shield",
+        "focus",
+        "settings",
+        "eye_care",
+        "grace_period",
+        "lockdown",
+        "pause_point"
+    )
+}
+
+/** Parses "key:value,key:value" counter maps written by setReelsShieldCounters. */
+private fun parseCountMap(raw: String): Map<String, Int> {
+    if (raw.isEmpty()) return emptyMap()
+    return raw.split(",").mapNotNull { entry ->
+        val separator = entry.lastIndexOf(':')
+        if (separator <= 0) null
+        else entry.substring(0, separator) to (entry.substring(separator + 1).toIntOrNull() ?: 0)
+    }.toMap()
+}
+
+private fun encodeCountMap(map: Map<String, Int>): String =
+    map.entries.joinToString(",") { "${it.key}:${it.value}" }
+
+/** Parses "date|pkg:count;pkg:count,date|pkg:count" per-day app maps. */
+private fun parseHistoryByAppMap(raw: String): Map<String, Map<String, Int>> {
+    if (raw.isEmpty()) return emptyMap()
+    return raw.split(",").mapNotNull { entry ->
+        val separator = entry.indexOf('|')
+        if (separator <= 0) return@mapNotNull null
+        val date = entry.substring(0, separator)
+        val apps = parseCountMap(entry.substring(separator + 1).replace(';', ','))
+        if (apps.isEmpty()) null else date to apps
+    }.toMap()
+}
+
+private fun encodeHistoryByAppMap(map: Map<String, Map<String, Int>>): String =
+    map.entries.joinToString(",") { (date, apps) ->
+        "$date|" + apps.entries.joinToString(";") { "${it.key}:${it.value}" }
+    }
+
 object MindfulGatewayDefaults {
     const val MAX_USES_PER_PERIOD = 5
     const val REFRESH_PERIOD_MINUTES = 60
@@ -2081,6 +2344,17 @@ data class UserPreferences(
     val mindfulGatewayPausePointEnabled: Boolean = MindfulGatewayDefaults.PAUSE_POINT_ENABLED,
     val mindfulGatewayEndOverlayEnabled: Boolean = MindfulGatewayDefaults.END_OVERLAY_ENABLED,
     val mindfulGatewayAutoQuitEnabled: Boolean = MindfulGatewayDefaults.AUTO_QUIT_ENABLED,
+    val reelsShieldEnabled: Boolean = false,
+    val reelsShieldDailyLimit: Int = ReelsShieldDefaults.DAILY_LIMIT,
+    val reelsShieldPackages: Set<String> = ReelsShieldDefaults.PACKAGES,
+    val reelsShieldTodayDate: String = "",
+    val reelsShieldTodayCount: Int = 0,
+    val reelsShieldTodayByApp: Map<String, Int> = emptyMap(),
+    val reelsShieldTotalCount: Long = 0L,
+    val reelsShieldHistory: Map<String, Int> = emptyMap(),
+    val reelsShieldHistoryByApp: Map<String, Map<String, Int>> = emptyMap(),
+    val reelsShieldAppLimits: Map<String, Int> = emptyMap(),
+    val homeQuickActions: List<String> = HomeQuickActionsDefaults.DEFAULT_ORDER,
     val refreshOnOpenUsageStats: Boolean = false,
     val checkUpdateOnStart: Boolean = false,
     val batteryStatsResetEnabled: Boolean = false,

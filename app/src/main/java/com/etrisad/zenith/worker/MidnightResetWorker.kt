@@ -21,6 +21,37 @@ class MidnightResetWorker(context: Context, params: WorkerParameters) : Coroutin
 
         val prefsRepo = UserPreferencesRepository(applicationContext)
         val prefs = prefsRepo.userPreferencesFlow.first()
+        if (prefs.reelsShieldEnabled || prefs.reelsShieldTodayCount > 0) {
+            val dayStart = com.etrisad.zenith.util.DateTimeUtils.getDayStartTime(
+                System.currentTimeMillis(), prefs.dayStartHour, prefs.dayStartMinute
+            )
+            val todayKey = com.etrisad.zenith.util.DateTimeUtils.getDateFormat().format(java.util.Date(dayStart))
+            // If the live controller already rolled the day and wrote a fresh
+            // count, do not clobber it from this stale worker snapshot.
+            if (prefs.reelsShieldTodayDate != todayKey) {
+                val history = HashMap(prefs.reelsShieldHistory)
+                if (prefs.reelsShieldTodayDate.isNotEmpty()) {
+                    history[prefs.reelsShieldTodayDate] = prefs.reelsShieldTodayCount
+                }
+                val trimmed = history.entries
+                    .sortedByDescending { it.key }
+                    .take(30)
+                    .associate { it.key to it.value }
+                val historyByApp = HashMap(prefs.reelsShieldHistoryByApp.mapValues { HashMap(it.value) })
+                if (prefs.reelsShieldTodayDate.isNotEmpty() && prefs.reelsShieldTodayByApp.isNotEmpty()) {
+                    historyByApp[prefs.reelsShieldTodayDate] = HashMap(prefs.reelsShieldTodayByApp)
+                }
+                val trimmedByApp = historyByApp.filterKeys { it in trimmed.keys }
+                prefsRepo.setReelsShieldCounters(
+                    todayDate = todayKey,
+                    todayCount = 0,
+                    todayByApp = emptyMap(),
+                    totalCount = prefs.reelsShieldTotalCount,
+                    history = trimmed,
+                    historyByApp = trimmedByApp
+                )
+            }
+        }
         val needsService = prefs.alarmMasterEnabled || prefs.bedtimeEnabled ||
             prefs.eyeCareEnabled || prefs.usageGlimpseEnabled || prefs.pomodoroEnabled
         if (needsService) {

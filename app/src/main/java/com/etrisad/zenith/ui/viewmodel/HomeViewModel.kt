@@ -433,6 +433,7 @@ class HomeViewModel(
         .map { it }
         .distinctUntilChanged { old, new ->
             old.screenTimeTargetMinutes == new.screenTimeTargetMinutes &&
+                    old.homeQuickActions == new.homeQuickActions &&
                     old.showDatabaseIndicator == new.showDatabaseIndicator &&
                     old.expressiveColors == new.expressiveColors &&
                     old.bedtimeEnabled == new.bedtimeEnabled &&

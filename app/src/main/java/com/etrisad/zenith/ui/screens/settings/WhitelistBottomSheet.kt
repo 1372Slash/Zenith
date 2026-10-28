@@ -11,6 +11,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
@@ -49,7 +50,11 @@ data class WhitelistAppInfo(
 fun WhitelistBottomSheet(
     initialWhitelisted: Set<String>,
     onDismiss: () -> Unit,
-    onSave: (Set<String>) -> Unit
+    onSave: (Set<String>) -> Unit,
+    title: String = "Bypass Restrictions",
+    subtitle: String = "Still tracked in stats, but skips schedules, shields, and goals.",
+    allowedPackages: Set<String>? = null,
+    priorityPackages: Set<String> = emptySet()
 ) {
     val context = LocalContext.current
     val pm = context.packageManager
@@ -77,36 +82,49 @@ fun WhitelistBottomSheet(
                 emptyList()
             }
 
-            val mappedApps = installedApps.map {
-                val isSystemFlag = (it.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
-                val hasLauncher = pm.getLaunchIntentForPackage(it.packageName) != null
-                val pkg = it.packageName
+            val mappedApps = installedApps
+                .filter { allowedPackages == null || it.packageName in allowedPackages }
+                .map {
+                    val isSystemFlag = (it.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
+                    val hasLauncher = pm.getLaunchIntentForPackage(it.packageName) != null
+                    val pkg = it.packageName
 
-                val isCoreComponent = pkg == "android" ||
-                        pkg.startsWith("com.android.settings") ||
-                        pkg.startsWith("com.android.systemui") ||
-                        pkg.startsWith("com.android.shell") ||
-                        pkg.startsWith("com.android.phone") ||
-                        pkg.startsWith("com.android.angle") ||
-                        pkg.startsWith("com.android.providers") ||
-                        pkg.startsWith("com.google.android.angle") ||
-                        pkg.startsWith("com.google.android.setupwizard") ||
-                        pkg.contains("restore") ||
-                        pkg.contains("overlay") ||
-                        pkg.contains("documentsui")
+                    val isCoreComponent = pkg == "android" ||
+                            pkg.startsWith("com.android.settings") ||
+                            pkg.startsWith("com.android.systemui") ||
+                            pkg.startsWith("com.android.shell") ||
+                            pkg.startsWith("com.android.phone") ||
+                            pkg.startsWith("com.android.angle") ||
+                            pkg.startsWith("com.android.providers") ||
+                            pkg.startsWith("com.google.android.angle") ||
+                            pkg.startsWith("com.google.android.setupwizard") ||
+                            pkg.contains("restore") ||
+                            pkg.contains("overlay") ||
+                            pkg.contains("documentsui")
 
-                WhitelistAppInfo(
-                    packageName = pkg,
-                    appName = pm.getApplicationLabel(it).toString(),
-                    isSystemApp = isSystemFlag && (!hasLauncher || isCoreComponent),
-                    isPreinstalledApp = isSystemFlag && hasLauncher && !isCoreComponent
+                    WhitelistAppInfo(
+                        packageName = pkg,
+                        appName = pm.getApplicationLabel(it).toString(),
+                        isSystemApp = isSystemFlag && (!hasLauncher || isCoreComponent),
+                        isPreinstalledApp = isSystemFlag && hasLauncher && !isCoreComponent
+                    )
+                }.sortedWith(
+                    compareBy(
+                        { it.packageName !in priorityPackages },
+                        { it.isPreinstalledApp || it.isSystemApp },
+                        { it.isSystemApp },
+                        { it.appName.lowercase() }
+                    )
                 )
-            }.sortedWith(compareBy({ it.isPreinstalledApp || it.isSystemApp }, { it.isSystemApp }, { it.appName.lowercase() }))
-            
+
             apps = mappedApps
 
             if (initialWhitelisted.isEmpty()) {
-                selectedApps = mappedApps.asSequence().filter { it.isSystemApp }.map { it.packageName }.toSet()
+                selectedApps = if (allowedPackages != null) {
+                    emptySet()
+                } else {
+                    mappedApps.asSequence().filter { it.isSystemApp }.map { it.packageName }.toSet()
+                }
             }
             isLoading = false
         }
@@ -146,13 +164,13 @@ fun WhitelistBottomSheet(
                         .padding(top = 24.dp)
                 ) {
                     Text(
-                        text = "Bypass Restrictions",
+                        text = title,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
                     Text(
-                        text = "Still tracked in stats, but skips schedules, shields, and goals.",
+                        text = subtitle,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 12.dp)
@@ -436,13 +454,11 @@ fun WhitelistAppItem(
                 }
             },
             leadingContent = {
-                coil.compose.AsyncImage(
-                    model = "app-icon://${app.packageName}",
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(8.dp)),
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                com.etrisad.zenith.ui.components.AppIconImage(
+                    packageName = app.packageName,
+                    modifier = Modifier.size(40.dp),
+                    shape = CircleShape,
+                    contentDescription = app.appName
                 )
             },
             trailingContent = {

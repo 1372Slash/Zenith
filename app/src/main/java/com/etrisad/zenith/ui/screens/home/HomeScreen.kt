@@ -1,5 +1,6 @@
 package com.etrisad.zenith.ui.screens.home
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
@@ -11,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.text.BasicTextField
@@ -47,6 +49,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.buildAnnotatedString
@@ -56,6 +59,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
@@ -98,6 +102,7 @@ import kotlin.math.pow
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
+import com.etrisad.zenith.data.preferences.HomeQuickActionsDefaults
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import kotlinx.coroutines.delay
@@ -113,7 +118,9 @@ fun HomeScreen(
     onDeleteShield: (ShieldEntity) -> Unit,
     onDismissUninstalled: (String) -> Unit,
     onAlarmClick: () -> Unit = {},
-    onPomodoroClick: () -> Unit = {}
+    onPomodoroClick: () -> Unit = {},
+    customizeState: HomeCustomizeState = remember { HomeCustomizeState() },
+    onNavigateRoute: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val preferences by viewModel.homeScreenPreferences.collectAsState()
@@ -134,10 +141,21 @@ fun HomeScreen(
     val onDaySelected = remember(viewModel) {
         { date: Long? -> viewModel.selectDate(date) }
     }
+    val onSaveQuickActions = remember(userPreferencesRepository, coroutineScope) {
+        { actions: List<String> ->
+            coroutineScope.launch {
+                userPreferencesRepository.setHomeQuickActions(actions)
+            }
+            Unit
+        }
+    }
 
     HomeScreenContent(
         uiState = uiState,
         preferences = preferences,
+        customizeState = customizeState,
+        onSetQuickActions = onSaveQuickActions,
+        onNavigateRoute = onNavigateRoute,
         bannerUri = bannerPrefs.userBannerUri,
         showBanner = bannerPrefs.profileBannerOnHome,
         innerPadding = innerPadding,
@@ -164,6 +182,9 @@ fun HomeScreen(
 fun HomeScreenContent(
     uiState: HomeUiState,
     preferences: com.etrisad.zenith.data.preferences.UserPreferences,
+    customizeState: HomeCustomizeState,
+    onSetQuickActions: (List<String>) -> Unit,
+    onNavigateRoute: (String) -> Unit,
     innerPadding: PaddingValues,
     bannerUri: String = "",
     showBanner: Boolean = false,
@@ -191,6 +212,7 @@ fun HomeScreenContent(
     }
 
     val bedtimeStatus = rememberBedtimeStatus(preferences)
+    val pomodoroStatus = rememberPomodoroStatus(preferences)
     var activeTab by remember { mutableStateOf(AppTypeTab.APPS) }
     val nowMillis by produceState(initialValue = System.currentTimeMillis()) {
         while (true) {
@@ -200,6 +222,67 @@ fun HomeScreenContent(
     }
     val isAccessibilityEnabled = rememberAccessibilityServiceEnabled()
 
+    val listState = rememberLazyListState()
+    // Park the row just below the header instead of behind it when the list
+    // snaps to it. scrollToItem's offset is subtracted from the item top, so a
+    // negative value pushes the row down by the header height.
+    val editorScrollOffsetPx = with(LocalDensity.current) {
+        -(innerPadding.calculateTopPadding() + 16.dp).roundToPx()
+    }
+    val quickActionDrag = remember { QuickActionDragState() }
+    var quickActionDraft by remember { mutableStateOf(preferences.homeQuickActions) }
+    var quickEditPending by remember { mutableStateOf(false) }
+    val homeScope = rememberCoroutineScope()
+
+    LaunchedEffect(preferences.homeQuickActions) {
+        if (!customizeState.quickEditOpen) quickActionDraft = preferences.homeQuickActions
+    }
+
+    fun finishQuickActionDrag() {
+        val source = quickActionDrag.source
+        val insertion = quickActionDrag.hoverIndex
+        if (source != null && insertion >= 0) {
+            val next = applyQuickActionDrop(quickActionDraft, source, insertion)
+            if (next != quickActionDraft) quickActionDraft = next
+        }
+        quickActionDrag.clear()
+    }
+
+    fun closeQuickActionEditor(save: Boolean) {
+        if (save) {
+            onSetQuickActions(quickActionDraft)
+        } else {
+            quickActionDraft = preferences.homeQuickActions
+        }
+        quickActionDrag.clear()
+        customizeState.quickEditOpen = false
+    }
+
+    fun startQuickActionEditor() {
+        if (quickEditPending || customizeState.quickEditOpen) return
+        customizeState.menuOpen = false
+        quickEditPending = true
+        homeScope.launch {
+            try {
+                // The quick action row is the sixth LazyColumn item and the
+                // items above it are always present, so the index is stable.
+                listState.animateScrollToItem(
+                    QUICK_ACTIONS_ITEM_INDEX,
+                    scrollOffset = editorScrollOffsetPx
+                )
+                quickActionDraft = preferences.homeQuickActions
+                customizeState.quickEditOpen = true
+            } finally {
+                quickEditPending = false
+            }
+        }
+    }
+
+    BackHandler(enabled = customizeState.quickEditOpen) {
+        closeQuickActionEditor(save = false)
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     PullToRefreshBox(
         isRefreshing = uiState.isLoading,
         onRefresh = {
@@ -237,6 +320,8 @@ fun HomeScreenContent(
     ) {
         val targetMillis = preferences.screenTimeTargetMinutes * 60 * 1000L
         LazyColumn(
+            state = listState,
+            userScrollEnabled = !customizeState.quickEditOpen,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
@@ -250,7 +335,6 @@ fun HomeScreenContent(
                     totalScreenTime = uiState.totalScreenTime,
                     globalCurrentStreak = uiState.globalCurrentStreak,
                     screenTimeTargetMinutes = preferences.screenTimeTargetMinutes,
-                    onSetTarget = onSetTarget,
                     formatDuration = formatDuration,
                     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
                     bannerUri = bannerUri,
@@ -392,14 +476,50 @@ fun HomeScreenContent(
             }
 
             item(key = "quick_actions") {
-                QuickActionsSection(
-                    bedtimeStatus = bedtimeStatus,
-                    pomodoroStatus = rememberPomodoroStatus(preferences),
-                    onAlarmClick = onAlarmClick,
-                    onBedtimeClick = onBedtimeClick,
-                    onStatsClick = onStatsClick,
-                    onPomodoroClick = onPomodoroClick
-                )
+                AnimatedContent(
+                    targetState = customizeState.quickEditOpen,
+                    transitionSpec = {
+                        (fadeIn(animationSpec = tween(220)) +
+                                scaleIn(initialScale = 0.94f, animationSpec = tween(220)))
+                            .togetherWith(
+                                fadeOut(animationSpec = tween(140)) +
+                                        scaleOut(targetScale = 0.98f, animationSpec = tween(140))
+                            )
+                            .using(SizeTransform(clip = false))
+                    },
+                    label = "QuickActionsMode",
+                    modifier = Modifier.fillMaxWidth()
+                ) { editing ->
+                    if (editing) {
+                        QuickActionsEditRow(
+                            actions = quickActionDraft,
+                            bedtimeStatus = bedtimeStatus,
+                            pomodoroStatus = pomodoroStatus,
+                            onRemove = { actionId ->
+                                if (quickActionDraft.size > HomeQuickActionsDefaults.MIN) {
+                                    quickActionDraft = quickActionDraft.filterNot { it == actionId }
+                                }
+                            },
+                            dragState = quickActionDrag,
+                            onDragEnd = { finishQuickActionDrag() }
+                        )
+                    } else {
+                        QuickActionsSection(
+                            actions = quickActionDraft,
+                            bedtimeStatus = bedtimeStatus,
+                            pomodoroStatus = pomodoroStatus,
+                            onActionClick = { type ->
+                                when (type) {
+                                    QuickActionType.ALARM -> onAlarmClick()
+                                    QuickActionType.POMODORO -> onPomodoroClick()
+                                    QuickActionType.STATS -> onStatsClick()
+                                    QuickActionType.BEDTIME -> onBedtimeClick()
+                                    else -> type.route?.let(onNavigateRoute)
+                                }
+                            }
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
@@ -567,7 +687,81 @@ fun HomeScreenContent(
             )
         }
     }
+
+        AnimatedVisibility(
+            visible = customizeState.quickEditOpen,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .zIndex(2f),
+            enter = slideInVertically(
+                initialOffsetY = { it },
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ) + fadeIn(),
+            exit = slideOutVertically(
+                targetOffsetY = { it },
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+            ) + fadeOut()
+        ) {
+            QuickActionsEditSheet(
+                actions = quickActionDraft,
+                bedtimeStatus = bedtimeStatus,
+                pomodoroStatus = pomodoroStatus,
+                dragState = quickActionDrag,
+                expressiveColors = preferences.expressiveColors,
+                onDragEnd = { finishQuickActionDrag() },
+                onSave = { closeQuickActionEditor(save = true) },
+                onCancel = { closeQuickActionEditor(save = false) }
+            )
+        }
+
+        if (quickActionDrag.source != null) {
+            // The ghost lives in the same window as the row and the sheet, so a
+            // tile dragged out of the sheet keeps following the finger above
+            // both instead of being clipped at the sheet edge.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(3f)
+            ) {
+                QuickActionDragLayer(
+                    dragState = quickActionDrag,
+                    actions = quickActionDraft,
+                    bedtimeStatus = bedtimeStatus,
+                    pomodoroStatus = pomodoroStatus
+                )
+            }
+        }
+    }
+
+    if (customizeState.menuOpen) {
+        HomeCustomizeMenuSheet(
+            expressiveColors = preferences.expressiveColors,
+            onDismiss = { customizeState.menuOpen = false },
+            onEditTarget = {
+                customizeState.menuOpen = false
+                customizeState.targetOpen = true
+            },
+            onEditQuickActions = { startQuickActionEditor() }
+        )
+    }
+
+    if (customizeState.targetOpen) {
+        ScreenTimeTargetBottomSheet(
+            initialMinutes = preferences.screenTimeTargetMinutes,
+            onDismiss = { customizeState.targetOpen = false },
+            onSave = {
+                onSetTarget(it)
+                customizeState.targetOpen = false
+            }
+        )
+    }
 }
+
+private const val QUICK_ACTIONS_ITEM_INDEX = 5
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -575,13 +769,11 @@ fun UsageDashboard(
     totalScreenTime: Long,
     globalCurrentStreak: Int,
     screenTimeTargetMinutes: Int,
-    onSetTarget: (Int) -> Unit,
     formatDuration: (Long) -> String,
     shape: Shape = RoundedCornerShape(32.dp),
     bannerUri: String = "",
     showBanner: Boolean = false
 ) {
-    var showTargetSheet by remember { mutableStateOf(false) }
     val bannerVisible = showBanner && bannerUri.isNotEmpty()
 
     Card(
@@ -671,20 +863,6 @@ fun UsageDashboard(
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-
-                IconButton(
-                    onClick = { showTargetSheet = true },
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Edit,
-                        contentDescription = "Set Target",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
             }
 
             val hours = totalScreenTime / (1000 * 60 * 60)
@@ -786,17 +964,6 @@ fun UsageDashboard(
             )
         }
         }
-    }
-
-    if (showTargetSheet) {
-        ScreenTimeTargetBottomSheet(
-            initialMinutes = screenTimeTargetMinutes,
-            onDismiss = { showTargetSheet = false },
-            onSave = {
-                onSetTarget(it)
-                showTargetSheet = false
-            }
-        )
     }
 }
 
@@ -1400,176 +1567,35 @@ fun rememberBedtimeStatus(prefs: UserPreferences): BedtimeStatus {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun QuickActionsSection(
+    actions: List<String>,
     bedtimeStatus: BedtimeStatus,
     pomodoroStatus: PomodoroStatus,
-    onAlarmClick: () -> Unit,
-    onBedtimeClick: () -> Unit,
-    onStatsClick: () -> Unit,
-    onPomodoroClick: () -> Unit = {}
+    onActionClick: (QuickActionType) -> Unit
 ) {
-    var showRemainingTime by remember { mutableStateOf(false) }
     val density = androidx.compose.ui.platform.LocalDensity.current
     val densityScale = 1f / density.density.pow(0.2f)
-    
-    LaunchedEffect(bedtimeStatus.isActive) {
-        if (bedtimeStatus.isActive) {
-            while (true) {
-                delay(60000)
-                showRemainingTime = !showRemainingTime
-            }
-        } else {
-            showRemainingTime = false
-        }
-    }
+    val types = remember(actions) { actions.mapNotNull(QuickActionType::fromId) }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp * densityScale),
+            .padding(vertical = 8.dp * densityScale)
+            .animateContentSize(
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+            ),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.Top
     ) {
-        QuickActionCard(
-            icon = Icons.Outlined.Alarm,
-            label = "Alarm",
-            onClick = onAlarmClick
-        )
-        QuickActionCard(
-            icon = Icons.Outlined.Timer,
-            label = "Pomodoro",
-            onClick = onPomodoroClick,
-            content = {
-                AnimatedContent(
-                    targetState = pomodoroStatus.isActive,
-                    transitionSpec = {
-                        (fadeIn() + scaleIn(initialScale = 0.6f))
-                            .togetherWith(fadeOut() + scaleOut(targetScale = 0.6f))
-                    },
-                    label = "PomodoroIconSwap"
-                ) { active ->
-                    if (active) {
-                        CircularWavyProgressIndicator(
-                            progress = { pomodoroStatus.progress },
-                            modifier = Modifier.size(32.dp * densityScale),
-                            color = if (pomodoroStatus.isBreak) MaterialTheme.colorScheme.tertiary
-                                else MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                            stroke = Stroke(width = with(density) { 3.dp.toPx() } * densityScale),
-                            trackStroke = Stroke(width = with(density) { 3.dp.toPx() } * densityScale),
-                            wavelength = 8.dp * densityScale
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Outlined.Timer,
-                            contentDescription = "Pomodoro",
-                            modifier = Modifier.size(24.dp * densityScale),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
+        types.forEach { type ->
+            key(type.id) {
+                QuickActionCardContent(
+                    type = type,
+                    bedtimeStatus = bedtimeStatus,
+                    pomodoroStatus = pomodoroStatus,
+                    densityScale = densityScale,
+                    onClick = { onActionClick(type) }
+                )
             }
-        )
-        QuickActionCard(
-            icon = Icons.Outlined.Insights,
-            label = "Stats",
-            onClick = onStatsClick
-        )
-        QuickActionCard(
-            icon = Icons.Outlined.Bedtime,
-            label = if (bedtimeStatus.isActive && showRemainingTime) bedtimeStatus.timeRemaining else "Bedtime",
-            onClick = onBedtimeClick,
-            content = if (bedtimeStatus.isActive) {
-                {
-                    CircularWavyProgressIndicator(
-                        progress = { bedtimeStatus.progress },
-                        modifier = Modifier.size(32.dp * densityScale),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        stroke = Stroke(width = with(density) { 3.dp.toPx() } * densityScale),
-                        trackStroke = Stroke(width = with(density) { 3.dp.toPx() } * densityScale),
-                        wavelength = 8.dp * densityScale
-                    )
-                }
-            } else null
-        )
-    }
-}
-
-@Composable
-fun QuickActionCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: (() -> Unit)? = null,
-    content: @Composable (() -> Unit)? = null
-) {
-    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val densityScale = 1f / density.density.pow(0.2f)
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.92f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "QuickActionScale"
-    )
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Surface(
-            modifier = Modifier
-                .width(82.dp * densityScale)
-                .height(60.dp * densityScale)
-                .graphicsLayer(scaleX = scale, scaleY = scale)
-                .clip(CircleShape)
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = ripple(),
-                    onClick = {
-                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        onClick?.invoke()
-                    }
-                ),
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 1.dp
-        ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                if (content != null) {
-                    content()
-                } else {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = label,
-                        modifier = Modifier.size(24.dp * densityScale),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        }
-        Spacer(modifier = Modifier.height(6.dp * densityScale))
-        AnimatedContent(
-            targetState = label,
-            transitionSpec = {
-                (fadeIn(animationSpec = tween(220, delayMillis = 90)) + 
-                 slideInVertically(animationSpec = spring(stiffness = Spring.StiffnessLow)) { it / 2 })
-                .togetherWith(fadeOut(animationSpec = tween(90)) + 
-                 slideOutVertically(animationSpec = spring(stiffness = Spring.StiffnessLow)) { -it / 2 })
-            },
-            label = "QuickActionLabelAnimation"
-        ) { targetLabel ->
-            Text(
-                text = targetLabel,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }
@@ -1994,6 +2020,9 @@ fun HomeScreenExpressivePreview() {
                 )
             ),
             preferences = com.etrisad.zenith.data.preferences.UserPreferences(expressiveColors = true),
+            customizeState = remember { HomeCustomizeState() },
+            onSetQuickActions = {},
+            onNavigateRoute = {},
             onSetTarget = {},
             formatDuration = { "3h 30m" },
             onShieldSortTypeChange = {},

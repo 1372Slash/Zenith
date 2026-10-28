@@ -37,6 +37,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.PauseCircle
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -79,6 +80,7 @@ import com.etrisad.zenith.ui.navigation.Screen
 import com.etrisad.zenith.ui.navigation.navItems
 import com.etrisad.zenith.ui.screens.focus.FocusScreen
 import com.etrisad.zenith.ui.screens.home.HomeScreen
+import com.etrisad.zenith.ui.screens.home.HomeCustomizeState
 import com.etrisad.zenith.ui.screens.home.UsageStatsScreen
 import com.etrisad.zenith.ui.screens.alarm.AlarmScreen
 import com.etrisad.zenith.ui.screens.bedtime.BedtimeScreen
@@ -227,6 +229,7 @@ fun MainScreen(
                 currentRoute == Screen.Alarm.route ||
                 currentRoute == Screen.GracePeriod.route ||
                 currentRoute == Screen.EyeCare.route ||
+                currentRoute == Screen.ReelsShield.route ||
                 currentRoute == Screen.Lockdown.route ||
                 currentRoute == Screen.TamperProtection.route ||
                 currentRoute == Screen.Pomodoro.route ||
@@ -287,9 +290,19 @@ fun MainScreen(
         currentRoute == Screen.GracePeriod.route && preferences.gracePeriodEnabled -> "grace"
         currentRoute == Screen.EyeCare.route && preferences.eyeCareEnabled -> "eye"
         currentRoute == Screen.Lockdown.route && preferences.lockdownEnabled -> "lockdown"
+        currentRoute == Screen.ReelsShield.route && preferences.reelsShieldEnabled -> "reels"
         currentRoute == Screen.PausePoint.route -> "pause"
         currentRoute == Screen.Alarm.route -> "alarm"
         else -> null
+    }
+
+    val homeCustomizeState = remember { HomeCustomizeState() }
+    LaunchedEffect(currentRoute) {
+        if (currentRoute != Screen.Home.route) {
+            homeCustomizeState.menuOpen = false
+            homeCustomizeState.targetOpen = false
+            homeCustomizeState.quickEditOpen = false
+        }
     }
 
     var showFeatureInfoSheet by remember { mutableStateOf(false) }
@@ -457,6 +470,7 @@ fun MainScreen(
                     currentRoute != Screen.Alarm.route &&
                     currentRoute != Screen.GracePeriod.route &&
                     currentRoute != Screen.EyeCare.route &&
+                    currentRoute != Screen.ReelsShield.route &&
                     currentRoute != Screen.Lockdown.route &&
                     currentRoute != Screen.TamperProtection.route &&
                     currentRoute != Screen.Pomodoro.route &&
@@ -545,7 +559,11 @@ fun MainScreen(
                     infoNextToAction = !isDeepScreen || currentRoute?.startsWith("app_detail") == true,
                     navigationIcon = {
                         AnimatedContent(
-                            targetState = if (currentRoute == Screen.Focus.route) "focus" else "none",
+                            targetState = when {
+                                currentRoute == Screen.Home.route -> "home"
+                                currentRoute == Screen.Focus.route -> "focus"
+                                else -> "none"
+                            },
                             transitionSpec = {
                                 (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
                                         scaleIn(initialScale = 0.92f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)) +
@@ -558,7 +576,41 @@ fun MainScreen(
                             },
                             label = "LeftActionsContent"
                         ) { state ->
-                            if (state == "focus") {
+                            if (state == "home") {
+                                val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                                val isPressed by interactionSource.collectIsPressedAsState()
+                                val scale by animateFloatAsState(
+                                    targetValue = if (isPressed) 0.86f else 1f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMediumLow
+                                    ),
+                                    label = "HomeCustomizeScale"
+                                )
+                                IconButton(
+                                    onClick = {
+                                        // The quick action editor owns the screen
+                                        // until it is saved or cancelled.
+                                        if (!homeCustomizeState.quickEditOpen) {
+                                            homeCustomizeState.menuOpen = true
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .padding(start = 12.dp)
+                                        .size(48.dp)
+                                        .scale(scale)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+                                    interactionSource = interactionSource
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Tune,
+                                        contentDescription = "Customize Home",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            } else if (state == "focus") {
                                 val isSelected = focusUiState.isSelectionMode
                                 val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                                 val isPressed by interactionSource.collectIsPressedAsState()
@@ -781,6 +833,14 @@ fun MainScreen(
                                                     }
                                                 }
                                             )
+                                            "reels" -> HeaderSwitch(
+                                                checked = preferences.reelsShieldEnabled,
+                                                onCheckedChange = {
+                                                    scope.launch {
+                                                        userPreferencesRepository.setReelsShieldEnabled(!preferences.reelsShieldEnabled)
+                                                    }
+                                                }
+                                            )
                                             "pause" -> HeaderSwitch(
                                                 checked = preferences.pausePointEnabled,
                                                 onCheckedChange = {
@@ -895,6 +955,7 @@ fun MainScreen(
                                     targetRoute == Screen.Alarm.route ||
                                     targetRoute == Screen.GracePeriod.route ||
                                     targetRoute == Screen.EyeCare.route ||
+                                    targetRoute == Screen.ReelsShield.route ||
                                     targetRoute == Screen.Lockdown.route ||
                                     targetRoute == Screen.TamperProtection.route ||
                                     targetRoute == Screen.Pomodoro.route ||
@@ -917,6 +978,7 @@ fun MainScreen(
                                     initialRoute == Screen.Alarm.route ||
                                     initialRoute == Screen.GracePeriod.route ||
                                     initialRoute == Screen.EyeCare.route ||
+                                    initialRoute == Screen.ReelsShield.route ||
                                     initialRoute == Screen.Lockdown.route ||
                                     initialRoute == Screen.TamperProtection.route ||
                                     initialRoute == Screen.Pomodoro.route ||
@@ -971,6 +1033,7 @@ fun MainScreen(
                                     targetRoute == Screen.Alarm.route ||
                                     targetRoute == Screen.GracePeriod.route ||
                                     targetRoute == Screen.EyeCare.route ||
+                                    targetRoute == Screen.ReelsShield.route ||
                                     targetRoute == Screen.Lockdown.route ||
                                     targetRoute == Screen.TamperProtection.route ||
                                     targetRoute == Screen.Pomodoro.route ||
@@ -994,6 +1057,7 @@ fun MainScreen(
                                     initialRoute == Screen.Alarm.route ||
                                     initialRoute == Screen.GracePeriod.route ||
                                     initialRoute == Screen.EyeCare.route ||
+                                    initialRoute == Screen.ReelsShield.route ||
                                     initialRoute == Screen.Lockdown.route ||
                                     initialRoute == Screen.TamperProtection.route ||
                                     initialRoute == Screen.Pomodoro.route ||
@@ -1075,6 +1139,8 @@ fun MainScreen(
                             onBedtimeClick = { navController.navigate(Screen.Bedtime.route) },
                             onAlarmClick = { navController.navigate(Screen.Alarm.route) },
                             onPomodoroClick = { navController.navigate(Screen.Pomodoro.route) },
+                            customizeState = homeCustomizeState,
+                            onNavigateRoute = { route -> navController.navigate(route) },
                             onDeleteShield = { shield -> homeViewModel.deleteShield(shield) },
                             onDismissUninstalled = { pkg ->
                                 homeScope.launch {
@@ -1131,6 +1197,12 @@ fun MainScreen(
                     composable(Screen.EyeCare.route) {
                         EyeCareScreen(
                             preferences = preferences,
+                            preferencesRepository = userPreferencesRepository,
+                            innerPadding = innerPadding
+                        )
+                    }
+                    composable(Screen.ReelsShield.route) {
+                        com.etrisad.zenith.ui.screens.settings.ReelsShieldScreen(
                             preferencesRepository = userPreferencesRepository,
                             innerPadding = innerPadding
                         )
@@ -1327,6 +1399,7 @@ fun MainScreen(
                             currentRoute != Screen.Alarm.route &&
                             currentRoute != Screen.GracePeriod.route &&
                             currentRoute != Screen.EyeCare.route &&
+                            currentRoute != Screen.ReelsShield.route &&
                             currentRoute != Screen.Lockdown.route &&
                             currentRoute != Screen.TamperProtection.route &&
                             currentRoute != Screen.DatabaseDebug.route &&
@@ -1342,7 +1415,8 @@ fun MainScreen(
                             currentRoute != Screen.PausePoint.route &&
                             currentRoute?.startsWith("pause_point_type") == false &&
                             currentRoute?.startsWith("settings_category") == false &&
-                            currentRoute?.startsWith("app_detail") == false
+                            currentRoute?.startsWith("app_detail") == false &&
+                            !(currentRoute == Screen.Home.route && homeCustomizeState.quickEditOpen)
 
                     androidx.compose.animation.AnimatedVisibility(
                         visible = showBottomBar,

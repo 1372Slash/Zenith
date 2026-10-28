@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">Zenith</string>
-    <string name="accessibility_service_description">Detects which app is in the foreground so Zenith can show mindful messages and shields. Standard mode also reads browser address bars for website blocking. Limited mode receives only app-switch events and no screen or notification content. Zenith never records keystrokes.</string>
+    <string name="accessibility_service_description">Detects which app is in the foreground so Zenith can show mindful messages and shields. Standard mode also reads browser address bars for website blocking and counts swipes in the short-video feeds you choose to limit. Limited mode receives only app-switch events and no screen or notification content. Zenith never records keystrokes.</string>
     <string name="global_streak_widget_description">Days in a row under your screen time target.</string>
     <string name="app_streak_widget_description">Streak for one app: shield stays under its limit, goal reaches its target.</string>
     <string name="total_screen_time_widget_description">Shows total screen time today.</string>

@@ -26,6 +26,7 @@ import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.data.website.WebsiteStateHolder
+import com.etrisad.zenith.ui.components.overlay.ReelsShieldOverlayManager
 import com.etrisad.zenith.ui.components.overlay.SessionUsageOverlayManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -45,11 +46,29 @@ class ZenithService : AccessibilityService() {
     private lateinit var shieldRepository: ShieldRepository
     private lateinit var preferencesRepository: UserPreferencesRepository
     private lateinit var overlayManager: InterceptOverlayManager
+    private lateinit var reelsShieldOverlay: ReelsShieldOverlayManager
+    private lateinit var reelsShield: ReelsShieldController
     private lateinit var sessionUsageOverlayManager: SessionUsageOverlayManager
     private lateinit var overlayActionHandler: OverlayActionHandler
     private val usageStatsManager by lazy { getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager }
     private val notificationManager by lazy { getSystemService(NotificationManager::class.java) }
     private val reusableCalendar = Calendar.getInstance()
+
+    /**
+     * Fully-qualified names of Zenith's real activities. Accessibility window
+     * events from the Reels Shield pill carry this package name too, so only a
+     * class in this set may be treated as "the user opened Zenith".
+     */
+    private val ownActivityClasses: Set<String> by lazy {
+        try {
+            packageManager.getPackageInfo(
+                packageName,
+                android.content.pm.PackageManager.GET_ACTIVITIES
+            ).activities?.mapNotNull { it.name }?.toSet().orEmpty()
+        } catch (_: Exception) {
+            emptySet()
+        }
+    }
 
     private var lastForegroundApp: String? = null
     @Volatile
@@ -195,6 +214,8 @@ class ZenithService : AccessibilityService() {
         preferencesRepository = app.userPreferencesRepository
         overlayManager = InterceptOverlayManager(this, preferencesRepository)
         sessionUsageOverlayManager = SessionUsageOverlayManager(this, preferencesRepository)
+        reelsShieldOverlay = ReelsShieldOverlayManager(this)
+        reelsShield = ReelsShieldController(this, preferencesRepository, reelsShieldOverlay)
         overlayActionHandler = OverlayActionHandler(
             shieldRepository = shieldRepository,
             overlayManager = overlayManager,
@@ -267,6 +288,8 @@ class ZenithService : AccessibilityService() {
                 SharedMonitoringState.notificationInterceptionEnabled = preferences.notificationInterceptionEnabled
                 SharedMonitoringState.notificationExcludedPackages = preferences.notificationExcludedPackages
                 SharedMonitoringState.storeInterceptedNotificationContent = preferences.storeInterceptedNotificationContent
+                reelsTrackingWanted = preferences.reelsShieldEnabled && !preferences.accessibilityLimitedMode
+                reelsShield.updatePreferences(preferences)
                 applyAccessibilityServiceInfo(preferences.accessibilityLimitedMode)
                 SharedMonitoringState.updateRestrictedPackages()
                 if (privateAppsChanged) {
@@ -350,9 +373,20 @@ class ZenithService : AccessibilityService() {
 
     @Volatile
     private var appliedLimitedMode: Boolean? = null
+    @Volatile
+    private var reelsTrackingWanted: Boolean = false
+    @Volatile
+    private var appliedReelsTracking: Boolean? = null
     private fun applyAccessibilityServiceInfo(limited: Boolean) {
-        if (appliedLimitedMode == limited) return
+        val reelsTracking = reelsTrackingWanted && !limited
+        if (appliedLimitedMode == limited && appliedReelsTracking == reelsTracking) return
+        appliedReelsTracking = reelsTracking
         appliedLimitedMode = limited
+        val scrollEvents = if (reelsTracking) {
+            AccessibilityEvent.TYPE_VIEW_SCROLLED or AccessibilityEvent.TYPE_VIEW_SELECTED
+        } else {
+            0
+        }
         val info = android.accessibilityservice.AccessibilityServiceInfo().apply {
             if (limited) {
                 flags = 0
@@ -364,7 +398,7 @@ class ZenithService : AccessibilityService() {
                         android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
                 eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
                         AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED or
-                        AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+                        AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or scrollEvents
             }
             feedbackType = android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_GENERIC
             notificationTimeout = 100
@@ -376,6 +410,7 @@ class ZenithService : AccessibilityService() {
         monitoringJob = serviceScope.launch {
             while (true) {
                 if (!AppStateHolder.isScreenOn.value) {
+                    reelsShield.onScreenOff()
                     delay(30_000L)
                     continue
                 }
@@ -435,19 +470,48 @@ class ZenithService : AccessibilityService() {
         lastEventTime = System.currentTimeMillis()
         if (!AppStateHolder.isScreenOn.value) return
 
+        // Tab selection is the only reliable Reels signal while the viewer is
+        // idle, and it is low volume. Handle it before the general throttle so
+        // a tab switch is never dropped.
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_SELECTED) {
+            reelsShield.handleViewSelectedEvent(event)
+            return
+        }
+
         val now = System.currentTimeMillis()
         val isWindowState = event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-        if (!isWindowState && now - lastA11yEventProcessedTime < 40) return
-        lastA11yEventProcessedTime = now
+        val isScrollEvent = event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED
+        // Scroll events are cheap but numerous. Do not let the general event
+        // throttle swallow the only settle event of a pager swipe.
+        if (!isWindowState && !isScrollEvent && now - lastA11yEventProcessedTime < 40) return
+        if (!isScrollEvent) lastA11yEventProcessedTime = now
 
         val packageName = event.packageName?.toString() ?: return
-        if (packageName == this.packageName) return
+        if (packageName == this.packageName) {
+            // Opening Zenith is leaving the tracked app. Only forward a real
+            // activity window: the Reels Shield pill is itself an accessibility
+            // overlay owned by this package, and treating its window event as
+            // "left to Zenith" would hide the pill right after it appears.
+            val ownActivityClass = event.className?.toString().orEmpty()
+            val isOwnActivityWindow = ownActivityClass in ownActivityClasses ||
+                (ownActivityClasses.isEmpty() && ownActivityClass.endsWith("Activity"))
+            if (isWindowState && isOwnActivityWindow) {
+                reelsShield.onForegroundChanged(packageName)
+            }
+            return
+        }
+        if (isScrollEvent) {
+            reelsShield.handleScrollEvent(event)
+            return
+        }
         if (SharedMonitoringState.isPrivatePackage(packageName)) {
             lastForegroundApp = packageName
             AppStateHolder.foregroundApp.value = packageName
+            reelsShield.onForegroundChanged(packageName)
             overlayManager.hideOverlay()
             return
         }
+
         if (SharedMonitoringState.accessibilityLimitedMode && !isWindowState) return
 
         val className = event.className?.toString() ?: ""
@@ -475,6 +539,7 @@ class ZenithService : AccessibilityService() {
                 handleViewTextChanged(packageName, event)
             }
         } else if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+            reelsShield.onContentChanged(event, packageName)
             if (packageName == lastForegroundApp && com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(packageName)) {
                 var domain = websiteUrlTracker.checkAccessibilityEvent(event)
                 if (domain == null && now - lastContentChangeUrlCheck > 1000) {
@@ -494,11 +559,18 @@ class ZenithService : AccessibilityService() {
 
     private fun handleWindowStateChanged(packageName: String, event: AccessibilityEvent) {
         val now = System.currentTimeMillis()
+        // Reels surface tracking must see every window transition, including
+        // in-app activity changes, before the per-package debounce below.
+        reelsShield.onForegroundChanged(
+            packageName,
+            event.className?.toString(),
+            event.text?.joinToString(" ")
+        )
+
         val lastPkgTime = lastA11yPackageTime[packageName] ?: 0L
         if (now - lastPkgTime < 150) return
         if (lastA11yPackageTime.size > 500) lastA11yPackageTime.clear()
         lastA11yPackageTime[packageName] = now
-
 
         if (packageName !in SharedMonitoringState.CRITICAL_SYSTEM_PACKAGES && !isKeyboardApp(packageName)) {
             lastForegroundApp = packageName
@@ -730,6 +802,7 @@ class ZenithService : AccessibilityService() {
 
     private suspend fun handlePackageChange(currentApp: String) {
         OverlayLogBuffer.d("Zenith_HPC", "handlePackageChange: $currentApp (lfga=$lastForegroundApp, isShowing=${InterceptOverlayManager.isShowing})")
+        reelsShield.onForegroundChanged(currentApp)
         if (SharedMonitoringState.isPrivatePackage(currentApp)) return
         val actualPkg = if (SharedMonitoringState.accessibilityLimitedMode) {
             null
@@ -1637,6 +1710,7 @@ class ZenithService : AccessibilityService() {
         try {
             overlayManager.hideOverlay()
             overlayManager.destroy()
+            reelsShield.destroy()
             sessionUsageOverlayManager.destroy()
         } catch (_: Exception) {}
         serviceJob.cancel()

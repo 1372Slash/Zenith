@@ -229,6 +229,7 @@ fun SettingsCategoryScreen(
                         onNavigateToTamperProtection = { navController.navigate(Screen.TamperProtection.route) },
                         onNavigateToPomodoro = { navController.navigate(Screen.Pomodoro.route) },
                         onNavigateToPausePoint = { navController.navigate(Screen.PausePoint.route) },
+                        onNavigateToReelsShield = { navController.navigate(Screen.ReelsShield.route) },
                         goalCount = goalCount
                     )
                     "appearance" -> AppearanceSettings(

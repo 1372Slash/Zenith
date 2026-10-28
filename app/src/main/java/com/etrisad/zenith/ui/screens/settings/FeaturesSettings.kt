@@ -85,6 +85,7 @@ fun FeaturesSettings(
         endOverlayEnabled: Boolean,
         autoQuitEnabled: Boolean,
     ) -> Unit,
+    onNavigateToReelsShield: () -> Unit = {},
     goalCount: Int
 ) {
     val context = LocalContext.current
@@ -376,6 +377,21 @@ fun FeaturesSettings(
             onClick = onNavigateToLockdown,
             icon = Icons.Outlined.Lock,
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        PreferenceCategory(title = "Short Video")
+
+        SettingsActionItem(
+            title = "Reels Shield",
+            summary = if (preferences.reelsShieldEnabled) {
+                "On · ${preferences.reelsShieldDailyLimit} swipes per day shared across ${preferences.reelsShieldPackages.size} apps"
+            } else {
+                "Count swipes through Reels, Shorts, TikTok and Spotlight, then press back when the daily pool is empty"
+            },
+            onClick = onNavigateToReelsShield,
+            icon = Icons.Outlined.SwapVert,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
         )
 
         Spacer(modifier = Modifier.height(16.dp))

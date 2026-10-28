@@ -473,11 +473,6 @@ fun requiredFor(def: AchievementDef, level: Int): Long {
     }
     return niceNumber(v)
 }
-
-/**
- * Full threshold for a 1-based tier position (handcrafted or generated),
- * or null when the ladder ends there.
- */
 fun thresholdAtOrNull(def: AchievementDef, level: Int): TierThreshold? {
     if (level < 1) return null
     def.thresholds.getOrNull(level - 1)?.let { return it }
@@ -490,8 +485,6 @@ fun thresholdAtOrNull(def: AchievementDef, level: Int): TierThreshold? {
         requireLabel = generatedRequireLabel(def, required)
     )
 }
-
-/** How many tiers are met at [current]; works past any list length. */
 fun tierCountFor(def: AchievementDef, current: Long): Int {
     var level = 0
     while (level < 100000) {
@@ -501,8 +494,6 @@ fun tierCountFor(def: AchievementDef, current: Long): Int {
     }
     return level
 }
-
-/** First unmet tier, or null when the ladder is complete (capped defs only). */
 fun nextThresholdFor(def: AchievementDef, current: Long): TierThreshold? =
     thresholdAtOrNull(def, tierCountFor(def, current) + 1)
 
@@ -517,21 +508,10 @@ private fun generatedRequireLabel(def: AchievementDef, required: Long): String {
         "$required ${suffix.trim()}".trim()
     }
 }
-
-/**
- * Storage key for a tier position. Handcrafted tiers keep their legacy roman
- * value (no migration needed); generated tiers use negative levels, which
- * can never collide with positive legacy values.
- */
 fun historyKeyFor(def: AchievementDef, level: Int): Int {
     if (level < 1) return level
     return def.thresholds.getOrNull(level - 1)?.tier?.value ?: -level
 }
-
-/**
- * Tier position for a storage key, or -1 when the key no longer maps to any
- * tier (def edited between versions) - callers should skip such rows.
- */
 fun levelForHistoryKey(def: AchievementDef, key: Int): Int {
     if (key < 0) return -key
     val idx = def.thresholds.indexOfFirst { it.tier.value == key }
@@ -567,12 +547,6 @@ private val TIER_NOUNS = listOf(
 )
 
 private val generatedNameOrder = java.util.concurrent.ConcurrentHashMap<String, List<Int>>()
-
-/**
- * Stable generated name for tiers past the handcrafted list: a per-achievement
- * seeded shuffle of adjective+noun pairs, so every ladder gets different names
- * that never change between runs. Practically inexhaustible (4096 combos).
- */
 fun generatedTierName(defId: String, level: Int): String {
     val total = TIER_ADJECTIVES.size * TIER_NOUNS.size
     val order = generatedNameOrder.getOrPut(defId) {
@@ -581,8 +555,6 @@ fun generatedTierName(defId: String, level: Int): String {
     val idx = order[(level - 1) % total]
     return "${TIER_ADJECTIVES[idx / TIER_NOUNS.size]} ${TIER_NOUNS[idx % TIER_NOUNS.size]}"
 }
-
-/** Counts owned symbols per tier across achievements. */
 fun countTierSymbols(achievements: List<AchievementState>): Map<ProfileTier, Int> {
     val counts = ProfileTier.entries.associateWith { 0 }.toMutableMap()
     achievements.forEach { state ->
@@ -1106,7 +1078,6 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
             "First Save", "Under Budget", "Frugal", "Economist", "Minimalist"
         )
     ),
-    // Fun tiered
     AchievementDef(
         id = "info_hunter", title = "Info Hunter",
         desc = "Tap the info button across screens",
@@ -1199,7 +1170,6 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
             "Guilty Pleasure", "Overachiever", "No Chill"
         )
     ),
-    // Fun single-tier
     AchievementDef(
         id = "midnight_oil", title = "Midnight Oil",
         desc = "Active after midnight (00:00-04:00)", icon = Icons.Outlined.DarkMode,
@@ -1367,51 +1337,28 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
         )
     )
 )
-
-/**
- * Display order following a new user's likely journey: setup targets and
- * protectors first, first streaks and savings next, customization and
- * power features in the middle, long grinds and tinkerer badges last.
- * Unknown ids sink to the bottom so new defs never break the order.
- */
 private val JOURNEY_ORDER = listOf(
-    // Setup: targets and first protections.
     "target_setter", "shield_setter", "goal_setter",
-    // First protector trials.
     "lockdown_explorer", "bedtime_explorer", "alarm_explorer",
     "pausepoint_explorer", "grace_explorer",
-    // First focus and planning.
     "pomo_first", "preset_saver", "schedule_keeper",
-    // Early streaks, savings, and playful daily rhythms.
     "hot_streak", "streak_keeper", "streak_roller", "under_budget", "overachiever",
     "time_saver", "night_guardian", "night_owl_lite", "early_bird",
     "midnight_oil", "sunrise_club",
-    // First week of data.
     "historian", "loyal_tracker", "app_atlas", "fortress_builder", "goal_getter",
     "weekend_warrior", "web_surf",
-    // Customization wave.
     "theme_stylist", "theme_explorer", "font_explorer", "contrast_seeker",
     "palette_painter", "overlay_tinter", "floater", "pill_keeper", "hud_pilot",
     "day_maker", "head_start", "info_hunter", "profile_polisher", "calendar_seeker",
-    // Shield power features.
     "patient_player", "strict_enforcer", "caller_tuned", "auto_quitter",
     "locked_in", "ghost_mode", "night_off",
-    // Awareness features.
     "mindful_explorer", "glimpse_user", "web_watcher", "full_charge",
-    // Eye and bedtime depth.
     "eyecare_explorer", "wind_downer", "bedtime_bouncer", "silent_sleeper",
-    // Planning depth (QR needs physical codes, so it sits with the
-    // optional Pause Point depth instead of the early journey).
     "alarm_collector", "scheduler_pro", "qr_collector", "nfc_collector", "taskmaster", "variant_vanguard",
-    // Focus depth.
     "focus_hours", "xp_hoarder",
-    // Sharing and ambient delights.
     "town_crier", "shorts_spotter", "widget_wielder",
-    // Recovery and maintenance.
     "second_chance", "cleaner", "backup_guardian", "data_doctor",
-    // Long grinds.
     "app_streaker", "web_cartographer", "interceptor", "escape_artist",
-    // Tinkerer corner.
     "dev_mode", "perf_tuner"
 )
 

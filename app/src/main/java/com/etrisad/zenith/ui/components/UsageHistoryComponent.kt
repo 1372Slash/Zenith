@@ -51,9 +51,12 @@ fun UsageHistoryCard(
     onChunkSelected: (Int) -> Unit = {},
     olderWeekLoader: (suspend (chunkOffset: Int) -> List<DailyUsage>)? = null,
     loaderKey: Any? = null,
+    axisLabelFormatter: ((Long) -> String)? = null,
+    showGoalMarkers: Boolean = true,
     shape: Shape = RoundedCornerShape(24.dp),
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
-    title: String = "History"
+    title: String = "History",
+    modifier: Modifier = Modifier
 ) {
     var internalSelectedDate by rememberSaveable { mutableStateOf<Long?>(null) }
     val effectiveSelectedDate = selectedDateMillis ?: internalSelectedDate
@@ -76,7 +79,7 @@ fun UsageHistoryCard(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = shape,
         colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
@@ -134,6 +137,8 @@ fun UsageHistoryCard(
                 onChunkSelected = onChunkSelected,
                 olderWeekLoader = olderWeekLoader,
                 loaderKey = loaderKey,
+                axisLabelFormatter = axisLabelFormatter,
+                showGoalMarkers = showGoalMarkers,
                 onOlderDaysChanged = { olderDays = it }
             )
         }
@@ -272,6 +277,8 @@ fun UsageGraph(
     onChunkSelected: (Int) -> Unit,
     olderWeekLoader: (suspend (chunkOffset: Int) -> List<DailyUsage>)? = null,
     loaderKey: Any? = null,
+    axisLabelFormatter: ((Long) -> String)? = null,
+    showGoalMarkers: Boolean = true,
     onOlderDaysChanged: (List<DailyUsage>) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
@@ -470,7 +477,7 @@ fun UsageGraph(
                     ) {
                         repeat(4) { i ->
                             val currentMillis = (pageMax * (3 - i) / 3)
-                            val labelText = when {
+                            val labelText = axisLabelFormatter?.invoke(currentMillis) ?: when {
                                 currentMillis == 0L -> "0"
                                 currentMillis >= 3600000L -> {
                                     val hours = currentMillis.toFloat() / 3600000f
@@ -564,7 +571,7 @@ fun UsageGraph(
                                         onDaySelected(if (isSelected) null else usage)
                                     }
                             ) {
-                                if (isGoalAchieved && !isInside) {
+                                if (showGoalMarkers && isGoalAchieved && !isInside) {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth(0.62f)
@@ -591,7 +598,7 @@ fun UsageGraph(
                                         .background(barColor),
                                     contentAlignment = Alignment.TopCenter
                                 ) {
-                                    if (isGoalAchieved && isInside) {
+                                    if (showGoalMarkers && isGoalAchieved && isInside) {
                                         Box(
                                             modifier = Modifier
                                                 .padding(top = 8.dp)
