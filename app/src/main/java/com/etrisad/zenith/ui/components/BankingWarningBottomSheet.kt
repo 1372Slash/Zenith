@@ -27,6 +27,8 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.etrisad.zenith.data.preferences.UserPreferences
+import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.service.SharedMonitoringState
 import kotlinx.coroutines.launch
 
@@ -45,6 +47,9 @@ fun BankingWarningBottomSheet(
     var dontShowAgainChecked by remember { mutableStateOf(false) }
     var showError by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    val repository = remember { UserPreferencesRepository(context) }
+    val preferences by repository.userPreferencesFlow.collectAsState(initial = UserPreferences())
 
     val installedBankingApps = remember {
         val allInstalled = context.packageManager.getInstalledApplications(0)
@@ -304,7 +309,7 @@ fun BankingWarningBottomSheet(
                 }
             }
 
-                    Spacer(modifier = Modifier.height(260.dp))
+            Spacer(modifier = Modifier.height(260.dp))
                 }
 
                 Box(
@@ -389,6 +394,28 @@ fun BankingWarningBottomSheet(
                     modifier = Modifier.padding(start = 16.dp, top = 4.dp)
                 )
             }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = preferences.accessibilityActiveNotificationEnabled,
+                    onCheckedChange = { checked ->
+                        scope.launch {
+                            repository.setAccessibilityActiveNotificationEnabled(checked)
+                        }
+                    }
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Show persistent warning notification",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),

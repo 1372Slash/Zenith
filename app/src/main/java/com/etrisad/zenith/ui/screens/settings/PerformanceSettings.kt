@@ -513,14 +513,7 @@ fun PerformanceTuningPanel(
                       else "Detect app launches instantly for peak performance",
         isGranted = hasAccessibility,
         onClick = {
-            if (!preferences.bankingWarningDismissed) {
-                showBankingWarning = true
-            } else {
-                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(intent)
-            }
+            showBankingWarning = true
         },
         onInfoClick = { showBankingWarning = true },
         icon = Icons.Outlined.AccessibilityNew,
@@ -533,6 +526,19 @@ fun PerformanceTuningPanel(
         checked = preferences.accessibilityRequired,
         onCheckedChange = onAccessibilityRequiredChange,
         icon = Icons.Outlined.Lock,
+        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+    )
+    Spacer(modifier = Modifier.height(4.dp))
+    SettingsToggle(
+        title = "Accessibility Active Notification",
+        description = "Show a persistent warning notification when accessibility service is active",
+        checked = preferences.accessibilityActiveNotificationEnabled,
+        onCheckedChange = { checked ->
+            scope.launch {
+                preferencesRepository?.setAccessibilityActiveNotificationEnabled(checked)
+            }
+        },
+        icon = Icons.Outlined.WarningAmber,
         shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
     )
     Spacer(modifier = Modifier.height(16.dp))
@@ -1143,7 +1149,7 @@ private fun TuningPermissionItemRow(
     }
 
     Surface(
-        onClick = if (!isGranted) onClick else ({}),
+        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape),

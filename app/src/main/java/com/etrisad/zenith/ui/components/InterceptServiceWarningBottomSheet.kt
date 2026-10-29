@@ -27,13 +27,15 @@ import kotlinx.coroutines.launch
 @Composable
 fun InterceptServiceWarningBottomSheet(
     onDismiss: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    onDontShowAgain: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
 
     var understandChecked by remember { mutableStateOf(false) }
+    var dontShowAgainChecked by remember { mutableStateOf(false) }
     var showError by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
@@ -223,6 +225,24 @@ fun InterceptServiceWarningBottomSheet(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Checkbox(
+                        checked = dontShowAgainChecked,
+                        onCheckedChange = { dontShowAgainChecked = it }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Don't show this again",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
                         checked = understandChecked,
                         onCheckedChange = {
                             understandChecked = it
@@ -273,6 +293,9 @@ fun InterceptServiceWarningBottomSheet(
                     ZenithButtonWeighted(
                         onClick = {
                             showError = false
+                            if (dontShowAgainChecked) {
+                                onDontShowAgain()
+                            }
                             onOpenSettings()
                         },
                         text = "Open Settings",

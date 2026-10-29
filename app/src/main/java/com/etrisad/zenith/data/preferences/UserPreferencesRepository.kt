@@ -338,6 +338,7 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
         val CHECK_UPDATE_ON_START = booleanPreferencesKey("check_update_on_start")
         val BATTERY_STATS_RESET_ENABLED = booleanPreferencesKey("battery_stats_reset_enabled")
         val BANKING_WARNING_DISMISSED = booleanPreferencesKey("banking_warning_dismissed")
+        val INTERCEPT_WARNING_DISMISSED = booleanPreferencesKey("intercept_warning_dismissed")
         val SHOW_CURRENT_EVENT = booleanPreferencesKey("show_current_event")
         val DAILY_RECAP_ENABLED = booleanPreferencesKey("daily_recap_enabled")
         val WEEKLY_INSIGHT_ENABLED = booleanPreferencesKey("weekly_insight_enabled")
@@ -349,6 +350,7 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
         val USAGE_GLIMPSE_ENABLED = booleanPreferencesKey("usage_glimpse_enabled")
         val WEBSITE_AUTO_TRACKING = booleanPreferencesKey("website_auto_tracking")
         val LAST_BANKING_APPS_COUNT = intPreferencesKey("last_banking_apps_count")
+        val ACCESSIBILITY_ACTIVE_NOTIFICATION_ENABLED = booleanPreferencesKey("accessibility_active_notification_enabled")
 
         val OVERLAY_PALETTE_ID = stringPreferencesKey("overlay_palette_id")
         val OVERLAY_SHEET_OPACITY = floatPreferencesKey("overlay_sheet_opacity")
@@ -623,6 +625,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             checkUpdateOnStart = settings[PreferencesKeys.CHECK_UPDATE_ON_START] ?: false,
             batteryStatsResetEnabled = settings[PreferencesKeys.BATTERY_STATS_RESET_ENABLED] ?: false,
             bankingWarningDismissed = settings[PreferencesKeys.BANKING_WARNING_DISMISSED] ?: false,
+            interceptWarningDismissed = settings[PreferencesKeys.INTERCEPT_WARNING_DISMISSED] ?: false,
             showCurrentEvent = settings[PreferencesKeys.SHOW_CURRENT_EVENT] ?: false,
             dailyRecapEnabled = settings[PreferencesKeys.DAILY_RECAP_ENABLED] ?: true,
             weeklyInsightEnabled = settings[PreferencesKeys.WEEKLY_INSIGHT_ENABLED] ?: true,
@@ -636,6 +639,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             usageGlimpseEnabled = settings[PreferencesKeys.USAGE_GLIMPSE_ENABLED] ?: false,
             websiteAutoTrackingEnabled = settings[PreferencesKeys.WEBSITE_AUTO_TRACKING] ?: false,
             lastBankingAppsCount = settings[PreferencesKeys.LAST_BANKING_APPS_COUNT] ?: -1,
+            accessibilityActiveNotificationEnabled = settings[PreferencesKeys.ACCESSIBILITY_ACTIVE_NOTIFICATION_ENABLED] ?: true,
             incentiveLockDisableRequestTimestamp = runtime[RuntimeKeys.INCENTIVE_LOCK_DISABLE_REQUEST_TIMESTAMP] ?: 0L,
             incentiveLockGoalsMetToday = if (runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_TODAY] != true) false
                 else runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_DATE] == SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
@@ -1716,8 +1720,16 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.BANKING_WARNING_DISMISSED] = dismissed }
     }
 
+    suspend fun setInterceptWarningDismissed(dismissed: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.INTERCEPT_WARNING_DISMISSED] = dismissed }
+    }
+
     suspend fun setLastBankingAppsCount(count: Int) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.LAST_BANKING_APPS_COUNT] = count }
+    }
+
+    suspend fun setAccessibilityActiveNotificationEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.ACCESSIBILITY_ACTIVE_NOTIFICATION_ENABLED] = enabled }
     }
 
     suspend fun setShowCurrentEvent(enabled: Boolean) {
@@ -2096,19 +2108,9 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 }
 const val MAX_REELS_SHIELD_DAILY_LIMIT = 200
 
-/**
- * Defaults for the Reels Shield: which apps expose short-video feeds, and how
- * many swipes per day the shared pool allows.
- */
 object ReelsShieldDefaults {
     const val DAILY_LIMIT = 30
 
-    /**
-     * Priority order matters during setup: Instagram Reels and Facebook Reels
-     * expose the most stable hierarchy, so they lead both the defaults and the
-     * picker. TikTok is tracked the same way; its whole app is a video feed, so
-     * foreground entry alone confirms the surface.
-     */
     val PACKAGES: Set<String> = setOf(
         "com.instagram.android",
         "com.facebook.katana",
@@ -2121,25 +2123,17 @@ object ReelsShieldDefaults {
         "com.ss.android.ugc.aweme"
     )
 
-    /** Feed hierarchies that Reels Shield integrates with first. */
     val PRIORITY_PACKAGES: Set<String> = setOf(
         "com.instagram.android",
         "com.facebook.katana",
         "com.facebook.lite"
     )
 
-    /** Apps that are fully supported with tuned detection passes. */
     val FULLY_SUPPORTED_PACKAGES: Set<String> = setOf(
         "com.instagram.android",
         "com.google.android.youtube"
     )
 
-    /**
-     * Supported, but not yet reliable across every app version: TikTok's
-     * comment trays and Facebook Lite's obfuscated hierarchy still miss (or
-     * over-count) swipes on some builds, so the picker and history show a
-     * partial-support badge for them while detection keeps improving.
-     */
     val PARTIAL_PACKAGES: Set<String> = setOf(
         "com.facebook.lite",
         "com.zhiliaoapp.musically",
@@ -2148,43 +2142,19 @@ object ReelsShieldDefaults {
         "com.ss.android.ugc.aweme"
     )
 
-    /**
-     * Explicit set of untested packages for reference/defaults.
-     * Note: Any app not in FULLY_SUPPORTED_PACKAGES and not in PARTIAL_PACKAGES
-     * is treated as untested by default via [isUntested].
-     */
     val UNTESTED_PACKAGES: Set<String> = setOf(
         "com.facebook.katana",
         "com.snapchat.android"
     )
 
-    /**
-     * Apps Zenith can recognise a short-video surface in. Instagram Reels and
-     * YouTube Shorts are fully supported; TikTok and Facebook Lite carry a
-     * partial-support badge; other apps carry an untested badge by default.
-     */
     val SUPPORTED_PACKAGES: Set<String> = PACKAGES
 
-    /**
-     * Returns true if the app is fully supported.
-     */
     fun isFullySupported(pkg: String): Boolean = pkg in FULLY_SUPPORTED_PACKAGES
 
-    /**
-     * Returns true if the app has partial support.
-     */
     fun isPartial(pkg: String): Boolean = pkg in PARTIAL_PACKAGES
 
-    /**
-     * Returns true if the app is untested. Default for any app that is neither
-     * fully supported nor partially supported.
-     */
     fun isUntested(pkg: String): Boolean = !isFullySupported(pkg) && !isPartial(pkg)
 
-    /**
-     * Apps that are nothing but a short-video feed, so foreground entry alone
-     * is enough to confirm the surface and kick the user back at the limit.
-     */
     val SHORT_VIDEO_ONLY_PACKAGES: Set<String> = setOf(
         "com.zhiliaoapp.musically",
         "com.zhiliaoapp.musically.go",
@@ -2192,10 +2162,6 @@ object ReelsShieldDefaults {
         "com.ss.android.ugc.aweme"
     )
 
-    /**
-     * Readable name used before (or instead of) PackageManager resolution.
-     * Never call PackageManager from an accessibility event.
-     */
     fun fallbackLabel(pkg: String): String = when (pkg) {
         "com.instagram.android" -> "Instagram"
         "com.google.android.youtube" -> "YouTube"
@@ -2207,10 +2173,6 @@ object ReelsShieldDefaults {
     }
 }
 
-/**
- * Stored ids for the Home quick action row. `ALL_IDS` must mirror the entries of
- * `QuickActionType` in the Home quick action editor; unknown ids are filtered on write.
- */
 object HomeQuickActionsDefaults {
     const val MIN = 1
     const val MAX = 4
@@ -2228,7 +2190,6 @@ object HomeQuickActionsDefaults {
     )
 }
 
-/** Parses "key:value,key:value" counter maps written by setReelsShieldCounters. */
 private fun parseCountMap(raw: String): Map<String, Int> {
     if (raw.isEmpty()) return emptyMap()
     return raw.split(",").mapNotNull { entry ->
@@ -2241,7 +2202,6 @@ private fun parseCountMap(raw: String): Map<String, Int> {
 private fun encodeCountMap(map: Map<String, Int>): String =
     map.entries.joinToString(",") { "${it.key}:${it.value}" }
 
-/** Parses "date|pkg:count;pkg:count,date|pkg:count" per-day app maps. */
 private fun parseHistoryByAppMap(raw: String): Map<String, Map<String, Int>> {
     if (raw.isEmpty()) return emptyMap()
     return raw.split(",").mapNotNull { entry ->
@@ -2446,6 +2406,7 @@ data class UserPreferences(
     val incentiveLockGoalsMetToday: Boolean = false,
     val incentiveBonusUsesUsed: Int = 0,
     val bankingWarningDismissed: Boolean = false,
+    val interceptWarningDismissed: Boolean = false,
     val eyeCareEnabled: Boolean = false,
     val eyeCareWorkMinutes: Int = 20,
     val eyeCareRestSeconds: Int = 20,
@@ -2454,6 +2415,7 @@ data class UserPreferences(
     val usageGlimpseEnabled: Boolean = false,
     val websiteAutoTrackingEnabled: Boolean = false,
     val lastBankingAppsCount: Int = -1,
+    val accessibilityActiveNotificationEnabled: Boolean = true,
     val overlayPaletteId: String = "dynamic",
     val overlaySheetOpacity: Float = 1f,
     val overlayFullScreen: Boolean = false,

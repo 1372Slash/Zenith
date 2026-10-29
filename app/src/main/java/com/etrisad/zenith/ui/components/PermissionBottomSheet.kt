@@ -188,21 +188,24 @@ fun PermissionBottomSheet(
     }
 
     fun openAccessibilitySettings(ctx: android.content.Context) {
+        val wasAlreadyEnabled = isAccessibilityServiceEnabled(ctx)
         ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         })
-        scope.launch {
-            val deadline = System.currentTimeMillis() + 120_000L
-            while (System.currentTimeMillis() < deadline) {
-                delay(500)
-                if (isAccessibilityServiceEnabled(ctx)) {
-                    delay(300)
-                    val launchIntent = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)
-                    if (launchIntent != null) {
-                        launchIntent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NEW_TASK)
-                        ctx.startActivity(launchIntent)
+        if (!wasAlreadyEnabled) {
+            scope.launch {
+                val deadline = System.currentTimeMillis() + 120_000L
+                while (System.currentTimeMillis() < deadline) {
+                    delay(500)
+                    if (isAccessibilityServiceEnabled(ctx)) {
+                        delay(300)
+                        val launchIntent = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)
+                        if (launchIntent != null) {
+                            launchIntent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NEW_TASK)
+                            ctx.startActivity(launchIntent)
+                        }
+                        break
                     }
-                    break
                 }
             }
         }
@@ -415,10 +418,14 @@ fun PermissionBottomSheet(
                         description = "Optional: pause notifications during focus or schedules",
                         isGranted = hasNotificationListener,
                         onClick = {
-                            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            if (!preferences.interceptWarningDismissed) {
+                                showInterceptWarning = true
+                            } else {
+                                val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
                             }
-                            context.startActivity(intent)
                         },
                         onInfoClick = { showInterceptWarning = true },
                         icon = Icons.Outlined.PhonelinkErase,
@@ -601,6 +608,11 @@ fun PermissionBottomSheet(
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 context.startActivity(intent)
+            },
+            onDontShowAgain = {
+                scope.launch {
+                    preferencesRepository.setInterceptWarningDismissed(true)
+                }
             }
         )
     }
@@ -731,7 +743,7 @@ private fun PermissionItemRow(
     }
 
     Surface(
-        onClick = if (!isGranted) onClick else ({}),
+        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape),

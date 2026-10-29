@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,6 +38,7 @@ fun PermissionScreen(
     var hasUsageStats by remember { mutableStateOf(hasUsageStatsPermission(context)) }
     var hasOverlay by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
     var hasAccessibility by remember { mutableStateOf(isAccessibilityServiceEnabled(context)) }
+    var showBankingWarning by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -126,9 +128,7 @@ fun PermissionScreen(
                 description = "Required for instant detection and blocking of shielded apps.",
                 isGranted = hasAccessibility,
                 onClick = {
-                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    })
+                    showBankingWarning = true
                 },
                 icon = Icons.Outlined.AccessibilityNew
             )
@@ -152,6 +152,20 @@ fun PermissionScreen(
             }
         }
     }
+
+    if (showBankingWarning) {
+        BankingWarningBottomSheet(
+            onDismiss = { showBankingWarning = false },
+            onProceed = {
+                showBankingWarning = false
+                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            },
+            onDontShowAgain = {}
+        )
+    }
 }
 
 @Composable
@@ -165,7 +179,8 @@ private fun PermissionItemCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
+            .padding(vertical = 6.dp)
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isGranted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)

@@ -296,6 +296,12 @@ class ZenithService : AccessibilityService() {
                     checkBankingAppsNotification()
                 }
 
+                if (preferences.accessibilityActiveNotificationEnabled && isServiceRunning) {
+                    showAccessibilityActivePersistentNotification()
+                } else {
+                    cancelAccessibilityActivePersistentNotification()
+                }
+
                 if (preferences.incentiveLockDisableRequestTimestamp > 0) {
                     val now = System.currentTimeMillis()
                     if (now >= preferences.incentiveLockDisableRequestTimestamp + 3600000L) {
@@ -780,6 +786,58 @@ class ZenithService : AccessibilityService() {
         try {
             notificationManager.notify(packageName.hashCode(), notification)
         } catch (_: Exception) {}
+    }
+
+    private var isAccessibilityActiveNotifPosted = false
+
+    private fun showAccessibilityActivePersistentNotification() {
+        val channelId = "zenith_accessibility_active_channel"
+        if (notificationManager.getNotificationChannel(channelId) == null) {
+            val channel = NotificationChannel(
+                channelId, "Accessibility Active Warning", NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Persistent reminder when Zenith accessibility service is active"
+                setSound(null, null)
+                enableVibration(false)
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val openSettingsIntent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Zenith Accessibility Active")
+            .setContentText("Please disable Zenith accessibility before opening sensitive apps to avoid unexpected restrictions.")
+            .setSmallIcon(R.drawable.ic_warning)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSound(null)
+            .setVibrate(longArrayOf(0L))
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    this, 3004, openSettingsIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+            )
+            .build()
+
+        try {
+            if (!isAccessibilityActiveNotifPosted) {
+                notificationManager.notify(3004, notification)
+                isAccessibilityActiveNotifPosted = true
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun cancelAccessibilityActivePersistentNotification() {
+        if (isAccessibilityActiveNotifPosted) {
+            try {
+                notificationManager.cancel(3004)
+            } catch (_: Exception) {}
+            isAccessibilityActiveNotifPosted = false
+        }
     }
 
     private suspend fun handlePackageChange(currentApp: String) {
@@ -1687,6 +1745,7 @@ class ZenithService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         isServiceRunning = false
+        cancelAccessibilityActivePersistentNotification()
         bypassCheckRunnable?.let { mainHandler.removeCallbacks(it) }
         bypassCheckRunnable = null
         try {
