@@ -192,7 +192,7 @@ fun ReelsShieldPoolCard(
 
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Each app can be capped below this pool. The stricter limit is the one enforced.",
+            text = "Each app can be capped below this limit. The stricter limit is the one enforced.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 8.dp)
@@ -267,7 +267,7 @@ fun ReelsShieldAppsCard(
                         color = MaterialTheme.colorScheme.surfaceContainerHighest
                     ) {
                         Text(
-                            text = if (customCaps == 0) "Pool only" else "$customCaps custom",
+                            text = if (customCaps == 0) "Limit only" else "$customCaps custom",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -333,7 +333,7 @@ fun ReelsShieldAppsCard(
                                     else MaterialTheme.colorScheme.surfaceContainerHighest
                                 ) {
                                     Text(
-                                        text = if (capped) "$cap / day" else "Pool only",
+                                        text = if (capped) "$cap / day" else "Limit only",
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = if (capped) MaterialTheme.colorScheme.onPrimaryContainer
@@ -384,12 +384,6 @@ fun ReelsShieldAppsCard(
     }
 }
 
-/**
- * BedtimeScreen's GroupedCard shape, kept local so the Reels Shield list has
- * the same 24 dp outer / 8 dp inner corners without importing another screen.
- * The history chart card uses it too, so chart + detail read as one group
- * exactly like Usage Stats' hourly chart group.
- */
 internal fun reelsGroupShape(index: Int, total: Int): Shape = when {
     total <= 1 -> RoundedCornerShape(24.dp)
     index == 0 -> RoundedCornerShape(
@@ -429,7 +423,6 @@ private fun ReelsGroupedCard(
     )
 }
 
-/** Compact editor styled after the Shield settings bottom sheet. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReelsShieldAppLimitSheet(
@@ -590,7 +583,7 @@ fun ReelsShieldAppLimitSheet(
 
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Shared pool: $pool per day. Set $pool to use only the shared pool; values are clamped to 1–$pool.",
+                text = "Shared limit: $pool per day. Set $pool to use only the shared limit; values are clamped to 1–$pool.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 4.dp)
@@ -613,11 +606,6 @@ fun ReelsShieldAppLimitSheet(
     }
 }
 
-/**
- * Daily swipe counts for the last [HISTORY_DAYS_SHOWN] days, oldest first.
- * Counts are mapped to one minute per swipe so the shared usage graph, which
- * works in millis, can render them without a second chart implementation.
- */
 internal fun buildReelsHistory(preferences: UserPreferences): List<DailyUsage> {
     val dateKeyFormat = DateTimeUtils.getDateFormat()
     val todayStart = DateTimeUtils.getDayStartTime(
@@ -662,7 +650,6 @@ data class ReelsHistoryDayDetail(
     val apps: List<ReelsHistoryAppCount>
 )
 
-/** Per-app split for a tapped history bar, including legacy days without data. */
 internal fun buildReelsHistoryDayDetail(
     preferences: UserPreferences,
     entries: List<DailyUsage>,
@@ -705,8 +692,6 @@ fun ReelsShieldHistoryCard(
     UsageHistoryCard(
         history = history,
         targetMillis = limit.coerceAtLeast(1).toLong() * 60_000L,
-        // A non-null sentinel keeps the chart's internal selection disabled so
-        // the tapped bar and the detail items stay in sync.
         selectedDateMillis = selectedDateMillis ?: Long.MIN_VALUE,
         formatDuration = { millis ->
             val count = millis / 60_000L
@@ -722,12 +707,6 @@ fun ReelsShieldHistoryCard(
     )
 }
 
-/**
- * Same header/row construction as UsageStats' "Apps used at hour" detail:
- * primary-tinted grouped cards, History icon, and the app rows underneath.
- * [index] starts at 1 because the history chart card is index 0 of the same
- * group, exactly like the hourly chart above the detail in Usage Stats.
- */
 @Composable
 fun ReelsShieldHistoryDetailHeader(
     detail: ReelsHistoryDayDetail,
@@ -880,10 +859,6 @@ fun ReelsShieldHistoryAppRow(
     }
 }
 
-/**
- * Resolves app labels off the main thread once per package and caches them;
- * the settings screen never calls PackageManager from composition.
- */
 @Composable
 internal fun rememberAppLabels(packages: Set<String>): Map<String, String> {
     val context = LocalContext.current

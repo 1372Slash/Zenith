@@ -387,7 +387,7 @@ fun FeaturesSettings(
             summary = if (preferences.reelsShieldEnabled) {
                 "On · ${preferences.reelsShieldDailyLimit} reels per day shared across ${preferences.reelsShieldPackages.size} apps"
             } else {
-                "Count reels watched through Reels, Shorts, TikTok and Spotlight, then press back when the daily pool is empty"
+                "Count short videos watched across apps, then press back when the daily limit is reached"
             },
             onClick = onNavigateToReelsShield,
             icon = Icons.Outlined.SwapVert,

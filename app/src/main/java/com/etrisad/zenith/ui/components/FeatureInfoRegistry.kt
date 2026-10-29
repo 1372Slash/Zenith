@@ -216,25 +216,25 @@ object FeatureInfoRegistry {
 
     private val reelsShield = FeatureInfo(
         title = "Reels Shield",
-        summary = "One shared daily reels pool for short-video feeds, optional per-app caps, and a gentle back-press when either limit runs out. Instagram and YouTube are fully supported, TikTok and Facebook Lite are partial support, and other apps carry an untested badge by default.",
+        summary = "One shared daily limit for short videos, optional per-app limits, and an automatic back-press when a limit is reached. Apps are categorized as fully supported, partial support, or untested based on detection accuracy.",
         sections = listOf(
             FeatureInfoSections.whatItDoes(
-                "Counts reels watched in Instagram Reels, Facebook Reels, YouTube Shorts, Snapchat Spotlight and TikTok - every tracked short-video feed counts against the same pool.",
-                "TikTok and Facebook Lite are marked partial support for now: some of their screens (comment trays, post details) can still miss or over-count a swipe.",
-                "Any other app carries an untested badge by default - they are tracked like everything else, but their detection passes are not explicitly tuned.",
-                "Shares a single daily pool across every tracked app while keeping a per-app breakdown of today's reels.",
-                "Optionally caps one app below the shared pool; the stricter of the two limits is the one enforced.",
-                "Presses back at entry and on continuation once the pool or an app cap is empty, instead of letting another short video load."
+                "Counts short videos watched across tracked apps, with every short-video feed sharing the same daily limit.",
+                "Fully supported apps offer precise detection, whereas partial support apps may occasionally miss or over-count swipes on secondary screens like comment sections or post details.",
+                "Untested apps are tracked normally, but their detection logic has not been specifically fine-tuned.",
+                "Shares a single daily limit across all tracked apps while maintaining a per-app breakdown of today's videos.",
+                "Allows setting individual app limits below the shared limit, enforcing whichever limit is stricter.",
+                "Presses back automatically when opening or scrolling short videos once the shared limit or an app limit is reached."
             ),
             FeatureInfoSections.whatYoullSee(
-                "A circular wavy hero ring with reels left, translucent detail stat cards for used today, apps today and lifetime, and the live shield status.",
-                "Text-field limits instead of sliders: one for the shared pool and a compact bottom sheet per app, merged with today-by-app usage in a Usage Stats style list.",
-                "The tracked-app picker and a 14-day history chart with a per-app breakdown of each day's reels."
+                "A visual progress ring showing remaining videos, alongside stat cards for today's usage, active apps, total lifetime count, and shield status.",
+                "Text inputs for setting limits, including the shared daily limit and individual app caps in a per-app usage list.",
+                "A tracked-app selector and a 14-day history chart showing daily usage broken down by app."
             ),
             FeatureInfoSections.tips(
-                "Zenith's accessibility service must be on, and limited accessibility mode hides the scroll events this feature needs.",
-                "Labels such as Reels or Shorts only support detection, they never activate tracking on a home feed by themselves; comments and descriptions are never counted.",
-                "Lower the pool on busy days; it tightens every per-app cap with it. The overlay pill shows the shared pool and the current visit's reels, which continue for ten minutes after you leave the app."
+                "Zenith's accessibility service must be active, as scroll detection requires full accessibility mode.",
+                "Detection algorithms only track short-video feeds, never home feeds, comments, or post descriptions.",
+                "Lowering the shared limit on busy days automatically tightens per-app caps. The floating overlay displays your remaining limit and current session count."
             )
         )
     )

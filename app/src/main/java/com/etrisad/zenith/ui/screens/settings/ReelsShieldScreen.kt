@@ -159,7 +159,7 @@ fun ReelsShieldScreen(
                 showAppsSheet = false
             },
             title = "Short Video Apps",
-            subtitle = "Instagram and YouTube are fully detected. Facebook Lite and TikTok are partial support; other apps are untested by default. Only apps Zenith can detect short videos in are listed.",
+            subtitle = "Apps are categorized as fully supported, partial support, or untested based on detection accuracy. Only apps capable of short video detection are listed.",
             allowedPackages = ReelsShieldDefaults.SUPPORTED_PACKAGES,
             priorityPackages = ReelsShieldDefaults.PRIORITY_PACKAGES
         )
@@ -323,7 +323,7 @@ fun ReelsShieldScreen(
                 Column(modifier = Modifier.animateItem()) {
                     SettingsActionItem(
                         title = "Tracked Apps",
-                        summary = "${preferences.reelsShieldPackages.size} supported apps · Reels, Shorts, Spotlight & TikTok",
+                        summary = "${preferences.reelsShieldPackages.size} tracked short-video apps",
                         onClick = { showAppsSheet = true },
                         icon = Icons.Outlined.Apps,
                         shape = RoundedCornerShape(24.dp)
@@ -428,10 +428,6 @@ private fun ReelsSectionHeader(title: String) {
     }
 }
 
-/**
- * Single card shown while the shield is off. Turning it on reveals the rest of
- * the screen and the switch in the app header.
- */
 @Composable
 private fun ReelsShieldToggleCard(enabled: Boolean, onToggle: (Boolean) -> Unit) {
     val containerColor by animateColorAsState(
@@ -542,11 +538,6 @@ private fun ReelsShieldToggleCard(enabled: Boolean, onToggle: (Boolean) -> Unit)
     }
 }
 
-/**
- * Wavy ring copied from BedtimeStatusProgress: no card wrapper, 240 dp box with
- * 16 dp inset, pulsing icon and the remaining swipes in the middle. The summary
- * card below is a separate container.
- */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ReelsShieldHero(
@@ -558,8 +549,6 @@ private fun ReelsShieldHero(
     val safeLimit = limit.coerceAtLeast(1)
     val remaining = (safeLimit - todayCount).coerceAtLeast(0)
     val poolEmpty = todayCount >= safeLimit
-    // Decreasing mode: the ring is full when the pool is untouched and empties
-    // as swipes are used, matching the "swipes left" number in the middle.
     val progress = (remaining.toFloat() / safeLimit).coerceIn(0f, 1f)
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
@@ -633,7 +622,7 @@ private fun ReelsShieldHero(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = if (poolEmpty) "pool empty" else "reels left",
+                    text = if (poolEmpty) "limit reached" else "reels left",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -650,7 +639,6 @@ private fun ReelsShieldHero(
     }
 }
 
-/** 2x2 grid of detail cards under the ring. */
 @Composable
 private fun ReelsShieldStatsGrid(
     todayCount: Int,
@@ -693,7 +681,7 @@ private fun ReelsShieldStatsGrid(
             ReelsHeroStatCard(
                 label = "Reels left",
                 value = "$remaining",
-                subtitle = if (poolEmpty) "Pool exhausted" else "Remaining pool",
+                subtitle = if (poolEmpty) "Limit reached" else "Remaining limit",
                 icon = if (poolEmpty) Icons.Outlined.HourglassEmpty else Icons.Outlined.Shield,
                 shape = RoundedCornerShape(bottomStart = 24.dp, topStart = 8.dp, topEnd = 8.dp, bottomEnd = 8.dp),
                 modifier = Modifier.weight(1f),
@@ -808,7 +796,6 @@ private fun ReelsHeroStatCard(
     }
 }
 
-/** 1000 -> "1K", 1550 -> "1.55K", 1_000_000 -> "1M". */
 private fun formatCompactCount(value: Long): String {
     if (value < 1_000) return value.toString()
     val units = arrayOf("K", "M", "B", "T")

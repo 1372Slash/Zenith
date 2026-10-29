@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Info
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.ui.navigation.Screen
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private class SmoothedHeaderValues(
@@ -236,14 +238,47 @@ fun ZenithHeader(
                         )
                     }
                 } else {
-                    Text(
-                        text = state,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = if (isDeepScreen) TextAlign.Start else TextAlign.Center,
-                        maxLines = 1
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = state,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = if (isDeepScreen) TextAlign.Start else TextAlign.Center,
+                            maxLines = 1
+                        )
+                        if (currentRoute == Screen.ReelsShield.route) {
+                            val coroutineScope = rememberCoroutineScope()
+                            val tooltipState = rememberTooltipState(isPersistent = true)
+                            ZenithTooltipBox(
+                                tooltipText = "Beta",
+                                state = tooltipState,
+                                arrowPosition = TooltipArrowPosition.TopCenter
+                            ) {
+                                Surface(
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            if (tooltipState.isVisible) tooltipState.dismiss() else tooltipState.show()
+                                        }
+                                    },
+                                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(
+                                        text = "β",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
