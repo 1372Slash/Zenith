@@ -124,7 +124,7 @@ object ScreenUsageHelper {
 
     private fun processEvent(
         event: UsageEvents.Event,
-        pkg: String,
+        pkg: String?,
         time: Long,
         todayStart: Long,
         endQuery: Long,
@@ -139,7 +139,7 @@ object ScreenUsageHelper {
             event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND ||
             event.eventType == UsageEvents.Event.ACTIVITY_PAUSED ||
             event.eventType == UsageEvents.Event.MOVE_TO_BACKGROUND
-        if (isAppTransition && SharedMonitoringState.isPrivatePackage(pkg)) {
+        if (isAppTransition && pkg != null && SharedMonitoringState.isPrivatePackage(pkg)) {
             if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED ||
                 event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND
             ) {
@@ -163,7 +163,7 @@ object ScreenUsageHelper {
             }
             UsageEvents.Event.ACTIVITY_RESUMED,
             UsageEvents.Event.MOVE_TO_FOREGROUND -> {
-                if (currentIsScreenOn) {
+                if (currentIsScreenOn && pkg != null) {
                     val className = event.className
                     if (className != null && (className.contains("Notification") ||
                                 className.contains("notification") ||
@@ -181,7 +181,7 @@ object ScreenUsageHelper {
             }
             UsageEvents.Event.ACTIVITY_PAUSED,
             UsageEvents.Event.MOVE_TO_BACKGROUND -> {
-                if (currentActivePkg == pkg) {
+                if (pkg != null && currentActivePkg == pkg) {
                     commitSegment(pkg, currentActiveStartTime, time, todayStart, endQuery, zoneId, includeHourly)
                     currentActivePkg = null
                     currentActiveStartTime = 0L
