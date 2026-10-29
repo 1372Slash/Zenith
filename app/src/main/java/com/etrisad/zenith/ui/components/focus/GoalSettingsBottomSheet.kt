@@ -145,7 +145,7 @@ fun GoalSettingsBottomSheet(
                         val isWebsite = appInfo.packageName.startsWith("zenith-web:")
                         val settingsIconShape = appIconShape(isWebsite)
                         SubcomposeAsyncImage(
-                            model = "app-icon:
+                            model = "app-icon://${appInfo.packageName}",
                             contentDescription = null,
                             modifier = Modifier
                                 .size(72.dp)
@@ -549,8 +549,8 @@ fun GoalSettingsBottomSheet(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             val isDefault = goalCallerSoundUri == null
-                                            val isSystem = goalCallerSoundUri != null && goalCallerSoundUri?.startsWith("content:
-                                            val isFile = goalCallerSoundUri != null && goalCallerSoundUri?.startsWith("content:
+                                            val isSystem = goalCallerSoundUri != null && goalCallerSoundUri?.startsWith("content://media") == true
+                                            val isFile = goalCallerSoundUri != null && goalCallerSoundUri?.startsWith("content://media") == false
 
                                             GroupedOptionButton(
                                                 label = "Default",

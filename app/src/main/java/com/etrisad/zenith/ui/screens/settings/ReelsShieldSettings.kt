@@ -383,6 +383,13 @@ fun ReelsShieldAppsCard(
         }
     }
 }
+
+/**
+ * BedtimeScreen's GroupedCard shape, kept local so the Reels Shield list has
+ * the same 24 dp outer / 8 dp inner corners without importing another screen.
+ * The history chart card uses it too, so chart + detail read as one group
+ * exactly like Usage Stats' hourly chart group.
+ */
 internal fun reelsGroupShape(index: Int, total: Int): Shape = when {
     total <= 1 -> RoundedCornerShape(24.dp)
     index == 0 -> RoundedCornerShape(
@@ -421,6 +428,8 @@ private fun ReelsGroupedCard(
         content = { content() }
     )
 }
+
+/** Compact editor styled after the Shield settings bottom sheet. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReelsShieldAppLimitSheet(
@@ -603,6 +612,12 @@ fun ReelsShieldAppLimitSheet(
         }
     }
 }
+
+/**
+ * Daily swipe counts for the last [HISTORY_DAYS_SHOWN] days, oldest first.
+ * Counts are mapped to one minute per swipe so the shared usage graph, which
+ * works in millis, can render them without a second chart implementation.
+ */
 internal fun buildReelsHistory(preferences: UserPreferences): List<DailyUsage> {
     val dateKeyFormat = DateTimeUtils.getDateFormat()
     val todayStart = DateTimeUtils.getDayStartTime(
@@ -646,6 +661,8 @@ data class ReelsHistoryDayDetail(
     val dayCount: Int,
     val apps: List<ReelsHistoryAppCount>
 )
+
+/** Per-app split for a tapped history bar, including legacy days without data. */
 internal fun buildReelsHistoryDayDetail(
     preferences: UserPreferences,
     entries: List<DailyUsage>,
@@ -688,6 +705,8 @@ fun ReelsShieldHistoryCard(
     UsageHistoryCard(
         history = history,
         targetMillis = limit.coerceAtLeast(1).toLong() * 60_000L,
+        // A non-null sentinel keeps the chart's internal selection disabled so
+        // the tapped bar and the detail items stay in sync.
         selectedDateMillis = selectedDateMillis ?: Long.MIN_VALUE,
         formatDuration = { millis ->
             val count = millis / 60_000L
@@ -702,6 +721,13 @@ fun ReelsShieldHistoryCard(
         modifier = modifier
     )
 }
+
+/**
+ * Same header/row construction as UsageStats' "Apps used at hour" detail:
+ * primary-tinted grouped cards, History icon, and the app rows underneath.
+ * [index] starts at 1 because the history chart card is index 0 of the same
+ * group, exactly like the hourly chart above the detail in Usage Stats.
+ */
 @Composable
 fun ReelsShieldHistoryDetailHeader(
     detail: ReelsHistoryDayDetail,
@@ -853,6 +879,11 @@ fun ReelsShieldHistoryAppRow(
         )
     }
 }
+
+/**
+ * Resolves app labels off the main thread once per package and caches them;
+ * the settings screen never calls PackageManager from composition.
+ */
 @Composable
 internal fun rememberAppLabels(packages: Set<String>): Map<String, String> {
     val context = LocalContext.current

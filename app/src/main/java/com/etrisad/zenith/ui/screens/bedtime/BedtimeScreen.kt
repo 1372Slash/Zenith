@@ -1499,7 +1499,7 @@ fun UsageItem(
             leadingContent = {
                 SubcomposeAsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data("app-icon:
+                        .data("app-icon://${app.packageName}")
                         .crossfade(500)
                         .build(),
                     contentDescription = null,

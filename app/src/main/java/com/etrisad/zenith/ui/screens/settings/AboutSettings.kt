@@ -90,15 +90,15 @@ fun AboutSettings(
         DeveloperCard(
             name = "1372Slash",
             onGithubClick = {
-                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https:
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/1372Slash"))
                 context.startActivity(intent)
             },
             onWebsiteClick = {
-                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https:
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://1372slash.vercel.app"))
                 context.startActivity(intent)
             },
             onWhatsAppClick = {
-                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https:
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://whatsapp.com/channel/0029VbAKkhlAojYyegxvV83V"))
                 context.startActivity(intent)
             },
             shape = RoundedCornerShape(8.dp)
@@ -118,7 +118,7 @@ fun AboutSettings(
             icon = Icons.Outlined.Code,
             shape = RoundedCornerShape(8.dp),
             onClick = {
-                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https:
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/1372Slash/Zenith"))
                 context.startActivity(intent)
             }
         )
@@ -129,7 +129,7 @@ fun AboutSettings(
             icon = Icons.Outlined.Description,
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
             onClick = {
-                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https:
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/1372Slash/Zenith/blob/master/LICENSE"))
                 context.startActivity(intent)
             }
         )

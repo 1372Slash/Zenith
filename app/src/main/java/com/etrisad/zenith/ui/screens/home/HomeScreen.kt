@@ -181,7 +181,7 @@ fun HomeScreen(
 @Composable
 fun HomeScreenContent(
     uiState: HomeUiState,
-    preferences: UserPreferences,
+    preferences: com.etrisad.zenith.data.preferences.UserPreferences,
     customizeState: HomeCustomizeState,
     onSetQuickActions: (List<String>) -> Unit,
     onNavigateRoute: (String) -> Unit,
@@ -1309,7 +1309,7 @@ fun TopAppsSection(
                         topApps.take(3).reversed().forEach { app ->
                             AsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
-                                    .data("app-icon:
+                                    .data("app-icon://${app.packageName}")
                                     .crossfade(500)
                                     .build(),
                                 contentDescription = null,
@@ -1378,7 +1378,7 @@ fun TopAppsSection(
                                 leadingContent = {
                                     SubcomposeAsyncImage(
                                         model = ImageRequest.Builder(LocalContext.current)
-                                            .data("app-icon:
+                                            .data("app-icon://${app.packageName}")
                                             .crossfade(500)
                                             .build(),
                                         contentDescription = null,
@@ -1564,7 +1564,7 @@ fun QuickActionsSection(
     pomodoroStatus: PomodoroStatus,
     onActionClick: (QuickActionType) -> Unit
 ) {
-    val density = LocalDensity.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
     val densityScale = 1f / density.density.pow(0.2f)
     val types = remember(actions) { actions.mapNotNull(QuickActionType::fromId) }
 
@@ -1730,7 +1730,7 @@ fun ShieldItem(
                     ) {
                         SubcomposeAsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
-                                .data("app-icon:
+                                .data("app-icon://${shield.packageName}")
                                 .crossfade(500)
                                 .build(),
                             contentDescription = null,
@@ -2011,7 +2011,7 @@ fun HomeScreenExpressivePreview() {
                     ShieldEntity("com.duolingo", "Duolingo", FocusType.GOAL, 30, remainingTimeMillis = 10 * 60 * 1000L)
                 )
             ),
-            preferences = UserPreferences(expressiveColors = true),
+            preferences = com.etrisad.zenith.data.preferences.UserPreferences(expressiveColors = true),
             customizeState = remember { HomeCustomizeState() },
             onSetQuickActions = {},
             onNavigateRoute = {},

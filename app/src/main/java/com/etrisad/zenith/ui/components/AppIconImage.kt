@@ -30,7 +30,7 @@ fun AppIconImage(
     val context = LocalContext.current
     val request = remember(packageName) {
         ImageRequest.Builder(context)
-            .data("app-icon:
+            .data("app-icon://$packageName")
             .crossfade(300)
             .build()
     }

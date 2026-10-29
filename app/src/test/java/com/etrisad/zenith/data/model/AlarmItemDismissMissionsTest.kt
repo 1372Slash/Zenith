@@ -54,7 +54,7 @@ class AlarmItemDismissMissionsTest {
             name = "Kerja",
             enabled = true,
             days = setOf(2, 3, 4, 5, 6),
-            soundUri = "content:
+            soundUri = "content://media/external/audio/media/42",
             soundEnabled = true,
             autoRepeatEnabled = false,
             vibrateEnabled = false,

@@ -20,7 +20,6 @@ import androidx.compose.material.icons.outlined.Snooze
 import com.etrisad.zenith.ui.components.pausepoint.PausePointTask
 import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskContent
 import androidx.compose.material3.*
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -468,14 +467,13 @@ private fun WakeUpAppBottomSheet(
 
             if (!isComplete) {
                 LinearProgressIndicator(
-                progress = { (accumulatedSeconds.toFloat() / requiredSeconds.toFloat()).coerceIn(0f, 1f) },
-                modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(8.dp)
-                                        .clip(RoundedCornerShape(4.dp)),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                strokeCap = COMPILED_CODE,
+                    progress = (accumulatedSeconds.toFloat() / requiredSeconds.toFloat()).coerceIn(0f, 1f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))

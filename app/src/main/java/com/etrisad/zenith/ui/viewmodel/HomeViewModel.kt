@@ -264,7 +264,7 @@ class HomeViewModel(
                 } catch (_: Exception) {
                     if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(pkg)) {
                         val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(pkg)
-                        com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https:
+                        com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
                     } else pkg
                 }
                 AppUsageInfo(pkg, label, total)
@@ -319,7 +319,7 @@ class HomeViewModel(
         } catch (_: Exception) {
             if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(pkg)) {
                 val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(pkg)
-                com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https:
+                com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
             } else pkg
         }
     }
@@ -662,7 +662,7 @@ class HomeViewModel(
                         .collect { entities ->
                             val usage = entities.map { entity ->
                                 val domain = entity.domain
-                                val displayName = com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https:
+                                val displayName = com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
                                 val pkgName = com.etrisad.zenith.data.website.WebsiteRepository.createPackageName(domain)
                                 AppUsageInfo(
                                     packageName = pkgName,
@@ -1035,7 +1035,7 @@ class HomeViewModel(
                 } catch (_: Exception) {
                     val label = if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(pkg)) {
                         val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(pkg)
-                        com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https:
+                        com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
                     } else pkg
                     AppUsageInfo(pkg, label, time, sessionCount = sessions, lastTimeUsed = lastUsed)
                 }
@@ -1055,7 +1055,7 @@ class HomeViewModel(
             }
             websiteEntities.map { entity ->
                 val domain = entity.domain
-                val displayName = com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https:
+                val displayName = com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
                 val pkgName = com.etrisad.zenith.data.website.WebsiteRepository.createPackageName(domain)
                 AppUsageInfo(
                     packageName = pkgName,
@@ -1206,7 +1206,7 @@ class HomeViewModel(
                         val cached = appInfoCache[pkg]
                         val label = cached ?: if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(pkg)) {
                             val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(pkg)
-                            com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https:
+                            com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
                         } else pkg
                         AppUsageInfo(pkg, label, duration, lastTimeUsed = lastUsedMap[pkg] ?: 0L)
                     } else null
@@ -1239,7 +1239,7 @@ class HomeViewModel(
                         val cached = appInfoCache[pkg]
                         val label = cached ?: if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(pkg)) {
                             val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(pkg)
-                            com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https:
+                            com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
                         } else pkg
                         AppUsageInfo(pkg, label, durationForThisHour, lastTimeUsed = lastUsedMap[pkg] ?: 0L)
                     } else null
@@ -1449,7 +1449,7 @@ class HomeViewModel(
                 var appName = packageName
                 if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(packageName)) {
                     val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(packageName)
-                    appName = com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https:
+                    appName = com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
                 } else {
                     try {
                         val appInfo = pm.getApplicationInfo(packageName, 0)
@@ -1842,7 +1842,7 @@ class HomeViewModel(
         val websites = try {
             shieldRepository.getWebsiteUsageListForDate(dateStr).map {
                 val pkg = com.etrisad.zenith.data.website.WebsiteRepository.createPackageName(it.domain)
-                val label = com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(it.domain, "https:
+                val label = com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(it.domain, "https://${it.domain}")
                 AppUsageInfo(pkg, label, it.usageTimeMillis)
             }
         } catch (_: Exception) { emptyList() }

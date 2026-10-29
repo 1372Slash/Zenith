@@ -522,7 +522,7 @@ fun AlarmScreen(
                             wakeUpAppPackageNames = wakeUpAppPackageNames,
                             wakeUpAppDurationSeconds = wakeUpAppDurationSeconds,
                             dismissTaskTypeNames = dismissTaskTypeNames,
-                            enabled = timeChanged || daysChanged || currentEditing.enabled
+                            enabled = if (timeChanged || daysChanged) true else currentEditing.enabled
                         )
                     )
                     withContext(Dispatchers.IO) {

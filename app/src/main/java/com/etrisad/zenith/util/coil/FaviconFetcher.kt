@@ -45,8 +45,8 @@ class FaviconFetcher(
 
     private fun fetchFavicon(domain: String): Drawable? {
         val urls = listOf(
-            "https:
-            "https:
+            "https://www.google.com/s2/favicons?domain=$domain&sz=64",
+            "https://$domain/favicon.ico"
         )
         for (url in urls) {
             try {
@@ -77,8 +77,8 @@ class FaviconFetcher(
 
 class FaviconMapper : Mapper<String, FaviconData> {
     override fun map(data: String, options: Options): FaviconData? {
-        if (!data.startsWith("favicon:
-        val domain = data.substringAfter("favicon:
+        if (!data.startsWith("favicon://")) return null
+        val domain = data.substringAfter("favicon://")
         return if (domain.isNotEmpty()) FaviconData(domain) else null
     }
 }

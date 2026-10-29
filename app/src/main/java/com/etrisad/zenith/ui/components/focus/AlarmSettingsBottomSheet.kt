@@ -1234,8 +1234,8 @@ private fun AlarmSettingsSheetContent(
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 val isDefault = alarmSoundUri == null
-                                                val isSystem = alarmSoundUri != null && alarmSoundUri?.startsWith("content:
-                                                val isFile = alarmSoundUri != null && alarmSoundUri?.startsWith("content:
+                                                val isSystem = alarmSoundUri != null && alarmSoundUri?.startsWith("content://media") == true
+                                                val isFile = alarmSoundUri != null && alarmSoundUri?.startsWith("content://media") == false
 
                                                 GroupedOptionButton(
                                                     label = "Default",

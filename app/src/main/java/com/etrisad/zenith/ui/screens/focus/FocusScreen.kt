@@ -91,8 +91,8 @@ fun FocusScreen(
     onDismissUninstalled: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
-    val app = context.applicationContext as ZenithApplication
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val app = context.applicationContext as com.etrisad.zenith.ZenithApplication
     val preferences by app.userPreferencesRepository.userPreferencesFlow.collectAsState(initial = null)
     val isInLockdown = preferences?.isInLockdown() ?: false
 

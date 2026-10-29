@@ -463,7 +463,7 @@ class ProfileViewModel(
         } catch (_: Exception) {
             if (com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(pkg)) {
                 val domain = com.etrisad.zenith.data.website.WebsiteRepository.extractDomainFromPackageName(pkg)
-                com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https:
+                com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
             } else pkg
         }
     }

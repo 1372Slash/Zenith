@@ -286,7 +286,7 @@ fun ActiveShieldCard(
                     val iconShape = appIconShape(isWebsite)
                     SubcomposeAsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data("app-icon:
+                            .data("app-icon://${shield.packageName}")
                             .crossfade(true)
                             .build(),
                         contentDescription = null,

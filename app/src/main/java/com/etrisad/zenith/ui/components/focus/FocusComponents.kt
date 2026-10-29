@@ -76,7 +76,7 @@ fun MultiAppIconGroup(
     val sunnyShape = MaterialShapes.Sunny.toShape()
 
     fun iconModel(pkg: String): String {
-        return "app-icon:
+        return "app-icon://$pkg"
     }
 
     @Composable fun iconShape(pkg: String) = appIconShape(WebsiteRepository.isWebsitePackageName(pkg))
@@ -697,7 +697,7 @@ fun AppPickerItem(
             },
             leadingContent = {
                 val iconSize = 44.dp
-                val imageModel = "app-icon:
+                val imageModel = "app-icon://${app.packageName}"
                 val isWebsite = app.packageName.startsWith("zenith-web:")
                 val shape = appIconShape(isWebsite)
                 SubcomposeAsyncImage(

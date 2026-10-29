@@ -607,7 +607,7 @@ fun SnapshotCard(
                                         )
                                     } else if (app.packageName.isNotEmpty()) {
                                         AsyncImage(
-                                            model = "app-icon:
+                                            model = "app-icon://${app.packageName}",
                                             contentDescription = null,
                                             modifier = Modifier.size(28.dp).clip(CircleShape),
                                             contentScale = ContentScale.Crop

@@ -406,7 +406,7 @@ private fun WebsitesContent(
                             val wsShape = MaterialShapes.Square.toShape()
                             SubcomposeAsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
-                                    .data("app-icon:
+                                    .data("app-icon://${com.etrisad.zenith.data.website.WebsiteRepository.createPackageName(domainOnly)}")
                                     .crossfade(400)
                                     .build(),
                                 contentDescription = null,
@@ -472,7 +472,7 @@ private fun WebsitesContent(
                                 val wsShape = MaterialShapes.Square.toShape()
                                 SubcomposeAsyncImage(
                                     model = ImageRequest.Builder(LocalContext.current)
-                                        .data("app-icon:
+                                        .data("app-icon://${com.etrisad.zenith.data.website.WebsiteRepository.createPackageName(domainOnly)}")
                                         .crossfade(400)
                                         .build(),
                                     contentDescription = null,

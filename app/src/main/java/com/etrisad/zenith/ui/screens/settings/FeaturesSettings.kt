@@ -438,7 +438,7 @@ fun FeaturesSettings(
             description = "Eject you from an app 5 minutes before its time limit expires, as an advance warning",
             checked = preferences.earlyKickEnabled,
             onCheckedChange = onEarlyKickEnabledChange,
-            icon = Icons.AutoMirrored.Outlined.ExitToApp,
+            icon = Icons.Outlined.ExitToApp,
             shape = RoundedCornerShape(8.dp)
         )
 
@@ -507,7 +507,7 @@ fun ForegroundNotificationStatusSelector(
                     Text(
                         text = "Status Notification",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                     )
                     Text(
                         text = "Choose what Zenith shows while monitoring is active",
@@ -568,7 +568,7 @@ fun HUDAppearanceSettings(
             Text(
                 text = "HUD Appearance",
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
             
@@ -674,7 +674,7 @@ fun HUDAppearanceSettings(
                     Text(
                         text = "15m",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Black,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }

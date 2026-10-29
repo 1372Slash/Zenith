@@ -630,7 +630,7 @@ fun PortraitInterceptLayout(
             ) {
                 SubcomposeAsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data("app-icon:
+                        .data("app-icon://$packageName")
                         .crossfade(500)
                         .build(),
                     contentDescription = null,
@@ -865,7 +865,7 @@ fun LandscapeInterceptLayout(
                 ) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data("app-icon:
+                            .data("app-icon://$packageName")
                             .crossfade(500)
                             .build(),
                         contentDescription = null,

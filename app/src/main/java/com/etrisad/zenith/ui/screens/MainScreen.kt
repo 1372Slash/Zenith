@@ -148,7 +148,7 @@ fun MainScreen(
     initialPackageName: String? = null,
     onInitialPackageHandled: () -> Unit = {}
 ) {
-    val context = LocalContext.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val bedtimeViewModel: BedtimeViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         factory = BedtimeViewModelFactory(context, userPreferencesRepository, shieldRepository)
     )
@@ -183,7 +183,7 @@ fun MainScreen(
             shieldRepository.getPomodoroTotalCountFlow()
                 .catch { emit(-1) }
                 .distinctUntilChanged()
-        ) { _, _, _, _ -> }
+        ) { _, _, _, _ -> Unit }
             .debounce(800)
             .catch { }
             .collect { profileViewModel.refresh(silent = true) }
@@ -485,8 +485,8 @@ fun MainScreen(
                     currentRoute != Screen.GSFlexCustomizer.route &&
                     currentRoute != Screen.SystemUsageDebug.route &&
                     currentRoute != Screen.OverlayAppearance.route &&
-                    currentRoute.startsWith("settings_category") == false &&
-                    currentRoute.startsWith("app_detail") == false
+                    currentRoute?.startsWith("settings_category") == false &&
+                    currentRoute?.startsWith("app_detail") == false
 
         if (useNavigationRail) {
             AnimatedVisibility(
@@ -556,7 +556,7 @@ fun MainScreen(
                         navBackStackEntry?.arguments?.getString("category")
                     ) != null && !focusUiState.isSelectionMode,
                     onInfoClick = { showFeatureInfoSheet = true },
-                    infoNextToAction = !isDeepScreen || currentRoute.startsWith("app_detail") == true,
+                    infoNextToAction = !isDeepScreen || currentRoute?.startsWith("app_detail") == true,
                     navigationIcon = {
                         AnimatedContent(
                             targetState = when {
@@ -1412,8 +1412,8 @@ fun MainScreen(
                     currentRoute != Screen.Level.route &&
                             currentRoute != Screen.PausePoint.route &&
                             currentRoute?.startsWith("pause_point_type") == false &&
-                            currentRoute.startsWith("settings_category") == false &&
-                            currentRoute.startsWith("app_detail") == false &&
+                            currentRoute?.startsWith("settings_category") == false &&
+                            currentRoute?.startsWith("app_detail") == false &&
                             !(currentRoute == Screen.Home.route && homeCustomizeState.quickEditOpen)
 
                     androidx.compose.animation.AnimatedVisibility(

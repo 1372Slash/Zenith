@@ -637,7 +637,8 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             websiteAutoTrackingEnabled = settings[PreferencesKeys.WEBSITE_AUTO_TRACKING] ?: false,
             lastBankingAppsCount = settings[PreferencesKeys.LAST_BANKING_APPS_COUNT] ?: -1,
             incentiveLockDisableRequestTimestamp = runtime[RuntimeKeys.INCENTIVE_LOCK_DISABLE_REQUEST_TIMESTAMP] ?: 0L,
-            incentiveLockGoalsMetToday = runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_TODAY] == true && runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_DATE] == SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
+            incentiveLockGoalsMetToday = if (runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_TODAY] != true) false
+                else runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_DATE] == SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
             incentiveBonusUsesUsed = {
                 val date = runtime[RuntimeKeys.INCENTIVE_BONUS_USES_DATE] ?: ""
                 val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
@@ -816,13 +817,13 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         .build()
 
     private val alarmsAdapter: com.squareup.moshi.JsonAdapter<List<AlarmItem>> by lazy {
-        moshi.adapter(Types.newParameterizedType(List::class.java, AlarmItem::class.java))
+        moshi.adapter(com.squareup.moshi.Types.newParameterizedType(List::class.java, AlarmItem::class.java))
     }
     private val stringListAdapter: com.squareup.moshi.JsonAdapter<List<String>> by lazy {
-        moshi.adapter(Types.newParameterizedType(List::class.java, String::class.java))
+        moshi.adapter(com.squareup.moshi.Types.newParameterizedType(List::class.java, String::class.java))
     }
     private val variantListAdapter: com.squareup.moshi.JsonAdapter<List<PausePointVariant>> by lazy {
-        moshi.adapter(Types.newParameterizedType(List::class.java, PausePointVariant::class.java))
+        moshi.adapter(com.squareup.moshi.Types.newParameterizedType(List::class.java, PausePointVariant::class.java))
     }
 
     fun parseAlarms(json: String): List<AlarmItem> {
@@ -1316,7 +1317,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
                     android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND -> {
                         if (activePkg != null) {
                             val duration = time - activeStartTime
-                            if (duration > 0) usageMap[activePkg] = (usageMap[activePkg] ?: 0L) + duration
+                            if (duration > 0) usageMap[activePkg!!] = (usageMap[activePkg!!] ?: 0L) + duration
                         }
                         activePkg = pkg
                         activeStartTime = time
@@ -1469,7 +1470,8 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         val preferences = context.dataStore.data.first()
         if (!(preferences[PreferencesKeys.GRACE_PERIOD_EDIT_LOCK_ENABLED] ?: false)) return true
         val last = preferences[PreferencesKeys.GRACE_PERIOD_LAST_EDIT_TIMESTAMP] ?: 0L
-        return last == 0L || System.currentTimeMillis() - last >= GRACE_PERIOD_EDIT_COOLDOWN_MILLIS
+        if (last == 0L) return true
+        return System.currentTimeMillis() - last >= GRACE_PERIOD_EDIT_COOLDOWN_MILLIS
     }
 
     fun getGracePeriodCooldownRemaining(prefs: UserPreferences): Long {
@@ -2068,7 +2070,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
     }
 
     suspend fun migrateAlarmIdsIfNeeded() {
-        val rawType = Types.newParameterizedType(List::class.java, Map::class.java)
+        val rawType = com.squareup.moshi.Types.newParameterizedType(List::class.java, Map::class.java)
         val rawAdapter: com.squareup.moshi.JsonAdapter<List<Map<String, Any?>>> = moshi.adapter(rawType)
 
         context.dataStore.edit { prefs ->
@@ -2080,7 +2082,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 
             val migrated = raw.map { entry ->
                 if (entry.containsKey("id")) entry
-                else entry.toMutableMap().apply { put("id", AlarmItem.createNew().id) }
+                else entry.toMutableMap().apply { put("id", com.etrisad.zenith.data.model.AlarmItem.createNew().id) }
             }
 
             val needsSave = raw.size != migrated.size || raw.zip(migrated).any { (o, n) -> o !== n }
@@ -2093,8 +2095,20 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 
 }
 const val MAX_REELS_SHIELD_DAILY_LIMIT = 200
+
+/**
+ * Defaults for the Reels Shield: which apps expose short-video feeds, and how
+ * many swipes per day the shared pool allows.
+ */
 object ReelsShieldDefaults {
     const val DAILY_LIMIT = 30
+
+    /**
+     * Priority order matters during setup: Instagram Reels and Facebook Reels
+     * expose the most stable hierarchy, so they lead both the defaults and the
+     * picker. TikTok is tracked the same way; its whole app is a video feed, so
+     * foreground entry alone confirms the surface.
+     */
     val PACKAGES: Set<String> = setOf(
         "com.instagram.android",
         "com.facebook.katana",
@@ -2106,15 +2120,26 @@ object ReelsShieldDefaults {
         "com.ss.android.ugc.trill",
         "com.ss.android.ugc.aweme"
     )
+
+    /** Feed hierarchies that Reels Shield integrates with first. */
     val PRIORITY_PACKAGES: Set<String> = setOf(
         "com.instagram.android",
         "com.facebook.katana",
         "com.facebook.lite"
     )
+
+    /** Apps that are fully supported with tuned detection passes. */
     val FULLY_SUPPORTED_PACKAGES: Set<String> = setOf(
         "com.instagram.android",
         "com.google.android.youtube"
     )
+
+    /**
+     * Supported, but not yet reliable across every app version: TikTok's
+     * comment trays and Facebook Lite's obfuscated hierarchy still miss (or
+     * over-count) swipes on some builds, so the picker and history show a
+     * partial-support badge for them while detection keeps improving.
+     */
     val PARTIAL_PACKAGES: Set<String> = setOf(
         "com.facebook.lite",
         "com.zhiliaoapp.musically",
@@ -2122,20 +2147,55 @@ object ReelsShieldDefaults {
         "com.ss.android.ugc.trill",
         "com.ss.android.ugc.aweme"
     )
+
+    /**
+     * Explicit set of untested packages for reference/defaults.
+     * Note: Any app not in FULLY_SUPPORTED_PACKAGES and not in PARTIAL_PACKAGES
+     * is treated as untested by default via [isUntested].
+     */
     val UNTESTED_PACKAGES: Set<String> = setOf(
         "com.facebook.katana",
         "com.snapchat.android"
     )
+
+    /**
+     * Apps Zenith can recognise a short-video surface in. Instagram Reels and
+     * YouTube Shorts are fully supported; TikTok and Facebook Lite carry a
+     * partial-support badge; other apps carry an untested badge by default.
+     */
     val SUPPORTED_PACKAGES: Set<String> = PACKAGES
+
+    /**
+     * Returns true if the app is fully supported.
+     */
     fun isFullySupported(pkg: String): Boolean = pkg in FULLY_SUPPORTED_PACKAGES
+
+    /**
+     * Returns true if the app has partial support.
+     */
     fun isPartial(pkg: String): Boolean = pkg in PARTIAL_PACKAGES
+
+    /**
+     * Returns true if the app is untested. Default for any app that is neither
+     * fully supported nor partially supported.
+     */
     fun isUntested(pkg: String): Boolean = !isFullySupported(pkg) && !isPartial(pkg)
+
+    /**
+     * Apps that are nothing but a short-video feed, so foreground entry alone
+     * is enough to confirm the surface and kick the user back at the limit.
+     */
     val SHORT_VIDEO_ONLY_PACKAGES: Set<String> = setOf(
         "com.zhiliaoapp.musically",
         "com.zhiliaoapp.musically.go",
         "com.ss.android.ugc.trill",
         "com.ss.android.ugc.aweme"
     )
+
+    /**
+     * Readable name used before (or instead of) PackageManager resolution.
+     * Never call PackageManager from an accessibility event.
+     */
     fun fallbackLabel(pkg: String): String = when (pkg) {
         "com.instagram.android" -> "Instagram"
         "com.google.android.youtube" -> "YouTube"
@@ -2168,7 +2228,7 @@ object HomeQuickActionsDefaults {
     )
 }
 
-
+/** Parses "key:value,key:value" counter maps written by setReelsShieldCounters. */
 private fun parseCountMap(raw: String): Map<String, Int> {
     if (raw.isEmpty()) return emptyMap()
     return raw.split(",").mapNotNull { entry ->
@@ -2181,7 +2241,7 @@ private fun parseCountMap(raw: String): Map<String, Int> {
 private fun encodeCountMap(map: Map<String, Int>): String =
     map.entries.joinToString(",") { "${it.key}:${it.value}" }
 
-
+/** Parses "date|pkg:count;pkg:count,date|pkg:count" per-day app maps. */
 private fun parseHistoryByAppMap(raw: String): Map<String, Map<String, Int>> {
     if (raw.isEmpty()) return emptyMap()
     return raw.split(",").mapNotNull { entry ->

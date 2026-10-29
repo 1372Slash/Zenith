@@ -833,7 +833,7 @@ private fun DayAppRow(
                 val isWebsite = app.packageName.startsWith("zenith-web:")
                 val shape = appIconShape(isWebsite)
                 SubcomposeAsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current).data("app-icon:
+                    model = ImageRequest.Builder(LocalContext.current).data("app-icon://${app.packageName}").crossfade(500).build(),
                     contentDescription = null,
                     modifier = Modifier.size(40.dp).then(
                         if (isWebsite) Modifier.background(

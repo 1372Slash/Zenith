@@ -388,7 +388,7 @@ private fun MultiWebsitesContent(
                             val wsShape = MaterialShapes.Square.toShape()
                             SubcomposeAsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
-                                    .data("app-icon:
+                                    .data("app-icon://${com.etrisad.zenith.data.website.WebsiteRepository.createPackageName(domainOnly)}")
                                     .crossfade(400)
                                     .build(),
                                 contentDescription = null,
@@ -442,7 +442,7 @@ private fun MultiWebsitesContent(
                 key = { _, pkg -> pkg }
             ) { index, pkg ->
                 val domain = WebsiteRepository.extractDomainFromPackageName(pkg)
-                val displayName = WebsiteRepository.getDisplayName(domain, "https:
+                val displayName = WebsiteRepository.getDisplayName(domain, "https://$domain")
 
                 Card(
                     onClick = { onWebsiteToggled?.invoke(domain) },
@@ -471,7 +471,7 @@ private fun MultiWebsitesContent(
                             val wsShape = MaterialShapes.Square.toShape()
                             SubcomposeAsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
-                                    .data("app-icon:
+                                    .data("app-icon://${com.etrisad.zenith.data.website.WebsiteRepository.createPackageName(domain)}")
                                     .crossfade(400)
                                     .build(),
                                 contentDescription = null,

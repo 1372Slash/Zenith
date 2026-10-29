@@ -50,8 +50,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Launch
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.components.UsageHistoryCard
 import com.etrisad.zenith.ui.components.LongTermSection
@@ -509,7 +507,7 @@ fun AppHeader(
         val detailIconShape = appIconShape(isWebsite)
         Box(contentAlignment = Alignment.Center) {
             SubcomposeAsyncImage(
-                model = "app-icon:
+                model = "app-icon://$packageName",
                 contentDescription = null,
                 modifier = Modifier
                     .size(80.dp)
@@ -1135,7 +1133,7 @@ fun SecondaryStatsRow(
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.Launch,
+                        imageVector = Icons.Outlined.Launch,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -1375,8 +1373,8 @@ fun BatteryUsageCard(
     val lastResetText = remember(lastResetTimestamp) {
         if (lastResetTimestamp <= 0L) "Never"
         else {
-            val sdf = SimpleDateFormat("MMM d, HH:mm", Locale.getDefault())
-            sdf.format(Date(lastResetTimestamp))
+            val sdf = java.text.SimpleDateFormat("MMM d, HH:mm", java.util.Locale.getDefault())
+            sdf.format(java.util.Date(lastResetTimestamp))
         }
     }
 
@@ -1496,7 +1494,7 @@ fun DeleteShieldCard(
 @Composable
 fun PerAppLongTermSection(
     packageName: String,
-    viewModel: HomeViewModel
+    viewModel: com.etrisad.zenith.ui.viewmodel.HomeViewModel
 ) {
     val selectedRange by viewModel.perAppStatsRange.collectAsState()
     val offset by viewModel.perAppPeriodOffset.collectAsState()

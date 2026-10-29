@@ -427,6 +427,11 @@ private fun ReelsSectionHeader(title: String) {
         )
     }
 }
+
+/**
+ * Single card shown while the shield is off. Turning it on reveals the rest of
+ * the screen and the switch in the app header.
+ */
 @Composable
 private fun ReelsShieldToggleCard(enabled: Boolean, onToggle: (Boolean) -> Unit) {
     val containerColor by animateColorAsState(
@@ -536,6 +541,12 @@ private fun ReelsShieldToggleCard(enabled: Boolean, onToggle: (Boolean) -> Unit)
         }
     }
 }
+
+/**
+ * Wavy ring copied from BedtimeStatusProgress: no card wrapper, 240 dp box with
+ * 16 dp inset, pulsing icon and the remaining swipes in the middle. The summary
+ * card below is a separate container.
+ */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ReelsShieldHero(
@@ -547,6 +558,8 @@ private fun ReelsShieldHero(
     val safeLimit = limit.coerceAtLeast(1)
     val remaining = (safeLimit - todayCount).coerceAtLeast(0)
     val poolEmpty = todayCount >= safeLimit
+    // Decreasing mode: the ring is full when the pool is untouched and empties
+    // as swipes are used, matching the "swipes left" number in the middle.
     val progress = (remaining.toFloat() / safeLimit).coerceIn(0f, 1f)
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
@@ -636,6 +649,8 @@ private fun ReelsShieldHero(
         )
     }
 }
+
+/** 2x2 grid of detail cards under the ring. */
 @Composable
 private fun ReelsShieldStatsGrid(
     todayCount: Int,
@@ -792,6 +807,8 @@ private fun ReelsHeroStatCard(
         }
     }
 }
+
+/** 1000 -> "1K", 1550 -> "1.55K", 1_000_000 -> "1M". */
 private fun formatCompactCount(value: Long): String {
     if (value < 1_000) return value.toString()
     val units = arrayOf("K", "M", "B", "T")

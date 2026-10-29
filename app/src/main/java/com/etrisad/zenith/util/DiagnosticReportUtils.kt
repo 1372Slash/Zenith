@@ -24,7 +24,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 object DiagnosticReportUtils {
-    const val GITHUB_ISSUES_URL = "https:
+    const val GITHUB_ISSUES_URL = "https://github.com/1372Slash/Zenith/issues/new"
 
     private val PII_KEY_VALUE = Regex(
         "(pkg|appName|packageName|actualPkg|currentApp|newPackage|target|shield)\\s*[:=]\\s*([^\\s,\\)\\]]+)"

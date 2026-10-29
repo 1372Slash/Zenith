@@ -294,7 +294,7 @@ private fun BedtimeHeader(appName: String, appIcon: androidx.compose.ui.graphics
             if (isWebsite) {
                 SubcomposeAsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data("app-icon:
+                        .data("app-icon://$packageName")
                         .crossfade(500)
                         .build(),
                     contentDescription = null,

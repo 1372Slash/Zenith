@@ -307,7 +307,7 @@ private fun ShieldAfterContent(
         ) {
             SubcomposeAsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data("app-icon:
+                    .data("app-icon://$packageName")
                     .crossfade(500)
                     .build(),
                 contentDescription = null,
@@ -401,7 +401,7 @@ private fun GoalAfterContent(
         ) {
             SubcomposeAsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data("app-icon:
+                    .data("app-icon://$packageName")
                     .crossfade(500)
                     .build(),
                 contentDescription = null,

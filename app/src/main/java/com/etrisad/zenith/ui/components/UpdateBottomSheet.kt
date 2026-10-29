@@ -906,9 +906,9 @@ fun UpdateBottomSheetPreview() {
                         ## New Features
                         * ✨ **Material 3 Expressive**: New floating tab bar.
                         * 🚀 **GitHub Update Checker**: Fast updates.
-                        ![Preview Image](https:
+                        ![Preview Image](https://raw.githubusercontent.com/1372Slash/Zenith/master/art/preview.png)
                         
-                        <img src="https:
+                        <img src="https://raw.githubusercontent.com/1372Slash/Zenith/master/art/banner.png" alt="Banner" />
 
                         ## Improvements
                         ### Performance
@@ -918,7 +918,7 @@ fun UpdateBottomSheetPreview() {
                         
                         This version is the result of many weeks of work.
                     """.trimIndent(),
-                    htmlUrl = "https:
+                    htmlUrl = "https://github.com/1372Slash/Zenith",
                     assets = emptyList()
                 ),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,

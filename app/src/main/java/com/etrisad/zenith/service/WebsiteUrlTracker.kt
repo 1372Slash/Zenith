@@ -273,15 +273,15 @@ class WebsiteUrlTracker(
 
         val filtered = WebsiteRepository.filterUrlFromText(text)
         val urlText = if (filtered != null) {
-            if (!filtered.startsWith("http:
+            if (!filtered.startsWith("http://") && !filtered.startsWith("https://")) "https://$filtered" else filtered
         } else {
             val trimmed = text.trim()
             when {
-                trimmed.startsWith("https:
-                trimmed.startsWith("http:
+                trimmed.startsWith("https://", ignoreCase = true) ||
+                trimmed.startsWith("http://", ignoreCase = true) ||
                 trimmed.startsWith("www.", ignoreCase = true) -> trimmed
                 trimmed.contains(".") && !trimmed.contains(" ")
-                        && trimmed.length > trimmed.lastIndexOf('.') + 2 -> "https:
+                        && trimmed.length > trimmed.lastIndexOf('.') + 2 -> "https://$trimmed"
                 else -> return null
             }
         }

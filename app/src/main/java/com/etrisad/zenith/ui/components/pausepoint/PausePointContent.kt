@@ -1295,7 +1295,7 @@ private fun ChooseAppTask(
         if (task.suggestedPackage.isNotEmpty()) {
             SubcomposeAsyncImage(
                 model = ImageRequest.Builder(context)
-                    .data("app-icon:
+                    .data("app-icon://${task.suggestedPackage}")
                     .crossfade(500)
                     .build(),
                 contentDescription = task.suggestedAppName,

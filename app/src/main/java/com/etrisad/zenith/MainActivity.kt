@@ -90,7 +90,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val appearance by userPreferencesRepository.appearanceFlow.collectAsState(
-                initial = UserPreferencesRepository.AppearancePrefs()
+                initial = com.etrisad.zenith.data.preferences.UserPreferencesRepository.AppearancePrefs()
             )
 
             val darkTheme = when (appearance.themeConfig) {

@@ -26,8 +26,8 @@ object WebsiteRepository {
     fun normalizeUrl(input: String): String {
         val trimmed = input.trim()
         if (trimmed.isEmpty()) return ""
-        val hasProtocol = trimmed.startsWith("http:
-        return if (hasProtocol) trimmed else "https:
+        val hasProtocol = trimmed.startsWith("http://") || trimmed.startsWith("https://")
+        return if (hasProtocol) trimmed else "https://$trimmed"
     }
 
     fun extractDomain(url: String): String {
@@ -35,7 +35,7 @@ object WebsiteRepository {
             val uri = URI(url)
             (uri.host ?: url).removePrefix("www.")
         } catch (_: Exception) {
-            url.removePrefix("www.").removePrefix("https:
+            url.removePrefix("www.").removePrefix("https://").removePrefix("http://").split("/").firstOrNull() ?: url
         }
     }
 
@@ -44,8 +44,8 @@ object WebsiteRepository {
     fun extractSiteIdentifier(urlText: String): SiteIdentifier {
         return try {
             var url = urlText
-            if (!url.startsWith("http:
-                url = "https:
+            if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                url = "https://$url"
             }
             val uri = URI(url)
             val domain = (uri.host ?: urlText).lowercase().removePrefix("www.")
@@ -65,7 +65,7 @@ object WebsiteRepository {
 
     fun filterUrlFromText(inputText: String?): String? {
         if (inputText.isNullOrBlank()) return null
-        val urlRegex = """(?:https?:
+        val urlRegex = """(?:https?://|www\.)?[a-zA-Z0-9][a-zA-Z0-9\-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}(?:[/\?#][a-zA-Z0-9\-._~:/?#\[\]@!${'$'}&'()*+,;=%]*)?"""
         val pattern = Pattern.compile(urlRegex, Pattern.CASE_INSENSITIVE)
         val matcher = pattern.matcher(inputText)
         if (matcher.find()) {
@@ -80,7 +80,7 @@ object WebsiteRepository {
     }
 
     fun getFaviconUrl(domain: String): String {
-        return "https:
+        return "https://www.google.com/s2/favicons?domain=$domain&sz=64"
     }
 
     fun validateUrl(input: String): String? {

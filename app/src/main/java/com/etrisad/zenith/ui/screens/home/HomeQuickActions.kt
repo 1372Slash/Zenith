@@ -141,17 +141,34 @@ internal sealed interface QuickActionDragSource {
     data class Row(val index: Int) : QuickActionDragSource
     data class New(val type: QuickActionType) : QuickActionDragSource
 }
+
+/**
+ * Holds an in-flight drag in window pixels so the ghost layer can follow the gesture without
+ * recomposing whatever it flies over, plus the parked slots it is allowed to land on.
+ */
 @Stable
 internal class QuickActionDragState {
     var source by mutableStateOf<QuickActionDragSource?>(null)
     val fingerPx = mutableStateOf(Offset.Zero)
     val layerOriginPx = mutableStateOf(Offset.Zero)
+
+    /** Where inside the tile the gesture started; the ghost keeps that grip point. */
     val grabOffsetPx = mutableStateOf(Offset.Zero)
+
+    /** Exact row bounds, used to spread the four slots like the real layout. */
     var rowRect by mutableStateOf<Rect?>(null)
+
+    /** Row bounds grown a little so gaps between tiles still count as "over the row". */
     var dropRect by mutableStateOf<Rect?>(null)
     var slotLeftPx by mutableStateOf(FloatArray(0))
     var slotWidthPx by mutableStateOf(0f)
     var slotCount by mutableStateOf(0)
+
+    /**
+     * Insertion point under the finger: 0..slotCount. Values are insertion
+     * indexes (between tiles), not slot indexes, so dropping past the last
+     * tile appends and dropping on the first icon can prepend.
+     */
     var hoverIndex by mutableStateOf(-1)
 
     fun begin(source: QuickActionDragSource, nodeOrigin: Offset, localOffset: Offset) {
@@ -186,12 +203,20 @@ internal class QuickActionDragState {
         hoverIndex = insertion
     }
 }
+
+/** Left edges of the parked slots, in window pixels, spread across the row like the real layout. */
 internal fun computeSlotRects(rowRect: Rect, cellWidthPx: Float, slotCount: Int): FloatArray {
     if (slotCount <= 0) return FloatArray(0)
     val gap = if (slotCount > 1) (rowRect.width - cellWidthPx * slotCount) / (slotCount - 1) else 0f
     val stride = cellWidthPx + gap
     return FloatArray(slotCount) { index -> rowRect.left + index * stride }
 }
+
+/**
+ * Applies a drop using an insertion index (0..size). Row moves keep the
+ * standard reorder semantics: removing the source shifts every later insertion
+ * point left by one.
+ */
 internal fun applyQuickActionDrop(
     current: List<String>,
     source: QuickActionDragSource,
@@ -215,6 +240,8 @@ internal fun applyQuickActionDrop(
     }
     return next.distinct().take(HomeQuickActionsDefaults.MAX).ifEmpty { current }
 }
+
+/** Long-press + drag handle for a tile that may be dragged across the screen. */
 private fun Modifier.quickActionDragSource(
     dragState: QuickActionDragState,
     source: QuickActionDragSource,
@@ -241,6 +268,12 @@ private fun Modifier.quickActionDragSource(
             onDragCancel = { if (dragState.source == source) dragState.clear() }
         )
     }
+
+/**
+ * The bottom sheet shown once the quick action row has been scrolled into view. It carries no
+ * scrim, so the highlighted row behind stays visible and reachable; its tiles drag straight onto
+ * the row through the full-screen ghost layer.
+ */
 @Composable
 internal fun QuickActionsEditSheet(
     actions: List<String>,
@@ -256,6 +289,8 @@ internal fun QuickActionsEditSheet(
     val densityScale = 1f / LocalDensity.current.density.pow(0.2f)
     val available = remember(actions) { QuickActionType.ALL.filter { it.id !in actions } }
     val full = actions.size >= HomeQuickActionsDefaults.MAX
+    // Keep the sheet short enough that the parked row above it stays visible
+    // even after several tiles have been removed and more tiles are offered.
     val availableMaxHeight = (LocalConfiguration.current.screenHeightDp * 0.30f)
         .dp.coerceAtLeast(120.dp)
     val containerColor = if (expressiveColors) {
@@ -342,6 +377,9 @@ internal fun QuickActionsEditSheet(
                     .fillMaxWidth()
                     .heightIn(max = availableMaxHeight)
             ) {
+                // Equal-width grid cells keep the picker aligned instead of
+                // letting the last item float on its own. The minimum cell is
+                // the scaled tile plus its 2dp padding on each side.
                 val gridGap = 10.dp
                 val contentWidth = (maxWidth - 40.dp).coerceAtLeast(1.dp)
                 val minCell = 82.dp * densityScale + 4.dp
@@ -403,6 +441,7 @@ internal fun QuickActionsEditSheet(
                                     }
                                 }
                             }
+                            // Keep the final row's cells aligned with the grid.
                             repeat(gridColumns - rowTypes.size) {
                                 Spacer(modifier = Modifier.weight(1f))
                             }
@@ -432,6 +471,12 @@ internal fun QuickActionsEditSheet(
         )
     }
 }
+
+/**
+ * Full-screen layer drawing the dragged tile above both the list and the picker sheet, so the
+ * gesture never looks trapped inside the sheet. Position is applied in a graphics layer, so
+ * following the finger costs no recomposition of what it flies over.
+ */
 @Composable
 internal fun QuickActionDragLayer(
     dragState: QuickActionDragState,
@@ -470,6 +515,8 @@ internal fun QuickActionDragLayer(
                     val origin = dragState.layerOriginPx.value
                     val finger = dragState.fingerPx.value
                     val grab = dragState.grabOffsetPx.value
+                    // Keep the exact grip point under the finger so lifting a
+                    // tile out of the sheet never makes it jump.
                     translationX = finger.x - origin.x - grab.x
                     translationY = finger.y - origin.y - grab.y
                     transformOrigin = TransformOrigin(
@@ -516,6 +563,8 @@ internal fun QuickActionDragLayer(
         }
     }
 }
+
+/** First level menu shown by the Home header action. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun HomeCustomizeMenuSheet(
@@ -610,7 +659,7 @@ private fun HomeCustomizeMenuItem(
     }
 }
 
-
+/** Circular tile shared by the parked row and the picker sheet. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun QuickActionCardContent(
@@ -627,8 +676,8 @@ internal fun QuickActionCardContent(
     var launching by remember { mutableStateOf(false) }
     val scale = animateFloatAsState(
         targetValue = when {
-            
-            
+            // The tile only ever shrinks: press compresses it, and the launch
+            // beat keeps it smaller than rest instead of popping outward.
             launching -> 0.92f
             isPressed -> 0.88f
             else -> 1f
@@ -702,8 +751,8 @@ internal fun QuickActionCardContent(
                             if (!launching) {
                                 launching = true
                                 coroutineScope.launch {
-                                    
-                                    
+                                    // Hold the compressed state for a beat before
+                                    // the destination slides in.
                                     delay(80)
                                     try {
                                         onClick()
@@ -768,6 +817,13 @@ internal fun QuickActionCardContent(
         }
     }
 }
+
+/**
+ * The parked row while editing. It shows exactly the actions that are parked (removing one
+ * removes its slot), gives every tile a thin primary ring offset from its shape plus an X, and
+ * previews the reorder while a row tile is dragged. A new tile dragged out of the sheet shows an
+ * insertion line between slots so the drop position is explicit.
+ */
 @Composable
 internal fun QuickActionsEditRow(
     actions: List<String>,
@@ -840,9 +896,9 @@ internal fun QuickActionsEditRow(
                 )
             }
     ) {
-        
-        
-        
+        // Recompute the slot positions from the current count; each tile then
+        // animates to its new slot in the layer phase, so removing one action
+        // makes the rest glide left instead of snapping.
         val rowGap = if (actions.size > 1) {
             ((maxWidth - cellW * actions.size) / (actions.size - 1)).coerceAtLeast(0.dp)
         } else {
@@ -953,9 +1009,9 @@ internal fun QuickActionsEditRow(
                                             Modifier.clickable {
                                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                 if (removingId == null) {
-                                                    
-                                                    
-                                                    
+                                                    // Let the tile shrink away before
+                                                    // the row re-spaces, matching the
+                                                    // entrance animation.
                                                     removingId = actionId
                                                     coroutineScope.launch {
                                                         entrance.animateTo(

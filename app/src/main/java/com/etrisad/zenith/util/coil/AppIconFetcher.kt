@@ -53,8 +53,8 @@ class AppIconFetcher(
 
     private fun fetchFavicon(domain: String): Drawable? {
         val urls = listOf(
-            "https:
-            "https:
+            "https://www.google.com/s2/favicons?domain=$domain&sz=64",
+            "https://$domain/favicon.ico"
         )
         for (url in urls) {
             try {
@@ -85,8 +85,8 @@ class AppIconFetcher(
 
 class AppIconMapper : Mapper<String, AppIconData> {
     override fun map(data: String, options: Options): AppIconData? {
-        if (!data.startsWith("app-icon:
-        val pkg = data.substringAfter("app-icon:
+        if (!data.startsWith("app-icon://")) return null
+        val pkg = data.substringAfter("app-icon://")
         return if (pkg.isNotEmpty()) AppIconData(pkg) else null
     }
 }

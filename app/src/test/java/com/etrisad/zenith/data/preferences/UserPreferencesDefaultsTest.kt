@@ -16,18 +16,18 @@ class UserPreferencesDefaultsTest {
 
     @Test
     fun reelsShieldDefaultsAppSupportTypes() {
-        
+        // Fully supported apps
         assertTrue(ReelsShieldDefaults.isFullySupported("com.instagram.android"))
         assertTrue(ReelsShieldDefaults.isFullySupported("com.google.android.youtube"))
         assertFalse(ReelsShieldDefaults.isUntested("com.instagram.android"))
         assertFalse(ReelsShieldDefaults.isUntested("com.google.android.youtube"))
 
-        
+        // Partial support apps
         assertTrue(ReelsShieldDefaults.isPartial("com.facebook.lite"))
         assertTrue(ReelsShieldDefaults.isPartial("com.zhiliaoapp.musically"))
         assertFalse(ReelsShieldDefaults.isUntested("com.facebook.lite"))
 
-        
+        // Untested apps by default (apps not in fully or partially supported)
         assertTrue(ReelsShieldDefaults.isUntested("com.facebook.katana"))
         assertTrue(ReelsShieldDefaults.isUntested("com.snapchat.android"))
         assertTrue(ReelsShieldDefaults.isUntested("com.unknown.shortvideoapp"))

@@ -284,7 +284,7 @@ fun CarryOverItem(
                 contentAlignment = Alignment.Center
             ) {
                 SubcomposeAsyncImage(
-                    model = "app-icon:
+                    model = "app-icon://$packageName",
                     contentDescription = null,
                     modifier = Modifier.size(24.dp),
                     error = {

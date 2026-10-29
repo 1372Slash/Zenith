@@ -524,7 +524,7 @@ class ZenithService : AccessibilityService() {
             }
         } else if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
             reelsShield.onContentChanged(event, packageName)
-            if (packageName == lastForegroundApp && WebsiteRepository.isKnownBrowser(packageName)) {
+            if (packageName == lastForegroundApp && com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(packageName)) {
                 var domain = websiteUrlTracker.checkAccessibilityEvent(event)
                 if (domain == null && now - lastContentChangeUrlCheck > 1000) {
                     lastContentChangeUrlCheck = now
@@ -546,7 +546,7 @@ class ZenithService : AccessibilityService() {
         reelsShield.onForegroundChanged(
             packageName,
             event.className?.toString(),
-            event.text.joinToString(" ")
+            event.text?.joinToString(" ")
         )
 
         val lastPkgTime = lastA11yPackageTime[packageName] ?: 0L
@@ -561,7 +561,7 @@ class ZenithService : AccessibilityService() {
         AppStateHolder.foregroundApp.value = packageName
 
         if (!SharedMonitoringState.accessibilityLimitedMode &&
-            WebsiteRepository.isKnownBrowser(packageName)
+            com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(packageName)
         ) {
             WebsiteStateHolder.currentWebsiteDomain.value?.let { domain ->
                 overlayActionHandler.cancelWebsiteSessionDismiss("zenith-web:$domain")
@@ -681,7 +681,7 @@ class ZenithService : AccessibilityService() {
         val oldDomain = WebsiteStateHolder.currentWebsiteDomain.value
         if (oldDomain != null && oldDomain != domain) {
             val currentPkg = lastForegroundApp
-            if (domain == null && currentPkg != null && WebsiteRepository.isKnownBrowser(currentPkg)) {
+            if (domain == null && currentPkg != null && com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(currentPkg)) {
                 return
             }
             overlayActionHandler.scheduleWebsiteSessionDismiss("zenith-web:$oldDomain")
@@ -723,7 +723,7 @@ class ZenithService : AccessibilityService() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        val openSettingsIntent = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+        val openSettingsIntent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
 
@@ -760,7 +760,7 @@ class ZenithService : AccessibilityService() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        val openSettingsIntent = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+        val openSettingsIntent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
 
@@ -798,7 +798,7 @@ class ZenithService : AccessibilityService() {
             OverlayLogBuffer.d("Zenith_HPC", "EARLY RETURN: pkg mismatch (actual=$actualPkg, current=$currentApp)")
             return
         }
-        if (WebsiteRepository.isKnownBrowser(currentApp) &&
+        if (com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(currentApp) &&
             WebsiteStateHolder.currentWebsiteDomain.value == null) {
             delay(150)
         }
@@ -1093,7 +1093,7 @@ class ZenithService : AccessibilityService() {
 
     private fun sendGoalReachedNotification(appName: String, packageName: String) {
         val channelId = "zenith_goal_channel"
-        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         if (manager.getNotificationChannel(channelId) == null) {
             val channel = NotificationChannel(
@@ -1183,8 +1183,8 @@ class ZenithService : AccessibilityService() {
                 }
             }
             if (shield != null) {
-                val todayCal = Calendar.getInstance()
-                val currentDayOfWeek = todayCal.get(Calendar.DAY_OF_WEEK)
+                val todayCal = java.util.Calendar.getInstance()
+                val currentDayOfWeek = todayCal.get(java.util.Calendar.DAY_OF_WEEK)
                 if (currentDayOfWeek !in shield.activeDays) return
             }
             val activeAllowedUntil = allowedApps[actualTargetPackage] ?: 0L
@@ -1248,7 +1248,7 @@ class ZenithService : AccessibilityService() {
                     }
                 }
 
-                OverlayLogBuffer.d("Zenith_HPC", "SHOWING overlay for: $actualTargetPackage (shield=${effectiveShield.type})")
+                OverlayLogBuffer.d("Zenith_HPC", "SHOWING overlay for: $actualTargetPackage (shield=${effectiveShield?.type})")
                 overlayActionHandler.showShieldOverlay(
                     targetPackageName = actualTargetPackage,
                     shield = effectiveShield,

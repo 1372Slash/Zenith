@@ -194,7 +194,7 @@ private fun AchievementFullRow(
     onClick: () -> Unit
 ) {
     val earned = achievement.earnedTier != null
-    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val bringIntoViewRequester = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
     LaunchedEffect(highlighted) {
         if (highlighted) {
             kotlinx.coroutines.delay(500)
