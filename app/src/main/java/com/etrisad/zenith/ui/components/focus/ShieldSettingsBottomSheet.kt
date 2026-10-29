@@ -127,7 +127,7 @@ fun ShieldSettingsBottomSheet(
                         val isWebsite = appInfo.packageName.startsWith("zenith-web:")
                         val settingsIconShape = appIconShape(isWebsite)
                         SubcomposeAsyncImage(
-                            model = "app-icon://${appInfo.packageName}",
+                            model = "app-icon:
                             contentDescription = null,
                             modifier = Modifier
                                 .size(72.dp)

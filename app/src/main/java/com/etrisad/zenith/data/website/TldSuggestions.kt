@@ -22,10 +22,10 @@ object TldSuggestions {
         val trimmed = input.trim().lowercase()
         if (trimmed.isEmpty()) return emptyList()
 
-        val isFullUrl = trimmed.startsWith("http://") || trimmed.startsWith("https://")
+        val isFullUrl = trimmed.startsWith("http:
         val base = if (isFullUrl) {
             try {
-                val withoutProtocol = trimmed.substringAfter("://")
+                val withoutProtocol = trimmed.substringAfter(":
                 withoutProtocol.split("/").firstOrNull()?.removePrefix("www.") ?: trimmed
             } catch (_: Exception) { trimmed }
         } else {
@@ -41,7 +41,7 @@ object TldSuggestions {
 
     private fun normalizeToUrl(input: String): String {
         val trimmed = input.trim()
-        val hasProtocol = trimmed.startsWith("http://") || trimmed.startsWith("https://")
-        return if (hasProtocol) trimmed else "https://$trimmed"
+        val hasProtocol = trimmed.startsWith("http:
+        return if (hasProtocol) trimmed else "https:
     }
 }

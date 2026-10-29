@@ -531,7 +531,7 @@ private fun PiechartDetail(preferences: UserPreferences, metadata: BackupUtils.B
                             contentAlignment = Alignment.Center
                         ) {
                             coil.compose.SubcomposeAsyncImage(
-                                model = "app-icon://$pkg",
+                                model = "app-icon:
                                 contentDescription = null,
                                 modifier = Modifier.fillMaxSize(),
                                 error = {

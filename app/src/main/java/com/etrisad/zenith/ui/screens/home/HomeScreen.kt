@@ -181,7 +181,7 @@ fun HomeScreen(
 @Composable
 fun HomeScreenContent(
     uiState: HomeUiState,
-    preferences: com.etrisad.zenith.data.preferences.UserPreferences,
+    preferences: UserPreferences,
     customizeState: HomeCustomizeState,
     onSetQuickActions: (List<String>) -> Unit,
     onNavigateRoute: (String) -> Unit,
@@ -223,9 +223,6 @@ fun HomeScreenContent(
     val isAccessibilityEnabled = rememberAccessibilityServiceEnabled()
 
     val listState = rememberLazyListState()
-    // Park the row just below the header instead of behind it when the list
-    // snaps to it. scrollToItem's offset is subtracted from the item top, so a
-    // negative value pushes the row down by the header height.
     val editorScrollOffsetPx = with(LocalDensity.current) {
         -(innerPadding.calculateTopPadding() + 16.dp).roundToPx()
     }
@@ -264,8 +261,6 @@ fun HomeScreenContent(
         quickEditPending = true
         homeScope.launch {
             try {
-                // The quick action row is the sixth LazyColumn item and the
-                // items above it are always present, so the index is stable.
                 listState.animateScrollToItem(
                     QUICK_ACTIONS_ITEM_INDEX,
                     scrollOffset = editorScrollOffsetPx
@@ -719,9 +714,6 @@ fun HomeScreenContent(
         }
 
         if (quickActionDrag.source != null) {
-            // The ghost lives in the same window as the row and the sheet, so a
-            // tile dragged out of the sheet keeps following the finger above
-            // both instead of being clipped at the sheet edge.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1317,7 +1309,7 @@ fun TopAppsSection(
                         topApps.take(3).reversed().forEach { app ->
                             AsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
-                                    .data("app-icon://${app.packageName}")
+                                    .data("app-icon:
                                     .crossfade(500)
                                     .build(),
                                 contentDescription = null,
@@ -1386,7 +1378,7 @@ fun TopAppsSection(
                                 leadingContent = {
                                     SubcomposeAsyncImage(
                                         model = ImageRequest.Builder(LocalContext.current)
-                                            .data("app-icon://${app.packageName}")
+                                            .data("app-icon:
                                             .crossfade(500)
                                             .build(),
                                         contentDescription = null,
@@ -1572,7 +1564,7 @@ fun QuickActionsSection(
     pomodoroStatus: PomodoroStatus,
     onActionClick: (QuickActionType) -> Unit
 ) {
-    val density = androidx.compose.ui.platform.LocalDensity.current
+    val density = LocalDensity.current
     val densityScale = 1f / density.density.pow(0.2f)
     val types = remember(actions) { actions.mapNotNull(QuickActionType::fromId) }
 
@@ -1738,7 +1730,7 @@ fun ShieldItem(
                     ) {
                         SubcomposeAsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
-                                .data("app-icon://${shield.packageName}")
+                                .data("app-icon:
                                 .crossfade(500)
                                 .build(),
                             contentDescription = null,
@@ -2019,7 +2011,7 @@ fun HomeScreenExpressivePreview() {
                     ShieldEntity("com.duolingo", "Duolingo", FocusType.GOAL, 30, remainingTimeMillis = 10 * 60 * 1000L)
                 )
             ),
-            preferences = com.etrisad.zenith.data.preferences.UserPreferences(expressiveColors = true),
+            preferences = UserPreferences(expressiveColors = true),
             customizeState = remember { HomeCustomizeState() },
             onSetQuickActions = {},
             onNavigateRoute = {},

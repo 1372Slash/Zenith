@@ -26,8 +26,6 @@ class MidnightResetWorker(context: Context, params: WorkerParameters) : Coroutin
                 System.currentTimeMillis(), prefs.dayStartHour, prefs.dayStartMinute
             )
             val todayKey = com.etrisad.zenith.util.DateTimeUtils.getDateFormat().format(java.util.Date(dayStart))
-            // If the live controller already rolled the day and wrote a fresh
-            // count, do not clobber it from this stale worker snapshot.
             if (prefs.reelsShieldTodayDate != todayKey) {
                 val history = HashMap(prefs.reelsShieldHistory)
                 if (prefs.reelsShieldTodayDate.isNotEmpty()) {

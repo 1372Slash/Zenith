@@ -20,12 +20,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
-
-/**
- * Launcher icon rendered exactly like the Usage Stats app list: a circular
- * Coil image with the platform Android glyph as the error fallback. Keeping one
- * implementation means Reels Shield no longer grows its own icon style.
- */
 @Composable
 fun AppIconImage(
     packageName: String,
@@ -36,7 +30,7 @@ fun AppIconImage(
     val context = LocalContext.current
     val request = remember(packageName) {
         ImageRequest.Builder(context)
-            .data("app-icon://$packageName")
+            .data("app-icon:
             .crossfade(300)
             .build()
     }

@@ -159,7 +159,7 @@ fun FeaturedCarousel(
                 description = "View development and sneak peaks",
                 icon = Icons.Outlined.Chat,
                 onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://whatsapp.com/channel/0029VbAKkhlAojYyegxvV83V"))
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https:
                     context.startActivity(intent)
                 }
             )
@@ -188,7 +188,7 @@ fun FeaturedCarousel(
                 icon = Icons.Outlined.Favorite,
                 isTertiary = true,
                 onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://ko-fi.com/1372slash"))
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https:
                     context.startActivity(intent)
                 }
             )
@@ -200,7 +200,7 @@ fun FeaturedCarousel(
                 icon = Icons.Outlined.Star,
                 isTertiary = true,
                 onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/1372Slash/Zenith"))
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https:
                     context.startActivity(intent)
                 }
             )

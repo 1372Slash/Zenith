@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -43,7 +44,13 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.AccessibilityNew
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.HourglassEmpty
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SwapVert
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularWavyProgressIndicator
@@ -51,10 +58,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -83,13 +88,6 @@ import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.text.NumberFormat
 import java.util.Locale
-
-/**
- * Home for the Reels Shield. The layout follows BedtimeScreen one-to-one: the
- * wavy ring sits directly on the page without a card, the summary card has its
- * own container underneath, and turning the main switch on or off animates the
- * toggle card and every list item.
- */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ReelsShieldScreen(
@@ -161,7 +159,7 @@ fun ReelsShieldScreen(
                 showAppsSheet = false
             },
             title = "Short Video Apps",
-            subtitle = "Instagram Reels and Facebook Reels are the primary targets. TikTok is available with partial support. Only apps Zenith can detect short videos in are listed.",
+            subtitle = "Instagram and YouTube are fully detected. Facebook Lite and TikTok are partial support; other apps are untested by default. Only apps Zenith can detect short videos in are listed.",
             allowedPackages = ReelsShieldDefaults.SUPPORTED_PACKAGES,
             priorityPackages = ReelsShieldDefaults.PRIORITY_PACKAGES
         )
@@ -257,7 +255,7 @@ fun ReelsShieldScreen(
                             if (!accessibilityEnabled) {
                                 SettingsActionItem(
                                     title = "Accessibility Service Off",
-                                    summary = "Turn on Zenith's accessibility service so short-video swipes can be detected",
+                                    summary = "Turn on Zenith's accessibility service so short-video reels can be detected",
                                     onClick = {
                                         context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                                     },
@@ -275,7 +273,7 @@ fun ReelsShieldScreen(
                                     )
                                 ) {
                                     Text(
-                                        text = "Zenith's limited accessibility mode hides scroll events, so swipes cannot be counted. Turn it off in Privacy for this feature to work.",
+                                        text = "Zenith's limited accessibility mode hides scroll events, so reels cannot be counted. Turn it off in Privacy for this feature to work.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onErrorContainer,
                                         modifier = Modifier.padding(16.dp)
@@ -325,7 +323,7 @@ fun ReelsShieldScreen(
                 Column(modifier = Modifier.animateItem()) {
                     SettingsActionItem(
                         title = "Tracked Apps",
-                        summary = "${preferences.reelsShieldPackages.size} supported apps · Instagram and Facebook first",
+                        summary = "${preferences.reelsShieldPackages.size} supported apps · Reels, Shorts, Spotlight & TikTok",
                         onClick = { showAppsSheet = true },
                         icon = Icons.Outlined.Apps,
                         shape = RoundedCornerShape(24.dp)
@@ -339,10 +337,6 @@ fun ReelsShieldScreen(
                     ReelsSectionHeader(title = "Insights")
                 }
             }
-
-            // Chart + header + rows are one group, exactly like Usage Stats'
-            // hourly group: the chart is index 0, so pressing a bar tightens
-            // its bottom corners and the detail tucks right underneath it.
             val detail = selectedHistoryDetail
             val historyGroupTotal = if (detail == null) {
                 1
@@ -357,8 +351,7 @@ fun ReelsShieldScreen(
                         limit = preferences.reelsShieldDailyLimit,
                         selectedDateMillis = selectedHistoryDate,
                         onDaySelected = { selectedHistoryDate = it },
-                        shape = reelsGroupShape(0, historyGroupTotal),
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                        shape = reelsGroupShape(0, historyGroupTotal)
                     )
                 }
             }
@@ -418,11 +411,6 @@ fun ReelsShieldScreen(
         }
     }
 }
-
-/**
- * Bedtime's "Usage" section header: left-aligned, titleMedium bold, with the
- * same 8 dp horizontal and vertical padding.
- */
 @Composable
 private fun ReelsSectionHeader(title: String) {
     Column(
@@ -439,11 +427,6 @@ private fun ReelsSectionHeader(title: String) {
         )
     }
 }
-
-/**
- * Single card shown while the shield is off. Turning it on reveals the rest of
- * the screen and the switch in the app header.
- */
 @Composable
 private fun ReelsShieldToggleCard(enabled: Boolean, onToggle: (Boolean) -> Unit) {
     val containerColor by animateColorAsState(
@@ -490,7 +473,7 @@ private fun ReelsShieldToggleCard(enabled: Boolean, onToggle: (Boolean) -> Unit)
                 )
                 Text(
                     text = if (enabled) {
-                        "Counting short-video swipes"
+                        "Counting short-video reels"
                     } else {
                         "Currently disabled · turn on to count Reels and Shorts"
                     },
@@ -553,12 +536,6 @@ private fun ReelsShieldToggleCard(enabled: Boolean, onToggle: (Boolean) -> Unit)
         }
     }
 }
-
-/**
- * Wavy ring copied from BedtimeStatusProgress: no card wrapper, 240 dp box with
- * 16 dp inset, pulsing icon and the remaining swipes in the middle. The summary
- * card below is a separate container.
- */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ReelsShieldHero(
@@ -570,8 +547,6 @@ private fun ReelsShieldHero(
     val safeLimit = limit.coerceAtLeast(1)
     val remaining = (safeLimit - todayCount).coerceAtLeast(0)
     val poolEmpty = todayCount >= safeLimit
-    // Decreasing mode: the ring is full when the pool is untouched and empties
-    // as swipes are used, matching the "swipes left" number in the middle.
     val progress = (remaining.toFloat() / safeLimit).coerceIn(0f, 1f)
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
@@ -645,15 +620,15 @@ private fun ReelsShieldHero(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = if (poolEmpty) "pool empty" else "swipes left",
+                    text = if (poolEmpty) "pool empty" else "reels left",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-        ReelsShieldStatsCard(
+        Spacer(modifier = Modifier.height(12.dp))
+        ReelsShieldStatsGrid(
             todayCount = todayCount,
             limit = safeLimit,
             todayByAppCount = todayByAppCount,
@@ -661,45 +636,62 @@ private fun ReelsShieldHero(
         )
     }
 }
-
-/** Separate primary-tinted container under the ring. */
 @Composable
-private fun ReelsShieldStatsCard(
+private fun ReelsShieldStatsGrid(
     todayCount: Int,
     limit: Int,
     todayByAppCount: Int,
     totalCount: Long
 ) {
-    Card(
+    val remaining = (limit - todayCount).coerceAtLeast(0)
+    val poolEmpty = todayCount >= limit
+
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
-        )
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp, horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            ReelsHeroStat(
+            ReelsHeroStatCard(
                 label = "Used today",
                 value = "$todayCount / $limit",
+                subtitle = "Reels watched",
+                icon = Icons.Outlined.SwapVert,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 8.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
                 modifier = Modifier.weight(1f)
             )
-            ReelsHeroDivider()
-            ReelsHeroStat(
+            ReelsHeroStatCard(
                 label = "Apps today",
                 value = "$todayByAppCount",
+                subtitle = if (todayByAppCount == 1) "Active app" else "Active apps",
+                icon = Icons.Outlined.Apps,
+                shape = RoundedCornerShape(topEnd = 24.dp, topStart = 8.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
                 modifier = Modifier.weight(1f)
             )
-            ReelsHeroDivider()
-            ReelsHeroStat(
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            ReelsHeroStatCard(
+                label = "Reels left",
+                value = "$remaining",
+                subtitle = if (poolEmpty) "Pool exhausted" else "Remaining pool",
+                icon = if (poolEmpty) Icons.Outlined.HourglassEmpty else Icons.Outlined.Shield,
+                shape = RoundedCornerShape(bottomStart = 24.dp, topStart = 8.dp, topEnd = 8.dp, bottomEnd = 8.dp),
+                modifier = Modifier.weight(1f),
+                iconTint = if (poolEmpty) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+            )
+            ReelsHeroStatCard(
                 label = "Lifetime",
                 value = formatCompactCount(totalCount),
-                tooltipText = NumberFormat.getIntegerInstance().format(totalCount),
-                modifier = Modifier.weight(1f)
+                subtitle = "Total reels",
+                icon = Icons.Outlined.History,
+                shape = RoundedCornerShape(bottomEnd = 24.dp, topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp),
+                modifier = Modifier.weight(1f),
+                tooltipText = NumberFormat.getIntegerInstance().format(totalCount)
             )
         }
     }
@@ -707,45 +699,82 @@ private fun ReelsShieldStatsCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ReelsHeroStat(
+private fun ReelsHeroStatCard(
     label: String,
     value: String,
+    subtitle: String,
+    icon: ImageVector,
+    shape: Shape,
     modifier: Modifier = Modifier,
-    tooltipText: String? = null
+    tooltipText: String? = null,
+    iconTint: Color = MaterialTheme.colorScheme.primary
 ) {
     val scope = rememberCoroutineScope()
     val tooltipState = rememberTooltipState(isPersistent = true)
 
-    val content: @Composable () -> Unit = {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(
-                    if (tooltipText != null) {
-                        Modifier.clickable {
-                            scope.launch {
-                                if (tooltipState.isVisible) tooltipState.dismiss() else tooltipState.show()
-                            }
-                        }
-                    } else {
-                        Modifier
-                    }
-                ),
-            horizontalAlignment = Alignment.CenterHorizontally
+    val cardContent: @Composable () -> Unit = {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = shape,
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            )
         ) {
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (tooltipText != null) {
+                            Modifier.clickable {
+                                scope.launch {
+                                    if (tooltipState.isVisible) tooltipState.dismiss() else tooltipState.show()
+                                }
+                            }
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .padding(16.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(iconTint.copy(alpha = 0.12f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = iconTint
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = iconTint,
+                        maxLines = 1
+                    )
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    softWrap = false
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
         }
     }
 
@@ -755,16 +784,14 @@ private fun ReelsHeroStat(
             state = tooltipState,
             modifier = modifier
         ) {
-            content()
+            cardContent()
         }
     } else {
-        Box(modifier = modifier, contentAlignment = Alignment.Center) {
-            content()
+        Box(modifier = modifier) {
+            cardContent()
         }
     }
 }
-
-/** 1000 -> "1K", 1550 -> "1.55K", 1_000_000 -> "1M". */
 private fun formatCompactCount(value: Long): String {
     if (value < 1_000) return value.toString()
     val units = arrayOf("K", "M", "B", "T")
@@ -781,13 +808,4 @@ private fun formatCompactCount(value: Long): String {
         text = "1"
     }
     return "$text${units[unitIndex]}"
-}
-
-@Composable
-private fun ReelsHeroDivider() {
-    VerticalDivider(
-        modifier = Modifier.height(40.dp),
-        thickness = 2.dp,
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
-    )
 }

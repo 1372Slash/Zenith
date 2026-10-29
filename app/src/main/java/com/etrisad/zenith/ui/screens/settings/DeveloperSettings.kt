@@ -1086,7 +1086,7 @@ private fun TtsTestBottomSheet(
                 Button(
                     onClick = {
                         if (textInput.isNotBlank()) {
-                            tts?.setLanguage(selectedLocale)
+                            tts?.language = selectedLocale
                             tts?.speak(textInput, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "tts_utterance")
                         }
                     },
@@ -1176,7 +1176,7 @@ private fun TtsTestBottomSheet(
                             onOptionSelected = { tag ->
                                 val locale = java.util.Locale.forLanguageTag(tag)
                                 selectedLocale = locale
-                                tts?.setLanguage(locale)
+                                tts?.language = locale
                                 ttsStatus = "Ready (${locale.displayName})"
                             },
                             width = 200.dp

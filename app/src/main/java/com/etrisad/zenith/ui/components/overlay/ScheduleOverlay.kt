@@ -390,7 +390,7 @@ fun PortraitScheduleLayout(
                 if (isWebsite) {
                     SubcomposeAsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data("app-icon://$packageName")
+                            .data("app-icon:
                             .crossfade(500)
                             .build(),
                         contentDescription = null,
@@ -630,7 +630,7 @@ fun LandscapeScheduleLayout(
                     if (isWebsite) {
                         SubcomposeAsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
-                                .data("app-icon://$packageName")
+                                .data("app-icon:
                                 .crossfade(500)
                                 .build(),
                             contentDescription = null,

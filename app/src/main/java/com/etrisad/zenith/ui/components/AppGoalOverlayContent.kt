@@ -404,7 +404,7 @@ private fun AppGoalMultiIconBox(
                 Box(contentAlignment = Alignment.Center) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data("app-icon://${appInfos[0].packageName}")
+                            .data("app-icon:
                             .crossfade(500)
                             .build(),
                         contentDescription = null,
@@ -417,7 +417,7 @@ private fun AppGoalMultiIconBox(
                     AsyncImage(
                         model = appInfos.getOrNull(1)?.let { 
                             ImageRequest.Builder(LocalContext.current)
-                                .data("app-icon://${it.packageName}")
+                                .data("app-icon:
                                 .crossfade(500)
                                 .build()
                         },
@@ -432,7 +432,7 @@ private fun AppGoalMultiIconBox(
             } else if (appInfos.isNotEmpty()) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data("app-icon://${appInfos[0].packageName}")
+                        .data("app-icon:
                         .crossfade(500)
                         .build(),
                     contentDescription = null,

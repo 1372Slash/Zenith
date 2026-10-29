@@ -400,7 +400,7 @@ class FocusViewModel(
                     val deferreds = suggestions.map { domain ->
                         async {
                             val ok = try {
-                                val request = okhttp3.Request.Builder().url("https://$domain").build()
+                                val request = okhttp3.Request.Builder().url("https:
                                 client.newCall(request).execute().use { it.isSuccessful }
                             } catch (_: Exception) {
                                 false

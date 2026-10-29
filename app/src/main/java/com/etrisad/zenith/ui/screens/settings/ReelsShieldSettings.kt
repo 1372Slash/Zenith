@@ -80,13 +80,6 @@ private val MAX_REELS_LIMIT = MAX_REELS_SHIELD_DAILY_LIMIT
 private const val HISTORY_DAYS_SHOWN = 14
 
 private val reelsAppLabelCache = ConcurrentHashMap<String, String>()
-
-/**
- * Shared daily pool. This reuses the Hours/Minutes surface from
- * ShieldSettingsBottomSheet verbatim and places it directly on the page: no
- * extra card wraps the input. The input owns the 28 dp top corners and the
- * preset row closes the group with 28 dp bottom corners.
- */
 @Composable
 fun ReelsShieldPoolCard(
     limit: Int,
@@ -120,7 +113,7 @@ fun ReelsShieldPoolCard(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Swipes per day",
+                    text = "Reels per day",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -206,13 +199,6 @@ fun ReelsShieldPoolCard(
         )
     }
 }
-
-/**
- * Today-by-app and per-app limits as a Bedtime/Usage Stats style group. The
- * header owns the top corners, each app row is its own card with tight inner
- * corners, and the last row closes the group. Tapping a row opens the compact
- * limit sheet instead of putting inline text fields on the screen.
- */
 @Composable
 fun ReelsShieldAppsCard(
     trackedPackages: Set<String>,
@@ -324,28 +310,12 @@ fun ReelsShieldAppsCard(
                         )
                     },
                     supportingContent = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = if (used == 1) "1 swipe today" else "$used swipes today",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (used >= cap) MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            if (pkg in ReelsShieldDefaults.PARTIAL_PACKAGES) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
-                                ) {
-                                    Text(
-                                        text = "Partial support",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
-                                    )
-                                }
-                            }
-                        }
+                        Text(
+                            text = if (used == 1) "1 reel today" else "$used reels today",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (used >= cap) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     },
                     leadingContent = {
                         AppIconImage(
@@ -356,19 +326,48 @@ fun ReelsShieldAppsCard(
                     },
                     trailingContent = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                shape = CircleShape,
-                                color = if (capped) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surfaceContainerHighest
-                            ) {
-                                Text(
-                                    text = if (capped) "$cap / day" else "Pool only",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (capped) MaterialTheme.colorScheme.onPrimaryContainer
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
-                                )
+                            Column(horizontalAlignment = Alignment.End) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (capped) MaterialTheme.colorScheme.primaryContainer
+                                    else MaterialTheme.colorScheme.surfaceContainerHighest
+                                ) {
+                                    Text(
+                                        text = if (capped) "$cap / day" else "Pool only",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (capped) MaterialTheme.colorScheme.onPrimaryContainer
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                                    )
+                                }
+                                if (ReelsShieldDefaults.isUntested(pkg)) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f)
+                                    ) {
+                                        Text(
+                                            text = "Untested",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                        )
+                                    }
+                                } else if (ReelsShieldDefaults.isPartial(pkg)) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+                                    ) {
+                                        Text(
+                                            text = "Partial",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                        )
+                                    }
+                                }
                             }
                             Spacer(modifier = Modifier.width(2.dp))
                             Icon(
@@ -384,13 +383,6 @@ fun ReelsShieldAppsCard(
         }
     }
 }
-
-/**
- * BedtimeScreen's GroupedCard shape, kept local so the Reels Shield list has
- * the same 24 dp outer / 8 dp inner corners without importing another screen.
- * The history chart card uses it too, so chart + detail read as one group
- * exactly like Usage Stats' hourly chart group.
- */
 internal fun reelsGroupShape(index: Int, total: Int): Shape = when {
     total <= 1 -> RoundedCornerShape(24.dp)
     index == 0 -> RoundedCornerShape(
@@ -429,8 +421,6 @@ private fun ReelsGroupedCard(
         content = { content() }
     )
 }
-
-/** Compact editor styled after the Shield settings bottom sheet. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReelsShieldAppLimitSheet(
@@ -490,7 +480,7 @@ fun ReelsShieldAppLimitSheet(
                     color = MaterialTheme.colorScheme.primary
                 )
                 Text(
-                    text = if (usedToday == 1) "1 swipe today" else "$usedToday swipes today",
+                    text = if (usedToday == 1) "1 reel today" else "$usedToday reels today",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Medium
@@ -514,7 +504,7 @@ fun ReelsShieldAppLimitSheet(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Swipes per day",
+                        text = "Reels per day",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
@@ -613,12 +603,6 @@ fun ReelsShieldAppLimitSheet(
         }
     }
 }
-
-/**
- * Daily swipe counts for the last [HISTORY_DAYS_SHOWN] days, oldest first.
- * Counts are mapped to one minute per swipe so the shared usage graph, which
- * works in millis, can render them without a second chart implementation.
- */
 internal fun buildReelsHistory(preferences: UserPreferences): List<DailyUsage> {
     val dateKeyFormat = DateTimeUtils.getDateFormat()
     val todayStart = DateTimeUtils.getDayStartTime(
@@ -662,8 +646,6 @@ data class ReelsHistoryDayDetail(
     val dayCount: Int,
     val apps: List<ReelsHistoryAppCount>
 )
-
-/** Per-app split for a tapped history bar, including legacy days without data. */
 internal fun buildReelsHistoryDayDetail(
     preferences: UserPreferences,
     entries: List<DailyUsage>,
@@ -706,12 +688,10 @@ fun ReelsShieldHistoryCard(
     UsageHistoryCard(
         history = history,
         targetMillis = limit.coerceAtLeast(1).toLong() * 60_000L,
-        // A non-null sentinel keeps the chart's internal selection disabled so
-        // the tapped bar and the detail items stay in sync.
         selectedDateMillis = selectedDateMillis ?: Long.MIN_VALUE,
         formatDuration = { millis ->
             val count = millis / 60_000L
-            if (count == 1L) "1 swipe" else "$count swipes"
+            if (count == 1L) "1 reel" else "$count reels"
         },
         onDaySelected = { usage -> onDaySelected(usage?.date) },
         axisLabelFormatter = { millis -> (millis / 60_000L).toString() },
@@ -722,13 +702,6 @@ fun ReelsShieldHistoryCard(
         modifier = modifier
     )
 }
-
-/**
- * Same header/row construction as UsageStats' "Apps used at hour" detail:
- * primary-tinted grouped cards, History icon, and the app rows underneath.
- * [index] starts at 1 because the history chart card is index 0 of the same
- * group, exactly like the hourly chart above the detail in Usage Stats.
- */
 @Composable
 fun ReelsShieldHistoryDetailHeader(
     detail: ReelsHistoryDayDetail,
@@ -769,7 +742,7 @@ fun ReelsShieldHistoryDetailHeader(
                 modifier = Modifier.weight(1f)
             )
             Text(
-                text = if (detail.dayCount == 1) "1 swipe" else "${detail.dayCount} swipes",
+                text = if (detail.dayCount == 1) "1 reel" else "${detail.dayCount} reels",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -794,7 +767,7 @@ fun ReelsShieldHistoryEmptyDetail(
             text = if (detail.dayCount > 0) {
                 "Per-app detail wasn't recorded for this day."
             } else {
-                "No swipes on this day."
+                "No reels on this day."
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -822,17 +795,38 @@ fun ReelsShieldHistoryAppRow(
     ) {
         ListItem(
             headlineContent = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
+            trailingContent = {
+                Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = label,
-                        style = MaterialTheme.typography.titleMedium,
+                        text = if (count == 1) "1 reel" else "$count reels",
+                        style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.weight(1f, fill = false),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        color = accentColor
                     )
-                    if (packageName in ReelsShieldDefaults.PARTIAL_PACKAGES) {
-                        Spacer(modifier = Modifier.width(8.dp))
+                    if (ReelsShieldDefaults.isUntested(packageName)) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            shape = CircleShape
+                        ) {
+                            Text(
+                                text = "Untested",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    } else if (ReelsShieldDefaults.isPartial(packageName)) {
+                        Spacer(modifier = Modifier.height(2.dp))
                         Surface(
                             color = accentColor.copy(alpha = 0.1f),
                             contentColor = accentColor,
@@ -848,14 +842,6 @@ fun ReelsShieldHistoryAppRow(
                     }
                 }
             },
-            trailingContent = {
-                Text(
-                    text = if (count == 1) "1 swipe" else "$count swipes",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = accentColor
-                )
-            },
             leadingContent = {
                 AppIconImage(
                     packageName = packageName,
@@ -867,11 +853,6 @@ fun ReelsShieldHistoryAppRow(
         )
     }
 }
-
-/**
- * Resolves app labels off the main thread once per package and caches them;
- * the settings screen never calls PackageManager from composition.
- */
 @Composable
 internal fun rememberAppLabels(packages: Set<String>): Map<String, String> {
     val context = LocalContext.current

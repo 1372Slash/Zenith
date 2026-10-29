@@ -83,7 +83,7 @@ class AppGoalOverlayActivity : ComponentActivity() {
                             val shieldRepo = (application as ZenithApplication).shieldRepository
                             lifecycleScope.launch(Dispatchers.IO) {
                                 val shield = shieldRepo.getShieldByPackageName(pkg)
-                                val url = shield?.url ?: "https://${WebsiteRepository.extractDomainFromPackageName(pkg)}"
+                                val url = shield?.url ?: "https:
                                 val intent = WebsiteRepository.createLaunchIntent(url)
                                 withContext(Dispatchers.Main) {
                                     startActivity(intent)

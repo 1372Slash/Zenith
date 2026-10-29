@@ -110,7 +110,7 @@ fun AppGoalSelectionBottomSheet(
                         ) {
                             AsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
-                                    .data("app-icon://${app.packageName}")
+                                    .data("app-icon:
                                     .crossfade(500)
                                     .build(),
                                 contentDescription = null,

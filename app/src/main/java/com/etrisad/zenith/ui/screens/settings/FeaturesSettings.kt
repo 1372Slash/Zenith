@@ -385,9 +385,9 @@ fun FeaturesSettings(
         SettingsActionItem(
             title = "Reels Shield",
             summary = if (preferences.reelsShieldEnabled) {
-                "On · ${preferences.reelsShieldDailyLimit} swipes per day shared across ${preferences.reelsShieldPackages.size} apps"
+                "On · ${preferences.reelsShieldDailyLimit} reels per day shared across ${preferences.reelsShieldPackages.size} apps"
             } else {
-                "Count swipes through Reels, Shorts, TikTok and Spotlight, then press back when the daily pool is empty"
+                "Count reels watched through Reels, Shorts, TikTok and Spotlight, then press back when the daily pool is empty"
             },
             onClick = onNavigateToReelsShield,
             icon = Icons.Outlined.SwapVert,
@@ -438,7 +438,7 @@ fun FeaturesSettings(
             description = "Eject you from an app 5 minutes before its time limit expires, as an advance warning",
             checked = preferences.earlyKickEnabled,
             onCheckedChange = onEarlyKickEnabledChange,
-            icon = Icons.Outlined.ExitToApp,
+            icon = Icons.AutoMirrored.Outlined.ExitToApp,
             shape = RoundedCornerShape(8.dp)
         )
 
@@ -507,7 +507,7 @@ fun ForegroundNotificationStatusSelector(
                     Text(
                         text = "Status Notification",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = "Choose what Zenith shows while monitoring is active",
@@ -568,7 +568,7 @@ fun HUDAppearanceSettings(
             Text(
                 text = "HUD Appearance",
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
             
@@ -674,7 +674,7 @@ fun HUDAppearanceSettings(
                     Text(
                         text = "15m",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
+                        fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }

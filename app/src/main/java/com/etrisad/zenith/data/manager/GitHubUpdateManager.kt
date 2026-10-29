@@ -17,7 +17,7 @@ class GitHubUpdateManager(private val context: Context) {
         .build()
 
     private val retrofit = Retrofit.Builder()
-        .baseUrl("https://api.github.com/")
+        .baseUrl("https:
         .client(OkHttpClient.Builder().build())
         .addConverterFactory(MoshiConverterFactory.create(moshi))
         .build()

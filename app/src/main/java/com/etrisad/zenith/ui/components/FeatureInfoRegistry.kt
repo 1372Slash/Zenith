@@ -216,23 +216,25 @@ object FeatureInfoRegistry {
 
     private val reelsShield = FeatureInfo(
         title = "Reels Shield",
-        summary = "One shared daily swipe pool for short-video feeds, optional per-app caps, and a gentle back-press when either limit runs out. Instagram and Facebook lead the integration; TikTok is partial.",
+        summary = "One shared daily reels pool for short-video feeds, optional per-app caps, and a gentle back-press when either limit runs out. Instagram and YouTube are fully supported, TikTok and Facebook Lite are partial support, and other apps carry an untested badge by default.",
         sections = listOf(
             FeatureInfoSections.whatItDoes(
-                "Counts swipes to the next short video in Instagram Reels and Facebook Reels first, plus YouTube Shorts and Snapchat Spotlight. TikTok is supported partially because its feed hierarchy changes between versions.",
-                "Shares a single daily pool across every tracked app while keeping a per-app breakdown of today's swipes.",
+                "Counts reels watched in Instagram Reels, Facebook Reels, YouTube Shorts, Snapchat Spotlight and TikTok - every tracked short-video feed counts against the same pool.",
+                "TikTok and Facebook Lite are marked partial support for now: some of their screens (comment trays, post details) can still miss or over-count a swipe.",
+                "Any other app carries an untested badge by default - they are tracked like everything else, but their detection passes are not explicitly tuned.",
+                "Shares a single daily pool across every tracked app while keeping a per-app breakdown of today's reels.",
                 "Optionally caps one app below the shared pool; the stricter of the two limits is the one enforced.",
                 "Presses back at entry and on continuation once the pool or an app cap is empty, instead of letting another short video load."
             ),
             FeatureInfoSections.whatYoullSee(
-                "A circular wavy hero ring with swipes left, a translucent stats card for used today, apps today and lifetime, and the live shield status.",
+                "A circular wavy hero ring with reels left, translucent detail stat cards for used today, apps today and lifetime, and the live shield status.",
                 "Text-field limits instead of sliders: one for the shared pool and a compact bottom sheet per app, merged with today-by-app usage in a Usage Stats style list.",
-                "The tracked-app picker, a 14-day history chart, and a per-app partial-support badge for TikTok."
+                "The tracked-app picker and a 14-day history chart with a per-app breakdown of each day's reels."
             ),
             FeatureInfoSections.tips(
                 "Zenith's accessibility service must be on, and limited accessibility mode hides the scroll events this feature needs.",
                 "Labels such as Reels or Shorts only support detection, they never activate tracking on a home feed by themselves; comments and descriptions are never counted.",
-                "Lower the pool on busy days; it tightens every per-app cap with it. The overlay pill shows the shared pool and the current visit's swipes, which continue for ten minutes after you leave the app."
+                "Lower the pool on busy days; it tightens every per-app cap with it. The overlay pill shows the shared pool and the current visit's reels, which continue for ten minutes after you leave the app."
             )
         )
     )

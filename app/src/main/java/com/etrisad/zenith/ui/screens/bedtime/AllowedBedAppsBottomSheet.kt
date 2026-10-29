@@ -298,7 +298,7 @@ fun AllowedAppItem(
             },
             leadingContent = {
                 coil.compose.AsyncImage(
-                    model = "app-icon://${app.packageName}",
+                    model = "app-icon:
                     contentDescription = null,
                     modifier = Modifier
                         .size(40.dp)

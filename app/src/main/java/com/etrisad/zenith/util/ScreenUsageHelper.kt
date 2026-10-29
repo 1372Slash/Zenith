@@ -422,7 +422,7 @@ object ScreenUsageHelper {
             val segmentStart = maxOf(activeStartTime, startTime)
             val segmentEnd = currentTime
             if (segmentStart < segmentEnd) {
-                usageMap[activePkg!!] = (usageMap[activePkg!!] ?: 0L) + (segmentEnd - segmentStart)
+                usageMap[activePkg] = (usageMap[activePkg] ?: 0L) + (segmentEnd - segmentStart)
             }
         }
 

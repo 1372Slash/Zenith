@@ -7,7 +7,7 @@ class ScheduleWindowTest {
 
     @Test
     fun normalWindowIsNotPastEndBeforeEnd() {
-        // 09:00 - 17:00
+        
         assertFalse(DateTimeUtils.isPastScheduleEnd(540, 1020, 0))
         assertFalse(DateTimeUtils.isPastScheduleEnd(540, 1020, 539))
         assertFalse(DateTimeUtils.isPastScheduleEnd(540, 1020, 540))
@@ -16,7 +16,7 @@ class ScheduleWindowTest {
 
     @Test
     fun normalWindowIsPastEndAfterEnd() {
-        // 09:00 - 17:00
+        
         assertTrue(DateTimeUtils.isPastScheduleEnd(540, 1020, 1020))
         assertTrue(DateTimeUtils.isPastScheduleEnd(540, 1020, 1200))
         assertTrue(DateTimeUtils.isPastScheduleEnd(540, 1020, 1439))
@@ -24,7 +24,7 @@ class ScheduleWindowTest {
 
     @Test
     fun overnightWindowIsNotPastEndDuringItsHours() {
-        // 22:00 - 06:00
+        
         assertFalse(DateTimeUtils.isPastScheduleEnd(1320, 360, 1320))
         assertFalse(DateTimeUtils.isPastScheduleEnd(1320, 360, 1439))
         assertFalse(DateTimeUtils.isPastScheduleEnd(1320, 360, 0))
@@ -33,7 +33,7 @@ class ScheduleWindowTest {
 
     @Test
     fun overnightWindowIsPastEndAfterMorningEnd() {
-        // 22:00 - 06:00
+        
         assertTrue(DateTimeUtils.isPastScheduleEnd(1320, 360, 360))
         assertTrue(DateTimeUtils.isPastScheduleEnd(1320, 360, 720))
         assertTrue(DateTimeUtils.isPastScheduleEnd(1320, 360, 1319))

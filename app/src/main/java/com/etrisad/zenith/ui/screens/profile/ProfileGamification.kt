@@ -1,10 +1,12 @@
 package com.etrisad.zenith.ui.screens.profile
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Assignment
+import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
+import androidx.compose.material.icons.automirrored.outlined.ExitToApp
 import androidx.compose.material.icons.outlined.Adjust
 import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.AlarmOn
-import androidx.compose.material.icons.outlined.Assignment
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.Backup
@@ -29,12 +31,10 @@ import androidx.compose.material.icons.outlined.Colorize
 import androidx.compose.material.icons.outlined.Cyclone
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.DashboardCustomize
-import androidx.compose.material.icons.outlined.DirectionsRun
 import androidx.compose.material.icons.outlined.FilterVintage
 import androidx.compose.material.icons.outlined.Dock
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.EventRepeat
-import androidx.compose.material.icons.outlined.ExitToApp
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Gavel
@@ -734,7 +734,7 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
     ),
     AchievementDef(
         id = "auto_quitter", title = "Auto Quitter",
-        desc = "Let Zenith auto-quit an app", icon = Icons.Outlined.ExitToApp,
+        desc = "Let Zenith auto-quit an app", icon = Icons.AutoMirrored.Outlined.ExitToApp,
         category = AchievementCategory.EXPLORER,
         thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Enabled once"))
     ),
@@ -807,7 +807,7 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
     AchievementDef(
         id = "escape_artist", title = "Escape Artist",
         desc = "Total emergency uses spent",
-        icon = Icons.Outlined.DirectionsRun, category = AchievementCategory.ACCUMULATION,
+        icon = Icons.AutoMirrored.Outlined.DirectionsRun, category = AchievementCategory.ACCUMULATION,
         thresholds = listOf(
             TierThreshold(ProfileTier.I, 1, "1 escape"),
             TierThreshold(ProfileTier.V, 3, "3 escapes"),
@@ -888,7 +888,7 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
     AchievementDef(
         id = "taskmaster", title = "Taskmaster",
         desc = "Pause Point task types mastered",
-        icon = Icons.Outlined.Assignment, category = AchievementCategory.ACCUMULATION,
+        icon = Icons.AutoMirrored.Outlined.Assignment, category = AchievementCategory.ACCUMULATION,
         thresholds = listOf(
             TierThreshold(ProfileTier.I, 1, "1 type"),
             TierThreshold(ProfileTier.V, 2, "2 types"),

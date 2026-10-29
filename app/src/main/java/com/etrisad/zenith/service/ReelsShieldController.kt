@@ -22,26 +22,6 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
-
-/**
- * Counts swipes through short-video feeds (Reels, Shorts, TikTok, Spotlight)
- * and enforces one shared daily pool.
- *
- * Android has no "next video" API, so detection works in two layers:
- *
- * 1. A short-video surface is confirmed from the active window - a large node
- *    whose id/description mentions reels/shorts/clips/spotlight, or a
- *    full-screen pager. Apps whose whole experience is a video feed (TikTok)
- *    are trusted as soon as they come to the foreground.
- * 2. A swipe is counted only while that surface is active. A scroll event is
- *    accepted when the feed reports a real index change, a large scroll
- *    position jump, a large scroll delta, or - for pagers that report none of
- *    those - a debounced scroll from a large feed container.
- *
- * Everything on the event path runs on the main thread and avoids node walks
- * unless a tracked app is visible. Node walks are bounded and throttled;
- * DataStore writes are batched and serialized off the event path.
- */
 class ReelsShieldController(
     private val service: ZenithService,
     private val preferencesRepository: UserPreferencesRepository,
@@ -72,8 +52,6 @@ class ReelsShieldController(
     @Volatile private var trackedPackages: Set<String> = ReelsShieldDefaults.PACKAGES
     @Volatile private var dayStartHour = 0
     @Volatile private var dayStartMinute = 0
-
-    // Main-thread owned counter state.
     private var adopted = false
     private var dirty = false
     private var todayDate = ""
@@ -83,17 +61,12 @@ class ReelsShieldController(
     private val history = HashMap<String, Int>(HISTORY_DAYS * 2)
     private val historyByApp = HashMap<String, MutableMap<String, Int>>(HISTORY_DAYS * 2)
     private val scrollTracks = HashMap<String, ScrollTrack>(8)
-
-    /**
-     * Reels are counted per visit. Leaving an app keeps its session alive for
-     * [SESSION_TIMEOUT_MS] so a quick app switch does not reset the number shown
-     * in the pill; coming back later starts a fresh session at zero.
-     */
     private val sessions = HashMap<String, SessionState>(8)
     private val sessionTimeouts = HashMap<String, Runnable>(8)
-
-    // Main-thread owned surface state.
     private var foregroundPackage = ""
+    private var lastWindowKey = ""
+    private var surfaceWindowKey = ""
+    private var blockedWindowPkg = ""
     private var surfacePackage = ""
     private var surfaceActive = false
     private var surfaceSeenAt = 0L
@@ -111,20 +84,8 @@ class ReelsShieldController(
     private var hintCachePackage = ""
     private var hintCacheAt = 0L
     private var hintCacheValue = false
-
-    /**
-     * Instagram keeps the Reels pager in its view tree on other tabs, so pager
-     * presence alone is not a signal. A selected Reels/Shorts/Spotlight tab is
-     * tracked from TYPE_VIEW_SELECTED and confirmed by the surface scan.
-     */
     private var selectedSurfaceTabPackage = ""
     private var selectedSurfaceTabAt = 0L
-
-    /**
-     * Facebook/Lite has no stable tab ids, so a confirmed structural pager is
-     * remembered for a short window. This keeps counting working when a scroll
-     * event arrives without a source node.
-     */
     private var structuralPagerPackage = ""
     private var structuralPagerAt = 0L
 
@@ -134,12 +95,6 @@ class ReelsShieldController(
 
     private val appLabels = ConcurrentHashMap<String, String>()
     private val requestedLabels = ConcurrentHashMap.newKeySet<String>()
-
-    /**
-     * What the node under a scroll actually is. Only [VIDEO] is allowed to
-     * advance the counter on its own; [SHEET]/[TEXT] are comments, captions or
-     * description panels and must never be mistaken for a video page change.
-     */
     private enum class ScrollSource { VIDEO, UNKNOWN, SHEET, TEXT }
 
     private class ScrollTrack {
@@ -149,9 +104,6 @@ class ReelsShieldController(
         var lastScrollY = 0
         var hasScrollY = false
         var lastSwipeAt = 0L
-
-        // One touch gesture can emit dozens of scroll frames, especially for a
-        // fling. They are accumulated and judged once after the stream settles.
         var gestureActive = false
         var gestureDistancePx = 0f
         var gestureExplicit = false
@@ -164,6 +116,7 @@ class ReelsShieldController(
 
     private class SurfaceScan(
         val matched: Boolean,
+        val matchedStrong: Boolean,
         val selectedSurfaceTab: Boolean,
         val otherTabSelected: Boolean,
         val sheetVisible: Boolean,
@@ -177,10 +130,6 @@ class ReelsShieldController(
         var swipes: Int = 0,
         var leftAt: Long = 0L
     )
-
-    // ---------------------------------------------------------------- state
-
-    /** Config sync. Safe from any thread; counter adoption happens on main. */
     fun updatePreferences(prefs: UserPreferences) {
         runOnMain {
             enabled = prefs.reelsShieldEnabled && !prefs.accessibilityLimitedMode
@@ -222,7 +171,6 @@ class ReelsShieldController(
                 todayByApp.clear()
                 todayByApp.putAll(prefs.reelsShieldTodayByApp)
             } else {
-                // The service may start before the midnight worker runs.
                 if (prefs.reelsShieldTodayDate.isNotEmpty() && prefs.reelsShieldTodayByApp.isNotEmpty()) {
                     historyByApp[prefs.reelsShieldTodayDate] = HashMap(prefs.reelsShieldTodayByApp)
                 }
@@ -232,14 +180,10 @@ class ReelsShieldController(
                 dirty = true
             }
             history[today] = todayCount
-            // Publish a stale-day reset right away so the settings card and a
-            // later worker run cannot resurrect yesterday's counters.
             if (dirty) persist(force = true)
         }
         rollDayIfNeeded()
     }
-
-    /** Day key is cached so the swipe path never formats a date. */
     private fun currentDateKey(): String {
         val now = System.currentTimeMillis()
         if (cachedDateKey.isEmpty() || now - cachedDateKeyAt > DATE_KEY_CACHE_MS) {
@@ -268,32 +212,16 @@ class ReelsShieldController(
     }
 
     private fun isPoolLimitReached(): Boolean = dailyLimit > 0 && todayCount >= dailyLimit
-
-    /** True while the selected Reels/Shorts/Spotlight tab is still in front. */
     private fun isSurfaceTabBacked(pkg: String): Boolean =
         selectedSurfaceTabPackage == pkg &&
                 System.currentTimeMillis() - selectedSurfaceTabAt <= SURFACE_TAB_STATE_TTL_MS
-
-    /** True while a Facebook structural pager was recently confirmed. */
     private fun isStructuralPagerBacked(pkg: String): Boolean =
         structuralPagerPackage == pkg &&
                 System.currentTimeMillis() - structuralPagerAt <= STRUCTURAL_PAGER_TTL_MS
-
-    /**
-     * Instagram/Facebook expose a reliable selected-tab state, so leaving the
-     * feed can tear the surface down quickly. YouTube's pivot bar is less
-     * consistent, so it keeps the longer miss grace.
-     */
     private fun tabConflictGraceFor(pkg: String): Long = when (pkg) {
         PACKAGE_INSTAGRAM, PACKAGE_FACEBOOK, PACKAGE_FACEBOOK_LITE -> TAB_CONFLICT_GRACE_MS
         else -> SURFACE_MISS_GRACE_MS
     }
-
-    /**
-     * The cap that actually applies to [pkg]. A missing override means the app
-     * uses the shared pool; a stored override is always clamped to the pool so
-     * stale values can never let one app outlive the pool.
-     */
     private fun perAppLimitFor(pkg: String): Int {
         if (dailyLimit <= 0) return 0
         val configured = appLimits[pkg] ?: dailyLimit
@@ -325,8 +253,8 @@ class ReelsShieldController(
 
     fun onScreenOff() {
         runOnMain {
-            // Turning the screen off ends the app visit; start the ten-minute
-            // session countdown before tearing the surface down.
+            
+            
             val active = surfacePackage.ifEmpty { foregroundPackage }
             if (active.isNotEmpty()) endSessionLater(active)
             deactivateSurface("screen off", flush = true)
@@ -350,17 +278,7 @@ class ReelsShieldController(
         sessions.clear()
     }
 
-    // ----------------------------------------------------------- counting
-
-    /**
-     * A selected bottom/top navigation tab is the only reliable signal while a
-     * Reels/Shorts viewer is idle. Instagram keeps the Reels pager alive on
-     * other tabs, so tab state - not pager presence - decides whether the feed
-     * is actually in front.
-     *
-     * Only tab-bar sized nodes are considered. Tapping a random "Reels" card in
-     * the home feed must not switch the surface on.
-     */
+    
     fun handleViewSelectedEvent(event: AccessibilityEvent) {
         if (Looper.myLooper() != Looper.getMainLooper()) return
         if (!enabled || !adopted) return
@@ -371,8 +289,8 @@ class ReelsShieldController(
         if (pkg == context.packageName) return
         if (SharedMonitoringState.isPrivatePackage(pkg)) return
         if (pkg !in trackedPackages) return
-        // TikTok and its variants are entirely short-video feeds; tab labels
-        // there ("For You", "Friends") must not tear the surface down.
+        
+        
         if (pkg in ReelsShieldDefaults.SHORT_VIDEO_ONLY_PACKAGES) return
 
         trackForeground(pkg)
@@ -402,13 +320,14 @@ class ReelsShieldController(
             val exactSurfaceTab = isSurfaceTabId(pkg, id)
             val tabLike = isTabId(id) || hasTabWord(label) || hasSurfaceTabWord(pkg, label)
 
-            // A top-bar label such as YouTube's "Shorts" filter chip is not a
-            // navigation tab; only an exact tab id may activate from up there.
+            
+            
             if (exactSurfaceTab ||
                 (inBottomBar && tabLike && hasSurfaceTabWord(pkg, label))
             ) {
                 selectedSurfaceTabPackage = pkg
                 selectedSurfaceTabAt = System.currentTimeMillis()
+                blockedWindowPkg = ""
                 OverlayLogBuffer.d("ReelsShield", "surface tab on: $pkg")
                 activateSurface(pkg, "surface tab", entered = true)
                 scheduleSurfaceScan(pkg, delayMs = 0L, deactivateIfMissing = false)
@@ -455,9 +374,9 @@ class ReelsShieldController(
             return
         }
 
-        // A scroll can be the first event after re-entering the app; make sure
-        // the visit (and its ten-minute session) is tracked even if the window
-        // event was missed.
+        
+        
+        
         trackForeground(pkg)
 
         val now = System.currentTimeMillis()
@@ -466,18 +385,23 @@ class ReelsShieldController(
         rollDayIfNeeded()
 
         val trusted = pkg in ReelsShieldDefaults.SHORT_VIDEO_ONLY_PACKAGES
-        // Scrolled containers often carry the screen name ("Reels", "Shorts",
-        // "Spotlight") in their accessibility description. That is cheap to
-        // read and works even when the source hierarchy is unavailable.
+        
+        
+        
         val eventHint = hasSurfaceWord(event.contentDescription?.toString())
         if (!surfaceActive || surfacePackage != pkg) {
             if (trusted) {
                 activateSurface(pkg, "short-video app", entered = true)
-            } else if (eventHint || cachedSourceHasSurfaceHint(pkg, event.source, now)) {
+            } else if (blockedWindowPkg != pkg &&
+                (eventHint || cachedSourceHasSurfaceHint(pkg, event.source, now))
+            ) {
+                
+                
+                
                 activateSurface(pkg, "scroll source", entered = true)
             } else {
-                // One bounded scan is enough to decide whether this scroll is
-                // happening on a reels/shorts surface; the scan is throttled.
+                
+                
                 scheduleSurfaceScan(pkg, delayMs = 0L, deactivateIfMissing = false)
                 return
             }
@@ -487,10 +411,10 @@ class ReelsShieldController(
 
         val track = scrollTracks.getOrPut(pkg) { ScrollTrack() }
         recordScrollGesture(pkg, event, track, trusted, now)
-        // Feeds whose pager ids are obfuscated (Instagram builds, Facebook
-        // Lite) confirm themselves through the bounded scan instead of the
-        // event source. Refresh it while scrolling so the confirmation window
-        // used by the counting gate stays current; the scan is throttled.
+        
+        
+        
+        
         scheduleSurfaceScan(pkg, delayMs = 0L, deactivateIfMissing = false)
     }
 
@@ -510,7 +434,7 @@ class ReelsShieldController(
         val dy = event.scrollDeltaY
         val dx = event.scrollDeltaX
         if (dx != 0 && abs(dx) > abs(dy)) {
-            // Horizontal carousels and tab paging are not video page changes.
+            
             resetGesture(track)
             track.lastEventAt = now
             return
@@ -518,9 +442,9 @@ class ReelsShieldController(
 
         val gap = now - track.lastEventAt
         if (!track.gestureActive || gap > GESTURE_GAP_MS) {
-            // New touch: start from a clean slate so index/position evidence
-            // never leaks across gestures or between the feed and a comment
-            // list that share the same package track.
+            
+            
+            
             resetGesture(track)
             track.gestureActive = true
         }
@@ -531,6 +455,11 @@ class ReelsShieldController(
             if (source != null) {
                 track.gestureKind = classifyScrollSource(pkg, source, trusted, now)
                 track.gestureKindResolved = true
+                if (track.gestureKind == ScrollSource.SHEET) {
+                    
+                    
+                    markSheetVisible("scroll classify")
+                }
             }
         }
 
@@ -580,6 +509,7 @@ class ReelsShieldController(
         val distance = abs(track.gestureDistancePx)
         val hadDelta = track.gestureHadDelta
         val explicit = track.gestureExplicit
+        val resolved = track.gestureKindResolved
         val kind = if (track.gestureKindResolved) {
             track.gestureKind
         } else {
@@ -593,8 +523,8 @@ class ReelsShieldController(
         val now = System.currentTimeMillis()
         if (now < suppressUntil) return
 
-        // A tap or a one-pixel jitter is not a page change. Containers that
-        // report no delta at all still fall back to one count per gesture.
+        
+        
         val qualified = explicit || (hadDelta && distance >= swipeDistancePx) || !hadDelta
         if (!qualified) return
 
@@ -603,23 +533,27 @@ class ReelsShieldController(
             return
         }
 
-        // While a comment/caption tray is confirmed, only a scroll that came
-        // from the video pager itself may count.
+        
+        
         val sheetOpen = sheetVisible && now - sheetVisibleAt <= SHEET_STATE_TTL_MS
         if (sheetOpen && kind != ScrollSource.VIDEO) return
 
         val trusted = pkg in ReelsShieldDefaults.SHORT_VIDEO_ONLY_PACKAGES
+        
+        
+        
+        if (trusted && resolved && kind != ScrollSource.VIDEO) return
         val backed = isSurfaceTabBacked(pkg) || isStructuralPagerBacked(pkg)
         if (!trusted && !backed && kind != ScrollSource.VIDEO &&
             now - surfaceConfirmedAt > SURFACE_FALLBACK_WINDOW_MS
         ) {
-            // Ambiguous hierarchy: re-confirm the feed before counting.
+            
             scheduleSurfaceScan(pkg, delayMs = 0L, deactivateIfMissing = false)
             return
         }
 
-        // A pager index change is strong evidence; fallback pagers get a longer
-        // cooldown so the tail of one fling cannot increment twice.
+        
+        
         val cooldown = if (explicit || kind == ScrollSource.VIDEO) {
             MIN_SWIPE_INTERVAL_MS
         } else {
@@ -627,14 +561,14 @@ class ReelsShieldController(
         }
         if (now - track.lastSwipeAt < cooldown) return
         track.lastSwipeAt = now
-        // A swipe that passed every evidence gate is itself proof the feed is
-        // on screen; keep the surface alive through the next video's
-        // transition scans, which often come back empty.
+        
+        
+        
         surfaceSeenAt = now
         surfaceMissStreak = 0
 
-        // The scroll demonstrably came from the video pager, so a sheet flag
-        // left over from a dismissed tray can be dropped.
+        
+        
         if (kind == ScrollSource.VIDEO) clearSheetVisible()
 
         if (isLimitReached(pkg)) {
@@ -673,12 +607,12 @@ class ReelsShieldController(
         if (previous.isNotEmpty() && previous != pkg) {
             endSessionLater(previous)
         }
-        // Also resume when the same package comes back after screen-off; the
-        // app can stay "foreground" while the display is off.
+        
+        
         resumeSession(pkg)
     }
 
-    /** Cancels the pending timeout and keeps the swipes when the app is reopened in time. */
+    
     private fun resumeSession(pkg: String) {
         val state = sessions[pkg] ?: return
         sessionTimeouts.remove(pkg)?.let { mainHandler.removeCallbacks(it) }
@@ -751,6 +685,7 @@ class ReelsShieldController(
         var depth = 0
         var large = false
         var video = false
+        var videoDepth = -1
         var text = false
         val parents = ArrayList<AccessibilityNodeInfo>(MAX_SOURCE_DEPTH)
         val bounds = Rect()
@@ -785,9 +720,15 @@ class ReelsShieldController(
                             isFullScreenPagePager(node, bounds, depth) ||
                             matchesStrongSurfaceHint(node) ||
                             isFullScreenPager(node, bounds) ||
-                            (depth == 0 && hasFullPageChild(node))
+                            (depth == 0 && hasFullPageChild(node)) ||
+                            
+                            
+                            
+                            (trusted && node.isVisibleToUser &&
+                                    hasMostlyFullPageChildren(node, bounds))
                         ) {
                             video = true
+                            if (videoDepth < 0 || depth < videoDepth) videoDepth = depth
                         }
                     }
                 } catch (_: Exception) {
@@ -800,22 +741,31 @@ class ReelsShieldController(
         } finally {
             parents.forEach { parent -> try { parent.recycle() } catch (_: Exception) {} }
         }
-        // A page-sized video container wins over a TextView seen on the way up
-        // the ancestry: every reel carries a caption, so a text hit alone would
-        // veto the count on exactly the apps whose pager ids are obfuscated.
-        if (video) return ScrollSource.VIDEO
+        
+        
+        
+        
+        
+        
+        if (video && (!sheetOpen || videoDepth <= 1)) return ScrollSource.VIDEO
+        
+        
+        
+        
+        if (trusted && !sheetOpen && source == null) return ScrollSource.VIDEO
         if (text) return ScrollSource.TEXT
-        // A selected Reels/Shorts tab (or a confirmed Facebook structural
-        // pager) is reliable even when the scroll event carries no source. The
-        // sheet check above still wins, so comments and captions never count.
-        if (!sheetOpen && (isSurfaceTabBacked(pkg) || isStructuralPagerBacked(pkg))) {
+        
+        
+        
+        
+        
+        
+        
+        
+        if (!trusted && !sheetOpen && (isSurfaceTabBacked(pkg) || isStructuralPagerBacked(pkg))) {
             return ScrollSource.VIDEO
         }
-        // Trusted short-video apps have no other feed, but while a comment or
-        // description tray is flagged they need positive video evidence so the
-        // tray's own list cannot ride the trusted fallback.
-        if (trusted && !sheetOpen) return ScrollSource.VIDEO
-        if (!sheetOpen && large && surfaceActive &&
+        if (!trusted && !sheetOpen && large && surfaceActive &&
             now - surfaceConfirmedAt <= SURFACE_SOURCE_GRACE_MS
         ) {
             return ScrollSource.VIDEO
@@ -842,7 +792,7 @@ class ReelsShieldController(
                     return true
                 }
             } catch (_: Exception) {
-                // Keep checking the remaining children.
+                
             } finally {
                 try { child.recycle() } catch (_: Exception) {}
             }
@@ -867,17 +817,23 @@ class ReelsShieldController(
         if (raw.isNullOrBlank()) return false
         val text = raw.trim().lowercase(Locale.US)
         if (text.length > MAX_SHEET_LABEL_LENGTH) return false
-        return SHEET_TEXT_WORDS.any { word ->
-            text == word || text.startsWith("$word ") || text.endsWith(" $word") ||
-                    text.contains(" $word ")
+        
+        var start = -1
+        for (index in text.indices) {
+            if (text[index].isLetterOrDigit() && start < 0) {
+                start = index
+            } else if (!text[index].isLetterOrDigit() && start >= 0) {
+                if (text.substring(start, index) in SHEET_TEXT_WORDS) return true
+                start = -1
+            }
         }
+        return start >= 0 && text.substring(start) in SHEET_TEXT_WORDS
     }
 
     private fun hasTabWord(raw: String?): Boolean {
         if (raw.isNullOrBlank()) return false
         val text = raw.trim().lowercase(Locale.US)
-        if (text.length > MAX_TAB_LABEL_LENGTH) return false
-        return hasWordInText(text, NON_SURFACE_TAB_WORDS)
+        return text.length <= MAX_TAB_LABEL_LENGTH && hasWordInText(text, NON_SURFACE_TAB_WORDS)
     }
 
     private fun hasWordInText(text: String, words: Set<String>): Boolean {
@@ -910,7 +866,7 @@ class ReelsShieldController(
         OverlayLogBuffer.d("ReelsShield", "sheet off")
     }
 
-    // ------------------------------------------------------- surface state
+    
 
     /**
      * Called from window-state events and package-change monitoring. The
@@ -947,9 +903,9 @@ class ReelsShieldController(
 
             rollDayIfNeeded()
 
-            // Opening the comment tray or an expanded description can arrive as
-            // its own window while the video surface stays behind it. Keep the
-            // surface alive, but flag the tray so its scrolls never count.
+            
+            
+            
             if (looksLikeSheetWindow(windowClassName) || isSheetLabel(windowTitle)) {
                 markSheetVisible("window")
                 if (surfaceActive && surfacePackage == pkg) return@runOnMain
@@ -957,14 +913,47 @@ class ReelsShieldController(
 
             if (pkg in ReelsShieldDefaults.SHORT_VIDEO_ONLY_PACKAGES) {
                 activateSurface(pkg, "short-video app", entered = true)
-                // Trusted feeds still need the overlay scan so comment trays
-                // can suppress counting.
+                
+                
                 scheduleSurfaceScan(pkg, delayMs = WINDOW_SETTLE_MS, deactivateIfMissing = false)
                 return@runOnMain
             }
             if (looksLikeSurfaceWindow(pkg, windowClassName) || hasSurfaceWord(windowTitle)) {
+                blockedWindowPkg = ""
                 activateSurface(pkg, "window label", entered = true)
                 return@runOnMain
+            }
+
+            
+            
+            
+            
+            val windowKey = if (windowClassName.isNullOrBlank() && windowTitle.isNullOrBlank()) {
+                ""
+            } else {
+                "$pkg|${windowClassName.orEmpty()}|${windowTitle.orEmpty()}"
+            }
+            if (windowKey.isNotEmpty()) {
+                if (lastWindowKey.isNotEmpty() && lastWindowKey.startsWith("$pkg|") &&
+                    lastWindowKey != windowKey
+                ) {
+                    selectedSurfaceTabPackage = ""
+                    selectedSurfaceTabAt = 0L
+                    structuralPagerPackage = ""
+                    structuralPagerAt = 0L
+                    blockedWindowPkg = pkg
+                    lastWindowKey = windowKey
+                    if (surfaceActive && surfacePackage == pkg) {
+                        deactivateSurface("in-app window", flush = true)
+                    }
+                    OverlayLogBuffer.d("ReelsShield", "window break: $windowKey")
+                    
+                    
+                    
+                    scheduleSurfaceScan(pkg, delayMs = WINDOW_SETTLE_MS, deactivateIfMissing = false)
+                    return@runOnMain
+                }
+                lastWindowKey = windowKey
             }
 
             val deactivateIfMissing = !surfaceActive || surfacePackage != pkg
@@ -986,21 +975,21 @@ class ReelsShieldController(
             if (!surfaceActive || surfacePackage != pkg) {
                 activateSurface(pkg, "short-video app", entered = true)
             }
-            // Refresh the comment/description tray state while the feed is
-            // open. The scan itself is throttled.
+            
+            
             scheduleSurfaceScan(pkg, delayMs = 0L, deactivateIfMissing = false)
             return
         }
 
         val now = System.currentTimeMillis()
-        if (cachedSourceHasSurfaceHint(pkg, event.source, now)) {
+        if (blockedWindowPkg != pkg && cachedSourceHasSurfaceHint(pkg, event.source, now)) {
             activateSurface(pkg, "content source", entered = true)
             scheduleSurfaceScan(pkg, delayMs = 0L, deactivateIfMissing = false)
             return
         }
-        // A pane/tab label in a content event is useful evidence, but on its own
-        // it can also be a Reels preview card on a home feed. Use it to scan
-        // immediately and let the bounded walk confirm a real feed surface.
+        
+        
+        
         val contentHint = hasSurfaceWord(event.contentDescription?.toString())
 
         val activeHere = surfaceActive && surfacePackage == pkg
@@ -1011,9 +1000,9 @@ class ReelsShieldController(
         }
         if (now - lastScanAt < minInterval && lastScanPackage == pkg) return
         if (!activeHere && !isLimitReached()) {
-            // Outside a reels surface there is nothing to count. Keep a slow
-            // confirmation scan for the pill, but never walk the tree on every
-            // ordinary feed refresh.
+            
+            
+            
             if (now - lastScanAt < IDLE_SCAN_INTERVAL_MS) return
         }
         scheduleSurfaceScan(pkg, delayMs = 0L, deactivateIfMissing = false)
@@ -1056,8 +1045,8 @@ class ReelsShieldController(
             null
         }
         if (root == null || root.packageName?.toString() != pkg) {
-            // A transient window transition must not tear the pill down while
-            // the surface was confirmed moments ago; see SURFACE_MISS_GRACE_MS.
+            
+            
             if (deactivateIfMissing && surfaceActive && surfacePackage == pkg &&
                 now - surfaceSeenAt > SURFACE_MISS_GRACE_MS
             ) {
@@ -1083,21 +1072,38 @@ class ReelsShieldController(
         if (scan.facebookPagerVisible) {
             structuralPagerPackage = pkg
             structuralPagerAt = now
-        } else if (structuralPagerPackage == pkg && scan.complete && scan.otherTabSelected) {
+        } else if (structuralPagerPackage == pkg && scan.complete) {
+            
+            
             structuralPagerPackage = ""
             structuralPagerAt = 0L
         }
 
-        // A visible comment/caption tray suppresses every scroll that does not
-        // come from the video pager itself. A complete scan that no longer sees
-        // a tray clears the flag, so closing comments restores counting.
+        
+        
+        
         if (scan.sheetVisible) {
             markSheetVisible("surface scan")
         } else if (scan.complete) {
             clearSheetVisible()
         }
 
-        if (scan.matched) {
+        
+        
+        
+        
+        
+        val reactivationAllowed = blockedWindowPkg != pkg ||
+                scan.matchedStrong ||
+                scan.selectedSurfaceTab ||
+                
+                
+                
+                
+                
+                scan.facebookPagerVisible ||
+                (surfaceWindowKey.isNotEmpty() && lastWindowKey == surfaceWindowKey)
+        if (scan.matched && reactivationAllowed) {
             surfaceSeenAt = now
             surfaceConfirmedAt = now
             surfaceMissStreak = 0
@@ -1106,32 +1112,32 @@ class ReelsShieldController(
             if (scan.otherTabSelected && !scan.selectedSurfaceTab &&
                 now - surfaceSeenAt > tabConflictGraceFor(pkg)
             ) {
-                // The selected bottom tab moved to Home/Search/Profile, so the
-                // short-video tab is no longer in front. A short grace window
-                // absorbs a transient tab report during a reel-to-reel
-                // transition without leaving the pill counting on the feed.
+                
+                
+                
+                
                 deactivateSurface("other tab", flush = true)
             } else if (scan.selectedSurfaceTab) {
-                // A selected Reels/Shorts/Spotlight tab keeps an already
-                // confirmed feed alive while its pager settles. An unselected
-                // tab on the home feed deliberately does not.
+                
+                
+                
                 surfaceSeenAt = now
                 surfaceMissStreak = 0
                 showPill(pkg, atLimit = isLimitReached(pkg))
             } else if (scan.facebookPagerVisible) {
-                // Facebook exposes no stable tab ids. Once a structural pager
-                // scroll activated the surface, keep it alive while that pager
-                // is still on screen.
+                
+                
+                
                 surfaceSeenAt = now
                 surfaceMissStreak = 0
                 showPill(pkg, atLimit = isLimitReached(pkg))
             } else {
                 surfaceMissStreak += 1
-                // A video transition or a partially rebuilt tree can make many
-                // consecutive scans come back empty while the user is still on
-                // the feed. A selected surface tab refreshes surfaceSeenAt on
-                // every scan, so the pill only goes away once the feed has
-                // truly not been seen for SURFACE_MISS_GRACE_MS after multiple consecutive misses.
+                
+                
+                
+                
+                
                 if ((deactivateIfMissing || surfaceMissStreak >= 4) &&
                     now - surfaceSeenAt > SURFACE_MISS_GRACE_MS
                 ) {
@@ -1148,6 +1154,10 @@ class ReelsShieldController(
         }
         val now = System.currentTimeMillis()
         surfacePackage = pkg
+        
+        
+        blockedWindowPkg = ""
+        if (lastWindowKey.isNotEmpty()) surfaceWindowKey = lastWindowKey
         surfaceActive = true
         surfaceSeenAt = now
         surfaceConfirmedAt = now
@@ -1159,8 +1169,8 @@ class ReelsShieldController(
             beginSession(pkg)
             OverlayLogBuffer.d("ReelsShield", "surface on: $pkg ($reason)")
             val atLimit = isLimitReached(pkg)
-            // Show the remaining number as soon as the short-video tab opens,
-            // not only after the first swipe.
+            
+            
             showPill(pkg, atLimit = atLimit)
             if (atLimit) {
                 enforceBack(pkg, "surface entry")
@@ -1189,8 +1199,8 @@ class ReelsShieldController(
         scanToken++
         scanPending = false
         if (previous.isNotEmpty()) {
-            // Closing the Reels/Shorts tab does not end the app visit. The
-            // session timeout is started by trackForeground()/onScreenOff().
+            
+            
             scrollTracks.remove(previous)
             OverlayLogBuffer.d("ReelsShield", "surface off: $previous ($reason)")
         }
@@ -1217,9 +1227,9 @@ class ReelsShieldController(
         queue.add(root)
         owned.add(root)
         var visited = 0
-        // The window label is the accessibility title of the active screen. A
-        // dedicated Reels/Shorts activity can be confirmed from it before the
-        // pager content is laid out.
+        
+        
+        
         var strongMatch = trusted || hasSurfaceWord(windowTitleOf(root))
         var weakMatch = false
         var selectedSurfaceTab = trusted
@@ -1227,12 +1237,13 @@ class ReelsShieldController(
         var sheetVisible = false
         var pagerFound = false
         var pagerVisible = false
+        var pagerPages = false
         var facebookPagerVisible = false
         val bounds = Rect()
 
-        // Instagram's hierarchy is deep enough that a plain BFS can hit the
-        // node cap before reaching either the pager or the tab bar. Exact ids
-        // are a cheap binder lookup, so resolve them before walking.
+        
+        
+        
         val exactPagers = findKnownPagerNodes(root, pkg)
         try {
             exactPagers.forEach { node ->
@@ -1246,6 +1257,7 @@ class ReelsShieldController(
                     bounds.width() >= minSurfaceWidthPx
                 ) {
                     pagerVisible = true
+                    if (hasMostlyFullPageChildren(node, bounds)) pagerPages = true
                 }
             }
         } finally {
@@ -1266,10 +1278,10 @@ class ReelsShieldController(
                     val large = nodeBounds.height() >= minSurfaceHeightPx &&
                             nodeBounds.width() >= minSurfaceWidthPx
                     val visible = node.isVisibleToUser
-                    // Instagram keeps its Reels fragment in the tree on other
-                    // tabs. Only the exact pager (above), the selected Reels tab,
-                    // or a dedicated window title may confirm it; a generic
-                    // "reel" class/description is not enough.
+                    
+                    
+                    
+                    
                     if (large && visible && pkg != PACKAGE_INSTAGRAM &&
                         matchesStrongSurfaceHint(node)
                     ) {
@@ -1279,6 +1291,7 @@ class ReelsShieldController(
                     }
                     if (large && visible && isKnownPagerNode(pkg, node)) {
                         pagerVisible = true
+                        if (hasMostlyFullPageChildren(node, nodeBounds)) pagerPages = true
                     }
                     if (large && isStructuralFacebookPager(pkg, node, nodeBounds)) {
                         facebookPagerVisible = true
@@ -1312,34 +1325,37 @@ class ReelsShieldController(
         } finally {
             owned.forEach { node -> try { node.recycle() } catch (_: Exception) {} }
         }
-        // The scan may miss the tab bar on a very large tree. Fall back to the
-        // last TYPE_VIEW_SELECTED tab only while the walk has not seen a
-        // different tab selected.
+        
+        
+        
         val tabFromEvent = selectedSurfaceTabPackage == pkg &&
                 System.currentTimeMillis() - selectedSurfaceTabAt <= SURFACE_TAB_STATE_TTL_MS &&
                 !otherTabSelected
         val effectiveSurfaceTab = selectedSurfaceTab || tabFromEvent
-        // Only a walk that reached the end of the tree saw the whole tab bar.
+        
         val scanComplete = queue.isEmpty() && visited < MAX_SURFACE_NODES
-        // A selected bottom tab that is not Reels/Shorts/Spotlight means the
-        // user already left the feed. A visible full-screen pager over Home
-        // (a reel opened from the feed) still wins.
+        
+        
+        
         val tabConflict = otherTabSelected && !effectiveSurfaceTab
-        // A screen-filling structural pager may never override a selected
-        // Home/Search tab: Facebook's obfuscated feed RecyclerView can look
-        // page-sized, and Instagram keeps its reels pager alive off-tab. With
-        // no conflicting tab it stays strong evidence of the feed.
+        
+        
+        
+        
         val facebookPagerMatch = facebookPagerVisible && !tabConflict
-        // A plain full-screen pager is not enough by itself: Snapchat Stories
-        // and photo carousels use the same primitive. It must be paired with
-        // the selected Spotlight/Reels/Shorts tab. Instagram additionally keeps
-        // its pager alive on other tabs, so a visible pager only counts while
-        // the Reels tab is selected, the surface was already activated by a
-        // scroll, or a complete walk saw no conflicting tab - several builds
-        // never report the Reels tab as selected at all.
+        
+        
+        
+        
+        
+        
+        
         val pagerMatch = if (pkg == PACKAGE_INSTAGRAM) {
-            pagerVisible && (effectiveSurfaceTab || surfaceActive ||
-                    (!tabConflict && scanComplete))
+            
+            
+            
+            pagerVisible && pagerPages && !tabConflict &&
+                    (effectiveSurfaceTab || surfaceActive || scanComplete)
         } else {
             pagerVisible
         }
@@ -1349,11 +1365,12 @@ class ReelsShieldController(
                 (!tabConflict && (weakMatch || (pagerFound && effectiveSurfaceTab)))
         return SurfaceScan(
             matched = matched,
+            matchedStrong = strongMatch,
             selectedSurfaceTab = effectiveSurfaceTab,
             otherTabSelected = otherTabSelected,
             sheetVisible = sheetVisible,
-            // Only a walk that actually reached the end of the tree may clear
-            // a previously detected tray. Hitting the node cap is inconclusive.
+            
+            
             complete = scanComplete,
             pagerVisible = pagerVisible,
             facebookPagerVisible = facebookPagerMatch,
@@ -1361,7 +1378,7 @@ class ReelsShieldController(
         )
     }
 
-    /** A selected bottom navigation tab that is not Reels/Shorts/Spotlight. */
+    
     private fun isOtherTabSelected(node: AccessibilityNodeInfo, bounds: Rect): Boolean {
         val selected = try {
             node.isSelected || node.isChecked
@@ -1369,6 +1386,12 @@ class ReelsShieldController(
             false
         }
         if (!selected) return false
+        
+        
+        try {
+            if (!node.isVisibleToUser) return false
+        } catch (_: Exception) {
+        }
         if (bounds.top < screenHeightPx * TAB_BAR_TOP_FRACTION) return false
         if (bounds.height() > screenHeightPx * TAB_BAR_MAX_HEIGHT_FRACTION) return false
         val label = paneTitleOf(node)
@@ -1404,7 +1427,7 @@ class ReelsShieldController(
         return bounds.height() >= sheetPaneMinHeightPx
     }
 
-    /** The currently selected Reels/Shorts/Spotlight navigation tab. */
+    
     private fun isSelectedSurfaceTab(pkg: String, node: AccessibilityNodeInfo): Boolean {
         val selected = try {
             node.isSelected || node.isChecked
@@ -1418,8 +1441,8 @@ class ReelsShieldController(
         } catch (_: Exception) {
             return false
         }
-        // Bottom navigation only. A selected "Shorts" filter chip at the top
-        // of YouTube Home is not the Shorts tab.
+        
+        
         if (bounds.top < screenHeightPx * TAB_BAR_TOP_FRACTION) return false
         if (bounds.height() > screenHeightPx * TAB_BAR_MAX_HEIGHT_FRACTION) return false
         return hasSurfaceTabWord(pkg, paneTitleOf(node)) ||
@@ -1427,16 +1450,16 @@ class ReelsShieldController(
                 hasSurfaceTabWord(pkg, nodeTextOf(node))
     }
 
-    /** Cheap ancestry check used on scroll/content events. */
+    
     private fun sourceHasSurfaceHint(pkg: String, source: AccessibilityNodeInfo?): Boolean {
         if (source == null) return false
-        // The window title is set by the app's activity/pane and is the
-        // cheapest navigation-level signal available on a scroll event.
+        
+        
         if (hasSurfaceWord(windowTitleOf(source))) return true
         var node: AccessibilityNodeInfo? = source
         var depth = 0
-        // Every parent fetched is owned here, including the last one, so they
-        // are all recycled on both the match and the miss path.
+        
+        
         val parents = ArrayList<AccessibilityNodeInfo>(MAX_SOURCE_DEPTH)
         val bounds = Rect()
         try {
@@ -1448,21 +1471,26 @@ class ReelsShieldController(
                 }
                 val large = bounds.height() >= minSurfaceHeightPx &&
                         bounds.width() >= minSurfaceWidthPx
-                // Exact pager ids and Facebook's structural pager are stronger
-                // than a caption word: Instagram keeps its pager alive on other
-                // tabs, so visibility is required before trusting it.
-                if (large && node.isVisibleToUser &&
+                
+                
+                
+                
+                
+                
+                
+                val backed = isSurfaceTabBacked(pkg) || isStructuralPagerBacked(pkg)
+                if (large && node.isVisibleToUser && backed &&
                     (isKnownPagerNode(pkg, node) || isStructuralFacebookPager(pkg, node, bounds))
                 ) {
                     return true
                 }
-                // Obfuscated pager containers (Instagram builds without the
-                // clips ids, Facebook Lite) are recognised by shape instead.
-                if (isFullScreenPagePager(node, bounds, depth)) return true
-                // A plain full-screen pager is ambiguous (Stories, photo
-                // carousels). Only an explicit Reels/Shorts marker may activate
-                // the surface from a scroll source; the bounded scan confirms
-                // tab-backed pagers.
+                
+                
+                if (backed && isFullScreenPagePager(node, bounds, depth)) return true
+                
+                
+                
+                
                 if (large && matchesStrongSurfaceHint(node)) return true
 
                 val parent = try { node.parent } catch (_: Exception) { null }
@@ -1568,8 +1596,7 @@ class ReelsShieldController(
 
     private fun isFullScreenPager(node: AccessibilityNodeInfo, bounds: Rect): Boolean {
         val className = node.className?.toString()?.lowercase(Locale.US) ?: ""
-        if (!className.contains("viewpager")) return false
-        return bounds.height() >= screenHeightPx * FULLSCREEN_PAGER_FRACTION &&
+        return className.contains("viewpager") && bounds.height() >= screenHeightPx * FULLSCREEN_PAGER_FRACTION &&
                 bounds.width() >= screenWidthPx * MIN_SURFACE_WIDTH_FRACTION
     }
 
@@ -1645,8 +1672,8 @@ class ReelsShieldController(
         if (!id.isNullOrEmpty()) {
             if (!id.startsWith("$pkg:id/")) return false
         } else if (pkg != PACKAGE_FACEBOOK_LITE) {
-            // Katana exposes resource ids; an unnamed RecyclerView there is a
-            // feed, not the Reels pager.
+            
+            
             return false
         }
 
@@ -1655,8 +1682,7 @@ class ReelsShieldController(
         } catch (_: Exception) {
             0
         }
-        if (childCount <= 0 || childCount > MAX_PAGER_CHILDREN) return false
-        return hasMostlyFullPageChildren(node, bounds)
+        return !(childCount <= 0 || childCount > MAX_PAGER_CHILDREN) && hasMostlyFullPageChildren(node, bounds)
     }
 
     /**
@@ -1698,6 +1724,9 @@ class ReelsShieldController(
         if (childCount <= 0) return false
         val sampled = minOf(childCount, MAX_PAGER_CHILDREN)
         var fullPage = 0
+        var firstFullTop = 0
+        var firstFullBottom = 0
+        var stackedPages = false
         val childBounds = Rect()
         for (index in 0 until sampled) {
             val child = try { node.getChild(index) } catch (_: Exception) { null } ?: continue
@@ -1706,15 +1735,32 @@ class ReelsShieldController(
                 if (childBounds.height() >= bounds.height() * PAGER_PAGE_HEIGHT_RATIO &&
                     childBounds.width() >= screenWidthPx * FACEBOOK_PAGER_MIN_WIDTH_FRACTION
                 ) {
+                    if (fullPage == 0) {
+                        firstFullTop = childBounds.top
+                        firstFullBottom = childBounds.bottom
+                    } else if (abs(childBounds.top - firstFullTop) > PAGER_STACK_EPSILON_PX ||
+                        abs(childBounds.bottom - firstFullBottom) > PAGER_STACK_EPSILON_PX
+                    ) {
+                        
+                        
+                        stackedPages = true
+                    }
                     fullPage++
                 }
             } catch (_: Exception) {
-                // Keep checking the remaining children.
+                
             } finally {
                 try { child.recycle() } catch (_: Exception) {}
             }
         }
-        return fullPage > 0 && fullPage * 3 >= sampled * 2
+        
+        
+        
+        
+        
+        
+        return fullPage > 0 && fullPage * 3 >= sampled * 2 &&
+                (fullPage < 2 || stackedPages)
     }
 
     private fun isTabId(id: String): Boolean {
@@ -1748,22 +1794,17 @@ class ReelsShieldController(
         if (pkg != PACKAGE_FACEBOOK && pkg != PACKAGE_FACEBOOK_LITE) return false
         if (raw.isNullOrBlank()) return false
         val text = raw.trim().lowercase(Locale.US)
-        if (text.length > MAX_TAB_LABEL_LENGTH) return false
-        return hasWordInText(text, FACEBOOK_SURFACE_TAB_WORDS)
+        return text.length <= MAX_TAB_LABEL_LENGTH && hasWordInText(text, FACEBOOK_SURFACE_TAB_WORDS)
     }
 
     private fun looksLikeSurfaceWindow(pkg: String, className: String?): Boolean {
         if (className.isNullOrEmpty()) return false
         val name = className.lowercase(Locale.US)
-        if (name.contains("clips") || name.contains("reels") ||
-            name.contains("shorts") || name.contains("spotlight") ||
-            name.contains("shortvideo")
-        ) {
-            return true
-        }
-        // YouTube's Shorts player uses the singular "reel". Instagram's
-        // Stories viewer can also contain "reel", so keep this package-scoped.
-        return pkg == PACKAGE_YOUTUBE && name.contains("reel")
+        return name.contains("clips") || name.contains("reels") ||
+                name.contains("shorts") || name.contains("spotlight") ||
+                name.contains("shortvideo") || pkg == PACKAGE_YOUTUBE && name.contains("reel")
+        
+        
     }
 
     private fun looksLikeSheetWindow(className: String?): Boolean {
@@ -1775,7 +1816,7 @@ class ReelsShieldController(
                 name.contains("comment")
     }
 
-    // ------------------------------------------------------- limit checks
+    
 
     private fun enforceBack(pkg: String, reason: String) {
         val now = System.currentTimeMillis()
@@ -1793,8 +1834,8 @@ class ReelsShieldController(
             } catch (_: Exception) {
             }
         }
-        // Keep the pill visible long enough to explain the kick, then hide it
-        // and let the next foreground/window event decide what comes next.
+        
+        
         mainHandler.postDelayed({
             if (surfacePackage == pkg) deactivateSurface("after back", flush = true)
         }, BACK_PILL_LINGER_MS)
@@ -1842,13 +1883,13 @@ class ReelsShieldController(
         }
     }
 
-    // ----------------------------------------------------------- persisting
+    
 
     private fun flushIfDirty() {
         if (dirty) persist(force = true)
     }
 
-    /** Main thread only; serialized DataStore writes keep snapshots in order. */
+    
     private fun persist(force: Boolean) {
         dirty = true
         val now = System.currentTimeMillis()
@@ -1931,8 +1972,9 @@ class ReelsShieldController(
         private const val FACEBOOK_PAGER_MIN_WIDTH_FRACTION = 0.90f
         private const val FACEBOOK_PAGER_MIN_HEIGHT_FRACTION = 0.75f
 
-        /** A pager page fills its container; a feed row never comes close. */
+        
         private const val PAGER_PAGE_HEIGHT_RATIO = 0.85f
+        private const val PAGER_STACK_EPSILON_PX = 8
 
         private const val PACKAGE_INSTAGRAM = "com.instagram.android"
         private const val PACKAGE_YOUTUBE = "com.google.android.youtube"
@@ -1947,13 +1989,21 @@ class ReelsShieldController(
             "reel", "reels", "shorts", "spotlight", "clips"
         )
         private val SHEET_TEXT_WORDS = setOf(
-            "comment", "comments", "reply", "replies", "caption", "description"
+            "comment", "comments", "reply", "replies", "caption", "description",
+            
+            "komentar", "balasan", "keterangan", "deskripsi"
         )
         private val NON_SURFACE_TAB_WORDS = setOf(
             "home", "search", "explore", "profile", "inbox", "chat", "chats",
             "camera", "stories", "friends", "marketplace", "notifications",
             "menu", "subscriptions", "library", "create", "activity", "you",
-            "watch"
+            "watch",
+            
+            
+            "beranda", "jelajahi", "eksplorasi", "telusuri", "cari", "profil",
+            "akun", "pesan", "kotak", "notifikasi", "pemberitahuan", "teman",
+            "belanja", "langganan", "pustaka", "aktivitas", "tonton", "nonton",
+            "cerita", "obrolan", "buat"
         )
         private val FACEBOOK_SURFACE_TAB_WORDS = setOf("video", "videos")
     }

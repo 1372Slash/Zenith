@@ -67,19 +67,6 @@ import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.ui.theme.GSFlexSettings
 import com.etrisad.zenith.ui.theme.ZenithTheme
 import kotlin.math.roundToInt
-
-/**
- * Floating pill HUD for the Reels Shield.
- *
- * Shows the shared daily pool on the left and the current session's swipe
- * count on the right. The window is attached only while a tracked short-video
- * surface is on screen and is removed right after it goes away, so an idle
- * device holds no overlay window and runs no recomposition.
- *
- * Theme values are copied out of the preference snapshot instead of collecting
- * the whole DataStore flow here. Counter writes therefore never recompose the
- * pill for unrelated preference fields.
- */
 class ReelsShieldOverlayManager(private val context: Context) {
 
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -114,8 +101,6 @@ class ReelsShieldOverlayManager(private val context: Context) {
     private var detachRunnable: Runnable? = null
 
     val isShowing: Boolean get() = composeView != null
-
-    /** Only theme fields, filtered so counter writes never change the theme state. */
     fun updateTheme(prefs: UserPreferences) {
         val next = PillTheme(
             fontOption = prefs.fontOption,
@@ -127,11 +112,6 @@ class ReelsShieldOverlayManager(private val context: Context) {
             if (theme.value != next) theme.value = next
         }
     }
-
-    /**
-     * Refreshes the counters and makes the pill visible. Safe from any thread;
-     * the caller is the accessibility event path, which is already main.
-     */
     fun show(
         pool: Int,
         limit: Int,
@@ -150,8 +130,6 @@ class ReelsShieldOverlayManager(private val context: Context) {
             cancelDetach()
 
             if (composeView == null) {
-                // Compose the pill hidden first so the entry animation has a
-                // real starting frame instead of appearing fully drawn.
                 pillVisible.value = false
                 attach()
                 mainHandler.post {
@@ -162,8 +140,6 @@ class ReelsShieldOverlayManager(private val context: Context) {
             }
         }
     }
-
-    /** Fades the pill out and removes the window; used when leaving the feed. */
     fun hideNow() {
         runOnMain {
             if (composeView == null) return@runOnMain
@@ -259,9 +235,6 @@ class ReelsShieldOverlayManager(private val context: Context) {
             lifecycleOwner = owner
             viewModelStore = store
         } catch (_: Exception) {
-            // Accessibility overlays do not need the draw-over-apps
-            // permission, but some OEMs reject the type. Try the regular
-            // overlay type once before giving up.
             if (!isAccessibilityOverlay) {
                 cleanupFailedAttach(view, owner, store)
                 return
@@ -340,14 +313,6 @@ private data class PillTheme(
     val expressiveColors: Boolean = false,
     val gsFlexSettings: GSFlexSettings = GSFlexSettings()
 )
-
-/**
- * Grouped HUD with neutral surfaces: two cards, a 2 dp gap, large outer
- * corners and tight facing corners. The left card shows the shared daily pool.
- * The right card shows how many reels were swiped in the current session plus
- * the remaining reels before Zenith presses back, so the next swipe is never a
- * surprise. No progress strips are drawn.
- */
 @Composable
 private fun ReelsShieldPill(
     pool: Int,
@@ -400,10 +365,6 @@ private fun ReelsShieldPill(
         topEnd = outerRadius,
         bottomEnd = outerRadius
     )
-
-    // Neutral surfaces only: no primary or tertiary fills, even when expressive
-    // colours are enabled. The limit state is the sole exception and uses the
-    // error role for the lock and the "0 left" text.
     val container = scheme.surfaceContainerHigh
     val content = scheme.onSurface
     val caption = scheme.onSurfaceVariant

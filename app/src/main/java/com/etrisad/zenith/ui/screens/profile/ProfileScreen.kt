@@ -1039,7 +1039,7 @@ private fun PodiumColumn(
         ) {
             SubcomposeAsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data("app-icon://${app.packageName}").crossfade(300).build(),
+                    .data("app-icon:
                 contentDescription = app.appName,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize().clip(iconShape),

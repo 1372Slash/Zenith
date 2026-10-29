@@ -53,12 +53,6 @@ class ZenithService : AccessibilityService() {
     private val usageStatsManager by lazy { getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager }
     private val notificationManager by lazy { getSystemService(NotificationManager::class.java) }
     private val reusableCalendar = Calendar.getInstance()
-
-    /**
-     * Fully-qualified names of Zenith's real activities. Accessibility window
-     * events from the Reels Shield pill carry this package name too, so only a
-     * class in this set may be treated as "the user opened Zenith".
-     */
     private val ownActivityClasses: Set<String> by lazy {
         try {
             packageManager.getPackageInfo(
@@ -469,10 +463,6 @@ class ZenithService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         lastEventTime = System.currentTimeMillis()
         if (!AppStateHolder.isScreenOn.value) return
-
-        // Tab selection is the only reliable Reels signal while the viewer is
-        // idle, and it is low volume. Handle it before the general throttle so
-        // a tab switch is never dropped.
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_SELECTED) {
             reelsShield.handleViewSelectedEvent(event)
             return
@@ -481,17 +471,11 @@ class ZenithService : AccessibilityService() {
         val now = System.currentTimeMillis()
         val isWindowState = event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
         val isScrollEvent = event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED
-        // Scroll events are cheap but numerous. Do not let the general event
-        // throttle swallow the only settle event of a pager swipe.
         if (!isWindowState && !isScrollEvent && now - lastA11yEventProcessedTime < 40) return
         if (!isScrollEvent) lastA11yEventProcessedTime = now
 
         val packageName = event.packageName?.toString() ?: return
         if (packageName == this.packageName) {
-            // Opening Zenith is leaving the tracked app. Only forward a real
-            // activity window: the Reels Shield pill is itself an accessibility
-            // overlay owned by this package, and treating its window event as
-            // "left to Zenith" would hide the pill right after it appears.
             val ownActivityClass = event.className?.toString().orEmpty()
             val isOwnActivityWindow = ownActivityClass in ownActivityClasses ||
                 (ownActivityClasses.isEmpty() && ownActivityClass.endsWith("Activity"))
@@ -540,7 +524,7 @@ class ZenithService : AccessibilityService() {
             }
         } else if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
             reelsShield.onContentChanged(event, packageName)
-            if (packageName == lastForegroundApp && com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(packageName)) {
+            if (packageName == lastForegroundApp && WebsiteRepository.isKnownBrowser(packageName)) {
                 var domain = websiteUrlTracker.checkAccessibilityEvent(event)
                 if (domain == null && now - lastContentChangeUrlCheck > 1000) {
                     lastContentChangeUrlCheck = now
@@ -559,12 +543,10 @@ class ZenithService : AccessibilityService() {
 
     private fun handleWindowStateChanged(packageName: String, event: AccessibilityEvent) {
         val now = System.currentTimeMillis()
-        // Reels surface tracking must see every window transition, including
-        // in-app activity changes, before the per-package debounce below.
         reelsShield.onForegroundChanged(
             packageName,
             event.className?.toString(),
-            event.text?.joinToString(" ")
+            event.text.joinToString(" ")
         )
 
         val lastPkgTime = lastA11yPackageTime[packageName] ?: 0L
@@ -579,7 +561,7 @@ class ZenithService : AccessibilityService() {
         AppStateHolder.foregroundApp.value = packageName
 
         if (!SharedMonitoringState.accessibilityLimitedMode &&
-            com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(packageName)
+            WebsiteRepository.isKnownBrowser(packageName)
         ) {
             WebsiteStateHolder.currentWebsiteDomain.value?.let { domain ->
                 overlayActionHandler.cancelWebsiteSessionDismiss("zenith-web:$domain")
@@ -699,7 +681,7 @@ class ZenithService : AccessibilityService() {
         val oldDomain = WebsiteStateHolder.currentWebsiteDomain.value
         if (oldDomain != null && oldDomain != domain) {
             val currentPkg = lastForegroundApp
-            if (domain == null && currentPkg != null && com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(currentPkg)) {
+            if (domain == null && currentPkg != null && WebsiteRepository.isKnownBrowser(currentPkg)) {
                 return
             }
             overlayActionHandler.scheduleWebsiteSessionDismiss("zenith-web:$oldDomain")
@@ -741,7 +723,7 @@ class ZenithService : AccessibilityService() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        val openSettingsIntent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+        val openSettingsIntent = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
 
@@ -778,7 +760,7 @@ class ZenithService : AccessibilityService() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        val openSettingsIntent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+        val openSettingsIntent = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
 
@@ -816,7 +798,7 @@ class ZenithService : AccessibilityService() {
             OverlayLogBuffer.d("Zenith_HPC", "EARLY RETURN: pkg mismatch (actual=$actualPkg, current=$currentApp)")
             return
         }
-        if (com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(currentApp) &&
+        if (WebsiteRepository.isKnownBrowser(currentApp) &&
             WebsiteStateHolder.currentWebsiteDomain.value == null) {
             delay(150)
         }
@@ -1111,7 +1093,7 @@ class ZenithService : AccessibilityService() {
 
     private fun sendGoalReachedNotification(appName: String, packageName: String) {
         val channelId = "zenith_goal_channel"
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
         if (manager.getNotificationChannel(channelId) == null) {
             val channel = NotificationChannel(
@@ -1201,8 +1183,8 @@ class ZenithService : AccessibilityService() {
                 }
             }
             if (shield != null) {
-                val todayCal = java.util.Calendar.getInstance()
-                val currentDayOfWeek = todayCal.get(java.util.Calendar.DAY_OF_WEEK)
+                val todayCal = Calendar.getInstance()
+                val currentDayOfWeek = todayCal.get(Calendar.DAY_OF_WEEK)
                 if (currentDayOfWeek !in shield.activeDays) return
             }
             val activeAllowedUntil = allowedApps[actualTargetPackage] ?: 0L
@@ -1266,7 +1248,7 @@ class ZenithService : AccessibilityService() {
                     }
                 }
 
-                OverlayLogBuffer.d("Zenith_HPC", "SHOWING overlay for: $actualTargetPackage (shield=${effectiveShield?.type})")
+                OverlayLogBuffer.d("Zenith_HPC", "SHOWING overlay for: $actualTargetPackage (shield=${effectiveShield.type})")
                 overlayActionHandler.showShieldOverlay(
                     targetPackageName = actualTargetPackage,
                     shield = effectiveShield,

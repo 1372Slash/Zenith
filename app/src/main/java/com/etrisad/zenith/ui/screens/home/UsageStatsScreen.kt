@@ -67,8 +67,9 @@ import com.etrisad.zenith.ui.viewmodel.DailyUsage
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
 import com.etrisad.zenith.ui.viewmodel.HourlySortType
 import com.etrisad.zenith.ui.viewmodel.HourlyUsageInfo
-import androidx.compose.material.icons.outlined.Sort
 import android.widget.Toast
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.ui.platform.LocalContext
 import java.time.Instant
 import java.time.LocalDate
@@ -368,7 +369,7 @@ fun UsageStatsScreen(
                             )
                             ZenithToggleButtonGroup(
                                 options = listOf(
-                                    ZenithToggleOption(text = "Usage", icon = Icons.Outlined.Sort),
+                                    ZenithToggleOption(text = "Usage", icon = Icons.AutoMirrored.Outlined.Sort),
                                     ZenithToggleOption(text = "Recent", icon = Icons.Outlined.Schedule)
                                 ),
                                 selectedIndices = setOf(if (uiState.hourlySortType == HourlySortType.USAGE_TIME) 0 else 1),
@@ -1301,7 +1302,7 @@ fun DashboardSmallCard(
     modifier: Modifier = Modifier,
     isHighlighted: Boolean = false,
     anyHighlighted: Boolean = false,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(16.dp)
+    shape: Shape = RoundedCornerShape(16.dp)
 ) {
     val animAlpha by animateFloatAsState(
         targetValue = if (!anyHighlighted || isHighlighted) 1f else 0.4f,
@@ -1427,7 +1428,7 @@ fun HourlyStatsContent(
     bedtimeEndTime: String,
     bedtimeDays: Set<Int>,
     dateMillis: Long,
-    accentColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary,
+    accentColor: Color = MaterialTheme.colorScheme.primary,
     showDatabaseIndicator: Boolean = false
 ) {
     val maxUsage = remember(hourlyUsage) { hourlyUsage.maxOfOrNull { it.usageTimeMillis }?.coerceAtLeast(1L) ?: 1L }
@@ -1994,7 +1995,7 @@ fun WeeklyStatsDoubleCard(
                                     val shape = appIconShape(isWebsite)
                                     AsyncImage(
                                         model = ImageRequest.Builder(LocalContext.current)
-                                            .data("app-icon://${app.packageName}")
+                                            .data("app-icon:
                                             .crossfade(500)
                                             .build(),
                                         contentDescription = null,
@@ -2153,7 +2154,7 @@ fun UsageItem(
                 val shape = appIconShape(isWebsite)
                 SubcomposeAsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data("app-icon://${app.packageName}")
+                        .data("app-icon:
                         .crossfade(500)
                         .build(),
                     contentDescription = null,

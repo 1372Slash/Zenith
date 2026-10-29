@@ -637,8 +637,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             websiteAutoTrackingEnabled = settings[PreferencesKeys.WEBSITE_AUTO_TRACKING] ?: false,
             lastBankingAppsCount = settings[PreferencesKeys.LAST_BANKING_APPS_COUNT] ?: -1,
             incentiveLockDisableRequestTimestamp = runtime[RuntimeKeys.INCENTIVE_LOCK_DISABLE_REQUEST_TIMESTAMP] ?: 0L,
-            incentiveLockGoalsMetToday = if (runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_TODAY] != true) false
-                else runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_DATE] == SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
+            incentiveLockGoalsMetToday = runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_TODAY] == true && runtime[RuntimeKeys.INCENTIVE_LOCK_GOALS_MET_DATE] == SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
             incentiveBonusUsesUsed = {
                 val date = runtime[RuntimeKeys.INCENTIVE_BONUS_USES_DATE] ?: ""
                 val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
@@ -817,13 +816,13 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         .build()
 
     private val alarmsAdapter: com.squareup.moshi.JsonAdapter<List<AlarmItem>> by lazy {
-        moshi.adapter(com.squareup.moshi.Types.newParameterizedType(List::class.java, AlarmItem::class.java))
+        moshi.adapter(Types.newParameterizedType(List::class.java, AlarmItem::class.java))
     }
     private val stringListAdapter: com.squareup.moshi.JsonAdapter<List<String>> by lazy {
-        moshi.adapter(com.squareup.moshi.Types.newParameterizedType(List::class.java, String::class.java))
+        moshi.adapter(Types.newParameterizedType(List::class.java, String::class.java))
     }
     private val variantListAdapter: com.squareup.moshi.JsonAdapter<List<PausePointVariant>> by lazy {
-        moshi.adapter(com.squareup.moshi.Types.newParameterizedType(List::class.java, PausePointVariant::class.java))
+        moshi.adapter(Types.newParameterizedType(List::class.java, PausePointVariant::class.java))
     }
 
     fun parseAlarms(json: String): List<AlarmItem> {
@@ -1317,7 +1316,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
                     android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND -> {
                         if (activePkg != null) {
                             val duration = time - activeStartTime
-                            if (duration > 0) usageMap[activePkg!!] = (usageMap[activePkg!!] ?: 0L) + duration
+                            if (duration > 0) usageMap[activePkg] = (usageMap[activePkg] ?: 0L) + duration
                         }
                         activePkg = pkg
                         activeStartTime = time
@@ -1470,8 +1469,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         val preferences = context.dataStore.data.first()
         if (!(preferences[PreferencesKeys.GRACE_PERIOD_EDIT_LOCK_ENABLED] ?: false)) return true
         val last = preferences[PreferencesKeys.GRACE_PERIOD_LAST_EDIT_TIMESTAMP] ?: 0L
-        if (last == 0L) return true
-        return System.currentTimeMillis() - last >= GRACE_PERIOD_EDIT_COOLDOWN_MILLIS
+        return last == 0L || System.currentTimeMillis() - last >= GRACE_PERIOD_EDIT_COOLDOWN_MILLIS
     }
 
     fun getGracePeriodCooldownRemaining(prefs: UserPreferences): Long {
@@ -1627,10 +1625,6 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         val safeLimit = limit.coerceIn(0, MAX_REELS_SHIELD_DAILY_LIMIT)
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.REELS_SHIELD_DAILY_LIMIT] = safeLimit
-            // A per-app cap can never exceed the shared pool. When the pool is
-            // lowered, tighten every stored cap with it; caps that end up equal
-            // to the pool are dropped so a later pool increase is not silently
-            // capped by an old value.
             val limits = preferences[PreferencesKeys.REELS_SHIELD_APP_LIMITS]
                 ?.let { parseCountMap(it) }
                 .orEmpty()
@@ -1654,12 +1648,6 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             preferences[PreferencesKeys.REELS_SHIELD_PACKAGES] = supported.joinToString(",")
         }
     }
-
-    /**
-     * Stores a cap for one tracked app. Values above the shared pool are
-     * clamped, values below one are raised, and a value equal to the pool
-     * removes the override so the app simply uses the shared pool.
-     */
     suspend fun setReelsShieldAppLimit(packageName: String, limit: Int) {
         if (packageName !in ReelsShieldDefaults.SUPPORTED_PACKAGES) return
         context.dataStore.edit { preferences ->
@@ -1683,8 +1671,6 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             }
         }
     }
-
-    /** Stores the ordered Home quick action row; never empties it, never exceeds the cap. */
     suspend fun setHomeQuickActions(actions: List<String>) {
         val sanitized = actions.filter { it in HomeQuickActionsDefaults.ALL_IDS }
             .distinct()
@@ -1694,11 +1680,6 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             preferences[PreferencesKeys.HOME_QUICK_ACTIONS] = sanitized.joinToString(",")
         }
     }
-
-    /**
-     * Writes every reels-shield counter in one atomic edit so the daily pool,
-     * the per-app split, the lifetime total and the bar history never drift apart.
-     */
     suspend fun setReelsShieldCounters(
         todayDate: String,
         todayCount: Int,
@@ -2087,7 +2068,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
     }
 
     suspend fun migrateAlarmIdsIfNeeded() {
-        val rawType = com.squareup.moshi.Types.newParameterizedType(List::class.java, Map::class.java)
+        val rawType = Types.newParameterizedType(List::class.java, Map::class.java)
         val rawAdapter: com.squareup.moshi.JsonAdapter<List<Map<String, Any?>>> = moshi.adapter(rawType)
 
         context.dataStore.edit { prefs ->
@@ -2099,7 +2080,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 
             val migrated = raw.map { entry ->
                 if (entry.containsKey("id")) entry
-                else entry.toMutableMap().apply { put("id", com.etrisad.zenith.data.model.AlarmItem.createNew().id) }
+                else entry.toMutableMap().apply { put("id", AlarmItem.createNew().id) }
             }
 
             val needsSave = raw.size != migrated.size || raw.zip(migrated).any { (o, n) -> o !== n }
@@ -2112,20 +2093,8 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 
 }
 const val MAX_REELS_SHIELD_DAILY_LIMIT = 200
-
-/**
- * Defaults for the Reels Shield: which apps expose short-video feeds, and how
- * many swipes per day the shared pool allows.
- */
 object ReelsShieldDefaults {
     const val DAILY_LIMIT = 30
-
-    /**
-     * Priority order matters during setup: Instagram Reels and Facebook Reels
-     * expose the most stable hierarchy, so they lead both the defaults and the
-     * picker. TikTok stays available but is marked as partial support because
-     * its node tree changes between app versions.
-     */
     val PACKAGES: Set<String> = setOf(
         "com.instagram.android",
         "com.facebook.katana",
@@ -2137,45 +2106,36 @@ object ReelsShieldDefaults {
         "com.ss.android.ugc.trill",
         "com.ss.android.ugc.aweme"
     )
-
-    /** Feed hierarchies that Reels Shield integrates with first. */
     val PRIORITY_PACKAGES: Set<String> = setOf(
         "com.instagram.android",
         "com.facebook.katana",
         "com.facebook.lite"
     )
-
-    /** Supported, but not yet reliable across every app version. */
+    val FULLY_SUPPORTED_PACKAGES: Set<String> = setOf(
+        "com.instagram.android",
+        "com.google.android.youtube"
+    )
     val PARTIAL_PACKAGES: Set<String> = setOf(
+        "com.facebook.lite",
         "com.zhiliaoapp.musically",
         "com.zhiliaoapp.musically.go",
         "com.ss.android.ugc.trill",
         "com.ss.android.ugc.aweme"
     )
-
-    /**
-     * Apps Zenith can recognise a short-video surface in. Instagram Reels,
-     * Facebook Reels, YouTube Shorts and Snapchat Spotlight expose a feed
-     * Zenith can detect and count. TikTok is included with partial support so
-     * the picker never hides it completely, but its hierarchy is less stable.
-     */
+    val UNTESTED_PACKAGES: Set<String> = setOf(
+        "com.facebook.katana",
+        "com.snapchat.android"
+    )
     val SUPPORTED_PACKAGES: Set<String> = PACKAGES
-
-    /**
-     * Apps that are nothing but a short-video feed, so foreground entry alone
-     * is enough to confirm the surface and kick the user back at the limit.
-     */
+    fun isFullySupported(pkg: String): Boolean = pkg in FULLY_SUPPORTED_PACKAGES
+    fun isPartial(pkg: String): Boolean = pkg in PARTIAL_PACKAGES
+    fun isUntested(pkg: String): Boolean = !isFullySupported(pkg) && !isPartial(pkg)
     val SHORT_VIDEO_ONLY_PACKAGES: Set<String> = setOf(
         "com.zhiliaoapp.musically",
         "com.zhiliaoapp.musically.go",
         "com.ss.android.ugc.trill",
         "com.ss.android.ugc.aweme"
     )
-
-    /**
-     * Readable name used before (or instead of) PackageManager resolution.
-     * Never call PackageManager from an accessibility event.
-     */
     fun fallbackLabel(pkg: String): String = when (pkg) {
         "com.instagram.android" -> "Instagram"
         "com.google.android.youtube" -> "YouTube"
@@ -2208,7 +2168,7 @@ object HomeQuickActionsDefaults {
     )
 }
 
-/** Parses "key:value,key:value" counter maps written by setReelsShieldCounters. */
+
 private fun parseCountMap(raw: String): Map<String, Int> {
     if (raw.isEmpty()) return emptyMap()
     return raw.split(",").mapNotNull { entry ->
@@ -2221,7 +2181,7 @@ private fun parseCountMap(raw: String): Map<String, Int> {
 private fun encodeCountMap(map: Map<String, Int>): String =
     map.entries.joinToString(",") { "${it.key}:${it.value}" }
 
-/** Parses "date|pkg:count;pkg:count,date|pkg:count" per-day app maps. */
+
 private fun parseHistoryByAppMap(raw: String): Map<String, Map<String, Int>> {
     if (raw.isEmpty()) return emptyMap()
     return raw.split(",").mapNotNull { entry ->
