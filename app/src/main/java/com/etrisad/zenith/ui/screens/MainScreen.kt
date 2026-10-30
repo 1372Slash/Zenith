@@ -291,7 +291,7 @@ fun MainScreen(
         currentRoute == Screen.EyeCare.route && preferences.eyeCareEnabled -> "eye"
         currentRoute == Screen.Lockdown.route && preferences.lockdownEnabled -> "lockdown"
         currentRoute == Screen.ReelsShield.route && preferences.reelsShieldEnabled -> "reels"
-        currentRoute == Screen.PausePoint.route -> "pause"
+        currentRoute == Screen.PausePoint.route && preferences.pausePointEnabled -> "pause"
         currentRoute == Screen.Alarm.route -> "alarm"
         else -> null
     }
@@ -577,16 +577,6 @@ fun MainScreen(
                             label = "LeftActionsContent"
                         ) { state ->
                             if (state == "home") {
-                                val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                                val isPressed by interactionSource.collectIsPressedAsState()
-                                val scale by animateFloatAsState(
-                                    targetValue = if (isPressed) 0.86f else 1f,
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                                        stiffness = Spring.StiffnessMediumLow
-                                    ),
-                                    label = "HomeCustomizeScale"
-                                )
                                 IconButton(
                                     onClick = {
                                         if (!homeCustomizeState.quickEditOpen) {
@@ -596,15 +586,12 @@ fun MainScreen(
                                     modifier = Modifier
                                         .padding(start = 12.dp)
                                         .size(48.dp)
-                                        .scale(scale)
                                         .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
-                                    interactionSource = interactionSource
                                 ) {
                                     Icon(
                                         imageVector = Icons.Outlined.Tune,
                                         contentDescription = "Customize Home",
-                                        tint = MaterialTheme.colorScheme.primary,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }

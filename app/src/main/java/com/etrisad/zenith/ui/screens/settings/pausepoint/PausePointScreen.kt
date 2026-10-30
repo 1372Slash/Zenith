@@ -1,7 +1,10 @@
 package com.etrisad.zenith.ui.screens.settings.pausepoint
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -20,6 +23,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -167,55 +171,166 @@ fun PausePointScreen(
                 bottom = innerPadding.calculateBottomPadding() + 24.dp
             )
     ) {
-        PreferenceCategory(title = "Task Type")
-        val toastContext = androidx.compose.ui.platform.LocalContext.current
-
-        PausePointTaskType.entries.forEachIndexed { index, taskType ->
-            val shape = when (index) {
-                0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-                PausePointTaskType.entries.lastIndex -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                else -> RoundedCornerShape(8.dp)
-            }
-            val checked = taskType in preferences.pausePointTaskTypes
-            val onCheckedChange: (Boolean) -> Unit = { isNowChecked ->
-                if (isNowChecked) {
-                    val blockReason = when (taskType) {
-                        com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType.QR_SCAN ->
-                            if (preferences.pausePointQrCodes.none { it.trim().isNotEmpty() })
-                                "Register a QR code first" else null
-                        com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType.NFC_SCAN ->
-                            if (preferences.pausePointNfcTagIds.none {
-                                    com.etrisad.zenith.ui.components.pausepoint.PausePointEngine.normalizeNfcId(it).isNotEmpty()
-                                }
-                            ) "Register an NFC tag first" else null
-                        else -> null
+        AnimatedVisibility(
+            visible = !preferences.pausePointEnabled,
+            enter = fadeIn(spring(stiffness = Spring.StiffnessLow)) +
+                    expandVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)),
+            exit = fadeOut(spring(stiffness = Spring.StiffnessLow)) +
+                   shrinkVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow))
+        ) {
+            Column {
+                PausePointToggleCard(
+                    enabled = preferences.pausePointEnabled,
+                    onToggle = { enabled ->
+                        coroutineScope.launch { preferencesRepository.setPausePointEnabled(enabled) }
                     }
-                    if (blockReason != null) {
-                        android.widget.Toast.makeText(toastContext, blockReason, android.widget.Toast.LENGTH_SHORT).show()
-                        onTaskTypeClick(taskType)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+
+        if (preferences.pausePointEnabled) {
+            PreferenceCategory(title = "Task Type")
+            val toastContext = androidx.compose.ui.platform.LocalContext.current
+
+            PausePointTaskType.entries.forEachIndexed { index, taskType ->
+                val shape = when (index) {
+                    0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                    PausePointTaskType.entries.lastIndex -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                    else -> RoundedCornerShape(8.dp)
+                }
+                val checked = taskType in preferences.pausePointTaskTypes
+                val onCheckedChange: (Boolean) -> Unit = { isNowChecked ->
+                    if (isNowChecked) {
+                        val blockReason = when (taskType) {
+                            com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType.QR_SCAN ->
+                                if (preferences.pausePointQrCodes.none { it.trim().isNotEmpty() })
+                                    "Register a QR code first" else null
+                            com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType.NFC_SCAN ->
+                                if (preferences.pausePointNfcTagIds.none {
+                                        com.etrisad.zenith.ui.components.pausepoint.PausePointEngine.normalizeNfcId(it).isNotEmpty()
+                                    }
+                                ) "Register an NFC tag first" else null
+                            else -> null
+                        }
+                        if (blockReason != null) {
+                            android.widget.Toast.makeText(toastContext, blockReason, android.widget.Toast.LENGTH_SHORT).show()
+                            onTaskTypeClick(taskType)
+                        } else {
+                            val updated = preferences.pausePointTaskTypes + taskType
+                            coroutineScope.launch { preferencesRepository.setPausePointTaskTypes(updated) }
+                        }
                     } else {
-                        val updated = preferences.pausePointTaskTypes + taskType
+                        val updated = preferences.pausePointTaskTypes - taskType
                         coroutineScope.launch { preferencesRepository.setPausePointTaskTypes(updated) }
                     }
-                } else {
-                    val updated = preferences.pausePointTaskTypes - taskType
-                    coroutineScope.launch { preferencesRepository.setPausePointTaskTypes(updated) }
+                }
+
+                SettingsToggleWithNavigation(
+                    title = taskType.displayName,
+                    description = taskType.description,
+                    summary = pausePointSummary(taskType, preferences),
+                    checked = checked,
+                    onCheckedChange = onCheckedChange,
+                    icon = taskType.icon,
+                    shape = shape,
+                    onClick = { onTaskTypeClick(taskType) }
+                )
+                if (index != PausePointTaskType.entries.lastIndex) {
+                    Spacer(modifier = Modifier.height(4.dp))
                 }
             }
+        }
+    }
+}
 
-            SettingsToggleWithNavigation(
-                title = taskType.displayName,
-                description = taskType.description,
-                summary = pausePointSummary(taskType, preferences),
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                icon = taskType.icon,
-                shape = shape,
-                onClick = { onTaskTypeClick(taskType) }
-            )
-            if (index != PausePointTaskType.entries.lastIndex) {
-                Spacer(modifier = Modifier.height(4.dp))
+@Composable
+private fun PausePointToggleCard(enabled: Boolean, onToggle: (Boolean) -> Unit) {
+    val containerColor by animateColorAsState(
+        targetValue = if (enabled) MaterialTheme.colorScheme.primaryContainer
+                      else MaterialTheme.colorScheme.surfaceContainerLow,
+        label = "toggleCardColor"
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(20.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(
+                        if (enabled) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f)
+                        else MaterialTheme.colorScheme.primaryContainer,
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.PauseCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(20.dp)
+                )
             }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Pause Point",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = if (enabled) "Require a task before a block overlay lets you through" else "Currently disabled",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = enabled,
+                onCheckedChange = onToggle,
+                thumbContent = {
+                    val thumbSize by animateDpAsState(
+                        targetValue = if (enabled) 28.dp else 24.dp,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
+                        label = "thumb_size"
+                    )
+                    val iconColor by animateColorAsState(
+                        targetValue = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
+                        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                        label = "switch_icon_color"
+                    )
+                    Box(
+                        modifier = Modifier.size(thumbSize),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AnimatedContent(
+                            targetState = enabled,
+                            transitionSpec = {
+                                (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                 scaleIn(initialScale = 0.5f, animationSpec = spring(dampingRatio = Spring.DampingRatioHighBouncy, stiffness = Spring.StiffnessMediumLow)))
+                                    .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                            scaleOut(targetScale = 0.5f, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
+                            },
+                            label = "switch_icon_anim"
+                        ) { isChecked ->
+                            Icon(
+                                imageVector = if (isChecked) Icons.Filled.Check else Icons.Filled.Close,
+                                contentDescription = null,
+                                modifier = Modifier.size(if (isChecked) 18.dp else 16.dp),
+                                tint = iconColor
+                            )
+                        }
+                    }
+                }
+            )
         }
     }
 }
