@@ -1,0 +1,108 @@
+name: Bug Report
+description: Create a report to help us improve Zenith
+title: "[BUG] : "
+labels: ["bug"]
+assignees: []
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A short summary of what is not working as expected.
+      placeholder: Describe the issue here...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps_to_reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: "1. Open Zenith\n2. Go to '...'\n3. Perform '...'\n4. See error"
+      placeholder: |
+        1. Open Zenith
+        2. Go to '...'
+        3. Perform '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_vs_actual
+    attributes:
+      label: Expected vs Actual
+      description: Describe what you expected to happen vs what actually happened.
+      placeholder: |
+        - Expected: (e.g., "The goal should be saved and visible in the list")
+        - Actual: (e.g., "The screen closes but the list remains empty")
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_ive_tried
+    attributes:
+      label: What I've tried so far
+      description: Did you try anything to fix it? (e.g., restarted the app, toggled permissions, cleared cache)
+      placeholder: Describe troubleshooting steps tried...
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots / Videos
+      description: Drag and drop images or videos here to help us see what's happening.
+      placeholder: Drop screenshots or videos here
+    validations:
+      required: false
+
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      description: e.g. Pixel 7
+      placeholder: Pixel 7
+    validations:
+      required: false
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      description: e.g. Android 14
+      placeholder: Android 14
+    validations:
+      required: false
+
+  - type: input
+    id: app_version
+    attributes:
+      label: App Version
+      description: e.g. v1.5.2
+      placeholder: v1.5.2
+    validations:
+      required: false
+
+  - type: textarea
+    id: technical_info
+    attributes:
+      label: "Optional: Technical Info"
+      description: If you have any error logs or specific details (like specific apps affected), paste them here.
+      placeholder: Paste logs or technical details here...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I am using the latest version of the app.
+          required: true
+        - label: I have checked that necessary permissions (Usage Access, Overlay) are granted.
+          required: true
+        - label: I have searched existing issues for a similar report.
+          required: true
+        - label: I have tried basic troubleshooting (restart app/device or clear cache).
+          required: true
+        - label: I have verified this isn't caused by battery optimization or system restrictions.
+          required: true
