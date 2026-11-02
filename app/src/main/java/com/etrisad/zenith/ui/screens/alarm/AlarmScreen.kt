@@ -27,6 +27,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.etrisad.zenith.ui.onboarding.onboardingAnchor
 import com.etrisad.zenith.data.model.AlarmItem
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.receiver.AlarmBroadcastReceiver
@@ -212,7 +213,8 @@ fun AlarmScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 80.dp),
+                            .padding(vertical = 80.dp)
+                            .then(Modifier.onboardingAnchor("alarm.master_switch")),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -322,14 +324,19 @@ fun AlarmScreen(
                     )
 
                     Column(
-                        modifier = Modifier.animateItem(
-                            fadeInSpec = spring(stiffness = Spring.StiffnessLow),
-                            fadeOutSpec = spring(stiffness = Spring.StiffnessLow),
-                            placementSpec = spring(
-                                dampingRatio = 0.8f,
-                                stiffness = Spring.StiffnessLow
+                        modifier = Modifier
+                            .animateItem(
+                                fadeInSpec = spring(stiffness = Spring.StiffnessLow),
+                                fadeOutSpec = spring(stiffness = Spring.StiffnessLow),
+                                placementSpec = spring(
+                                    dampingRatio = 0.8f,
+                                    stiffness = Spring.StiffnessLow
+                                )
                             )
-                        )
+                            .then(
+                                if (index == 0) Modifier.onboardingAnchor("alarm.master_switch")
+                                else Modifier
+                            )
                     ) {
                         SwipeableItemContainer(
                             onEdit = {

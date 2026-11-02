@@ -22,11 +22,18 @@
 <p align="center">
   <a href="https://github.com/1372Slash/Zenith/releases">
     <img src="https://img.shields.io/github/v/release/1372Slash/Zenith?label=Download%20Zenith&style=for-the-badge&color=6750A4&logo=android&logoColor=white">
+  </a>&nbsp;&nbsp;
+  <a href="https://github.com/1372Slash/Zenith/releases">
+    <img src="https://img.shields.io/github/downloads/1372Slash/Zenith/total?style=for-the-badge&color=6750A4&logo=github&logoColor=white">
   </a>
   <br>
   <a href="https://ko-fi.com/1372slash">
     <img src="https://img.shields.io/badge/Support%20me%20on%20Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white">
   </a>
+  <br><br>
+  <a href="https://trendshift.io/repositories/44401?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-44401" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/44401" alt="1372Slash%2FZenith | Trendshift" width="250" height="55"/></a>&nbsp;&nbsp;
+  <a href="https://trendshift.io/repositories/44401?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-44401" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/44401/daily?language=Kotlin" alt="1372Slash%2FZenith | Trendshift" width="250" height="55"/></a>&nbsp;&nbsp;
+  <a href="https://trendshift.io/repositories/44401?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-44401" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/44401/weekly?language=Kotlin" alt="1372Slash%2FZenith | Trendshift" width="250" height="55"/></a>
 </p>
 
 <div align="center">

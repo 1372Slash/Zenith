@@ -15,6 +15,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.LimitPeriod
@@ -46,6 +47,9 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
+
+private const val ONBOARDING_MASTERY_XP_KEY = "mastery"
+
 private class SafeAwarePreferencesDelegate(
     private val normalFileName: String,
     private val safeFileName: String
@@ -294,6 +298,7 @@ class UserPreferencesRepository(private val context: Context) {
         val USER_BANNER_URI = stringPreferencesKey("user_banner_uri")
 val USER_TITLE = stringPreferencesKey("user_title")
 val USER_AVATAR_BORDER = stringPreferencesKey("user_avatar_border")
+val USER_PROFILE_SHAPE = stringPreferencesKey("user_profile_shape")
         val PROFILE_BANNER_ON_HOME = booleanPreferencesKey("profile_banner_on_home")
         val USER_SHARED_PROFILE = booleanPreferencesKey("user_shared_profile")
         val INFO_VISITED_ROUTES = stringPreferencesKey("info_visited_routes")
@@ -311,6 +316,13 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
         val PREFER_SYSTEM_USAGE_HISTORY = booleanPreferencesKey("prefer_system_usage_history")
         val ONBOARDING_STATS_COMPLETED = booleanPreferencesKey("onboarding_stats_completed")
         val ONBOARDING_UPDATE_COMPLETED = booleanPreferencesKey("onboarding_update_completed")
+        val ONBOARDING_GUIDE_CHAPTERS = stringSetPreferencesKey("onboarding_guide_chapters")
+        val ONBOARDING_GUIDE_SKIPPED = stringSetPreferencesKey("onboarding_guide_skipped")
+        val ONBOARDING_GUIDE_XP_CLAIMED = stringSetPreferencesKey("onboarding_guide_xp_claimed")
+        val ONBOARDING_GUIDE_MASTERED = booleanPreferencesKey("onboarding_guide_mastered")
+        val ONBOARDING_GUIDE_STEP = stringPreferencesKey("onboarding_guide_step")
+        val ONBOARDING_GUIDE_VERSION = intPreferencesKey("onboarding_guide_version")
+        val ONBOARDING_GUIDE_LAST_SEEN = longPreferencesKey("onboarding_guide_last_seen")
         val HUD_HIDE_FEATURE_LEARNED = booleanPreferencesKey("hud_hide_feature_learned")
         val SMART_REPAIR_ON_REFRESH = booleanPreferencesKey("smart_repair_on_refresh")
         val ALLOW_REPAIR_NON_UNAVAILABLE = booleanPreferencesKey("allow_repair_non_unavailable")
@@ -557,6 +569,7 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
             userBannerUri = settings[PreferencesKeys.USER_BANNER_URI] ?: "",
 userTitle = settings[PreferencesKeys.USER_TITLE] ?: "",
 userAvatarBorder = settings[PreferencesKeys.USER_AVATAR_BORDER] ?: "",
+userProfileShape = settings[PreferencesKeys.USER_PROFILE_SHAPE] ?: "",
             profileBannerOnHome = settings[PreferencesKeys.PROFILE_BANNER_ON_HOME] ?: false,
             userSharedProfile = settings[PreferencesKeys.USER_SHARED_PROFILE] ?: false,
             infoVisitedRoutes = settings[PreferencesKeys.INFO_VISITED_ROUTES]
@@ -580,6 +593,13 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             preferSystemUsageHistory = settings[PreferencesKeys.PREFER_SYSTEM_USAGE_HISTORY] ?: true,
             onboardingStatsCompleted = settings[PreferencesKeys.ONBOARDING_STATS_COMPLETED] ?: false,
             onboardingUpdateCompleted = settings[PreferencesKeys.ONBOARDING_UPDATE_COMPLETED] ?: false,
+            onboardingGuideChapters = settings[PreferencesKeys.ONBOARDING_GUIDE_CHAPTERS] ?: emptySet(),
+            onboardingGuideSkipped = settings[PreferencesKeys.ONBOARDING_GUIDE_SKIPPED] ?: emptySet(),
+            onboardingGuideXpClaimed = settings[PreferencesKeys.ONBOARDING_GUIDE_XP_CLAIMED] ?: emptySet(),
+            onboardingGuideMastered = settings[PreferencesKeys.ONBOARDING_GUIDE_MASTERED] ?: false,
+            onboardingGuideStep = settings[PreferencesKeys.ONBOARDING_GUIDE_STEP] ?: "",
+            onboardingGuideVersion = settings[PreferencesKeys.ONBOARDING_GUIDE_VERSION] ?: 0,
+            onboardingGuideLastSeen = settings[PreferencesKeys.ONBOARDING_GUIDE_LAST_SEEN] ?: 0L,
             whitelistInitialized = runtime[RuntimeKeys.WHITELIST_INITIALIZED] ?: false,
             hudHideFeatureLearned = settings[PreferencesKeys.HUD_HIDE_FEATURE_LEARNED] ?: false,
             smartRepairOnRefresh = settings[PreferencesKeys.SMART_REPAIR_ON_REFRESH] ?: false,
@@ -919,6 +939,10 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.USER_AVATAR_BORDER] = borderId }
     }
 
+    suspend fun setUserProfileShape(shapeId: String) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.USER_PROFILE_SHAPE] = shapeId }
+    }
+
     suspend fun setProfileBannerOnHome(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.PROFILE_BANNER_ON_HOME] = enabled }
     }
@@ -976,6 +1000,118 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             preferences[PreferencesKeys.USER_XP_HISTORY] = lines.take(30).joinToString("\n")
         }
     }
+    suspend fun markOnboardingGuideShown(version: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.ONBOARDING_GUIDE_VERSION] = version
+        }
+    }
+
+    suspend fun saveOnboardingGuideStep(chapterId: String, stepIndex: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.ONBOARDING_GUIDE_STEP] = "$chapterId:$stepIndex"
+            preferences[PreferencesKeys.ONBOARDING_GUIDE_LAST_SEEN] = System.currentTimeMillis()
+        }
+    }
+
+    suspend fun clearOnboardingGuideStep() {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.ONBOARDING_GUIDE_STEP] = ""
+        }
+    }
+
+    suspend fun completeOnboardingChapter(
+        chapterId: String,
+        xp: Int,
+        todayDate: String,
+        now: Long = System.currentTimeMillis()
+    ) {
+        var awardXp = 0
+        context.dataStore.edit { preferences ->
+            val completed = preferences[PreferencesKeys.ONBOARDING_GUIDE_CHAPTERS].orEmpty()
+            val claimed = preferences[PreferencesKeys.ONBOARDING_GUIDE_XP_CLAIMED].orEmpty().toMutableSet()
+            if (chapterId !in completed) {
+                preferences[PreferencesKeys.ONBOARDING_GUIDE_CHAPTERS] = completed + chapterId
+                preferences[PreferencesKeys.ONBOARDING_GUIDE_SKIPPED] =
+                    preferences[PreferencesKeys.ONBOARDING_GUIDE_SKIPPED].orEmpty() - chapterId
+            }
+            if (xp > 0 && claimed.add(chapterId)) {
+                preferences[PreferencesKeys.ONBOARDING_GUIDE_XP_CLAIMED] = claimed
+                awardXp = xp
+            }
+            preferences[PreferencesKeys.ONBOARDING_GUIDE_STEP] = ""
+            preferences[PreferencesKeys.ONBOARDING_GUIDE_LAST_SEEN] = now
+        }
+        if (awardXp > 0) addOnboardingBonusXp(todayDate, awardXp)
+    }
+
+    suspend fun skipOnboardingChapter(chapterId: String) {
+        context.dataStore.edit { preferences ->
+            if (chapterId !in preferences[PreferencesKeys.ONBOARDING_GUIDE_CHAPTERS].orEmpty()) {
+                preferences[PreferencesKeys.ONBOARDING_GUIDE_SKIPPED] =
+                    preferences[PreferencesKeys.ONBOARDING_GUIDE_SKIPPED].orEmpty() + chapterId
+            }
+            preferences[PreferencesKeys.ONBOARDING_GUIDE_STEP] = ""
+            preferences[PreferencesKeys.ONBOARDING_GUIDE_LAST_SEEN] = System.currentTimeMillis()
+        }
+    }
+
+    suspend fun claimOnboardingMastery(
+        xp: Int,
+        todayDate: String,
+        now: Long = System.currentTimeMillis()
+    ) {
+        var awardXp = 0
+        context.dataStore.edit { preferences ->
+            val alreadyMastered = preferences[PreferencesKeys.ONBOARDING_GUIDE_MASTERED] ?: false
+            if (!alreadyMastered) {
+                preferences[PreferencesKeys.ONBOARDING_GUIDE_MASTERED] = true
+            }
+            val claimed = preferences[PreferencesKeys.ONBOARDING_GUIDE_XP_CLAIMED].orEmpty().toMutableSet()
+            if (xp > 0 && claimed.add(ONBOARDING_MASTERY_XP_KEY)) {
+                preferences[PreferencesKeys.ONBOARDING_GUIDE_XP_CLAIMED] = claimed
+                awardXp = xp
+            }
+            preferences[PreferencesKeys.ONBOARDING_GUIDE_STEP] = ""
+            preferences[PreferencesKeys.ONBOARDING_GUIDE_LAST_SEEN] = now
+        }
+        if (awardXp > 0) addOnboardingBonusXp(todayDate, awardXp)
+    }
+
+    suspend fun resetOnboardingGuide() {
+        context.dataStore.edit { preferences ->
+            preferences.remove(PreferencesKeys.ONBOARDING_GUIDE_CHAPTERS)
+            preferences.remove(PreferencesKeys.ONBOARDING_GUIDE_SKIPPED)
+            preferences.remove(PreferencesKeys.ONBOARDING_GUIDE_XP_CLAIMED)
+            preferences[PreferencesKeys.ONBOARDING_GUIDE_MASTERED] = false
+            preferences[PreferencesKeys.ONBOARDING_GUIDE_STEP] = ""
+            preferences[PreferencesKeys.ONBOARDING_GUIDE_VERSION] = 0
+            preferences[PreferencesKeys.ONBOARDING_GUIDE_LAST_SEEN] = 0L
+        }
+    }
+
+    private suspend fun addOnboardingBonusXp(todayDate: String, xp: Int) {
+        context.runtimeDataStore.edit { preferences ->
+            if ((preferences[RuntimeKeys.USER_XP_DEBUG_BASE] ?: -1L) < 0L) {
+                preferences[RuntimeKeys.USER_XP_TOTAL] =
+                    (preferences[RuntimeKeys.USER_XP_TOTAL] ?: 0L) + xp
+            }
+        }
+        context.dataStore.edit { preferences ->
+            val lines = (preferences[PreferencesKeys.USER_XP_HISTORY] ?: "")
+                .lines().filter { it.isNotBlank() }.toMutableList()
+            val index = lines.indexOfFirst { it.substringBefore('\t') == todayDate }
+            if (index >= 0) {
+                val parts = lines[index].split('\t')
+                val currentXp = parts.getOrNull(1)?.toIntOrNull() ?: 0
+                val saved = parts.getOrNull(2) ?: "0"
+                lines[index] = "$todayDate\t${currentXp + xp}\t$saved"
+            } else {
+                lines.add(0, "$todayDate\t$xp\t0")
+            }
+            preferences[PreferencesKeys.USER_XP_HISTORY] = lines.take(30).joinToString("\n")
+        }
+    }
+
     suspend fun setUserXpTotal(xp: Long) {
         context.runtimeDataStore.edit { preferences ->
             if ((preferences[RuntimeKeys.USER_XP_DEBUG_BASE] ?: -1L) < 0L) {
@@ -2288,6 +2424,7 @@ data class UserPreferences(
     val userBannerUri: String = "",
     val userTitle: String = "",
     val userAvatarBorder: String = "",
+    val userProfileShape: String = "",
     val profileBannerOnHome: Boolean = false,
     val userSharedProfile: Boolean = false,
     val infoVisitedRoutes: Set<String> = emptySet(),
@@ -2310,6 +2447,13 @@ data class UserPreferences(
     val preferSystemUsageHistory: Boolean = true,
     val onboardingStatsCompleted: Boolean = false,
     val onboardingUpdateCompleted: Boolean = false,
+    val onboardingGuideChapters: Set<String> = emptySet(),
+    val onboardingGuideSkipped: Set<String> = emptySet(),
+    val onboardingGuideXpClaimed: Set<String> = emptySet(),
+    val onboardingGuideMastered: Boolean = false,
+    val onboardingGuideStep: String = "",
+    val onboardingGuideVersion: Int = 0,
+    val onboardingGuideLastSeen: Long = 0L,
     val whitelistInitialized: Boolean = false,
     val hudHideFeatureLearned: Boolean = false,
     val smartRepairOnRefresh: Boolean = false,

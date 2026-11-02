@@ -57,6 +57,7 @@ fun DeveloperSettings(
     onTriggerOnboardingPermissions: () -> Unit,
     onTriggerOnboardingStats: () -> Unit,
     onTriggerOnboardingUpdate: () -> Unit,
+    onResetOnboardingGuide: () -> Unit = {},
     onResetBedtimeStreak: () -> Unit,
     onResetStreakRecovery: () -> Unit,
     onUpdateAppStreak: (String, Int) -> Unit,
@@ -236,6 +237,15 @@ fun DeveloperSettings(
                     shape = RoundedCornerShape(8.dp)
                 )
             }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            SettingsActionItem(
+                title = "Reset Guided Path",
+                summary = "Clear chapter progress, badges and the guide version",
+                onClick = onResetOnboardingGuide,
+                icon = Icons.Outlined.Explore,
+                shape = RoundedCornerShape(8.dp)
+            )
 
             Spacer(modifier = Modifier.height(4.dp))
             SettingsActionItem(

@@ -84,6 +84,11 @@ fun LevelScreen(
         AVATAR_BORDERS.find { it.id == preferences.userAvatarBorder }
             ?.takeIf { it.requiredLevel <= level }?.id ?: ""
     }
+    val equippedShapeDef = remember(preferences.userProfileShape, level) {
+        PROFILE_SHAPES.find { it.id == preferences.userProfileShape }
+            ?.takeIf { it.requiredLevel <= level } ?: PROFILE_SHAPES.first()
+    }
+    val equippedShape = equippedShapeDef.shapeResolver()
     val nextReward = remember(level) { nextLevelReward(level) }
 
     LazyColumn(
@@ -113,10 +118,11 @@ fun LevelScreen(
                                     AVATAR_BORDERS.find { it.id == equippedBorderId }, 3.dp,
                                     SolidColor(
                                         MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                                    )
+                                    ),
+                                    shape = equippedShape
                                 )
                                 .padding(3.dp)
-                                .background(MaterialTheme.colorScheme.primary, CircleShape),
+                                .background(MaterialTheme.colorScheme.primary, equippedShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -316,14 +322,15 @@ fun LevelScreen(
                                                     SolidColor(
                                                         MaterialTheme.colorScheme.surfaceContainerHighest
                                                     ),
-                                                    animate = false
+                                                    animate = false,
+                                                    shape = equippedShape
                                                 )
                                                 else Modifier.border(
                                                     4.dp,
                                                     SolidColor(
                                                         MaterialTheme.colorScheme.surfaceContainerHighest
                                                     ),
-                                                    CircleShape
+                                                    equippedShape
                                                 )
                                             ),
                                         contentAlignment = Alignment.Center
@@ -357,6 +364,112 @@ fun LevelScreen(
                                         else MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
+                                    )
+                                    Box(
+                                        modifier = Modifier.height(20.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (equipped) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.CheckCircleOutline,
+                                                contentDescription = "Equipped",
+                                                tint = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item(key = "shapes") {
+            Column {
+                PreferenceCategory(title = "Profile Shapes")
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                ) {
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        itemsIndexed(PROFILE_SHAPES, key = { _, s -> "shape-${s.id}" }) { index, pShapeDef ->
+                            val unlocked = level >= pShapeDef.requiredLevel
+                            val equipped = equippedShapeDef.id == pShapeDef.id && unlocked
+                            val pShape = pShapeDef.shapeResolver()
+                            Card(
+                                onClick = {
+                                    scope.launch {
+                                        preferencesRepository.setUserProfileShape(
+                                            if (equipped) "" else pShapeDef.id
+                                        )
+                                    }
+                                },
+                                enabled = unlocked,
+                                shape = rewardGroupShape(index, PROFILE_SHAPES.size, unlocked),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (unlocked) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceContainerHigh
+                                    },
+                                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                ),
+                                modifier = Modifier.width(124.dp).aspectRatio(0.78f)
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxSize().padding(10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(pShape)
+                                            .background(
+                                                if (unlocked) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.25f)
+                                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (!unlocked) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Lock,
+                                                contentDescription = "Locked",
+                                                tint = MaterialTheme.colorScheme.outline,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(20.dp)
+                                                    .clip(pShape)
+                                                    .background(MaterialTheme.colorScheme.onPrimary)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = pShapeDef.name,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center,
+                                        color = if (unlocked) MaterialTheme.colorScheme.onPrimary
+                                        else MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        text = "Lv ${pShapeDef.requiredLevel}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (unlocked) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.75f)
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
                                     )
                                     Box(
                                         modifier = Modifier.height(20.dp),

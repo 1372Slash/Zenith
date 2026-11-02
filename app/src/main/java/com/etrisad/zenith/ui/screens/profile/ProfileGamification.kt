@@ -1,6 +1,12 @@
 package com.etrisad.zenith.ui.screens.profile
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.toShape
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.material.icons.outlined.Adjust
 import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.AlarmOn
@@ -290,9 +296,45 @@ val AVATAR_BORDERS = listOf(
         BorderEffect.SPIN
     )
 )
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+data class ProfileShapeDef(
+    val id: String,
+    val name: String,
+    val requiredLevel: Int,
+    val shapeResolver: @Composable () -> Shape
+)
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+val PROFILE_SHAPES = listOf(
+    ProfileShapeDef("circle", "Circle", 1) { CircleShape },
+    ProfileShapeDef("square", "Square", 4) { MaterialShapes.Square.toShape() },
+    ProfileShapeDef("pill", "Pill", 8) { MaterialShapes.Pill.toShape() },
+    ProfileShapeDef("pentagon", "Pentagon", 12) { MaterialShapes.Pentagon.toShape() },
+    ProfileShapeDef("gem", "Gem", 16) { MaterialShapes.Gem.toShape() },
+    ProfileShapeDef("cookie7", "Cookie 7", 20) { MaterialShapes.Cookie7Sided.toShape() },
+    ProfileShapeDef("sunny", "Sunny", 24) { MaterialShapes.Sunny.toShape() },
+    ProfileShapeDef("slanted", "Slanted", 28) { MaterialShapes.Slanted.toShape() },
+    ProfileShapeDef("arch", "Arch", 32) { MaterialShapes.Arch.toShape() },
+    ProfileShapeDef("burst", "Burst", 36) { MaterialShapes.Burst.toShape() },
+    ProfileShapeDef("puffy", "Puffy", 40) { MaterialShapes.Puffy.toShape() },
+    ProfileShapeDef("bun", "Bun", 44) { MaterialShapes.Bun.toShape() },
+    ProfileShapeDef("pixel", "Pixel Circle", 48) { MaterialShapes.PixelCircle.toShape() },
+    ProfileShapeDef("flower", "Flower", 52) { MaterialShapes.Flower.toShape() },
+    ProfileShapeDef("cookie12", "Cookie 12", 58) { MaterialShapes.Cookie12Sided.toShape() },
+    ProfileShapeDef("clover", "Clover 4", 64) { MaterialShapes.Clover4Leaf.toShape() },
+    ProfileShapeDef("verysunny", "Very Sunny", 70) { MaterialShapes.VerySunny.toShape() }
+)
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun ProfileShapeDef.resolveShape(): Shape = shapeResolver()
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 fun nextLevelReward(level: Int): Pair<Int, String>? {
     val upcoming = (LEVEL_TITLES.map { it.requiredLevel to it.name } +
-        AVATAR_BORDERS.map { it.requiredLevel to it.name })
+        AVATAR_BORDERS.map { it.requiredLevel to "${it.name} Border" } +
+        PROFILE_SHAPES.map { it.requiredLevel to "${it.name} Shape" })
         .filter { it.first > level }
     return upcoming.minByOrNull { it.first }
 }
@@ -408,7 +450,9 @@ data class ProfileAchievementStats(
     val fontChanged: Boolean = false,
     val contrastOff: Boolean = false,
     val hasCalendarEvent: Boolean = false,
-    val hasOverlayTint: Boolean = false
+    val hasOverlayTint: Boolean = false,
+    val onboardingChaptersCompleted: Int = 0,
+    val onboardingMastered: Boolean = false
 )
 
 private fun hoursLabel(millis: Long): String {
@@ -570,6 +614,24 @@ fun countTierSymbols(achievements: List<AchievementState>): Map<ProfileTier, Int
 }
 
 fun buildAchievementDefs(): List<AchievementDef> = listOf(
+    AchievementDef(
+        id = "onboarding_path", title = "Pathfinder",
+        desc = "Complete the Zenith guided path",
+        icon = Icons.Outlined.Explore, category = AchievementCategory.EXPLORER,
+        thresholds = listOf(
+            TierThreshold(ProfileTier.I, 1, "1 chapter"),
+            TierThreshold(ProfileTier.V, 2, "2 chapters"),
+            TierThreshold(ProfileTier.X, 3, "3 chapters"),
+            TierThreshold(ProfileTier.L, 4, "4 chapters"),
+            TierThreshold(ProfileTier.C, 5, "5 chapters"),
+            TierThreshold(ProfileTier.D, 6, "6 chapters"),
+            TierThreshold(ProfileTier.M, 7, "Mastery")
+        ),
+        tierNames = listOf(
+            "First Light", "Shieldbearer", "Stillness",
+            "Timekeeper", "Oracle", "Curator", "Zenith Master"
+        )
+    ),
     AchievementDef(
         id = "pomo_first", title = "Focus Starter",
         desc = "Complete a Pomodoro focus session",
@@ -1338,6 +1400,7 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
     )
 )
 private val JOURNEY_ORDER = listOf(
+    "onboarding_path",
     "target_setter", "shield_setter", "goal_setter",
     "lockdown_explorer", "bedtime_explorer", "alarm_explorer",
     "pausepoint_explorer", "grace_explorer",
@@ -1367,6 +1430,9 @@ fun buildAchievementStates(stats: ProfileAchievementStats): List<AchievementStat
         JOURNEY_ORDER.indexOf(it.id).takeIf { i -> i >= 0 } ?: Int.MAX_VALUE
     }
     val currentById = mapOf(
+        "onboarding_path" to (
+            stats.onboardingChaptersCompleted + if (stats.onboardingMastered) 1 else 0
+        ).toLong(),
         "pomo_first" to stats.pomodoroSessions.toLong(),
         "focus_hours" to stats.pomodoroFocusMillis,
         "streak_keeper" to stats.globalBestStreak.toLong(),

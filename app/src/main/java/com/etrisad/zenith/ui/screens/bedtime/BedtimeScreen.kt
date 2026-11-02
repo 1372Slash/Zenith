@@ -43,6 +43,7 @@ import androidx.compose.ui.platform.LocalDensity
 import com.etrisad.zenith.util.hasNotificationPolicyAccess
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.etrisad.zenith.ui.onboarding.onboardingAnchor
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
@@ -157,7 +158,7 @@ fun BedtimeScreen(
                        shrinkVertically(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)),
                 modifier = Modifier.animateItem()
             ) {
-                Column {
+                Column(modifier = Modifier.onboardingAnchor("bedtime.hero")) {
                     BedtimeToggleCard(
                         enabled = preferences.bedtimeEnabled,
                         onToggle = { 
@@ -175,7 +176,11 @@ fun BedtimeScreen(
 
         if (preferences.bedtimeEnabled) {
             item(key = "bedtime_status_progress") {
-                Column(modifier = Modifier.animateItem()) {
+                Column(
+                    modifier = Modifier
+                        .animateItem()
+                        .onboardingAnchor("bedtime.hero")
+                ) {
                     BedtimeStatusProgress(
                         startTimeStr = preferences.bedtimeStartTime,
                         endTimeStr = preferences.bedtimeEndTime,

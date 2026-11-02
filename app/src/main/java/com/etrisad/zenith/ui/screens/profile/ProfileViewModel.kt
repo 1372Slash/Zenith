@@ -88,6 +88,7 @@ fun com.etrisad.zenith.data.preferences.UserPreferences.achievementTrackingKey()
         bedtimeWhitelistedPackages.size, bedtimeDndEnabled,
         shortsScreenTimeMs > 0,
         infoVisitedRoutes.size, userBio, userAvatarUri, userBannerUri,
+        onboardingGuideChapters.size, onboardingGuideMastered,
         themeConfig.name, fontOption.name, dynamicColor, overlayCustomHue
     ).joinToString("|")
 }
@@ -359,7 +360,9 @@ class ProfileViewModel(
                             null, null, null
                         )?.use { it.count > 0 } ?: false
                     } catch (_: Exception) { false },
-                    hasOverlayTint = freshPrefs.overlayCustomHue != 270f
+                    hasOverlayTint = freshPrefs.overlayCustomHue != 270f,
+                    onboardingChaptersCompleted = freshPrefs.onboardingGuideChapters.size,
+                    onboardingMastered = freshPrefs.onboardingGuideMastered
                 )
                 val baseAchievements = buildAchievementStates(stats)
                 val (achievements, newlyTieredIds) = recordUnlockDates(baseAchievements, todayStr)

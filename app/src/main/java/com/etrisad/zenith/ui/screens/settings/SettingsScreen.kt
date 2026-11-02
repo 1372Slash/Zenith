@@ -39,7 +39,8 @@ fun SettingsScreen(
     innerPadding: PaddingValues,
     navController: NavController,
     onOpenPermissions: () -> Unit,
-    permissionsMissing: Boolean = false
+    permissionsMissing: Boolean = false,
+    onOpenGuidedPath: () -> Unit = {}
 ) {
     val preferences by preferencesRepository.userPreferencesFlow.collectAsState(initial = UserPreferences())
     val coroutineScope = rememberCoroutineScope()
@@ -153,6 +154,7 @@ fun SettingsScreen(
 
             item {
                 GeneralSettings(
+                    onOpenGuidedPath = onOpenGuidedPath,
                     preferences = preferences,
                     onSetTarget = { mins -> coroutineScope.launch { preferencesRepository.setScreenTimeTarget(mins) } },
                     onSetEmergencyRecharge = { mins -> coroutineScope.launch { preferencesRepository.setEmergencyRechargeDuration(mins) } },
@@ -168,7 +170,7 @@ fun SettingsScreen(
             item {
                 Spacer(modifier = Modifier.height(16.dp))
                 PreferenceCategory(title = "Categories")
-                
+
                 SettingsActionItem(
                     title = "Features",
                     summary = "Mindful Gateway, Session Overlay, Early Kick, and more",

@@ -101,6 +101,7 @@ import com.etrisad.zenith.util.DateTimeUtils
 import com.etrisad.zenith.ui.components.ShieldSortHeader
 import com.etrisad.zenith.ui.components.UninstalledAppCard
 import com.etrisad.zenith.ui.viewmodel.ShieldSortType
+import com.etrisad.zenith.ui.onboarding.onboardingAnchor
 import kotlinx.coroutines.delay
 
 enum class AppTypeTab { APPS, WEBSITES }
@@ -1028,7 +1029,11 @@ fun LazyListScope.activeTypeTabRow(
     onTabChange: (AppTypeTab) -> Unit
 ) {
     item(key = "global_tab") {
-        AppTypeTabRow(selectedTab = tabValue, onTabChange = onTabChange)
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier.onboardingAnchor("home.focus_list")
+        ) {
+            AppTypeTabRow(selectedTab = tabValue, onTabChange = onTabChange)
+        }
         Spacer(modifier = Modifier.height(16.dp))
     }
 }

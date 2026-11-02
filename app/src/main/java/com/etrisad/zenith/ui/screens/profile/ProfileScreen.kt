@@ -51,12 +51,14 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.EmojiEvents
+import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -102,6 +104,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.etrisad.zenith.ui.onboarding.LocalOnboardingScroll
+import com.etrisad.zenith.ui.onboarding.onboardingAnchor
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
@@ -166,7 +171,8 @@ fun ProfileScreen(
     innerPadding: PaddingValues,
     onAppClick: (String) -> Unit,
     onSeeAllAchievements: () -> Unit = {},
-    onOpenLevel: () -> Unit = {}
+    onOpenLevel: () -> Unit = {},
+    onOpenGuidedPathHub: () -> Unit = {}
 ) {
     val state by profileViewModel.uiState.collectAsState()
     val preferences by preferencesRepository.userPreferencesFlow.collectAsState(
@@ -221,8 +227,27 @@ fun ProfileScreen(
         countTierSymbols(state.achievements)
     }
 
+    val guideListState = rememberLazyListState()
+    val guideScrollHub = LocalOnboardingScroll.current
+    val guideTopOffsetPx = with(LocalDensity.current) {
+        (innerPadding.calculateTopPadding() + 24.dp).roundToPx()
+    }
+    androidx.compose.runtime.DisposableEffect(guideScrollHub) {
+        guideScrollHub.register("profile.identity") { guideListState.animateScrollToItem(0) }
+        guideScrollHub.register("profile.xp") { guideListState.animateScrollToItem(1) }
+        guideScrollHub.register("profile.achievements") {
+            guideListState.animateScrollToItem(4, scrollOffset = -guideTopOffsetPx)
+        }
+        onDispose {
+            guideScrollHub.unregister("profile.identity")
+            guideScrollHub.unregister("profile.xp")
+            guideScrollHub.unregister("profile.achievements")
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
+        state = guideListState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = 16.dp,
@@ -241,6 +266,14 @@ fun ProfileScreen(
                 AVATAR_BORDERS.find { it.id == preferences.userAvatarBorder }
                     ?.takeIf { it.requiredLevel <= state.level }
             }
+            val equippedShapeDef = remember(preferences.userProfileShape, state.level) {
+                PROFILE_SHAPES.find { it.id == preferences.userProfileShape }
+                    ?.takeIf { it.requiredLevel <= state.level } ?: PROFILE_SHAPES.first()
+            }
+            val equippedShape = equippedShapeDef.shapeResolver()
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier.onboardingAnchor("profile.identity")
+            ) {
             ProfileIdentityCard(
                 userName = preferences.userName,
                 userBio = preferences.userBio,
@@ -249,6 +282,7 @@ fun ProfileScreen(
                 level = state.level,
                 equippedTitle = equippedTitle?.name ?: "",
                 equippedBorder = equippedBorder,
+                equippedShape = equippedShape,
                 isEditing = isEditing,
                 showBannerOnHome = preferences.profileBannerOnHome,
                 onShowBannerOnHomeChange = {
@@ -271,12 +305,13 @@ fun ProfileScreen(
                     }
                 }
             )
+            }
         }
         item(key = "xp") {
             val unlockedBadges = remember(state.achievements) {
                 state.achievements.count { it.earnedTier != null }
             }
-            Column {
+            Column(modifier = Modifier.onboardingAnchor("profile.xp")) {
                 PreferenceCategory(title = "Progress")
                 XpCard(
                     level = state.level,
@@ -316,8 +351,48 @@ fun ProfileScreen(
                 }
             }
         }
+        item(key = "guided_path_card") {
+            Card(
+                onClick = onOpenGuidedPathHub,
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Outlined.Explore,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Guided Path Hub",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Explore chapters, review badges & mastery",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Outlined.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
         item(key = "achievements_section") {
-            Column {
+            Column(modifier = Modifier.onboardingAnchor("profile.achievements")) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
@@ -504,7 +579,8 @@ fun ProfileScreen(
         state.achievements.find { it.def.id == id }?.let { ach ->
             AchievementDetailSheet(
                 achievement = ach,
-                onDismiss = { selectedAchId = null }
+                onDismiss = { selectedAchId = null },
+                onOpenGuidedPathHub = { onOpenGuidedPathHub(); selectedAchId = null }
             )
         }
     }
@@ -653,6 +729,7 @@ private fun ProfileIdentityCard(
     level: Int,
     equippedTitle: String,
     equippedBorder: AvatarBorder?,
+    equippedShape: Shape = CircleShape,
     isEditing: Boolean,
     showBannerOnHome: Boolean,
     onShowBannerOnHomeChange: (Boolean) -> Unit,
@@ -841,14 +918,21 @@ private fun ProfileIdentityCard(
                             Modifier
                                 .avatarRing(
                                     equippedBorder, 4.dp,
-                                    SolidColor(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                                    SolidColor(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                    shape = equippedShape
                                 )
                                 .padding(4.dp)
                         } else {
                             Modifier
+                                .border(
+                                    2.dp,
+                                    SolidColor(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                    equippedShape
+                                )
+                                .padding(2.dp)
                         }
                     )
-                    .clip(CircleShape)
+                    .clip(equippedShape)
                     .background(MaterialTheme.colorScheme.tertiaryContainer),
                 contentAlignment = Alignment.Center
             ) {
@@ -862,7 +946,7 @@ private fun ProfileIdentityCard(
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         onError = { imgError = true },
-                        modifier = Modifier.fillMaxSize().clip(CircleShape)
+                        modifier = Modifier.fillMaxSize().clip(equippedShape)
                     )
                 }
             }
@@ -1343,7 +1427,8 @@ private fun AchievementSquareCard(
 @Composable
 fun AchievementDetailSheet(
     achievement: AchievementState,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onOpenGuidedPathHub: (() -> Unit)? = null
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1384,6 +1469,20 @@ fun AchievementDetailSheet(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+            if (achievement.def.id == "onboarding_path" && onOpenGuidedPathHub != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = {
+                        onDismiss()
+                        onOpenGuidedPathHub()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Outlined.Explore, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Open Guided Path Hub")
                 }
             }
             Spacer(modifier = Modifier.height(20.dp))

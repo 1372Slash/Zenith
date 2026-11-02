@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.etrisad.zenith.ui.onboarding.onboardingAnchor
 import androidx.documentfile.provider.DocumentFile
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.ui.components.*
@@ -37,7 +38,7 @@ fun DataManagementSettings(
     onRefreshOnOpenUsageStatsChange: (Boolean) -> Unit,
     onRestore: () -> Unit
 ) {
-    Column {
+    Column(modifier = Modifier.onboardingAnchor("settings.data")) {
         PreferenceCategory(title = "Backup & Restore")
 
         SettingsToggle(

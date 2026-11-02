@@ -5,13 +5,16 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -29,12 +32,23 @@ import com.etrisad.zenith.data.remote.model.GitHubRelease
 import com.etrisad.zenith.service.SharedMonitoringState
 import com.etrisad.zenith.service.UsageSyncManager
 import com.etrisad.zenith.ui.navigation.Screen
+import com.etrisad.zenith.ui.onboarding.GuideTokens
+import com.etrisad.zenith.ui.onboarding.LocalOnboardingScroll
+import com.etrisad.zenith.ui.onboarding.LocalOnboardingTargets
+import com.etrisad.zenith.ui.onboarding.guideChapters
 import com.etrisad.zenith.ui.screens.profile.xpForLevel
 import com.etrisad.zenith.ui.viewmodel.FocusViewModel
 import com.etrisad.zenith.ui.viewmodel.FocusViewModelFactory
 import com.etrisad.zenith.util.BackupUtils
 import com.etrisad.zenith.worker.BackupManager
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+
+private val guideSettingsAnchorIds: List<String> = guideChapters
+    .flatMap { it.steps }
+    .filter { it.route.startsWith("settings_category") }
+    .mapNotNull { it.targetId }
+    .distinct()
 
 @Composable
 fun SettingsCategoryScreen(
@@ -45,6 +59,7 @@ fun SettingsCategoryScreen(
     onOpenPermissions: () -> Unit,
     onTriggerOnboardingStats: () -> Unit,
     onTriggerOnboardingUpdate: () -> Unit,
+    onResetOnboardingGuide: () -> Unit = {},
     onTestAchievementBanner: () -> Unit = {},
     performanceBackInterceptor: MutableState<() -> Boolean> = remember { mutableStateOf({ false }) }
 ) {
@@ -177,19 +192,59 @@ fun SettingsCategoryScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
+    val categoryScrollState = rememberScrollState()
+    val guideScrollHub = LocalOnboardingScroll.current
+    val guideTargets = LocalOnboardingTargets.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    var viewportTopInWindow by remember { mutableFloatStateOf(0f) }
+    val anchorTopInsetPx = with(density) { GuideTokens.AnchorTopInset.toPx() }
+    DisposableEffect(guideScrollHub, guideTargets) {
+        val handlers = HashMap<String, suspend () -> Unit>()
+        guideSettingsAnchorIds.forEach { key ->
+            handlers[key] = guideAnchor@{
+                val bounds = guideTargets.await(key, timeoutMs = 1_000) ?: return@guideAnchor
+                var frames = 0
+                while (categoryScrollState.maxValue == 0 && frames < 8) {
+                    withFrameNanos { }
+                    frames++
+                }
+                val contentTopPx = with(density) {
+                    viewportTopInWindow + (innerPadding.calculateTopPadding() + 16.dp).toPx()
+                }
+                val delta = bounds.top - (contentTopPx + anchorTopInsetPx)
+                if (kotlin.math.abs(delta) > 1f) {
+                    val next = (categoryScrollState.value + delta)
+                        .roundToInt()
+                        .coerceIn(0, categoryScrollState.maxValue)
+                    if (next != categoryScrollState.value) {
+                        categoryScrollState.animateScrollTo(next)
+                    }
+                }
+            }
+        }
+        handlers.forEach { (key, handler) -> guideScrollHub.register(key, handler) }
+        onDispose { handlers.keys.forEach(guideScrollHub::unregister) }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { coordinates ->
+                viewportTopInWindow = coordinates.localToWindow(Offset.Zero).y
+            }
+    ) {
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(
-                top = innerPadding.calculateTopPadding() + 16.dp,
-                bottom = innerPadding.calculateBottomPadding() + 100.dp
-            )
+                .verticalScroll(categoryScrollState)
+                .padding(horizontal = 16.dp)
+                .padding(
+                    top = innerPadding.calculateTopPadding() + 16.dp,
+                    bottom = innerPadding.calculateBottomPadding() + 100.dp
+                )
         ) {
-            item {
-                when (category.lowercase()) {
-                    "features" -> FeaturesSettings(
+            when (category.lowercase()) {
+                "features" -> FeaturesSettings(
                         preferences = preferences,
                         onTotalUsagePillEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setTotalUsagePillEnabled(enabled) } },
                         onForegroundNotificationStatusModeChange = { mode -> coroutineScope.launch { preferencesRepository.setForegroundNotificationStatusMode(mode) } },
@@ -369,6 +424,7 @@ fun SettingsCategoryScreen(
                         onNavigateToFontTest = { navController.navigate(Screen.FontTest.route) },
                         onNavigateToSystemUsageDebug = { navController.navigate(Screen.SystemUsageDebug.route) },
                         onTriggerOnboardingPermissions = { onOpenPermissions() },
+                        onResetOnboardingGuide = onResetOnboardingGuide,
                         onTriggerOnboardingStats = {
                             coroutineScope.launch {
                                 preferencesRepository.setOnboardingStatsCompleted(false)
@@ -484,7 +540,6 @@ fun SettingsCategoryScreen(
                     )
                 }
             }
-        }
 
         if (category.lowercase() == "performance") {
             ExtendedFloatingActionButton(

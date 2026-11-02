@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.etrisad.zenith.ui.onboarding.onboardingAnchor
 import com.etrisad.zenith.data.preferences.ForegroundNotificationStatusMode
 import com.etrisad.zenith.data.preferences.MindfulGatewayDefaults
 import com.etrisad.zenith.data.preferences.UserPreferences
@@ -228,14 +229,16 @@ fun FeaturesSettings(
         Spacer(modifier = Modifier.height(16.dp))
         PreferenceCategory(title = "Entry Control")
 
-        SettingsToggle(
-            title = "Mindful Gateway",
-            description = "Interrupt every restricted app with a mindful pause, even without a specific shield",
-            checked = preferences.mindfulGatewayEnabled,
-            onCheckedChange = onMindfulGatewayEnabledChange,
-            icon = Icons.Outlined.AutoFixHigh,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-        )
+        Box(modifier = Modifier.onboardingAnchor("features.mindful_gateway")) {
+            SettingsToggle(
+                title = "Mindful Gateway",
+                description = "Interrupt every restricted app with a mindful pause, even without a specific shield",
+                checked = preferences.mindfulGatewayEnabled,
+                onCheckedChange = onMindfulGatewayEnabledChange,
+                icon = Icons.Outlined.AutoFixHigh,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+            )
+        }
 
         AnimatedVisibility(
             visible = preferences.mindfulGatewayEnabled,
@@ -344,55 +347,65 @@ fun FeaturesSettings(
         }
 
         Spacer(modifier = Modifier.height(4.dp))
-        SettingsActionItem(
-            title = "Grace Period",
-            summary = "Set a daily window where all restrictions are lifted (max 2 h; optional weekly edit lock)",
-            onClick = onNavigateToGracePeriod,
-            icon = Icons.Outlined.FreeBreakfast,
-            shape = RoundedCornerShape(8.dp)
-        )
+        Box(modifier = Modifier.onboardingAnchor("features.grace_period")) {
+            SettingsActionItem(
+                title = "Grace Period",
+                summary = "Set a daily window where all restrictions are lifted (max 2 h; optional weekly edit lock)",
+                onClick = onNavigateToGracePeriod,
+                icon = Icons.Outlined.FreeBreakfast,
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(4.dp))
-        SettingsActionItem(
-            title = "Eye Care",
-            summary = "Remind you to look away every ${preferences.eyeCareWorkMinutes} minutes to reduce eye strain",
-            onClick = onNavigateToEyeCare,
-            icon = Icons.Outlined.RemoveRedEye,
-            shape = RoundedCornerShape(8.dp)
-        )
+        Box(modifier = Modifier.onboardingAnchor("features.eye_care")) {
+            SettingsActionItem(
+                title = "Eye Care",
+                summary = "Remind you to look away every ${preferences.eyeCareWorkMinutes} minutes to reduce eye strain",
+                onClick = onNavigateToEyeCare,
+                icon = Icons.Outlined.RemoveRedEye,
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(4.dp))
-        SettingsActionItem(
-            title = "Pomodoro",
-            summary = "Lock down distractions and take puzzle-guided breaks",
-            onClick = onNavigateToPomodoro,
-            icon = Icons.Outlined.Visibility,
-            shape = RoundedCornerShape(8.dp)
-        )
+        Box(modifier = Modifier.onboardingAnchor("features.pomodoro")) {
+            SettingsActionItem(
+                title = "Pomodoro",
+                summary = "Lock down distractions and take puzzle-guided breaks",
+                onClick = onNavigateToPomodoro,
+                icon = Icons.Outlined.Visibility,
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(4.dp))
-        SettingsActionItem(
-            title = "Lockdown",
-            summary = if (preferences.lockdownEnabled && preferences.isInLockdown()) "Editing is currently restricted" else "Restrict editing during specific hours",
-            onClick = onNavigateToLockdown,
-            icon = Icons.Outlined.Lock,
-            shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-        )
+        Box(modifier = Modifier.onboardingAnchor("features.lockdown")) {
+            SettingsActionItem(
+                title = "Lockdown",
+                summary = if (preferences.lockdownEnabled && preferences.isInLockdown()) "Editing is currently restricted" else "Restrict editing during specific hours",
+                onClick = onNavigateToLockdown,
+                icon = Icons.Outlined.Lock,
+                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
         PreferenceCategory(title = "Short Video")
 
-        SettingsActionItem(
-            title = "Reels Shield",
-            summary = if (preferences.reelsShieldEnabled) {
-                "On · ${preferences.reelsShieldDailyLimit} reels per day shared across ${preferences.reelsShieldPackages.size} apps"
-            } else {
-                "Count short videos watched across apps, then press back when the daily limit is reached"
-            },
-            onClick = onNavigateToReelsShield,
-            icon = Icons.Outlined.SwapVert,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-        )
+        Box(modifier = Modifier.onboardingAnchor("features.reels_shield")) {
+            SettingsActionItem(
+                title = "Reels Shield",
+                summary = if (preferences.reelsShieldEnabled) {
+                    "On · ${preferences.reelsShieldDailyLimit} reels per day shared across ${preferences.reelsShieldPackages.size} apps"
+                } else {
+                    "Count short videos watched across apps, then press back when the daily limit is reached"
+                },
+                onClick = onNavigateToReelsShield,
+                icon = Icons.Outlined.SwapVert,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
         PreferenceCategory(title = "Protection")
@@ -408,17 +421,19 @@ fun FeaturesSettings(
         Spacer(modifier = Modifier.height(16.dp))
         PreferenceCategory(title = "Pause Point")
 
-        SettingsActionItem(
-            title = "Pause Point",
-            summary = if (preferences.pausePointEnabled) {
-                val count = preferences.pausePointTaskTypes.size
-                if (count == 0) "Enabled (no task types selected)"
-                else "Random tasks enabled ($count types)"
-            } else "Disabled",
-            onClick = onNavigateToPausePoint,
-            icon = Icons.Outlined.PauseCircle,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-        )
+        Box(modifier = Modifier.onboardingAnchor("features.pause_point")) {
+            SettingsActionItem(
+                title = "Pause Point",
+                summary = if (preferences.pausePointEnabled) {
+                    val count = preferences.pausePointTaskTypes.size
+                    if (count == 0) "Enabled (no task types selected)"
+                    else "Random tasks enabled ($count types)"
+                } else "Disabled",
+                onClick = onNavigateToPausePoint,
+                icon = Icons.Outlined.PauseCircle,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
         PreferenceCategory(title = "Triggers")
@@ -433,14 +448,16 @@ fun FeaturesSettings(
         )
 
         Spacer(modifier = Modifier.height(4.dp))
-        SettingsToggle(
-            title = "Early Kick",
-            description = "Eject you from an app 5 minutes before its time limit expires, as an advance warning",
-            checked = preferences.earlyKickEnabled,
-            onCheckedChange = onEarlyKickEnabledChange,
-            icon = Icons.Outlined.ExitToApp,
-            shape = RoundedCornerShape(8.dp)
-        )
+        Box(modifier = Modifier.onboardingAnchor("features.early_kick")) {
+            SettingsToggle(
+                title = "Early Kick",
+                description = "Eject you from an app 5 minutes before its time limit expires, as an advance warning",
+                checked = preferences.earlyKickEnabled,
+                onCheckedChange = onEarlyKickEnabledChange,
+                icon = Icons.Outlined.ExitToApp,
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(4.dp))
         SettingsToggle(
@@ -455,14 +472,16 @@ fun FeaturesSettings(
         Spacer(modifier = Modifier.height(16.dp))
         PreferenceCategory(title = "Website Tracking")
 
-        SettingsToggle(
-            title = "Auto Track Websites",
-            description = "Automatically record time spent on all websites (not just shielded ones) and show them in usage stats",
-            checked = preferences.websiteAutoTrackingEnabled,
-            onCheckedChange = onWebsiteAutoTrackingEnabledChange,
-            icon = Icons.Outlined.Language,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-        )
+        Box(modifier = Modifier.onboardingAnchor("features.website_tracking")) {
+            SettingsToggle(
+                title = "Auto Track Websites",
+                description = "Automatically record time spent on all websites (not just shielded ones) and show them in usage stats",
+                checked = preferences.websiteAutoTrackingEnabled,
+                onCheckedChange = onWebsiteAutoTrackingEnabledChange,
+                icon = Icons.Outlined.Language,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+            )
+        }
     }
 }
 

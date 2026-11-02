@@ -19,9 +19,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.etrisad.zenith.R
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
@@ -41,7 +43,8 @@ fun GeneralSettings(
     onShowWhitelistSheetChange: (Boolean) -> Unit,
     onShowAppExclusionsSheetChange: (Boolean) -> Unit,
     onOpenPermissions: () -> Unit,
-    permissionsMissing: Boolean = false
+    permissionsMissing: Boolean = false,
+    onOpenGuidedPath: () -> Unit = {}
 ) {
     var showTargetSheet by remember { mutableStateOf(false) }
     var showEmergencyRechargeSheet by remember { mutableStateOf(false) }
@@ -71,6 +74,15 @@ fun GeneralSettings(
                     )
                 }
             } else null
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+        SettingsActionItem(
+            title = stringResource(R.string.onboarding_open_path),
+            summary = stringResource(R.string.onboarding_open_path_summary),
+            onClick = onOpenGuidedPath,
+            icon = Icons.Outlined.Explore,
+            shape = RoundedCornerShape(8.dp)
         )
 
         Spacer(modifier = Modifier.height(4.dp))

@@ -89,6 +89,7 @@ import com.etrisad.zenith.ui.screens.pomodoro.PomodoroScreen
 import com.etrisad.zenith.ui.screens.profile.AchievementProgressBanner
 import com.etrisad.zenith.ui.screens.profile.AchievementUnlockBanner
 import com.etrisad.zenith.ui.screens.profile.AVATAR_BORDERS
+import com.etrisad.zenith.ui.screens.profile.PROFILE_SHAPES
 import com.etrisad.zenith.ui.screens.profile.AchievementsScreen
 import com.etrisad.zenith.ui.screens.profile.LevelScreen
 import com.etrisad.zenith.ui.screens.profile.avatarRing
@@ -129,6 +130,21 @@ import com.etrisad.zenith.data.remote.model.GitHubRelease
 import com.etrisad.zenith.ui.components.UpdateBottomSheet
 import com.etrisad.zenith.ui.components.FeatureInfoSheet
 import com.etrisad.zenith.ui.components.FeatureInfoRegistry
+import com.etrisad.zenith.ui.onboarding.CURRENT_GUIDE_VERSION
+import com.etrisad.zenith.ui.onboarding.GUIDED_PATH_ENABLED
+import com.etrisad.zenith.ui.onboarding.GuideState
+import com.etrisad.zenith.ui.onboarding.LocalOnboardingActions
+import com.etrisad.zenith.ui.onboarding.LocalOnboardingScroll
+import com.etrisad.zenith.ui.onboarding.LocalOnboardingTargets
+import com.etrisad.zenith.ui.onboarding.OnboardingActionHub
+import com.etrisad.zenith.ui.onboarding.OnboardingController
+import com.etrisad.zenith.ui.onboarding.OnboardingOverlayHost
+import com.etrisad.zenith.ui.onboarding.OnboardingPathCard
+import com.etrisad.zenith.ui.onboarding.OnboardingScrollHub
+import com.etrisad.zenith.ui.onboarding.OnboardingTargetRegistry
+import com.etrisad.zenith.ui.onboarding.PathCardMode
+import androidx.compose.ui.res.stringResource
+import com.etrisad.zenith.R
 import com.etrisad.zenith.data.preferences.UserPreferences
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -275,6 +291,13 @@ fun MainScreen(
         AVATAR_BORDERS.find { it.id == preferences.userAvatarBorder }
             ?.takeIf { it.requiredLevel <= headerProfile.level }
     }
+    val headerShapeDef = remember(
+        preferences.userProfileShape, headerProfile.level
+    ) {
+        PROFILE_SHAPES.find { it.id == preferences.userProfileShape }
+            ?.takeIf { it.requiredLevel <= headerProfile.level } ?: PROFILE_SHAPES.first()
+    }
+    val headerShape = headerShapeDef.shapeResolver()
 
     val useNavigationRail = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
 
@@ -315,6 +338,87 @@ fun MainScreen(
     var latestRelease by remember { mutableStateOf<GitHubRelease?>(null) }
     var showUpdateSheet by remember { mutableStateOf(false) }
     var showNotifCenter by remember { mutableStateOf(false) }
+
+    val guideTargets = remember { OnboardingTargetRegistry() }
+    val guideActions = remember { OnboardingActionHub() }
+    val guideScroll = remember { OnboardingScrollHub() }
+    val guidePrefsRef = rememberUpdatedState(preferences)
+    fun isCurrentGuideRoute(target: String): Boolean {
+        val entry = navController.currentBackStackEntry ?: return false
+        val destination = entry.destination.route ?: return false
+        if (destination == target) return true
+        return destination.startsWith("settings_category") &&
+            target == Screen.SettingsCategory.createRoute(
+                entry.arguments?.getString("category").orEmpty()
+            )
+    }
+    fun navigateGuideRoute(route: String) {
+        if (isCurrentGuideRoute(route)) return
+        if (route == Screen.Home.route || route == Screen.Focus.route || route == Screen.Settings.route) {
+            navController.navigate(route) {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        } else {
+            navController.navigate(route) { launchSingleTop = true }
+        }
+    }
+    val guideController = remember(userPreferencesRepository, navController) {
+        OnboardingController(
+            context = context,
+            repository = userPreferencesRepository,
+            scope = scope,
+            navigateTo = { navigateGuideRoute(it) },
+            prefsProvider = { guidePrefsRef.value },
+            onProgressChanged = { profileViewModel.refresh(silent = true) }
+        )
+    }
+    var showGuideCard by remember { mutableStateOf(false) }
+    var showGuideResumeCard by remember { mutableStateOf(false) }
+    var showGuidedPathHub by remember { mutableStateOf(false) }
+    val guideModalsVisible =
+        showPermissionSheet || showOnboardingStatsSheet || showOnboardingUpdateSheet ||
+            showFeatureInfoSheet || showUpdateSheet
+    val guideFirstRunEligible =
+        GUIDED_PATH_ENABLED &&
+            preferences.onboardingStatsCompleted &&
+            (!com.etrisad.zenith.BuildConfig.SHOW_UPDATES || preferences.onboardingUpdateCompleted) &&
+            !permissionsMissing &&
+            !preferences.isInLockdown() &&
+            preferences.onboardingGuideVersion < CURRENT_GUIDE_VERSION
+
+    LaunchedEffect(guideFirstRunEligible, currentRoute, guideModalsVisible, showGuideCard) {
+        if (!guideFirstRunEligible || showGuideCard) return@LaunchedEffect
+        if (currentRoute != Screen.Home.route) return@LaunchedEffect
+        if (guideModalsVisible) return@LaunchedEffect
+        delay(600)
+        showGuideCard = true
+        userPreferencesRepository.markOnboardingGuideShown(CURRENT_GUIDE_VERSION)
+    }
+
+    LaunchedEffect(Unit) {
+        delay(900)
+        if (preferences.onboardingGuideStep.isNotBlank() &&
+            !preferences.onboardingGuideMastered
+        ) {
+            showGuideResumeCard = true
+        }
+    }
+
+    val guideCardMode = when {
+        showGuideResumeCard -> PathCardMode.RESUME
+        showGuideCard -> PathCardMode.INTRO
+        else -> null
+    }
+    val questCompleted = focusUiState.activeShields.isNotEmpty() || focusUiState.activeGoals.isNotEmpty()
+    val masterySummary = stringResource(
+        R.string.onboarding_mastery_summary,
+        "${preferences.screenTimeTargetMinutes} min",
+        focusUiState.activeShields.size,
+        focusUiState.activeGoals.size,
+        focusUiState.activeSchedules.size
+    )
 
     LaunchedEffect(preferences.checkUpdateOnStart) {
         if (com.etrisad.zenith.BuildConfig.SHOW_UPDATES && preferences.checkUpdateOnStart) {
@@ -460,6 +564,11 @@ fun MainScreen(
             onDismissRequest = { showFeatureInfoSheet = false }
         )
     }
+    CompositionLocalProvider(
+        LocalOnboardingTargets provides guideTargets,
+        LocalOnboardingActions provides guideActions,
+        LocalOnboardingScroll provides guideScroll
+    ) {
     Box(modifier = Modifier.fillMaxSize()) {
     Row(
         modifier = Modifier.fillMaxSize()
@@ -734,14 +843,21 @@ fun MainScreen(
                                                                             SolidColor(
                                                                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                                                                             ),
-                                                                            animate = false
+                                                                            animate = false,
+                                                                            shape = headerShape
                                                                         )
                                                                         .padding(2.dp)
                                                                 } else {
                                                                     Modifier
+                                                                        .border(
+                                                                            1.dp,
+                                                                            SolidColor(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                                                            headerShape
+                                                                        )
+                                                                        .padding(1.dp)
                                                                 }
                                                             )
-                                                            .clip(CircleShape)
+                                                            .clip(headerShape)
                                                     )
                                                 }
                                             }
@@ -1163,7 +1279,10 @@ fun MainScreen(
                             innerPadding = innerPadding,
                             navController = navController,
                             onOpenPermissions = { showPermissionSheet = true },
-                            permissionsMissing = permissionsMissing
+                            permissionsMissing = permissionsMissing,
+                            onOpenGuidedPath = {
+                                showGuidedPathHub = true
+                            }
                         )
                     }
                     composable(Screen.Bedtime.route) {
@@ -1227,6 +1346,9 @@ fun MainScreen(
                             },
                             onOpenLevel = {
                                 navController.navigate(Screen.Level.route)
+                            },
+                            onOpenGuidedPathHub = {
+                                showGuidedPathHub = true
                             }
                         )
                     }
@@ -1368,6 +1490,12 @@ fun MainScreen(
                             onOpenPermissions = { showPermissionSheet = true },
                             onTriggerOnboardingStats = { showOnboardingStatsSheet = true },
                             onTriggerOnboardingUpdate = { showOnboardingUpdateSheet = true },
+                            onResetOnboardingGuide = {
+                                scope.launch { userPreferencesRepository.resetOnboardingGuide() }
+                                showGuideCard = true
+                                showGuideResumeCard = false
+                                Toast.makeText(context, "Guided Path reset", Toast.LENGTH_SHORT).show()
+                            },
                             onTestAchievementBanner = {
                                 profileViewModel.testUnlockBanner()
                                 navController.navigate(Screen.Profile.route)
@@ -1546,19 +1674,63 @@ fun MainScreen(
                     }
                 }
 
-                GlobalAchievementBanners(
-                    profileViewModel = profileViewModel,
-                    navController = navController,
-                    onOpenCenter = { showNotifCenter = true },
-                    onOpenAchievement = { defId ->
-                        navController.navigate(Screen.Achievements.createRoute(defId))
+                val guideHidesBanners = guideController.state !is GuideState.Idle &&
+                    guideController.state !is GuideState.Dismissed
+                if (!guideHidesBanners) {
+                    GlobalAchievementBanners(
+                        profileViewModel = profileViewModel,
+                        navController = navController,
+                        onOpenCenter = { showNotifCenter = true },
+                        onOpenAchievement = { defId ->
+                            navController.navigate(Screen.Achievements.createRoute(defId))
+                        },
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
+                }
+
+                OnboardingOverlayHost(
+                    controller = guideController,
+                    suspended = guideModalsVisible || permissionsMissing || preferences.isInLockdown(),
+                    masterySummary = masterySummary,
+                    questCompleted = questCompleted
+                )
+
+                if (showGuidedPathHub) {
+                    com.etrisad.zenith.ui.onboarding.GuidedPathHubBottomSheet(
+                        controller = guideController,
+                        onDismiss = { showGuidedPathHub = false }
+                    )
+                }
+
+                val cardMode = guideCardMode
+                val overlayIdle = guideController.state is GuideState.Idle ||
+                    guideController.state is GuideState.Dismissed
+                var lastCardMode by remember { mutableStateOf(PathCardMode.INTRO) }
+                LaunchedEffect(cardMode) { if (cardMode != null) lastCardMode = cardMode }
+                GuidePathCardHost(
+                    mode = lastCardMode,
+                    visible = cardMode != null && currentRoute == Screen.Home.route &&
+                        !guideModalsVisible && overlayIdle,
+                    onPrimary = {
+                        if (lastCardMode == PathCardMode.RESUME) guideController.resume()
+                        else guideController.startFirstChapter()
+                        showGuideCard = false
+                        showGuideResumeCard = false
                     },
-                    modifier = Modifier.align(Alignment.TopCenter)
+                    onDismiss = {
+                        showGuideCard = false
+                        showGuideResumeCard = false
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 100.dp)
                 )
 
                 CrashSafetyOverlay()
             }
         }
+    }
     }
     run {
         val centerPending by profileViewModel.pendingBanners.collectAsState()
@@ -2033,4 +2205,28 @@ private fun HeaderSwitch(
             }
         }
     )
+}
+
+@Composable
+private fun GuidePathCardHost(
+    mode: com.etrisad.zenith.ui.onboarding.PathCardMode,
+    visible: Boolean,
+    onPrimary: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(220)) +
+            slideInVertically(animationSpec = tween(320)) { height -> height / 3 },
+        exit = fadeOut(tween(140)) +
+            slideOutVertically(animationSpec = tween(180)) { height -> height / 4 },
+        modifier = modifier
+    ) {
+        com.etrisad.zenith.ui.onboarding.OnboardingPathCard(
+            mode = mode,
+            onPrimary = onPrimary,
+            onDismiss = onDismiss
+        )
+    }
 }

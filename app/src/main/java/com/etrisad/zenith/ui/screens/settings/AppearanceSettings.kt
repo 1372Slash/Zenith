@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.data.preferences.FontOption
 import com.etrisad.zenith.data.preferences.ThemeConfig
 import com.etrisad.zenith.data.preferences.UserPreferences
+import com.etrisad.zenith.ui.onboarding.onboardingAnchor
 
 @Composable
 fun AppearanceSettings(
@@ -24,7 +25,7 @@ fun AppearanceSettings(
     onNavigateToGSFlexCustomizer: () -> Unit,
     onNavigateToOverlayAppearance: () -> Unit
 ) {
-    Column {
+    Column(modifier = Modifier.onboardingAnchor("settings.appearance")) {
         PreferenceCategory(title = "Theming")
 
         ThemeSelector(

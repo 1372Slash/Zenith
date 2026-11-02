@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,6 +45,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.etrisad.zenith.ui.onboarding.LocalOnboardingScroll
+import com.etrisad.zenith.ui.onboarding.LocalOnboardingTargets
+import com.etrisad.zenith.ui.onboarding.onboardingAnchor
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
@@ -280,7 +284,38 @@ fun UsageStatsScreen(
             .fillMaxSize()
             .graphicsLayer { clip = false }
     ) {
+        val guideListState = rememberLazyListState()
+        val guideScrollHub = LocalOnboardingScroll.current
+        val guideTargets = LocalOnboardingTargets.current
+        val guideTopOffsetPx = with(androidx.compose.ui.platform.LocalDensity.current) {
+            (innerPadding.calculateTopPadding() + 24.dp).roundToPx()
+        }
+        androidx.compose.runtime.DisposableEffect(guideScrollHub) {
+            guideScrollHub.register("usage_stats.donut") { guideListState.animateScrollToItem(0) }
+            guideScrollHub.register("usage_stats.heatmap") {
+                if (guideTargets.bounds("usage_stats.heatmap") == null) {
+                    var frames = 0
+                    while (guideListState.layoutInfo.totalItemsCount == 0 && frames < 8) {
+                        withFrameNanos { }
+                        frames++
+                    }
+                    var index = 0
+                    val last = guideListState.layoutInfo.totalItemsCount - 1
+                    while (index <= last && guideTargets.bounds("usage_stats.heatmap") == null) {
+                        guideListState.scrollToItem(index, scrollOffset = -guideTopOffsetPx)
+                        withFrameNanos { }
+                        withFrameNanos { }
+                        index += 2
+                    }
+                }
+            }
+            onDispose {
+                guideScrollHub.unregister("usage_stats.donut")
+                guideScrollHub.unregister("usage_stats.heatmap")
+            }
+        }
         LazyColumn(
+            state = guideListState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
@@ -290,7 +325,11 @@ fun UsageStatsScreen(
             )
         ) {
         item(key = "zenith_dashboard") {
-            Column(modifier = Modifier.animateItem()) {
+            Column(
+                modifier = Modifier
+                    .animateItem()
+                    .onboardingAnchor("usage_stats.donut")
+            ) {
                 val selectedDayTotal = uiState.totalScreenTime
                 ZenithDashboard(
                     totalTime = selectedDayTotal,
@@ -700,7 +739,11 @@ fun UsageStatsScreen(
         }
 
         item(key = "insight_heatmap") {
-            Column(modifier = Modifier.animateItem()) {
+            Column(
+                modifier = Modifier
+                    .animateItem()
+                    .onboardingAnchor("usage_stats.heatmap")
+            ) {
                 GoalHeatmapItem(
                     history = uiState.dailyUsageHistory,
                     targetMillis = uiState.targetMillis,

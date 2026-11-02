@@ -5,6 +5,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -46,7 +47,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -71,6 +75,9 @@ import com.etrisad.zenith.ui.components.focus.AccessibilityWarningCard
 import com.etrisad.zenith.ui.components.focus.rememberAccessibilityServiceEnabled
 import com.etrisad.zenith.ui.components.focus.activeShieldSection
 import com.etrisad.zenith.ui.components.focus.activeTypeTabRow
+import com.etrisad.zenith.ui.onboarding.LocalOnboardingScroll
+import com.etrisad.zenith.ui.onboarding.LocalOnboardingTargets
+import com.etrisad.zenith.ui.onboarding.onboardingAnchor
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonWeighted
 import com.etrisad.zenith.ui.components.ZenithButtonType
@@ -97,6 +104,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.Calendar
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.math.pow
 
 import androidx.compose.ui.text.PlatformTextStyle
@@ -223,6 +231,44 @@ fun HomeScreenContent(
     val isAccessibilityEnabled = rememberAccessibilityServiceEnabled()
 
     val listState = rememberLazyListState()
+    val guideScrollHub = LocalOnboardingScroll.current
+    val guideTargets = LocalOnboardingTargets.current
+    var guideListTopPx by remember { mutableStateOf(0) }
+    val guideHeaderPx = with(LocalDensity.current) { innerPadding.calculateTopPadding().roundToPx() }
+
+    suspend fun scrollGuideTo(index: Int, anchorId: String) {
+        val viewportHeight = listState.layoutInfo.viewportSize.height
+        if (viewportHeight <= 0) return
+        val visibleTop = maxOf(guideListTopPx, guideHeaderPx)
+        val centreTop = visibleTop + viewportHeight / 2f
+
+        if (guideTargets.bounds(anchorId) == null) {
+            val aim = -(centreTop - guideListTopPx).roundToInt()
+            listState.animateScrollToItem(index, scrollOffset = aim)
+        }
+
+        val anchor = guideTargets.await(anchorId, timeoutMs = 800) ?: return
+        val targetTop = centreTop - anchor.height / 2f
+        val delta = anchor.top - targetTop
+        if (delta > 1f || delta < -1f) listState.animateScrollBy(delta)
+
+        withFrameNanos { }
+        val settled = guideTargets.bounds(anchorId) ?: return
+        val residue = settled.top - (centreTop - settled.height / 2f)
+        if (residue > 1f || residue < -1f) listState.scrollBy(residue)
+    }
+
+    DisposableEffect(guideScrollHub, listState, innerPadding) {
+        guideScrollHub.register("usage_dashboard") { scrollGuideTo(0, "home.dashboard.target") }
+        guideScrollHub.register("usage_trends") { scrollGuideTo(1, "home.trends") }
+        guideScrollHub.register("top_apps") { scrollGuideTo(4, "home.top_apps") }
+        guideScrollHub.register("quick_actions") { scrollGuideTo(5, "home.quick_actions") }
+        guideScrollHub.register("focus_list") { scrollGuideTo(6, "home.focus_list") }
+        onDispose {
+            listOf("usage_dashboard", "usage_trends", "top_apps", "quick_actions", "focus_list")
+                .forEach { guideScrollHub.unregister(it) }
+        }
+    }
     val editorScrollOffsetPx = with(LocalDensity.current) {
         -(innerPadding.calculateTopPadding() + 16.dp).roundToPx()
     }
@@ -319,7 +365,8 @@ fun HomeScreenContent(
             userScrollEnabled = !customizeState.quickEditOpen,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp)
+                .onGloballyPositioned { guideListTopPx = it.positionInWindow().y.roundToInt() },
             contentPadding = PaddingValues(
                 top = innerPadding.calculateTopPadding() + 16.dp,
                 bottom = 150.dp
@@ -339,11 +386,13 @@ fun HomeScreenContent(
             }
 
             item(key = "usage_trends") {
-                UsageTrendsRow(
-                    yesterdayScreenTime = uiState.yesterdayScreenTime,
-                    percentageChange = uiState.percentageChange,
-                    formatDuration = formatDuration
-                )
+                Box(modifier = Modifier.onboardingAnchor("home.trends")) {
+                    UsageTrendsRow(
+                        yesterdayScreenTime = uiState.yesterdayScreenTime,
+                        percentageChange = uiState.percentageChange,
+                        formatDuration = formatDuration
+                    )
+                }
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
@@ -459,18 +508,21 @@ fun HomeScreenContent(
             }
 
             item(key = "top_apps") {
-                TopAppsSection(
-                    topApps = uiState.topApps,
-                    formatDuration = formatDuration,
-                    expressiveColors = preferences.expressiveColors,
-                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
-                    onSeeFullList = onSeeFullList,
-                    onAppClick = { packageName -> onAppClick(packageName) }
-                )
+                Box(modifier = Modifier.onboardingAnchor("home.top_apps")) {
+                    TopAppsSection(
+                        topApps = uiState.topApps,
+                        formatDuration = formatDuration,
+                        expressiveColors = preferences.expressiveColors,
+                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
+                        onSeeFullList = onSeeFullList,
+                        onAppClick = { packageName -> onAppClick(packageName) }
+                    )
+                }
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
             item(key = "quick_actions") {
+                Box(modifier = Modifier.onboardingAnchor("home.quick_actions")) {
                 AnimatedContent(
                     targetState = customizeState.quickEditOpen,
                     transitionSpec = {
@@ -514,6 +566,7 @@ fun HomeScreenContent(
                             }
                         )
                     }
+                }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -811,7 +864,9 @@ fun UsageDashboard(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onboardingAnchor("home.dashboard.target"),
                 contentAlignment = Alignment.Center
             ) {
                 if (screenTimeTargetMinutes > 0) {

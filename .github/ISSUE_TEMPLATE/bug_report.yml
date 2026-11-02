@@ -17,7 +17,7 @@ body:
     id: steps_to_reproduce
     attributes:
       label: Steps to Reproduce
-      description: "1. Open Zenith\n2. Go to '...'\n3. Perform '...'\n4. See error"
+      description: Clear and concise steps to reproduce the behavior.
       placeholder: |
         1. Open Zenith
         2. Go to '...'

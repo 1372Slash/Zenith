@@ -28,6 +28,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.etrisad.zenith.ui.onboarding.onboardingAnchor
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
@@ -100,6 +101,20 @@ fun FocusScreen(
 
     val isAppPickerOpen = remember { mutableStateOf(false) }
     var isFabMenuExpanded by remember { mutableStateOf(false) }
+
+    val guideActions = com.etrisad.zenith.ui.onboarding.LocalOnboardingActions.current
+    androidx.compose.runtime.DisposableEffect(guideActions) {
+        guideActions.register(com.etrisad.zenith.ui.onboarding.GuideAction.ExpandFocusFab) {
+            isFabMenuExpanded = true
+        }
+        guideActions.register(com.etrisad.zenith.ui.onboarding.GuideAction.CollapseFocusFab) {
+            isFabMenuExpanded = false
+        }
+        onDispose {
+            guideActions.unregister(com.etrisad.zenith.ui.onboarding.GuideAction.ExpandFocusFab)
+            guideActions.unregister(com.etrisad.zenith.ui.onboarding.GuideAction.CollapseFocusFab)
+        }
+    }
 
     var pendingDeleteShield by remember { mutableStateOf<ShieldEntity?>(null) }
     var pendingDeleteSchedule by remember { mutableStateOf<ScheduleEntity?>(null) }
@@ -254,7 +269,8 @@ fun FocusScreen(
                         onCheckedChange = { isFabMenuExpanded = it },
                         modifier = Modifier
                             .size(80.dp)
-                            .offset(x = fabOffset, y = -fabOffset),
+                            .offset(x = fabOffset, y = -fabOffset)
+                            .onboardingAnchor("focus.fab"),
                         containerColor = ToggleFloatingActionButtonDefaults.containerColor(
                             MaterialTheme.colorScheme.primaryContainer,
                             MaterialTheme.colorScheme.primary
@@ -284,34 +300,40 @@ fun FocusScreen(
                     }
                 }
             ) {
-                ExpressiveFabMenuItem(
-                    onClick = {
-                        isFabMenuExpanded = false
-                        viewModel.selectAppForFocus(null, FocusType.SHIELD)
-                        isAppPickerOpen.value = true
-                    },
-                    icon = { Icon(Icons.Outlined.Shield, contentDescription = null) },
-                    text = { Text("Add Shield") }
-                )
+                Box(modifier = Modifier.onboardingAnchor("focus.fab.add_shield")) {
+                    ExpressiveFabMenuItem(
+                        onClick = {
+                            isFabMenuExpanded = false
+                            viewModel.selectAppForFocus(null, FocusType.SHIELD)
+                            isAppPickerOpen.value = true
+                        },
+                        icon = { Icon(Icons.Outlined.Shield, contentDescription = null) },
+                        text = { Text("Add Shield") }
+                    )
+                }
 
-                ExpressiveFabMenuItem(
-                    onClick = {
-                        isFabMenuExpanded = false
-                        viewModel.selectAppForFocus(null, FocusType.GOAL)
-                        isAppPickerOpen.value = true
-                    },
-                    icon = { Icon(Icons.Outlined.Flag, contentDescription = null) },
-                    text = { Text("Add Goal") }
-                )
+                Box(modifier = Modifier.onboardingAnchor("focus.fab.add_goal")) {
+                    ExpressiveFabMenuItem(
+                        onClick = {
+                            isFabMenuExpanded = false
+                            viewModel.selectAppForFocus(null, FocusType.GOAL)
+                            isAppPickerOpen.value = true
+                        },
+                        icon = { Icon(Icons.Outlined.Flag, contentDescription = null) },
+                        text = { Text("Add Goal") }
+                    )
+                }
 
-                ExpressiveFabMenuItem(
-                    onClick = {
-                        isFabMenuExpanded = false
-                        viewModel.openSchedulePicker()
-                    },
-                    icon = { Icon(Icons.Outlined.Schedule, contentDescription = null) },
-                    text = { Text("Add Schedule") }
-                )
+                Box(modifier = Modifier.onboardingAnchor("focus.fab.add_schedule")) {
+                    ExpressiveFabMenuItem(
+                        onClick = {
+                            isFabMenuExpanded = false
+                            viewModel.openSchedulePicker()
+                        },
+                        icon = { Icon(Icons.Outlined.Schedule, contentDescription = null) },
+                        text = { Text("Add Schedule") }
+                    )
+                }
             }
         }
 
@@ -495,10 +517,12 @@ fun FocusScreenContent(
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Spacer(modifier = Modifier.height(innerPadding.calculateTopPadding() + 16.dp))
-        AppTypeTabRow(
-            selectedTab = activeTab,
-            onTabChange = { activeTab = it }
-        )
+        Box(modifier = Modifier.onboardingAnchor("focus.tabs")) {
+            AppTypeTabRow(
+                selectedTab = activeTab,
+                onTabChange = { activeTab = it }
+            )
+        }
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             AnimatedContent(
                 targetState = activeTab,

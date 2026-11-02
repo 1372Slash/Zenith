@@ -6,4 +6,151 @@
     <string name="total_screen_time_widget_description">Shows total screen time today.</string>
     <string name="remaining_target_widget_description">Shows remaining time before daily screen time target.</string>
     <string name="phone_free_time_widget_description">Shows phone-free time today - how long you haven\'t used your phone, resets daily.</string>
+
+    <!-- Guided Path -->
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_back">Back</string>
+    <string name="onboarding_show_me">Show me</string>
+    <string name="onboarding_finish">Finish</string>
+    <string name="onboarding_continue">Continue</string>
+    <string name="onboarding_skip_chapter">Skip chapter</string>
+    <string name="onboarding_close">Close</string>
+    <string name="onboarding_step_label">Chapter %1$d · Step %2$d of %3$d</string>
+    <string name="onboarding_step_label_plain">Step %1$d of %2$d</string>
+    <string name="onboarding_exit_title">Leave the Path?</string>
+    <string name="onboarding_exit_body">Your progress is saved. You can resume from Home whenever you like.</string>
+    <string name="onboarding_exit_stay">Keep going</string>
+    <string name="onboarding_exit_leave">Leave</string>
+    <string name="onboarding_path_card_title">New to Zenith? Start here</string>
+    <string name="onboarding_path_card_body">Six short guided chapters cover your dashboard, Shields, routines and rewards. About a minute each, and your progress is saved.</string>
+    <string name="onboarding_path_start">Start the Path</string>
+    <string name="onboarding_path_explore">Explore on my own</string>
+    <string name="onboarding_resume_title">Continue your Guided Path</string>
+    <string name="onboarding_resume_body">You are partway through, and the next chapter is ready when you are.</string>
+    <string name="onboarding_next_chapter">Next chapter</string>
+    <string name="onboarding_chapter_complete_title">Chapter complete</string>
+    <string name="onboarding_badge_earned">Badge earned · %1$s</string>
+    <string name="onboarding_also_title">Also in this chapter</string>
+    <string name="onboarding_replay_complete">Replay complete</string>
+    <string name="onboarding_mastered_title">Mastered</string>
+    <string name="onboarding_mastered_body">The Path is complete. Your badges stay with you.</string>
+    <string name="onboarding_mastery_title">Zenith Master</string>
+    <string name="onboarding_mastery_body">Six chapters. One deliberate system.\n\nYou now know where the day lives, how to draw a boundary, how to interrupt autopilot, how to let the clock decide, how to read the mirror, and how to keep it all.</string>
+    <string name="onboarding_mastery_claim">Claim your badge</string>
+    <string name="onboarding_share_path">Share your Path</string>
+    <string name="onboarding_mastery_summary">%1$s target · %2$d Shields · %3$d Goals · %4$d Schedules</string>
+    <string name="onboarding_replay">Replay the Path</string>
+    <string name="onboarding_replay_summary">Walk through the six chapters again. Your badges are kept.</string>
+    <string name="onboarding_open_path">Guided Path</string>
+    <string name="onboarding_open_path_summary">Resume, replay, or restart the six-chapter tour</string>
+    <string name="onboarding_hub_chapters">Chapters</string>
+    <string name="onboarding_ladder_title">Your ladder</string>
+    <string name="onboarding_hub_progress">%1$d of %2$d chapters completed</string>
+    <string name="onboarding_hub_chapter_title">Chapter %1$d: %2$s</string>
+    <string name="onboarding_hub_chapter_summary">%1$s · %2$s</string>
+    <string name="onboarding_hub_status_completed">Completed</string>
+    <string name="onboarding_hub_status_start">Start</string>
+    <string name="onboarding_a11y_step">Chapter %1$d of %2$d, step %3$d of %4$d. %5$s. %6$s</string>
+    <string name="onboarding_a11y_activate_target">Activate highlighted control</string>
+    <string name="onboarding_quest_title">Optional quest · Draw your first line</string>
+    <string name="onboarding_quest_done">Already done — nice.</string>
+    <string name="onboarding_quest_pending">Create a Shield or a Goal whenever you are ready. The badge is already yours.</string>
+
+    <string name="onboarding_chapter_first_light">First Light</string>
+    <string name="onboarding_chapter_first_light_sub">See the day before changing it</string>
+    <string name="onboarding_chapter_first_light_badge">First Light</string>
+    <string name="onboarding_chapter_first_light_close">The dashboard is yours. Next: draw your first boundary.</string>
+    <string name="onboarding_chapter_first_light_also">Usage history: tap a day to inspect it.\nTop apps: the three biggest consumers today.\nYour avatar is the door to level and achievements.\nHistory becomes trustworthy after about three days.</string>
+
+    <string name="onboarding_step_dashboard_title">Your day, at a glance</string>
+    <string name="onboarding_step_dashboard_body">This ring is today\'s screen time against your target. The flame is your current streak. You can tap the target anytime to change it.</string>
+    <string name="onboarding_step_trends_title">Three days to truth</string>
+    <string name="onboarding_step_trends_body">Zenith gets sharper as it learns your patterns. Give it about three days before trusting the trend line.</string>
+    <string name="onboarding_step_focus_list_title">Protection lives here</string>
+    <string name="onboarding_step_focus_list_body">A Shield blocks. A Goal rewards. Both appear in this list; tap one to open its app detail.</string>
+    <string name="onboarding_step_quick_actions_title">Your shortcuts</string>
+    <string name="onboarding_step_quick_actions_body">Bedtime, Alarm, Stats, and Pomodoro are one tap away. Use the Tune menu to choose which shortcuts you see.</string>
+
+    <string name="onboarding_chapter_shield">The Shield</string>
+    <string name="onboarding_chapter_shield_sub">Protection is a boundary, not a punishment</string>
+    <string name="onboarding_chapter_shield_badge">Shieldbearer</string>
+    <string name="onboarding_chapter_shield_close">Draw your first line and the rest gets easier.</string>
+    <string name="onboarding_chapter_shield_also">Delay App: a pause before a protected app opens.\nStrict mode removes the easy exit.\nEmergency uses are the planned escape hatch.\nAuto-quit closes an app at the limit.\nBypass Restrictions skip schedules but are still tracked.</string>
+
+    <string name="onboarding_step_focus_tabs_title">Three tools, one screen</string>
+    <string name="onboarding_step_focus_tabs_body">Focus holds Shields, Goals, and Schedules. Apps and Websites are separate surfaces, and each list only shows what you created.</string>
+    <string name="onboarding_step_fab_title">One button</string>
+    <string name="onboarding_step_fab_body">This button adds any of the three tools. Long-press a card to select several at once.</string>
+    <string name="onboarding_step_add_shield_title">Meet the Shield</string>
+    <string name="onboarding_step_add_shield_body">A Shield stands between you and an app. Set a daily limit, add a delay, or make it strict. You can always spend an emergency use.</string>
+    <string name="onboarding_step_add_goal_title">Goals are the good cop</string>
+    <string name="onboarding_step_add_goal_body">Goals don\'t block. They reward you for staying under a target, and they feed your XP.</string>
+    <string name="onboarding_step_add_schedule_title">Let the clock decide</string>
+    <string name="onboarding_step_add_schedule_body">A Schedule automates BLOCK or ALLOW windows by day and time. BLOCK schedules can intercept notifications.</string>
+
+    <string name="onboarding_chapter_pause">The Pause</string>
+    <string name="onboarding_chapter_pause_sub">Friction interrupts autopilot</string>
+    <string name="onboarding_chapter_pause_badge">Stillness</string>
+    <string name="onboarding_chapter_pause_close">Small frictions, chosen by you.</string>
+    <string name="onboarding_chapter_pause_also">QR and NFC tasks need a code or tag registered first.\nSession HUD floats your remaining time.\nUsage Glimpse shows a brief total every five minutes.\nAudio Focus Intercept pauses media during an overlay.</string>
+
+    <string name="onboarding_step_mindful_title">A pause, not a prison</string>
+    <string name="onboarding_step_mindful_body">Mindful Gateway interrupts every app that isn\'t whitelisted, even if it has no Shield. Defaults control uses, emergency, and pause behavior.</string>
+    <string name="onboarding_step_pause_point_title">Break the autopilot</string>
+    <string name="onboarding_step_pause_point_body">Pause Point asks for a small task before you continue. Waiting, breathing, walk, scan, slide, math, counting, typing, and more.</string>
+    <string name="onboarding_step_reels_title">Short videos, counted</string>
+    <string name="onboarding_step_reels_body">Reels Shield shares one daily limit across your chosen apps and presses back when it runs out. It needs accessibility.</string>
+    <string name="onboarding_step_early_kick_title">Leave before the wall</string>
+    <string name="onboarding_step_early_kick_body">Early Kick ejects you five minutes before a limit, so the stop is a warning instead of a surprise.</string>
+    <string name="onboarding_step_eye_care_title">Look away, on purpose</string>
+    <string name="onboarding_step_eye_care_body">Eye Care runs the 20-20-20 rule with rest overlays you can\'t skip. Work and rest lengths are yours to set.</string>
+
+    <string name="onboarding_chapter_clock">The Clock</string>
+    <string name="onboarding_chapter_clock_sub">Routines should run without willpower</string>
+    <string name="onboarding_chapter_clock_badge">Timekeeper</string>
+    <string name="onboarding_chapter_clock_close">Let the day keep itself.</string>
+    <string name="onboarding_chapter_clock_also">Bedtime history and wind-down live on the Bedtime screen.\nPomodoro keeps presets and session stats.\nGrace Period can wrap past midnight with a weekly edit lock.\nTamper Protection adds an uninstall step and a PIN.</string>
+
+    <string name="onboarding_step_bedtime_title">Close the day on purpose</string>
+    <string name="onboarding_step_bedtime_body">Bedtime blocks distracting apps, can wind you down, and can silence notifications. Add trusted apps to the allowlist.</string>
+    <string name="onboarding_step_pomodoro_title">Work in waves</string>
+    <string name="onboarding_step_pomodoro_body">Pomodoro alternates focus and rest, and can protect you from apps during a session. Save a preset for the way you actually work.</string>
+    <string name="onboarding_step_grace_title">A planned break</string>
+    <string name="onboarding_step_grace_body">Grace Period lifts every restriction for a window you choose, up to two hours a day. Weekly Edit Lock keeps it from becoming permanent.</string>
+    <string name="onboarding_step_lockdown_title">Protect future you</string>
+    <string name="onboarding_step_lockdown_body">Lockdown blocks editing Shields, Goals, and Schedules during chosen hours. Turning it off takes a deliberate confirmation.</string>
+    <string name="onboarding_step_alarm_title">Wake up, gently</string>
+    <string name="onboarding_step_alarm_body">Alarms support text-to-speech, dismiss missions, gradual volume, and launching a wake-up app.</string>
+
+    <string name="onboarding_chapter_mirror">The Mirror</string>
+    <string name="onboarding_chapter_mirror_sub">Data turns intention into feedback</string>
+    <string name="onboarding_chapter_mirror_badge">Oracle</string>
+    <string name="onboarding_chapter_mirror_close">The numbers are yours to read.</string>
+    <string name="onboarding_chapter_mirror_also">Notification Insights recap your day and week.\nIntercepted notifications feed an achievement.\nWeekly and monthly summaries keep unlimited history.\nApp Detail can edit, pause, or delete its Shield or Goal.</string>
+
+    <string name="onboarding_step_donut_title">Where the hours went</string>
+    <string name="onboarding_step_donut_body">This donut splits your day into Shield, Goal, and Other. Peak hours and the time profile sit right below.</string>
+    <string name="onboarding_step_heatmap_title">The long arc</string>
+    <string name="onboarding_step_heatmap_body">The heatmap is your history at a glance. Swipe back through weeks, months, and years, and compare with last week.</string>
+    <string name="onboarding_step_top_apps_title">Trace one app</string>
+    <string name="onboarding_step_top_apps_body">Tap any app for App Detail: 21-day and hourly charts, battery, peak hour, and the Shield or Goal attached to it.</string>
+    <string name="onboarding_step_websites_title">Sites count too</string>
+    <string name="onboarding_step_websites_body">Website auto-tracking records time on domains across supported browsers, and website Shields work like app Shields.</string>
+
+    <string name="onboarding_chapter_summit">The Summit</string>
+    <string name="onboarding_chapter_summit_sub">Identity and resilience make it last</string>
+    <string name="onboarding_chapter_summit_badge">Curator</string>
+    <string name="onboarding_chapter_summit_close">Make it yours, then keep it.</string>
+    <string name="onboarding_chapter_summit_also">Widgets put streak and focus progress on your home screen.\nPrivacy hides apps and notification content.\nSmart Repair and diagnostic export live in Data Management.\nTamper Protection and Lockdown guard your future self.</string>
+
+    <string name="onboarding_step_identity_title">Build your identity</string>
+    <string name="onboarding_step_identity_body">Avatar, banner, name, and bio are local to your device. The share card renders from them.</string>
+    <string name="onboarding_step_xp_title">Earned, not bought</string>
+    <string name="onboarding_step_xp_body">XP comes from Shield headroom and Goal targets. Levels unlock titles and avatar borders.</string>
+    <string name="onboarding_step_achievements_title">Badges that remember</string>
+    <string name="onboarding_step_achievements_body">Explorer badges reward trying features. Accumulation badges grow over time. Your Path badge lives here too.</string>
+    <string name="onboarding_step_appearance_title">Make it look like yours</string>
+    <string name="onboarding_step_appearance_body">Theme, Dynamic Color, Expressive Colors, fonts, the floating tab bar, and Overlay Appearance all live here.</string>
+    <string name="onboarding_step_data_title">Keep it safe</string>
+    <string name="onboarding_step_data_body">Auto and manual backup, restore, Smart Repair, privacy, and performance profiles. Set a backup and forget it.</string>
 </resources>
