@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import com.etrisad.zenith.BuildConfig
 import com.etrisad.zenith.ZenithApplication
 import com.etrisad.zenith.data.manager.GitHubUpdateManager
 import com.etrisad.zenith.data.preferences.PerformanceConfig
@@ -51,8 +52,10 @@ fun SettingsScreen(
     var checkingForUpdate by remember { mutableStateOf(false) }
     var showUpdateSheet by remember { mutableStateOf(false) }
     var showChangelogSheet by remember { mutableStateOf(false) }
+    var showMajorChangelogSheet by remember { mutableStateOf(false) }
     var latestRelease by remember { mutableStateOf<GitHubRelease?>(null) }
     var allReleases by remember { mutableStateOf<List<GitHubRelease>>(emptyList()) }
+    var majorReleases by remember { mutableStateOf<List<GitHubRelease>>(emptyList()) }
     var showWhitelistSheet by remember { mutableStateOf(false) }
     var showAppExclusionsSheet by remember { mutableStateOf(false) }
     var showDiagnosticSheet by remember { mutableStateOf(false) }
@@ -117,6 +120,49 @@ fun SettingsScreen(
                 showChangelogSheet = true
             } else {
                 Toast.makeText(context, "Failed to fetch changelog", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val onViewMajorChangelog: () -> Unit = {
+        if (BuildConfig.SHOW_UPDATES) {
+            coroutineScope.launch {
+                val releases = updateManager.fetchAllReleases()
+                val filtered = releases?.filter { 
+                    it.tagName.removePrefix("v").startsWith("1.6") 
+                } ?: emptyList()
+
+                majorReleases = if (filtered.isNotEmpty()) {
+                    filtered
+                } else {
+                    listOf(
+                        GitHubRelease(
+                            tagName = "v1.6.4",
+                            name = "Zenith v1.6.4 - Gleam Update",
+                            body = "# Zenith v1.6.4\n[QOL]\n## What's New\n* ✨ Added Gleam major update badge and interactive changelog viewer in About.\n* 🎨 Enhanced image rendering inside changelog dialogs and bottom sheets.\n* 🚀 Improved Guided Path onboarding animations.",
+                            htmlUrl = "https://github.com/1372Slash/Zenith/releases/tag/v1.6.4",
+                            publishedAt = "2026-11-01T00:00:00Z",
+                            assets = emptyList()
+                        ),
+                        GitHubRelease(
+                            tagName = "v1.6.3.1",
+                            name = "Zenith v1.6.3.1",
+                            body = "# Zenith v1.6.3.1\n[Bug Fixes]\n* 🐛 Bug fixes and stability improvements.",
+                            htmlUrl = "https://github.com/1372Slash/Zenith/releases/tag/v1.6.3.1",
+                            publishedAt = "2026-11-01T00:00:00Z",
+                            assets = emptyList()
+                        ),
+                        GitHubRelease(
+                            tagName = "v1.6.3",
+                            name = "Zenith v1.6.3",
+                            body = "# Zenith v1.6.3\n[Performances]\n* 🚀 Performance optimizations and dependency updates.",
+                            htmlUrl = "https://github.com/1372Slash/Zenith/releases/tag/v1.6.3",
+                            publishedAt = "2026-10-28T00:00:00Z",
+                            assets = emptyList()
+                        )
+                    )
+                }
+                showMajorChangelogSheet = true
             }
         }
     }
@@ -256,6 +302,7 @@ fun SettingsScreen(
                     isCheckingForUpdate = checkingForUpdate,
                     onCheckForUpdate = onCheckForUpdate,
                     onViewChangelog = onViewChangelog,
+                    onViewMajorChangelog = onViewMajorChangelog,
                     onExportDiagnostics = {
                         diagnosticError = null
                         diagnosticSuccess = false
@@ -265,6 +312,22 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+
+    if (showMajorChangelogSheet && majorReleases.isNotEmpty()) {
+        val isDark = when (preferences.themeConfig) {
+            ThemeConfig.FOLLOW_SYSTEM -> isSystemInDarkTheme()
+            ThemeConfig.LIGHT -> false
+            ThemeConfig.DARK -> true
+        }
+        com.etrisad.zenith.ui.components.ChangelogBottomSheet(
+            releases = majorReleases,
+            useExpressiveColors = preferences.expressiveColors,
+            isDark = isDark,
+            title = "Gleam Changelog",
+            subtitle = "Updates & Improvements in v1.6",
+            onDismiss = { showMajorChangelogSheet = false }
+        )
     }
 
     if (showUpdateSheet && latestRelease != null) {
@@ -296,6 +359,8 @@ fun SettingsScreen(
             releases = allReleases,
             useExpressiveColors = preferences.expressiveColors,
             isDark = isDark,
+            title = "Changelog History",
+            subtitle = "All release versions and updates",
             onDismiss = { showChangelogSheet = false }
         )
     }

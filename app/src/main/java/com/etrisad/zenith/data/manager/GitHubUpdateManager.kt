@@ -24,6 +24,10 @@ class GitHubUpdateManager(private val context: Context) {
 
     private val service = retrofit.create(GitHubService::class.java)
 
+    private val listAdapter = moshi.adapter<List<GitHubRelease>>(
+        com.squareup.moshi.Types.newParameterizedType(List::class.java, GitHubRelease::class.java)
+    )
+
     suspend fun fetchLatestRelease(): GitHubRelease? {
         return try {
             val response = service.getLatestRelease()
@@ -34,10 +38,34 @@ class GitHubUpdateManager(private val context: Context) {
     }
 
     suspend fun fetchAllReleases(): List<GitHubRelease>? {
-        return try {
+        val cacheFile = java.io.File(context.cacheDir, "changelog_cache.json")
+
+        try {
             val response = service.getAllReleases()
-            if (response.isSuccessful) response.body() else null
+            if (response.isSuccessful) {
+                val body = response.body()
+                if (!body.isNullOrEmpty()) {
+                    try {
+                        cacheFile.writeText(listAdapter.toJson(body))
+                    } catch (e: Exception) {
+                    }
+                    return body
+                }
+            }
         } catch (e: Exception) {
+        }
+
+        return getCachedReleasesFallback(cacheFile)
+    }
+
+    private fun getCachedReleasesFallback(cacheFile: java.io.File): List<GitHubRelease>? {
+        return if (cacheFile.exists()) {
+            try {
+                listAdapter.fromJson(cacheFile.readText())
+            } catch (e: Exception) {
+                null
+            }
+        } else {
             null
         }
     }

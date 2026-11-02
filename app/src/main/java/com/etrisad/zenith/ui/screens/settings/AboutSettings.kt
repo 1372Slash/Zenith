@@ -43,6 +43,7 @@ fun AboutSettings(
     isCheckingForUpdate: Boolean,
     onCheckForUpdate: () -> Unit,
     onViewChangelog: () -> Unit,
+    onViewMajorChangelog: () -> Unit,
     onExportDiagnostics: () -> Unit
 ) {
     val context = LocalContext.current
@@ -55,6 +56,7 @@ fun AboutSettings(
             versionName = versionName,
             developerModeEnabled = developerModeEnabled,
             onDeveloperModeChange = onDeveloperModeChange,
+            onViewMajorChangelog = onViewMajorChangelog,
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
         )
 
@@ -142,6 +144,7 @@ fun AppInfoCard(
     versionName: String,
     developerModeEnabled: Boolean,
     onDeveloperModeChange: (Boolean) -> Unit,
+    onViewMajorChangelog: () -> Unit,
     shape: Shape = RoundedCornerShape(24.dp)
 ) {
     val context = LocalContext.current
@@ -213,17 +216,40 @@ fun AppInfoCard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Surface(
-                    color = MaterialTheme.colorScheme.tertiary,
-                    shape = CircleShape
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "v$versionName",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onTertiary,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = CircleShape,
+                        modifier = if (BuildConfig.SHOW_UPDATES) {
+                            Modifier.clickable { onViewMajorChangelog() }
+                        } else {
+                            Modifier
+                        }
+                    ) {
+                        Text(
+                            text = "Gleam",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiary,
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            text = "v$versionName",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onTertiary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }

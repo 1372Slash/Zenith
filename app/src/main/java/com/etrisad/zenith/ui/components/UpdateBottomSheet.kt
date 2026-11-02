@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ListAlt
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.*
@@ -33,8 +34,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import androidx.compose.ui.graphics.Brush
 import androidx.palette.graphics.Palette
-import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.etrisad.zenith.data.remote.model.GitHubRelease
 import com.etrisad.zenith.ui.theme.ZenithTheme
@@ -140,11 +141,16 @@ fun ChangelogBottomSheet(
     releases: List<GitHubRelease>,
     useExpressiveColors: Boolean,
     isDark: Boolean = isSystemInDarkTheme(),
+    title: String = "Changelog History",
+    subtitle: String = "Updates & Improvements",
     onDismiss: () -> Unit
 ) {
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    var displayCount by remember { mutableStateOf(minOf(5, releases.size)) }
+    val displayedReleases = remember(releases, displayCount) { releases.take(displayCount) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -152,50 +158,95 @@ fun ChangelogBottomSheet(
         dragHandle = { BottomSheetDefaults.DragHandle() },
         containerColor = MaterialTheme.colorScheme.surface
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = screenHeight * 0.9f)
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier.fillMaxSize()
             ) {
-                Surface(
-                    modifier = Modifier.size(64.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Outlined.History,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(32.dp)
-                        )
+                    Surface(
+                        modifier = Modifier.size(64.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Outlined.History,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
                     }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Changelog History",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.ExtraBold
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-            }
 
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                items(releases) { release ->
-                    ChangelogVersionCard(
-                        release = release,
-                        useExpressiveColors = useExpressiveColors,
-                        isDark = isDark
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 48.dp, top = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(displayedReleases) { release ->
+                            ChangelogVersionCard(
+                                release = release,
+                                useExpressiveColors = useExpressiveColors,
+                                isDark = isDark
+                            )
+                        }
+
+                        if (displayCount < releases.size) {
+                            item {
+                                LaunchedEffect(Unit) {
+                                    displayCount = minOf(releases.size, displayCount + 5)
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    ZenithLoadingIndicator()
+                                }
+                            }
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(24.dp)
+                            .align(Alignment.TopCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(MaterialTheme.colorScheme.surface, Color.Transparent)
+                                )
+                            )
                     )
                 }
             }
@@ -284,12 +335,32 @@ fun ChangelogVersionCard(
                     ) {
                         Text(
                             text = release.tagName,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onTertiary,
                             fontWeight = FontWeight.Bold
                         )
                     }
+
+                    val badgeType = remember(release.body, release.name) {
+                        extractUpdateBadge(release.body, release.name)
+                    }
+                    if (badgeType != null) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            color = getBadgeColor(badgeType),
+                            shape = CircleShape
+                        ) {
+                            Text(
+                                text = badgeType,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = getBadgeTextColor(badgeType),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.weight(1f))
                     Text(
                         text = formatReleaseDate(release.publishedAt),
@@ -302,7 +373,7 @@ fun ChangelogVersionCard(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 MarkdownBody(
-                    content = release.body,
+                    content = cleanMarkdownBody(release.body),
                     containerColor = animatedMarkdownColor
                 )
             }
@@ -396,33 +467,63 @@ fun UpdateBottomSheetContent(
         label = "iconScale"
     )
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(max = screenHeight * 0.9f)
     ) {
         Column(
-            modifier = Modifier
-                .weight(1f, fill = false)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp)
+            modifier = Modifier.fillMaxSize()
         ) {
-            UpdateHeaderSection(
-                tagName = release.tagName,
-                iconScale = iconScale
-            )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp, vertical = 8.dp)
+                ) {
+                    UpdateHeaderSection(
+                        release = release,
+                        iconScale = iconScale
+                    )
 
-            MarkdownBody(
-                content = release.body,
-                containerColor = containerColor
-            )
-            
-            Spacer(modifier = Modifier.height(24.dp))
+                    MarkdownBody(
+                        content = cleanMarkdownBody(release.body),
+                        containerColor = containerColor
+                    )
+                    
+                    Spacer(modifier = Modifier.height(64.dp))
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(24.dp)
+                        .align(Alignment.TopCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(MaterialTheme.colorScheme.surface, Color.Transparent)
+                            )
+                        )
+                )
+            }
         }
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, MaterialTheme.colorScheme.surface),
+                        startY = 0f,
+                        endY = 40f
+                    )
+                )
                 .padding(24.dp)
                 .navigationBarsPadding()
         ) {
@@ -457,7 +558,7 @@ fun UpdateBottomSheetContent(
 
 @Composable
 private fun UpdateHeaderSection(
-    tagName: String,
+    release: GitHubRelease,
     iconScale: Float
 ) {
     Column(
@@ -493,21 +594,77 @@ private fun UpdateHeaderSection(
             textAlign = TextAlign.Center
         )
 
-        Surface(
-            color = MaterialTheme.colorScheme.tertiary,
-            shape = CircleShape,
-            modifier = Modifier.padding(top = 8.dp)
+        Row(
+            modifier = Modifier.padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = tagName,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onTertiary,
-                fontWeight = FontWeight.Bold
-            )
+            Surface(
+                color = MaterialTheme.colorScheme.tertiary,
+                shape = CircleShape
+            ) {
+                Text(
+                    text = release.tagName,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onTertiary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            val badgeType = remember(release.body, release.name) { extractUpdateBadge(release.body, release.name) }
+            if (badgeType != null) {
+                Surface(
+                    color = getBadgeColor(badgeType),
+                    shape = CircleShape
+                ) {
+                    Text(
+                        text = badgeType,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = getBadgeTextColor(badgeType),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            val timeAgo = formatTimeAgo(release.publishedAt)
+            if (timeAgo.isNotEmpty()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = CircleShape
+                ) {
+                    Text(
+                        text = timeAgo,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
         
         Spacer(modifier = Modifier.height(32.dp))
+    }
+}
+
+private fun formatTimeAgo(dateString: String?): String {
+    if (dateString.isNullOrBlank()) return ""
+    return try {
+        val instant = java.time.Instant.parse(dateString)
+        val now = java.time.Instant.now()
+        val duration = java.time.Duration.between(instant, now)
+        when {
+            duration.toDays() > 365 -> "${duration.toDays() / 365}y ago"
+            duration.toDays() > 30 -> "${duration.toDays() / 30}mo ago"
+            duration.toDays() > 0 -> "${duration.toDays()}d ago"
+            duration.toHours() > 0 -> "${duration.toHours()}h ago"
+            duration.toMinutes() > 0 -> "${duration.toMinutes()}m ago"
+            else -> "Just now"
+        }
+    } catch (e: Exception) {
+        ""
     }
 }
 
@@ -546,6 +703,46 @@ fun MarkdownBody(
     }
 }
 
+private data class Header3Subsection(
+    val header: MarkdownElement.Header3,
+    val children: List<MarkdownElement>
+)
+
+private data class ParsedGroup(
+    val topElements: List<MarkdownElement>,
+    val subsections: List<Header3Subsection>
+)
+
+private fun parseGroup(elements: List<MarkdownElement>): ParsedGroup {
+    val top = mutableListOf<MarkdownElement>()
+    val subs = mutableListOf<Header3Subsection>()
+    var currentHeader3: MarkdownElement.Header3? = null
+    var currentChildren = mutableListOf<MarkdownElement>()
+
+    elements.forEach { element ->
+        when (element) {
+            is MarkdownElement.Header3 -> {
+                if (currentHeader3 != null) {
+                    subs.add(Header3Subsection(currentHeader3, currentChildren.toList()))
+                    currentChildren = mutableListOf()
+                }
+                currentHeader3 = element
+            }
+            else -> {
+                if (currentHeader3 != null) {
+                    currentChildren.add(element)
+                } else {
+                    top.add(element)
+                }
+            }
+        }
+    }
+    if (currentHeader3 != null) {
+        subs.add(Header3Subsection(currentHeader3, currentChildren.toList()))
+    }
+    return ParsedGroup(top, subs)
+}
+
 @Composable
 fun MarkdownGroupedCard(
     elements: List<MarkdownElement>,
@@ -566,60 +763,148 @@ fun MarkdownGroupedCard(
         groups
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        elementGroups.forEachIndexed { index, group ->
-            val isFirst = index == 0
-            val isLast = index == elementGroups.size - 1
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        elementGroups.forEach { group ->
+            val parsed = remember(group) { parseGroup(group) }
+            val hasTop = parsed.topElements.isNotEmpty()
             
-            val topRadius = if (isFirst) 28.dp else 8.dp
-            val bottomRadius = if (isLast) 28.dp else 8.dp
-            val shape = RoundedCornerShape(topStart = topRadius, topEnd = topRadius, bottomStart = bottomRadius, bottomEnd = bottomRadius)
+            val allItems = mutableListOf<Any>()
+            if (hasTop) allItems.add(parsed.topElements)
+            parsed.subsections.forEach { allItems.add(it) }
 
-            Card(
-                modifier = Modifier.fillMaxWidth().clip(shape),
-                colors = CardDefaults.cardColors(containerColor = containerColor),
-                shape = shape
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    group.forEach { element ->
-                        when (element) {
-                            is MarkdownElement.Header2 -> {
-                                MarkdownHeaderItem(
-                                    text = element.text,
-                                    icon = Icons.AutoMirrored.Outlined.ListAlt,
-                                    containerColor = MaterialTheme.colorScheme.tertiary,
-                                    contentColor = MaterialTheme.colorScheme.onTertiary,
-                                    style = MaterialTheme.typography.titleLarge
-                                )
+            val totalItems = allItems.size
+
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                allItems.forEachIndexed { itemIndex, item ->
+                    val isFirst = itemIndex == 0
+                    val isLast = itemIndex == totalItems - 1
+                    val shape = when {
+                        isFirst && isLast -> RoundedCornerShape(24.dp)
+                        isFirst -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                        isLast -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                        else -> RoundedCornerShape(8.dp)
+                    }
+
+                    if (item is List<*>) {
+                        @Suppress("UNCHECKED_CAST")
+                        val topElems = item as List<MarkdownElement>
+                        Card(
+                            modifier = Modifier.fillMaxWidth().clip(shape),
+                            colors = CardDefaults.cardColors(containerColor = containerColor),
+                            shape = shape
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                topElems.forEach { element ->
+                                    RenderMarkdownElement(element)
+                                }
                             }
-                            is MarkdownElement.Header3 -> {
-                                MarkdownHeaderItem(
-                                    text = element.text,
-                                    icon = Icons.Outlined.AutoAwesome,
-                                    containerColor = MaterialTheme.colorScheme.secondary,
-                                    contentColor = MaterialTheme.colorScheme.onSecondary,
-                                    style = MaterialTheme.typography.titleMedium
-                                )
+                        }
+                    } else if (item is Header3Subsection) {
+                        val sub = item
+                        var expanded by remember { mutableStateOf(false) }
+                        val rotation by animateFloatAsState(
+                            targetValue = if (expanded) 90f else 0f,
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                            label = "chevronRotation"
+                        )
+
+                        Card(
+                            onClick = { expanded = !expanded },
+                            modifier = Modifier.fillMaxWidth().clip(shape),
+                            colors = CardDefaults.cardColors(containerColor = containerColor),
+                            shape = shape
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .background(MaterialTheme.colorScheme.secondary, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.AutoAwesome,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSecondary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = parseInlineMarkdown(sub.header.text),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Outlined.ChevronRight,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .graphicsLayer { rotationZ = rotation }
+                                    )
+                                }
+
+                                AnimatedVisibility(
+                                    visible = expanded,
+                                    enter = fadeIn() + expandVertically(),
+                                    exit = fadeOut() + shrinkVertically()
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        sub.children.forEach { child ->
+                                            RenderMarkdownElement(child)
+                                        }
+                                    }
+                                }
                             }
-                            is MarkdownElement.ListItem -> {
-                                MarkdownListItemRow(text = element.text)
-                            }
-                            is MarkdownElement.Text -> {
-                                Text(
-                                    text = parseInlineMarkdown(element.text),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-                            }
-                            is MarkdownElement.Quote -> {
-                                MarkdownQuoteItem(text = element.text)
-                            }
-                            else -> {} 
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun RenderMarkdownElement(element: MarkdownElement) {
+    when (element) {
+        is MarkdownElement.Header2 -> {
+            MarkdownHeaderItem(
+                text = element.text,
+                icon = Icons.AutoMirrored.Outlined.ListAlt,
+                containerColor = MaterialTheme.colorScheme.tertiary,
+                contentColor = MaterialTheme.colorScheme.onTertiary,
+                style = MaterialTheme.typography.titleLarge
+            )
+        }
+        is MarkdownElement.Header3 -> {}
+        is MarkdownElement.ListItem -> {
+            MarkdownListItemRow(text = element.text)
+        }
+        is MarkdownElement.Text -> {
+            Text(
+                text = parseInlineMarkdown(element.text),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
+        }
+        is MarkdownElement.Quote -> {
+            MarkdownQuoteItem(text = element.text)
         }
     }
 }
@@ -680,7 +965,7 @@ fun MarkdownListItemRow(text: String) {
 
 @Composable
 fun MarkdownImageItem(url: String) {
-    AsyncImage(
+    coil.compose.SubcomposeAsyncImage(
         model = url,
         contentDescription = null,
         modifier = Modifier
@@ -688,7 +973,19 @@ fun MarkdownImageItem(url: String) {
             .padding(vertical = 8.dp)
             .heightIn(max = 400.dp)
             .clip(RoundedCornerShape(28.dp)),
-        contentScale = ContentScale.FillWidth
+        contentScale = ContentScale.FillWidth,
+        loading = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                contentAlignment = Alignment.Center
+            ) {
+                ZenithLoadingIndicator()
+            }
+        }
     )
 }
 
@@ -858,7 +1155,9 @@ private fun parseMarkdownIntoSections(content: String): List<MarkdownSection> {
             trimmed.startsWith("![") -> {
                 flushGroup()
                 val url = trimmed.substringAfter("(").substringBefore(")")
-                result.add(MarkdownSection.Image(url))
+                if (url.isNotEmpty()) {
+                    result.add(MarkdownSection.Image(url))
+                }
             }
             trimmed.startsWith("<img", ignoreCase = true) -> {
                 flushGroup()
@@ -886,6 +1185,63 @@ private fun parseMarkdownIntoSections(content: String): List<MarkdownSection> {
     }
     flushGroup()
     return result
+}
+
+private fun extractUpdateBadge(body: String?, name: String?): String? {
+    val explicitRegex = Regex("\\[(?:badge|type|tag)?\\s*:?\\s*([^]]+)]", RegexOption.IGNORE_CASE)
+    val textToSearch = "${name ?: ""} \n ${body ?: ""}"
+    
+    val match = explicitRegex.find(textToSearch)?.groupValues?.get(1)?.trim()
+    if (!match.isNullOrBlank()) {
+        return normalizeCategory(match)
+    }
+    return null
+}
+
+private fun normalizeCategory(input: String): String {
+    val lower = input.lowercase().trim()
+    return when {
+        lower.contains("critical") || lower.contains("hotfix") -> "Critical Fix"
+        lower.contains("bug") || lower.contains("fix") -> "Bug Fixes"
+        lower.contains("feature") || lower.contains("new") -> "Features"
+        lower.contains("perf") -> "Performances"
+        lower.contains("cosmetic") || lower.contains("ui") -> "Cosmetics"
+        lower.contains("qol") || lower.contains("quality") -> "QOL"
+        else -> input.replaceFirstChar { it.uppercase() }
+    }
+}
+
+private fun cleanMarkdownBody(body: String?): String {
+    if (body.isNullOrBlank()) return ""
+    return body.replace(Regex("\\[(?:badge|type|tag)?\\s*:?\\s*[^]]+]", RegexOption.IGNORE_CASE), "").trim()
+}
+
+@Composable
+private fun getBadgeColor(type: String): Color {
+    val isDark = isSystemInDarkTheme()
+    return when (type.lowercase()) {
+        "critical fix" -> MaterialTheme.colorScheme.errorContainer
+        "bug fixes" -> MaterialTheme.colorScheme.tertiaryContainer
+        "features" -> MaterialTheme.colorScheme.primaryContainer
+        "performances" -> Color(0xFF2196F3).copy(alpha = if (isDark) 0.25f else 0.15f)
+        "cosmetics" -> Color(0xFF9C27B0).copy(alpha = if (isDark) 0.25f else 0.15f)
+        "qol" -> Color(0xFFFFC107).copy(alpha = if (isDark) 0.25f else 0.2f)
+        else -> MaterialTheme.colorScheme.secondaryContainer
+    }
+}
+
+@Composable
+private fun getBadgeTextColor(type: String): Color {
+    val isDark = isSystemInDarkTheme()
+    return when (type.lowercase()) {
+        "critical fix" -> MaterialTheme.colorScheme.onErrorContainer
+        "bug fixes" -> MaterialTheme.colorScheme.onTertiaryContainer
+        "features" -> MaterialTheme.colorScheme.onPrimaryContainer
+        "performances" -> if (isDark) Color(0xFF90CAF9) else Color(0xFF1976D2)
+        "cosmetics" -> if (isDark) Color(0xFFCE93D8) else Color(0xFF7B1FA2)
+        "qol" -> if (isDark) Color(0xFFFFD54F) else Color(0xFFF57F17)
+        else -> MaterialTheme.colorScheme.onSecondaryContainer
+    }
 }
 
 @Preview(showBackground = true)
