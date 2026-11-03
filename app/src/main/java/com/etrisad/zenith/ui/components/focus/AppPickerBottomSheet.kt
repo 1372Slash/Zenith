@@ -109,64 +109,38 @@ fun AppPickerBottomSheet(
                         label = "PickerSearchBar"
                     ) { tab ->
                         if (tab == PickerTab.APPS) {
-                            SearchBar(
-                                inputField = {
-                                    SearchBarDefaults.InputField(
-                                        query = uiState.searchQuery,
-                                        onQueryChange = onSearchQueryChange,
-                                        onSearch = { },
-                                        expanded = false,
-                                        onExpandedChange = {},
-                                        placeholder = { Text("Search apps...") },
-                                        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                                        trailingIcon = {
-                                            if (uiState.searchQuery.isNotEmpty()) {
-                                                IconButton(onClick = { onSearchQueryChange("") }) {
-                                                    Icon(Icons.Outlined.Close, contentDescription = "Clear")
-                                                }
-                                            }
-                                        }
-                                    )
-                                },
-                                expanded = false,
-                                onExpandedChange = {},
+                            OutlinedTextField(
+                                value = uiState.searchQuery,
+                                onValueChange = onSearchQueryChange,
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = SearchBarDefaults.inputFieldShape,
-                                colors = SearchBarDefaults.colors(),
-                                tonalElevation = SearchBarDefaults.TonalElevation,
-                                shadowElevation = 0.dp,
-                                windowInsets = SearchBarDefaults.windowInsets,
-                                content = {}
+                                singleLine = true,
+                                shape = RoundedCornerShape(24.dp),
+                                placeholder = { Text("Search apps...") },
+                                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                                trailingIcon = {
+                                    if (uiState.searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { onSearchQueryChange("") }) {
+                                            Icon(Icons.Outlined.Close, contentDescription = "Clear")
+                                        }
+                                    }
+                                }
                             )
                         } else {
-                            SearchBar(
-                                inputField = {
-                                    SearchBarDefaults.InputField(
-                                        query = uiState.websiteSearchQuery,
-                                        onQueryChange = { onWebsiteSearchChange?.invoke(it) },
-                                        onSearch = { onWebsiteSelected?.invoke(uiState.websiteSearchQuery) },
-                                        expanded = false,
-                                        onExpandedChange = {},
-                                        placeholder = { Text("Enter website URL...") },
-                                        leadingIcon = { Icon(Icons.Outlined.Language, contentDescription = null) },
-                                        trailingIcon = {
-                                            if (uiState.websiteSearchQuery.isNotEmpty()) {
-                                                IconButton(onClick = { onWebsiteSearchChange?.invoke("") }) {
-                                                    Icon(Icons.Outlined.Close, contentDescription = "Clear")
-                                                }
-                                            }
-                                        }
-                                    )
-                                },
-                                expanded = false,
-                                onExpandedChange = {},
+                            OutlinedTextField(
+                                value = uiState.websiteSearchQuery,
+                                onValueChange = { onWebsiteSearchChange?.invoke(it) },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = SearchBarDefaults.inputFieldShape,
-                                colors = SearchBarDefaults.colors(),
-                                tonalElevation = SearchBarDefaults.TonalElevation,
-                                shadowElevation = 0.dp,
-                                windowInsets = SearchBarDefaults.windowInsets,
-                                content = {}
+                                singleLine = true,
+                                shape = RoundedCornerShape(24.dp),
+                                placeholder = { Text("Enter website URL...") },
+                                leadingIcon = { Icon(Icons.Outlined.Language, contentDescription = null) },
+                                trailingIcon = {
+                                    if (uiState.websiteSearchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { onWebsiteSearchChange?.invoke("") }) {
+                                            Icon(Icons.Outlined.Close, contentDescription = "Clear")
+                                        }
+                                    }
+                                }
                             )
                         }
                     }
@@ -210,6 +184,7 @@ private fun AppsContent(
             ZenithContainedLoadingIndicator()
         }
     } else {
+        val visibleApps = filterPickerApps(uiState.installedApps, uiState.searchQuery)
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(0.dp),
@@ -265,7 +240,7 @@ private fun AppsContent(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            if (uiState.installedApps.isEmpty()) {
+            if (visibleApps.isEmpty()) {
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth().animateItem(),
@@ -296,13 +271,13 @@ private fun AppsContent(
                 }
             } else {
                 itemsIndexed(
-                    items = uiState.installedApps,
+                    items = visibleApps,
                     key = { _, app -> "all_${app.packageName}" }
                 ) { index, app ->
                     val shape = when {
-                        uiState.installedApps.size == 1 -> RoundedCornerShape(24.dp)
+                        visibleApps.size == 1 -> RoundedCornerShape(24.dp)
                         index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-                        index == uiState.installedApps.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                        index == visibleApps.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
                         else -> RoundedCornerShape(8.dp)
                     }
                     Column(modifier = Modifier.animateItem()) {
@@ -317,7 +292,7 @@ private fun AppsContent(
                             },
                             isTopApp = false
                         )
-                        if (index < uiState.installedApps.size - 1) {
+                        if (index < visibleApps.size - 1) {
                             Spacer(modifier = Modifier.height(4.dp))
                         }
                     }

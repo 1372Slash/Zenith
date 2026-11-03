@@ -29,6 +29,7 @@ import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.ui.components.ZenithContainedLoadingIndicator
+import com.etrisad.zenith.ui.viewmodel.AppInfo
 import com.etrisad.zenith.ui.viewmodel.FocusUiState
 import com.etrisad.zenith.ui.viewmodel.PickerTab
 import kotlinx.coroutines.launch
@@ -125,54 +126,38 @@ fun MultiAppPickerBottomSheet(
                         label = "MultiPickerSearchBar"
                     ) { tab ->
                         if (tab == PickerTab.APPS) {
-                            SearchBar(
-                                inputField = {
-                                    SearchBarDefaults.InputField(
-                                        query = uiState.searchQuery,
-                                        onQueryChange = onSearchQueryChange,
-                                        onSearch = { },
-                                        expanded = false,
-                                        onExpandedChange = {},
-                                        placeholder = { Text("Search apps...") },
-                                        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                                        trailingIcon = {
-                                            if (uiState.searchQuery.isNotEmpty()) {
-                                                IconButton(onClick = { onSearchQueryChange("") }) {
-                                                    Icon(Icons.Outlined.Close, contentDescription = "Clear")
-                                                }
-                                            }
-                                        }
-                                    )
-                                },
-                                expanded = false,
-                                onExpandedChange = {},
+                            OutlinedTextField(
+                                value = uiState.searchQuery,
+                                onValueChange = onSearchQueryChange,
                                 modifier = Modifier.fillMaxWidth(),
-                                content = {}
+                                singleLine = true,
+                                shape = RoundedCornerShape(24.dp),
+                                placeholder = { Text("Search apps...") },
+                                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                                trailingIcon = {
+                                    if (uiState.searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { onSearchQueryChange("") }) {
+                                            Icon(Icons.Outlined.Close, contentDescription = "Clear")
+                                        }
+                                    }
+                                }
                             )
                         } else {
-                            SearchBar(
-                                inputField = {
-                                    SearchBarDefaults.InputField(
-                                        query = uiState.websiteSearchQuery,
-                                        onQueryChange = { onWebsiteSearchChange?.invoke(it) },
-                                        onSearch = { },
-                                        expanded = false,
-                                        onExpandedChange = {},
-                                        placeholder = { Text("Enter website URL...") },
-                                        leadingIcon = { Icon(Icons.Outlined.Language, contentDescription = null) },
-                                        trailingIcon = {
-                                            if (uiState.websiteSearchQuery.isNotEmpty()) {
-                                                IconButton(onClick = { onWebsiteSearchChange?.invoke("") }) {
-                                                    Icon(Icons.Outlined.Close, contentDescription = "Clear")
-                                                }
-                                            }
-                                        }
-                                    )
-                                },
-                                expanded = false,
-                                onExpandedChange = {},
+                            OutlinedTextField(
+                                value = uiState.websiteSearchQuery,
+                                onValueChange = { onWebsiteSearchChange?.invoke(it) },
                                 modifier = Modifier.fillMaxWidth(),
-                                content = {}
+                                singleLine = true,
+                                shape = RoundedCornerShape(24.dp),
+                                placeholder = { Text("Enter website URL...") },
+                                leadingIcon = { Icon(Icons.Outlined.Language, contentDescription = null) },
+                                trailingIcon = {
+                                    if (uiState.websiteSearchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { onWebsiteSearchChange?.invoke("") }) {
+                                            Icon(Icons.Outlined.Close, contentDescription = "Clear")
+                                        }
+                                    }
+                                }
                             )
                         }
                     }
@@ -232,6 +217,15 @@ fun MultiAppPickerBottomSheet(
     }
 }
 
+internal fun filterPickerApps(apps: List<AppInfo>, query: String): List<AppInfo> {
+    val search = query.trim()
+    if (search.isEmpty()) return apps
+    return apps.filter {
+        it.appName.contains(search, ignoreCase = true) ||
+            it.packageName.contains(search, ignoreCase = true)
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun MultiAppsContent(
@@ -247,7 +241,32 @@ private fun MultiAppsContent(
         ),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        val allApps = (uiState.topApps + uiState.installedApps).distinctBy { it.packageName }
+        val allApps = filterPickerApps(
+            (uiState.topApps + uiState.installedApps).distinctBy { it.packageName },
+            uiState.searchQuery
+        )
+        if (allApps.isEmpty() && uiState.searchQuery.isNotBlank()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                ) {
+                    Box(
+                        modifier = Modifier.padding(32.dp).fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No apps found for \"${uiState.searchQuery.trim()}\"",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+            }
+        }
         itemsIndexed(
             allApps,
             key = { _, app -> app.packageName }
