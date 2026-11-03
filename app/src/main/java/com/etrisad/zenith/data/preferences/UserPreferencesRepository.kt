@@ -2323,14 +2323,8 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 const val MAX_REELS_SHIELD_DAILY_LIMIT = 200
 
 object RedirectShieldDefaults {
-    /**
-     * How long the shield stays armed after leaving a trigger app. Ad redirects often
-     * pass through a browser or the ad SDK before the store opens, so the window has
-     * to outlast that chain.
-     */
     const val ARM_GRACE_PERIOD_MS = 15000L
 
-    /** Minimum delay between two redirects so the service cannot loop. */
     const val REDIRECT_COOLDOWN_MS = 2000L
 }
 
