@@ -1,23 +1,10 @@
-/*
- * Ported from Curbox (https://github.com/iecal/curbox-android-kt-rewrite).
- * Original work: Copyright (c) Curbox contributors.
- * Adapted for Zenith: package renamed, feature-specific integration.
- */
 package com.etrisad.zenith.service.reels.script
 
-/**
- * Recursive-descent parser turning a token list into a list of [Stmt].
- * Throws [ScriptError] (with a line number) on the first syntax error.
- *
- * Precedence, low to high: or · and · equality · comparison · range(`..`) ·
- * `+ -` · `* / %` · unary(`not -`) · postfix(call/index/member) · primary.
- */
 class Parser(private val tokens: List<Token>) {
 
     private var current = 0
 
     companion object {
-        /** Convenience: source -> AST. The single entry point used by the runtime and editor. */
         fun parse(source: String): List<Stmt> = Parser(Lexer(source).scan()).parseProgram()
     }
 
@@ -43,8 +30,8 @@ class Parser(private val tokens: List<Token>) {
     }
 
     private fun assignment(): Stmt {
-        val name = advance()           // IDENT
-        advance()                      // ASSIGN
+        val name = advance()
+        advance()
         val value = expression()
         return Stmt.Assign(name.lexeme, value, name.line)
     }
@@ -208,7 +195,7 @@ class Parser(private val tokens: List<Token>) {
             do {
                 if (check(TokenType.IDENT) && checkNext(TokenType.ASSIGN)) {
                     val name = advance().lexeme
-                    advance() // ASSIGN
+                    advance()
                     named[name] = expression()
                 } else {
                     args.add(expression())

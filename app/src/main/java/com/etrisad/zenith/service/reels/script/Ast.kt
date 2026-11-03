@@ -1,11 +1,5 @@
-/*
- * Ported from Curbox (https://github.com/iecal/curbox-android-kt-rewrite).
- * Original work: Copyright (c) Curbox contributors.
- * Adapted for Zenith: package renamed, feature-specific integration.
- */
 package com.etrisad.zenith.service.reels.script
 
-/** Expression nodes. Every node carries the source [line] for error reporting. */
 sealed class Expr {
     abstract val line: Int
 
@@ -19,7 +13,6 @@ sealed class Expr {
     class Index(val target: Expr, val index: Expr, override val line: Int) : Expr()
     class Member(val target: Expr, val name: String, override val line: Int) : Expr()
 
-    /** A call. [callee] is a bare name for global calls, or a [Member] for method calls. */
     class Call(
         val callee: Expr,
         val args: List<Expr>,
@@ -28,7 +21,6 @@ sealed class Expr {
     ) : Expr()
 }
 
-/** Statement nodes. */
 sealed class Stmt {
     abstract val line: Int
 

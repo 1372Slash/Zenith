@@ -1,26 +1,9 @@
-/*
- * Ported from Curbox (https://github.com/iecal/curbox-android-kt-rewrite).
- * Original work: Copyright (c) Curbox contributors.
- * Adapted for Zenith: package renamed, feature-specific integration.
- */
 package com.etrisad.zenith.service.reels
 
 import android.view.accessibility.AccessibilityNodeInfo
 import com.etrisad.zenith.service.reels.script.ScriptError
 import com.etrisad.zenith.service.reels.script.Values
 
-/**
- * Selector based search over a live accessibility tree, using the ported script selector
- * vocabulary: `id`, `text`, `desc`, `class`, `textContains`, `descContains`, `clickable`,
- * `scrollable`, `selected`, `checked`, and `path`.
- *
- * Whenever a selector can drive the platform's batched finders
- * (findAccessibilityNodeInfosByViewId / ByText) it is used as an anchor and the remaining
- * selectors are verified on that small candidate set; otherwise the tree is walked depth first.
- * `path` resolves a class index hierarchy walk from the start node.
- *
- * Every node returned by [findFirst] / [findAll] is owned by the caller and should be recycled.
- */
 object ReelNodeFinder {
 
     const val MAX_FIND_RESULTS = 500
@@ -199,7 +182,6 @@ object ReelNodeFinder {
         }
     }
 
-    /** Descend [root] through [segments], returning the matched leaf nodes (owned by the caller). */
     fun walkPath(root: AccessibilityNodeInfo, segments: List<PathSegment>): List<AccessibilityNodeInfo> {
         if (segments.isEmpty()) return emptyList()
 

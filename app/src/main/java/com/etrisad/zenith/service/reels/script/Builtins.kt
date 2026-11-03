@@ -1,8 +1,3 @@
-/*
- * Ported from Curbox (https://github.com/iecal/curbox-android-kt-rewrite).
- * Original work: Copyright (c) Curbox contributors.
- * Adapted for Zenith: package renamed, feature-specific integration.
- */
 package com.etrisad.zenith.service.reels.script
 
 import java.util.concurrent.ConcurrentHashMap
@@ -13,11 +8,6 @@ import kotlin.math.pow
 import kotlin.math.roundToLong
 import kotlin.math.sqrt
 
-/**
- * Host-agnostic standard library: math and utility functions with no Android dependency.
- * The runtime's [RuntimeApi] delegates here for any name it doesn't handle itself; [UNKNOWN]
- * is returned for names this object doesn't recognise so the host can raise a clean error.
- */
 object Builtins {
 
     val UNKNOWN = Any()
@@ -86,7 +76,7 @@ object Builtins {
                 'i' -> options.add(RegexOption.IGNORE_CASE)
                 'm' -> options.add(RegexOption.MULTILINE)
                 's' -> options.add(RegexOption.DOT_MATCHES_ALL)
-                'u' -> Unit // Kotlin/JVM regexes are Unicode-aware; accepted for API familiarity.
+                'u' -> Unit
                 else -> throw ScriptError("matchesRegex() unknown flag '$flag'")
             }
         }

@@ -1,8 +1,3 @@
-/*
- * Ported from Curbox (https://github.com/iecal/curbox-android-kt-rewrite).
- * Original work: Copyright (c) Curbox contributors.
- * Adapted for Zenith: package names, supported app list, and detector marker.
- */
 package com.etrisad.zenith.service.reels
 
 import android.view.accessibility.AccessibilityEvent
@@ -88,7 +83,6 @@ object ReelAppConfig {
 
     private fun instagramData(packageName: String) = ReelAppData(
         scriptSource = instagramScript(packageName),
-        // Seekbar updates keep content events flowing, so a dropped scroll event cannot hide a reel.
         eventType = AccessibilityEvent.TYPE_VIEW_SCROLLED or
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
         pagerClassName = "androidx.viewpager.widget.ViewPager"
@@ -254,10 +248,6 @@ object ReelAppConfig {
         }
     }
 
-    /**
-     * The Instagram Lite fallback detector is keyed by a synthetic package so the regular
-     * Instagram script is never used for the Lite build (which hides its view ids).
-     */
     fun dataFor(packageName: String): ReelAppData? = when (packageName) {
         INSTAGRAM_LITE_PACKAGE -> reelData["com.instagram.lite.positional"]
         else -> reelData[packageName]

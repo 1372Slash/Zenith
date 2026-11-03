@@ -1,8 +1,3 @@
-/*
- * Ported from Curbox (https://github.com/iecal/curbox-android-kt-rewrite).
- * Original work: Copyright (c) Curbox contributors.
- * Adapted for Zenith: package renamed, uses the shared accessibility service.
- */
 package com.etrisad.zenith.service.reels
 
 import android.accessibilityservice.AccessibilityService
@@ -35,7 +30,6 @@ internal fun reelDetectionFromScriptResult(
     )
 }
 
-/** Runs the shipped reel detectors with the same node API and safety budget as Curbox. */
 class ReelScriptRunner(
     private val service: AccessibilityService
 ) {
@@ -60,8 +54,6 @@ class ReelScriptRunner(
                     )
                 }
             }
-            // The Instagram Lite fallback is stored under a synthetic key; expose it under
-            // the real package name so detection can find it.
             ReelAppConfig.reelData[INSTAGRAM_LITE_KEY]?.let { data ->
                 try {
                     put(
@@ -78,7 +70,6 @@ class ReelScriptRunner(
         }
     }
 
-    /** Returns reel screen details, including an empty comparator while its content loads. */
     fun detect(event: AccessibilityEvent): ReelDetection? {
         val packageName = event.packageName?.toString() ?: return null
         val data = ReelAppConfig.dataFor(packageName) ?: return null

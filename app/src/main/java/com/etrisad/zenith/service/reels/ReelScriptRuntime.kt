@@ -1,9 +1,3 @@
-/*
- * Ported from Curbox (https://github.com/iecal/curbox-android-kt-rewrite).
- * Original work: Copyright (c) Curbox contributors.
- * Adapted for Zenith: reduced to a read-only runtime used by the reel detectors
- * (no overlay drawing, global actions, or persistence).
- */
 package com.etrisad.zenith.service.reels
 
 import android.content.Context
@@ -17,13 +11,6 @@ import com.etrisad.zenith.service.reels.script.ScriptNode
 import com.etrisad.zenith.service.reels.script.Values
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * Per-run [RuntimeApi] implementation bridging the ported script language to the live
- * accessibility tree. Created fresh for every reel detection.
- *
- * Accessibility node handles obtained during a run are tracked in [ownedNodes] and recycled in
- * [finish]; the supplied [root] is owned by the caller.
- */
 class ReelScriptRuntime(
     private val context: Context,
     private val root: AccessibilityNodeInfo,
@@ -37,9 +24,7 @@ class ReelScriptRuntime(
     private val ownedNodes = ArrayList<AccessibilityNodeInfo>()
 
     companion object {
-        // Resolved foreign-app string resources, cached across runs (key = "package:resName").
         private val appStringCache = ConcurrentHashMap<String, String>()
-        // Compiled patterns are immutable and safe to reuse across short-lived runtime instances.
         private val regexCache = ConcurrentHashMap<String, Regex>()
 
         private const val MAX_SUBTREE_DEPTH = 64
@@ -73,7 +58,6 @@ class ReelScriptRuntime(
         }
     }
 
-    /** Recycle every node handle this run created. Call exactly once when the run ends. */
     fun finish() {
         for (node in ownedNodes) {
             try {
@@ -109,7 +93,6 @@ class ReelScriptRuntime(
         } catch (_: Exception) {}
     }
 
-    /** Script-visible wrapper over an [AccessibilityNodeInfo]. Bounds are read once, lazily. */
     inner class NodeHandle(private val node: AccessibilityNodeInfo) : ScriptNode {
 
         val bounds: Rect by lazy { Rect().also { node.getBoundsInScreen(it) } }
@@ -215,7 +198,6 @@ class ReelScriptRuntime(
         }
     }
 
-    /** Best-effort class-index path from the root, e.g. `FrameLayout[0]/RecyclerView[1]`. */
     private fun computePath(node: AccessibilityNodeInfo): String {
         val segments = ArrayList<String>()
         var current: AccessibilityNodeInfo? = run {

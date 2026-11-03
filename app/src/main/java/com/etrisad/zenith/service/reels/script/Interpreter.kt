@@ -1,20 +1,5 @@
-/*
- * Ported from Curbox (https://github.com/iecal/curbox-android-kt-rewrite).
- * Original work: Copyright (c) Curbox contributors.
- * Adapted for Zenith: package renamed, feature-specific integration.
- */
 package com.etrisad.zenith.service.reels.script
 
-/**
- * Tree-walking interpreter for a parsed reel detector script.
- *
- * Semantics: dynamic typing, lexical block scopes, top-level user functions. Host concerns
- * (accessibility nodes) are delegated to [api]; the [budget] bounds every statement and loop
- * iteration so a run can never hang the service.
- *
- * `and`/`or` short-circuit and return the deciding operand value (Lua-style). A top-level
- * `return` ends the run and exposes its value to the host.
- */
 class Interpreter(
     private val api: RuntimeApi,
     private val budget: Budget
@@ -36,7 +21,6 @@ class Interpreter(
             throw ScriptError("undefined variable '$name'")
         }
 
-        /** Reassign the nearest existing binding, or declare in the current scope. */
         fun assign(name: String, value: Any?) {
             var env: Environment? = this
             while (env != null) {
@@ -58,7 +42,6 @@ class Interpreter(
 
     fun run(program: List<Stmt>): Any? {
         for ((name, value) in api.provideGlobals()) globals.define(name, value)
-        // Hoist function declarations so order doesn't matter.
         for (stmt in program) if (stmt is Stmt.FnDecl) functions[stmt.name] = UserFunction(stmt)
         return try {
             for (stmt in program) execute(stmt, globals)
@@ -229,7 +212,6 @@ class Interpreter(
         val args = expr.args.map { evaluate(it, env) }
         val named = expr.named.mapValues { evaluate(it.value, env) }
 
-        // Method call: obj.method(...)
         if (callee is Expr.Member) {
             val target = evaluate(callee.target, env)
             if (target is ScriptNode) return target.call(callee.name, args, named)

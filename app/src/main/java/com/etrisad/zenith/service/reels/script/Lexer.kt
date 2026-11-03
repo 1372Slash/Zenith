@@ -1,20 +1,12 @@
-/*
- * Ported from Curbox (https://github.com/iecal/curbox-android-kt-rewrite).
- * Original work: Copyright (c) Curbox contributors.
- * Adapted for Zenith: package renamed, feature-specific integration.
- */
 package com.etrisad.zenith.service.reels.script
 
 enum class TokenType {
-    // literals
     NUMBER, STRING, IDENT,
-    // keywords
     IF, ELSE, WHILE, FOR, IN, FN, RETURN, BREAK, CONTINUE,
     TRUE, FALSE, NULL, AND, OR, NOT,
-    // punctuation / operators
     LPAREN, RPAREN, LBRACE, RBRACE, LBRACKET, RBRACKET,
     COMMA, DOT, DOTDOT,
-    ASSIGN,                 // = or :=
+    ASSIGN,
     PLUS, MINUS, STAR, SLASH, PERCENT,
     EQ, NEQ, LT, LTE, GT, GTE,
     EOF
@@ -27,10 +19,6 @@ data class Token(
     val line: Int
 )
 
-/**
- * Converts script source into a flat token list. Comments start with `#` and run to the
- * end of the line. Strings are double-quoted with `\n`, `\t`, `\"`, `\\` escapes.
- */
 class Lexer(private val source: String) {
 
     private val tokens = ArrayList<Token>()
@@ -106,13 +94,12 @@ class Lexer(private val source: String) {
             }
         }
         if (isAtEnd()) throw ScriptError("unterminated string", line)
-        advance() // closing "
+        advance()
         tokens.add(Token(TokenType.STRING, sb.toString(), sb.toString(), line))
     }
 
     private fun number() {
         while (peek().isDigit()) advance()
-        // A '.' is only part of the number if followed by a digit (so `node.x` and `a..b` work).
         if (peek() == '.' && peekNext().isDigit()) {
             advance()
             while (peek().isDigit()) advance()

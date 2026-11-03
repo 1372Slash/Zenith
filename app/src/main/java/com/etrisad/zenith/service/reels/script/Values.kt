@@ -1,17 +1,7 @@
-/*
- * Ported from Curbox (https://github.com/iecal/curbox-android-kt-rewrite).
- * Original work: Copyright (c) Curbox contributors.
- * Adapted for Zenith: package renamed, feature-specific integration.
- */
 package com.etrisad.zenith.service.reels.script
 
-/**
- * Helpers for the dynamically typed value model. Script values are plain Kotlin objects:
- * [Double], [String], [Boolean], `null`, [List] (`List<Any?>`), and [ScriptNode].
- */
 object Values {
 
-    /** Only `false` and `null` are falsy; everything else (including 0) is truthy. */
     fun isTruthy(v: Any?): Boolean = when (v) {
         null -> false
         is Boolean -> v
@@ -42,7 +32,6 @@ object Values {
         else -> v::class.simpleName ?: "value"
     }
 
-    /** Display form used by `str()`, `log()`, and string concatenation. */
     fun stringify(v: Any?): String = when (v) {
         null -> "null"
         is Double -> if (v.isFinite() && v == Math.floor(v)) v.toLong().toString() else v.toString()

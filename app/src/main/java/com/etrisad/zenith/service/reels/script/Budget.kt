@@ -1,15 +1,5 @@
-/*
- * Ported from Curbox (https://github.com/iecal/curbox-android-kt-rewrite).
- * Original work: Copyright (c) Curbox contributors.
- * Adapted for Zenith: package renamed, feature-specific integration.
- */
 package com.etrisad.zenith.service.reels.script
 
-/**
- * Hard execution limits for a single script run. The interpreter calls [tick] on every
- * statement and loop iteration so a runaway script (e.g. `while true {}`) is always
- * aborted with a [ScriptError] instead of hanging the service.
- */
 class Budget(
     private val maxOps: Int = 300_000,
     private val maxNodes: Int = 20_000,
@@ -32,7 +22,6 @@ class Budget(
         if (++nodes > maxNodes) throw ScriptError("script visited too many nodes ($maxNodes)")
     }
 
-    /** Charge a bounded amount of host-side work (for example regex input scanning). */
     fun chargeOperations(amount: Int) {
         if (amount <= 0) return
         if (amount > maxOps - ops) {
