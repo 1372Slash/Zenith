@@ -169,7 +169,7 @@ If you find Zenith helpful and would like to support its development, you can su
 ## Special Thanks
 
 - **[Tomato](https://github.com/nsh07/Tomato)** - Interface and promotional material inspiration.
-- **[Curbox](https://github.com/iecal/curbox-android-kt-rewrite)** - The short-video detection scripts, accessibility-node counting algorithm, pager-position tracking, and website keyword-matching design in Zenith are ported and adapted from Curbox. Full credit for the original implementation and detector scripts goes to the Curbox contributors; Zenith's versions are renamed, trimmed to its own architecture, and extended with an authored 18+ website preset.
+- **[Curbox](https://github.com/iecal/curbox-android-kt-rewrite)** - Short-video detection scripts, accessibility-node counting, and website keyword matching adapted from Curbox. Credit to the Curbox contributors.
 
 ## License
 
