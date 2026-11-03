@@ -57,6 +57,7 @@ class InterceptOverlayManager(
     private val sharedPrefs = MutableStateFlow<com.etrisad.zenith.data.preferences.UserPreferences?>(null)
     private var recreateOverlay: (() -> Unit)? = null
     private var overlayWindowParams: WindowManager.LayoutParams? = null
+    private val launchablePackageCache = HashMap<String, Boolean>()
 
     init {
         managerScope.launch {
@@ -685,6 +686,18 @@ class InterceptOverlayManager(
         return packageName in keyboardPackages
     }
 
+    private fun isLaunchableUserApp(packageName: String): Boolean {
+        launchablePackageCache[packageName]?.let { return it }
+        val launchable = try {
+            context.packageManager.getLaunchIntentForPackage(packageName) != null
+        } catch (_: Exception) {
+            true
+        }
+        if (launchablePackageCache.size > 200) launchablePackageCache.clear()
+        launchablePackageCache[packageName] = launchable
+        return launchable
+    }
+
     fun checkAndHide(newPackage: String) {
         if (!isShowing) {
             OverlayLogBuffer.d("OverlayMgr", "checkAndHide SKIP (not showing): $newPackage")
@@ -699,6 +712,10 @@ class InterceptOverlayManager(
         }
         if (SYSTEM_UI_PACKAGES.contains(newPackage) || isKeyboardApp(newPackage)) {
             OverlayLogBuffer.d("OverlayMgr", "checkAndHide SKIP (sys/keyboard): $newPackage")
+            return
+        }
+        if (!isLaunchableUserApp(newPackage)) {
+            OverlayLogBuffer.d("OverlayMgr", "checkAndHide SKIP (transient window): $newPackage")
             return
         }
 
