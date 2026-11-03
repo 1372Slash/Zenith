@@ -285,6 +285,7 @@ fun SettingsCategoryScreen(
                         onNavigateToPomodoro = { navController.navigate(Screen.Pomodoro.route) },
                         onNavigateToPausePoint = { navController.navigate(Screen.PausePoint.route) },
                         onNavigateToReelsShield = { navController.navigate(Screen.ReelsShield.route) },
+                        onNavigateToRedirectShield = { navController.navigate(Screen.RedirectShield.route) },
                         goalCount = goalCount
                     )
                     "appearance" -> AppearanceSettings(

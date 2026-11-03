@@ -14,6 +14,7 @@ object FeatureInfoRegistry {
         route == Screen.GracePeriod.route -> gracePeriod
         route == Screen.EyeCare.route -> eyeCare
         route == Screen.ReelsShield.route -> reelsShield
+        route == Screen.RedirectShield.route -> redirectShield
         route?.startsWith("app_detail") == true -> appDetail
         route == Screen.Lockdown.route -> lockdown
         route == Screen.TamperProtection.route -> tamperProtection
@@ -103,6 +104,26 @@ object FeatureInfoRegistry {
                 "Updates are checked automatically on open if enabled; otherwise use the manual check button.",
                 "Bypass Restrictions and Private & Hidden Apps are managed via sheets inside General Settings.",
                 "Enable developer mode in About to unlock extra categories and tools."
+            )
+        )
+    )
+
+    private val redirectShield = FeatureInfo(
+        title = "Redirect Shield",
+        summary = "Bounce you back to the home screen when a shielded app is opened while a trigger app is active.",
+        sections = listOf(
+            FeatureInfoSections.whatItDoes(
+                "Opening any shielded app while a trigger app is in the foreground sends you straight back home.",
+                "Whitelisted apps stay exempt, so they can still open shielded apps without being redirected."
+            ),
+            FeatureInfoSections.whatYoullSee(
+                "A master toggle, an accessibility warning when the service is off, and three dedicated app lists.",
+                "Shielded Apps, Whitelisted Apps, and Trigger Apps each open a full-screen multi-app selector with search, select all, and per-app checkboxes."
+            ),
+            FeatureInfoSections.tips(
+                "Pick a few trigger apps you actually work inside, and the shield arms every time you open one.",
+                "Whitelist the launcher or a trusted app if you still need to reach a shielded app on purpose.",
+                "Zenith's accessibility service must stay enabled for app switches to be detected."
             )
         )
     )

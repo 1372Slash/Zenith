@@ -308,110 +308,110 @@ fun PerformanceTuningPanel(
     var a11yActive by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().a11yActiveDelay
-            else preferences.perfA11yActiveDelay
+            else preferences.performanceConfig.a11yActiveDelay
         )
     }
     var a11yInactive by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().a11yInactiveDelay
-            else preferences.perfA11yInactiveDelay
+            else preferences.performanceConfig.a11yInactiveDelay
         )
     }
     var screenOff by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().screenOffDelay
-            else preferences.perfScreenOffDelay
+            else preferences.performanceConfig.screenOffDelay
         )
     }
     var powerSave by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().powerSaveDelay
-            else preferences.perfPowerSaveDelay
+            else preferences.performanceConfig.powerSaveDelay
         )
     }
     var usageCache by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().usageStatsCacheMs
-            else preferences.perfUsageStatsCacheMs
+            else preferences.performanceConfig.usageStatsCacheMs
         )
     }
     var dbWrite by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().shieldDbWriteMs
-            else preferences.perfShieldDbWriteMs
+            else preferences.performanceConfig.shieldDbWriteMs
         )
     }
     var dbWriteNear by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().shieldDbWriteNearMs
-            else preferences.perfShieldDbWriteNearMs
+            else preferences.performanceConfig.shieldDbWriteNearMs
         )
     }
     var launcherCache by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().launcherCacheMs
-            else preferences.perfLauncherCacheMs
+            else preferences.performanceConfig.launcherCacheMs
         )
     }
 
     var delayPowerSave by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().monPowerSave
-            else preferences.perfMonPowerSave
+            else preferences.performanceConfig.monPowerSave
         )
     }
     var delayOverlayShowing by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().monOverlayShowing
-            else preferences.perfMonOverlayShowing
+            else preferences.performanceConfig.monOverlayShowing
         )
     }
     var delayGoalNear by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().monGoalNear
-            else preferences.perfMonGoalNear
+            else preferences.performanceConfig.monGoalNear
         )
     }
     var delayGoalMid by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().monGoalMid
-            else preferences.perfMonGoalMid
+            else preferences.performanceConfig.monGoalMid
         )
     }
     var delayGoalFar by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().monGoalFar
-            else preferences.perfMonGoalFar
+            else preferences.performanceConfig.monGoalFar
         )
     }
     var delayShieldNear by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().monShieldNear
-            else preferences.perfMonShieldNear
+            else preferences.performanceConfig.monShieldNear
         )
     }
     var delayShieldMid by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().monShieldMid
-            else preferences.perfMonShieldMid
+            else preferences.performanceConfig.monShieldMid
         )
     }
     var delayShieldFar by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().monShieldFar
-            else preferences.perfMonShieldFar
+            else preferences.performanceConfig.monShieldFar
         )
     }
     var delayShieldVeryFar by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().monShieldVeryFar
-            else preferences.perfMonShieldVeryFar
+            else preferences.performanceConfig.monShieldVeryFar
         )
     }
     var delayDefault by remember {
         mutableStateOf(
             if (selectedLevel.isPreset()) selectedLevel.toConfig().monDefault
-            else preferences.perfMonDefault
+            else preferences.performanceConfig.monDefault
         )
     }
 

@@ -345,6 +345,10 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
         val REELS_SHIELD_HISTORY = stringPreferencesKey("reels_shield_history")
         val REELS_SHIELD_HISTORY_BY_APP = stringPreferencesKey("reels_shield_history_by_app")
         val REELS_SHIELD_APP_LIMITS = stringPreferencesKey("reels_shield_app_limits")
+        val REDIRECT_SHIELD_ENABLED = booleanPreferencesKey("redirect_shield_enabled")
+        val REDIRECT_SHIELD_APPS = stringPreferencesKey("redirect_shield_apps")
+        val REDIRECT_SHIELD_WHITELIST = stringPreferencesKey("redirect_shield_whitelist")
+        val REDIRECT_SHIELD_TRIGGERS = stringPreferencesKey("redirect_shield_triggers")
         val HOME_QUICK_ACTIONS = stringPreferencesKey("home_quick_actions")
         val REFRESH_ON_OPEN_USAGE_STATS = booleanPreferencesKey("refresh_on_open_usage_stats")
         val CHECK_UPDATE_ON_START = booleanPreferencesKey("check_update_on_start")
@@ -634,6 +638,22 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
                 ?.filterKeys { it in ReelsShieldDefaults.SUPPORTED_PACKAGES }
                 ?.filterValues { it > 0 }
                 ?: emptyMap(),
+            redirectShieldEnabled = settings[PreferencesKeys.REDIRECT_SHIELD_ENABLED] ?: false,
+            redirectShieldApps = settings[PreferencesKeys.REDIRECT_SHIELD_APPS]
+                ?.split(",")
+                ?.filter { it.isNotEmpty() }
+                ?.toSet()
+                ?: emptySet(),
+            redirectShieldWhitelistedApps = settings[PreferencesKeys.REDIRECT_SHIELD_WHITELIST]
+                ?.split(",")
+                ?.filter { it.isNotEmpty() }
+                ?.toSet()
+                ?: emptySet(),
+            redirectShieldTriggerApps = settings[PreferencesKeys.REDIRECT_SHIELD_TRIGGERS]
+                ?.split(",")
+                ?.filter { it.isNotEmpty() }
+                ?.toSet()
+                ?: emptySet(),
             homeQuickActions = settings[PreferencesKeys.HOME_QUICK_ACTIONS]
                 ?.split(",")
                 ?.filter { it in HomeQuickActionsDefaults.ALL_IDS }
@@ -669,26 +689,28 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
                 if (date != today) 0 else (runtime[RuntimeKeys.INCENTIVE_BONUS_USES_USED] ?: 0)
             }(),
             performanceLevel = PerformanceLevel.valueOf(settings[PreferencesKeys.PERFORMANCE_LEVEL] ?: PerformanceLevel.BALANCED.name),
-            perfA11yActiveDelay = settings[PreferencesKeys.PERF_A11Y_ACTIVE_DELAY] ?: PerformanceConfig().a11yActiveDelay,
-            perfA11yInactiveDelay = settings[PreferencesKeys.PERF_A11Y_INACTIVE_DELAY] ?: PerformanceConfig().a11yInactiveDelay,
-            perfScreenOffDelay = settings[PreferencesKeys.PERF_SCREEN_OFF_DELAY] ?: PerformanceConfig().screenOffDelay,
-            perfPowerSaveDelay = settings[PreferencesKeys.PERF_POWER_SAVE_DELAY] ?: PerformanceConfig().powerSaveDelay,
-            perfUsageStatsCacheMs = settings[PreferencesKeys.PERF_USAGE_STATS_CACHE] ?: PerformanceConfig().usageStatsCacheMs,
-            perfShieldDbWriteMs = settings[PreferencesKeys.PERF_SHIELD_DB_WRITE] ?: PerformanceConfig().shieldDbWriteMs,
-            perfShieldDbWriteNearMs = settings[PreferencesKeys.PERF_SHIELD_DB_WRITE_NEAR] ?: PerformanceConfig().shieldDbWriteNearMs,
-            perfLauncherCacheMs = settings[PreferencesKeys.PERF_LAUNCHER_CACHE] ?: PerformanceConfig().launcherCacheMs,
-            perfGoalReminderTick = settings[PreferencesKeys.PERF_GOAL_REMINDER_TICK] ?: PerformanceConfig().goalReminderTick,
-            perfDayChangeTick = settings[PreferencesKeys.PERF_DAY_CHANGE_TICK] ?: PerformanceConfig().dayChangeTick,
-            perfMonPowerSave = settings[PreferencesKeys.PERF_MON_POWER_SAVE] ?: PerformanceConfig().monPowerSave,
-            perfMonOverlayShowing = settings[PreferencesKeys.PERF_MON_OVERLAY_SHOWING] ?: PerformanceConfig().monOverlayShowing,
-            perfMonGoalNear = settings[PreferencesKeys.PERF_MON_GOAL_NEAR] ?: PerformanceConfig().monGoalNear,
-            perfMonGoalMid = settings[PreferencesKeys.PERF_MON_GOAL_MID] ?: PerformanceConfig().monGoalMid,
-            perfMonGoalFar = settings[PreferencesKeys.PERF_MON_GOAL_FAR] ?: PerformanceConfig().monGoalFar,
-            perfMonShieldNear = settings[PreferencesKeys.PERF_MON_SHIELD_NEAR] ?: PerformanceConfig().monShieldNear,
-            perfMonShieldMid = settings[PreferencesKeys.PERF_MON_SHIELD_MID] ?: PerformanceConfig().monShieldMid,
-            perfMonShieldFar = settings[PreferencesKeys.PERF_MON_SHIELD_FAR] ?: PerformanceConfig().monShieldFar,
-            perfMonShieldVeryFar = settings[PreferencesKeys.PERF_MON_SHIELD_VERY_FAR] ?: PerformanceConfig().monShieldVeryFar,
-            perfMonDefault = settings[PreferencesKeys.PERF_MON_DEFAULT] ?: PerformanceConfig().monDefault,
+            performanceConfig = PerformanceConfig(
+                a11yActiveDelay = settings[PreferencesKeys.PERF_A11Y_ACTIVE_DELAY] ?: PerformanceConfig().a11yActiveDelay,
+                a11yInactiveDelay = settings[PreferencesKeys.PERF_A11Y_INACTIVE_DELAY] ?: PerformanceConfig().a11yInactiveDelay,
+                screenOffDelay = settings[PreferencesKeys.PERF_SCREEN_OFF_DELAY] ?: PerformanceConfig().screenOffDelay,
+                powerSaveDelay = settings[PreferencesKeys.PERF_POWER_SAVE_DELAY] ?: PerformanceConfig().powerSaveDelay,
+                usageStatsCacheMs = settings[PreferencesKeys.PERF_USAGE_STATS_CACHE] ?: PerformanceConfig().usageStatsCacheMs,
+                shieldDbWriteMs = settings[PreferencesKeys.PERF_SHIELD_DB_WRITE] ?: PerformanceConfig().shieldDbWriteMs,
+                shieldDbWriteNearMs = settings[PreferencesKeys.PERF_SHIELD_DB_WRITE_NEAR] ?: PerformanceConfig().shieldDbWriteNearMs,
+                launcherCacheMs = settings[PreferencesKeys.PERF_LAUNCHER_CACHE] ?: PerformanceConfig().launcherCacheMs,
+                goalReminderTick = settings[PreferencesKeys.PERF_GOAL_REMINDER_TICK] ?: PerformanceConfig().goalReminderTick,
+                dayChangeTick = settings[PreferencesKeys.PERF_DAY_CHANGE_TICK] ?: PerformanceConfig().dayChangeTick,
+                monPowerSave = settings[PreferencesKeys.PERF_MON_POWER_SAVE] ?: PerformanceConfig().monPowerSave,
+                monOverlayShowing = settings[PreferencesKeys.PERF_MON_OVERLAY_SHOWING] ?: PerformanceConfig().monOverlayShowing,
+                monGoalNear = settings[PreferencesKeys.PERF_MON_GOAL_NEAR] ?: PerformanceConfig().monGoalNear,
+                monGoalMid = settings[PreferencesKeys.PERF_MON_GOAL_MID] ?: PerformanceConfig().monGoalMid,
+                monGoalFar = settings[PreferencesKeys.PERF_MON_GOAL_FAR] ?: PerformanceConfig().monGoalFar,
+                monShieldNear = settings[PreferencesKeys.PERF_MON_SHIELD_NEAR] ?: PerformanceConfig().monShieldNear,
+                monShieldMid = settings[PreferencesKeys.PERF_MON_SHIELD_MID] ?: PerformanceConfig().monShieldMid,
+                monShieldFar = settings[PreferencesKeys.PERF_MON_SHIELD_FAR] ?: PerformanceConfig().monShieldFar,
+                monShieldVeryFar = settings[PreferencesKeys.PERF_MON_SHIELD_VERY_FAR] ?: PerformanceConfig().monShieldVeryFar,
+                monDefault = settings[PreferencesKeys.PERF_MON_DEFAULT] ?: PerformanceConfig().monDefault,
+            ),
             lastChargeTimestamp = runtime[RuntimeKeys.LAST_CHARGE_TIMESTAMP] ?: 0L,
             manualResetTimestamps = runtime[RuntimeKeys.MANUAL_RESET_TIMESTAMPS]?.split(",")
                 ?.filter { it.contains(":") }
@@ -1813,6 +1835,36 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             }
         }
     }
+    suspend fun setRedirectShieldEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.REDIRECT_SHIELD_ENABLED] = enabled }
+    }
+
+    suspend fun setRedirectShieldApps(packages: Set<String>) {
+        setRedirectShieldSet(PreferencesKeys.REDIRECT_SHIELD_APPS, packages)
+    }
+
+    suspend fun setRedirectShieldWhitelistedApps(packages: Set<String>) {
+        setRedirectShieldSet(PreferencesKeys.REDIRECT_SHIELD_WHITELIST, packages)
+    }
+
+    suspend fun setRedirectShieldTriggerApps(packages: Set<String>) {
+        setRedirectShieldSet(PreferencesKeys.REDIRECT_SHIELD_TRIGGERS, packages)
+    }
+
+    private suspend fun setRedirectShieldSet(
+        key: androidx.datastore.preferences.core.Preferences.Key<String>,
+        packages: Set<String>
+    ) {
+        val sanitized = packages.filter { it.isNotBlank() }.toSet()
+        context.dataStore.edit { preferences ->
+            if (sanitized.isEmpty()) {
+                preferences.remove(key)
+            } else {
+                preferences[key] = sanitized.joinToString(",")
+            }
+        }
+    }
+
     suspend fun setHomeQuickActions(actions: List<String>) {
         val sanitized = actions.filter { it in HomeQuickActionsDefaults.ALL_IDS }
             .distinct()
@@ -2244,6 +2296,18 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 }
 const val MAX_REELS_SHIELD_DAILY_LIMIT = 200
 
+object RedirectShieldDefaults {
+    /**
+     * How long the shield stays armed after leaving a trigger app. Ad redirects often
+     * pass through a browser or the ad SDK before the store opens, so the window has
+     * to outlast that chain.
+     */
+    const val ARM_GRACE_PERIOD_MS = 15000L
+
+    /** Minimum delay between two redirects so the service cannot loop. */
+    const val REDIRECT_COOLDOWN_MS = 2000L
+}
+
 object ReelsShieldDefaults {
     const val DAILY_LIMIT = 30
 
@@ -2478,6 +2542,10 @@ data class UserPreferences(
     val reelsShieldHistory: Map<String, Int> = emptyMap(),
     val reelsShieldHistoryByApp: Map<String, Map<String, Int>> = emptyMap(),
     val reelsShieldAppLimits: Map<String, Int> = emptyMap(),
+    val redirectShieldEnabled: Boolean = false,
+    val redirectShieldApps: Set<String> = emptySet(),
+    val redirectShieldWhitelistedApps: Set<String> = emptySet(),
+    val redirectShieldTriggerApps: Set<String> = emptySet(),
     val homeQuickActions: List<String> = HomeQuickActionsDefaults.DEFAULT_ORDER,
     val refreshOnOpenUsageStats: Boolean = false,
     val checkUpdateOnStart: Boolean = false,
@@ -2487,26 +2555,7 @@ data class UserPreferences(
     val weeklyInsightEnabled: Boolean = true,
     val trendMilestoneEnabled: Boolean = true,
     val performanceLevel: PerformanceLevel = PerformanceLevel.BALANCED,
-    val perfA11yActiveDelay: Long = PerformanceConfig().a11yActiveDelay,
-    val perfA11yInactiveDelay: Long = PerformanceConfig().a11yInactiveDelay,
-    val perfScreenOffDelay: Long = PerformanceConfig().screenOffDelay,
-    val perfPowerSaveDelay: Long = PerformanceConfig().powerSaveDelay,
-    val perfUsageStatsCacheMs: Long = PerformanceConfig().usageStatsCacheMs,
-    val perfShieldDbWriteMs: Long = PerformanceConfig().shieldDbWriteMs,
-    val perfShieldDbWriteNearMs: Long = PerformanceConfig().shieldDbWriteNearMs,
-    val perfLauncherCacheMs: Long = PerformanceConfig().launcherCacheMs,
-    val perfGoalReminderTick: Long = PerformanceConfig().goalReminderTick,
-    val perfDayChangeTick: Long = PerformanceConfig().dayChangeTick,
-    val perfMonPowerSave: Long = PerformanceConfig().monPowerSave,
-    val perfMonOverlayShowing: Long = PerformanceConfig().monOverlayShowing,
-    val perfMonGoalNear: Long = PerformanceConfig().monGoalNear,
-    val perfMonGoalMid: Long = PerformanceConfig().monGoalMid,
-    val perfMonGoalFar: Long = PerformanceConfig().monGoalFar,
-    val perfMonShieldNear: Long = PerformanceConfig().monShieldNear,
-    val perfMonShieldMid: Long = PerformanceConfig().monShieldMid,
-    val perfMonShieldFar: Long = PerformanceConfig().monShieldFar,
-    val perfMonShieldVeryFar: Long = PerformanceConfig().monShieldVeryFar,
-    val perfMonDefault: Long = PerformanceConfig().monDefault,
+    val performanceConfig: PerformanceConfig = PerformanceConfig(),
     val lastChargeTimestamp: Long = 0L,
     val manualResetTimestamps: Map<String, Long> = emptyMap(),
     val gsFlexSettings: GSFlexSettings = GSFlexSettings(),
@@ -2615,28 +2664,7 @@ data class UserPreferences(
 
     fun buildPerformanceConfig(): PerformanceConfig {
         if (performanceLevel.isPreset()) return performanceLevel.toConfig()
-        return PerformanceConfig(
-            a11yActiveDelay = perfA11yActiveDelay,
-            a11yInactiveDelay = perfA11yInactiveDelay,
-            screenOffDelay = perfScreenOffDelay,
-            powerSaveDelay = perfPowerSaveDelay,
-            usageStatsCacheMs = perfUsageStatsCacheMs,
-            shieldDbWriteMs = perfShieldDbWriteMs,
-            shieldDbWriteNearMs = perfShieldDbWriteNearMs,
-            launcherCacheMs = perfLauncherCacheMs,
-            goalReminderTick = perfGoalReminderTick,
-            dayChangeTick = perfDayChangeTick,
-            monPowerSave = perfMonPowerSave,
-            monOverlayShowing = perfMonOverlayShowing,
-            monGoalNear = perfMonGoalNear,
-            monGoalMid = perfMonGoalMid,
-            monGoalFar = perfMonGoalFar,
-            monShieldNear = perfMonShieldNear,
-            monShieldMid = perfMonShieldMid,
-            monShieldFar = perfMonShieldFar,
-            monShieldVeryFar = perfMonShieldVeryFar,
-            monDefault = perfMonDefault,
-        )
+        return performanceConfig
     }
 }
 

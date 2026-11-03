@@ -44,6 +44,11 @@ sealed class Screen(
 
     object ReelsShield : Screen("reels_shield", "Reels Shield", Icons.Filled.Shield, Icons.Outlined.Shield)
 
+    object RedirectShield : Screen("redirect_shield", "Redirect Shield", Icons.Filled.Shield, Icons.Outlined.Shield)
+
+
+
+
     object AppDetail : Screen("app_detail/{packageName}", "App Detail", Icons.Filled.Home, Icons.Outlined.Home) {
         fun createRoute(packageName: String) = "app_detail/$packageName"
     }

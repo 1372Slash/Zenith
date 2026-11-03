@@ -87,6 +87,7 @@ fun FeaturesSettings(
         autoQuitEnabled: Boolean,
     ) -> Unit,
     onNavigateToReelsShield: () -> Unit = {},
+    onNavigateToRedirectShield: () -> Unit = {},
     goalCount: Int
 ) {
     val context = LocalContext.current
@@ -411,11 +412,25 @@ fun FeaturesSettings(
         PreferenceCategory(title = "Protection")
 
         SettingsActionItem(
+            title = "Redirect Shield",
+            summary = if (preferences.redirectShieldEnabled) {
+                "On · ${preferences.redirectShieldApps.size} shielded apps · ${preferences.redirectShieldTriggerApps.size} trigger apps"
+            } else {
+                "Bounce back to home when a shielded app is opened from a trigger app"
+            },
+            onClick = onNavigateToRedirectShield,
+            icon = Icons.Outlined.Security,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        SettingsActionItem(
             title = "Tamper Protection",
             summary = if (preferences.tamperProtectionEnabled) "On. PIN required to turn it off" else "Add an extra Android step before Zenith can be uninstalled",
             onClick = onNavigateToTamperProtection,
             icon = Icons.Outlined.AdminPanelSettings,
-            shape = RoundedCornerShape(24.dp)
+            shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
         )
 
         Spacer(modifier = Modifier.height(16.dp))

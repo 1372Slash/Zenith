@@ -246,6 +246,7 @@ fun MainScreen(
                 currentRoute == Screen.GracePeriod.route ||
                 currentRoute == Screen.EyeCare.route ||
                 currentRoute == Screen.ReelsShield.route ||
+                currentRoute == Screen.RedirectShield.route ||
                 currentRoute == Screen.Lockdown.route ||
                 currentRoute == Screen.TamperProtection.route ||
                 currentRoute == Screen.Pomodoro.route ||
@@ -314,6 +315,7 @@ fun MainScreen(
         currentRoute == Screen.EyeCare.route && preferences.eyeCareEnabled -> "eye"
         currentRoute == Screen.Lockdown.route && preferences.lockdownEnabled -> "lockdown"
         currentRoute == Screen.ReelsShield.route && preferences.reelsShieldEnabled -> "reels"
+        currentRoute == Screen.RedirectShield.route && preferences.redirectShieldEnabled -> "redirect"
         currentRoute == Screen.PausePoint.route && preferences.pausePointEnabled -> "pause"
         currentRoute == Screen.Alarm.route -> "alarm"
         else -> null
@@ -580,6 +582,7 @@ fun MainScreen(
                     currentRoute != Screen.GracePeriod.route &&
                     currentRoute != Screen.EyeCare.route &&
                     currentRoute != Screen.ReelsShield.route &&
+                    currentRoute != Screen.RedirectShield.route &&
                     currentRoute != Screen.Lockdown.route &&
                     currentRoute != Screen.TamperProtection.route &&
                     currentRoute != Screen.Pomodoro.route &&
@@ -942,6 +945,14 @@ fun MainScreen(
                                                     }
                                                 }
                                             )
+                                            "redirect" -> HeaderSwitch(
+                                                checked = preferences.redirectShieldEnabled,
+                                                onCheckedChange = {
+                                                    scope.launch {
+                                                        userPreferencesRepository.setRedirectShieldEnabled(!preferences.redirectShieldEnabled)
+                                                    }
+                                                }
+                                            )
                                             "pause" -> HeaderSwitch(
                                                 checked = preferences.pausePointEnabled,
                                                 onCheckedChange = {
@@ -1057,6 +1068,7 @@ fun MainScreen(
                                     targetRoute == Screen.GracePeriod.route ||
                                     targetRoute == Screen.EyeCare.route ||
                                     targetRoute == Screen.ReelsShield.route ||
+                                    targetRoute == Screen.RedirectShield.route ||
                                     targetRoute == Screen.Lockdown.route ||
                                     targetRoute == Screen.TamperProtection.route ||
                                     targetRoute == Screen.Pomodoro.route ||
@@ -1080,6 +1092,7 @@ fun MainScreen(
                                     initialRoute == Screen.GracePeriod.route ||
                                     initialRoute == Screen.EyeCare.route ||
                                     initialRoute == Screen.ReelsShield.route ||
+                                    initialRoute == Screen.RedirectShield.route ||
                                     initialRoute == Screen.Lockdown.route ||
                                     initialRoute == Screen.TamperProtection.route ||
                                     initialRoute == Screen.Pomodoro.route ||
@@ -1135,6 +1148,7 @@ fun MainScreen(
                                     targetRoute == Screen.GracePeriod.route ||
                                     targetRoute == Screen.EyeCare.route ||
                                     targetRoute == Screen.ReelsShield.route ||
+                                    targetRoute == Screen.RedirectShield.route ||
                                     targetRoute == Screen.Lockdown.route ||
                                     targetRoute == Screen.TamperProtection.route ||
                                     targetRoute == Screen.Pomodoro.route ||
@@ -1159,6 +1173,7 @@ fun MainScreen(
                                     initialRoute == Screen.GracePeriod.route ||
                                     initialRoute == Screen.EyeCare.route ||
                                     initialRoute == Screen.ReelsShield.route ||
+                                    initialRoute == Screen.RedirectShield.route ||
                                     initialRoute == Screen.Lockdown.route ||
                                     initialRoute == Screen.TamperProtection.route ||
                                     initialRoute == Screen.Pomodoro.route ||
@@ -1309,6 +1324,12 @@ fun MainScreen(
                         com.etrisad.zenith.ui.screens.settings.ReelsShieldScreen(
                             preferencesRepository = userPreferencesRepository,
                             innerPadding = innerPadding
+                        )
+                    }
+                    composable(Screen.RedirectShield.route) {
+                        com.etrisad.zenith.ui.screens.settings.RedirectShieldScreen(
+                            preferencesRepository = userPreferencesRepository,
+                            innerPadding = innerPadding,
                         )
                     }
                     composable(Screen.Lockdown.route) {
@@ -1513,6 +1534,7 @@ fun MainScreen(
                             currentRoute != Screen.GracePeriod.route &&
                             currentRoute != Screen.EyeCare.route &&
                             currentRoute != Screen.ReelsShield.route &&
+                            currentRoute != Screen.RedirectShield.route &&
                             currentRoute != Screen.Lockdown.route &&
                             currentRoute != Screen.TamperProtection.route &&
                             currentRoute != Screen.DatabaseDebug.route &&

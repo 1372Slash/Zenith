@@ -80,6 +80,7 @@ class ZenithService : AccessibilityService() {
     private var monitoringJob: kotlinx.coroutines.Job? = null
     private var bypassCheckRunnable: Runnable? = null
     private val websiteUrlTracker = WebsiteUrlTracker(this)
+    private val redirectShield = RedirectShieldController()
     private var urlPollJob: kotlinx.coroutines.Job? = null
     @Volatile
     private var isOverlayCheckInProgress = false
@@ -121,6 +122,7 @@ class ZenithService : AccessibilityService() {
             try {
                 val prefs = preferencesRepository.userPreferencesFlow.first()
                 SharedMonitoringState.currentPreferences = prefs
+                redirectShield.updatePreferences(prefs)
                 SharedMonitoringState.performanceLevel = prefs.performanceLevel
                 val initCfg = prefs.buildPerformanceConfig()
                 SharedMonitoringState.performanceConfig = initCfg
@@ -284,6 +286,7 @@ class ZenithService : AccessibilityService() {
                 SharedMonitoringState.storeInterceptedNotificationContent = preferences.storeInterceptedNotificationContent
                 reelsTrackingWanted = preferences.reelsShieldEnabled && !preferences.accessibilityLimitedMode
                 reelsShield.updatePreferences(preferences)
+                redirectShield.updatePreferences(preferences)
                 applyAccessibilityServiceInfo(preferences.accessibilityLimitedMode)
                 SharedMonitoringState.updateRestrictedPackages()
                 if (privateAppsChanged) {
@@ -843,6 +846,22 @@ class ZenithService : AccessibilityService() {
     private suspend fun handlePackageChange(currentApp: String) {
         OverlayLogBuffer.d("Zenith_HPC", "handlePackageChange: $currentApp (lfga=$lastForegroundApp, isShowing=${InterceptOverlayManager.isShowing})")
         reelsShield.onForegroundChanged(currentApp)
+        val isNoise = InterceptOverlayManager.isSystemUiPackage(currentApp) ||
+            isKeyboardApp(currentApp) || currentApp == packageName
+        if (!isNoise) {
+            val redirect = redirectShield.onForegroundChanged(currentApp)
+            if (redirect.redirect) {
+                OverlayLogBuffer.d(
+                    "RedirectShield",
+                    "redirect $currentApp -> ${redirect.returnToPackage ?: "home"} (${redirect.reason})"
+                )
+                returnToPreviousApp(redirect.returnToPackage)
+                return
+            }
+            if (redirect.reason in redirectDiagnosticReasons) {
+                OverlayLogBuffer.d("RedirectShield", "allow $currentApp (${redirect.reason})")
+            }
+        }
         if (SharedMonitoringState.isPrivatePackage(currentApp)) return
         val actualPkg = if (SharedMonitoringState.accessibilityLimitedMode) {
             null
@@ -1490,6 +1509,47 @@ class ZenithService : AccessibilityService() {
             }
         }
         return foundPackage
+    }
+
+    private val redirectDiagnosticReasons = setOf(
+        "shielded",
+        "cooldown",
+        "from_whitelisted",
+        "not_armed"
+    )
+
+    /**
+     * Sends the user back to the app they came from after a shielded app was bounced.
+     *
+     * The bounce waits briefly so the shielded activity finishes opening, then walks
+     * back with BACK, which returns to the app underneath it. If that did not land on
+     * [packageName] (because the shielded app opened as its own task), the previous app
+     * is launched explicitly, with the home screen as the last resort.
+     */
+    private fun returnToPreviousApp(packageName: String?) {
+        val target = packageName?.takeIf { it != this.packageName }
+        serviceScope.launch(Dispatchers.Main) {
+            delay(250)
+            performGlobalAction(GLOBAL_ACTION_BACK)
+            delay(450)
+            val current = rootInActiveWindow?.packageName?.toString()
+            if (target != null && current != target) {
+                val launchIntent = packageManager.getLaunchIntentForPackage(target)
+                if (launchIntent != null) {
+                    launchIntent.addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+                    )
+                    try {
+                        startActivity(launchIntent)
+                        return@launch
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+            if (current != target) {
+                goToHomeScreen()
+            }
+        }
     }
 
     private fun goToHomeScreen() {
