@@ -2,14 +2,6 @@ package com.etrisad.zenith.data.website
 
 import com.etrisad.zenith.data.preferences.UserPreferences
 
-/**
- * Evaluates the current browser page against the user's blocked keywords and the
- * optional adult preset.
- *
- * The blocker is intentionally stateless: the accessibility service owns URL
- * extraction, cooldowns, and the actual redirect, so this class can be reused by
- * the settings screen for previews and tests.
- */
 class WebsiteBlocker {
 
     @Volatile private var enabled = false
@@ -47,7 +39,6 @@ class WebsiteBlocker {
 
     fun isEnabled(): Boolean = enabled
 
-    /** Browser-internal pages such as new-tab, settings, and about:blank never block. */
     private fun isInternalBrowserPage(url: String): Boolean {
         val lower = url.lowercase()
         return lower.startsWith("chrome://") ||

@@ -10,8 +10,6 @@ import java.util.ArrayDeque
 class WebsiteUrlTracker(
     private val service: AccessibilityService,
 ) {
-    // The blocker needs the path too (e.g. youtube.com/shorts), while the rest of
-    // Zenith keeps using the bare domain for shields and sessions.
     @Volatile private var lastSiteIdentifier: String? = null
 
     fun currentSiteIdentifier(): String? = lastSiteIdentifier

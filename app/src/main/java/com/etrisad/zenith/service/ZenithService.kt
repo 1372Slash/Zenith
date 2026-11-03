@@ -721,11 +721,6 @@ class ZenithService : AccessibilityService() {
         }
     }
 
-    /**
-     * The tracker keeps the full URL identifier (domain + first path segment) so a
-     * keyword like "/shorts" can be targeted. Fall back to the domain when the last
-     * extraction came from a different page.
-     */
     private fun resolveWebsiteIdentifier(domain: String): String {
         val tracked = websiteUrlTracker.currentSiteIdentifier()
         return if (tracked != null &&
@@ -737,7 +732,6 @@ class ZenithService : AccessibilityService() {
         }
     }
 
-    /** Returns true when the page was blocked and normal website handling should stop. */
     private fun enforceWebsiteBlocker(domain: String, urlIdentifier: String): Boolean {
         val reason = websiteBlocker.blockReason(domain, urlIdentifier) ?: return false
         val now = System.currentTimeMillis()
@@ -749,9 +743,6 @@ class ZenithService : AccessibilityService() {
         lastWebsiteBlockAt = now
         OverlayLogBuffer.d("WebsiteBlocker", "blocked $urlIdentifier ($reason)")
 
-        // Register the blocked website as a Zenith website shield (zenith-web:domain) so it
-        // appears in Zenith's website shield system and is handled by the existing shield
-        // overlay/HUD instead of being a standalone Curbox-style redirect.
         val websitePkg = "zenith-web:$domain"
         if (SharedMonitoringState.allShieldsCache[websitePkg] == null) {
             val websiteShield = ShieldEntity(
@@ -1592,14 +1583,6 @@ class ZenithService : AccessibilityService() {
         "not_armed"
     )
 
-    /**
-     * Sends the user back to the app they came from after a shielded app was bounced.
-     *
-     * The bounce waits briefly so the shielded activity finishes opening, then walks
-     * back with BACK, which returns to the app underneath it. If that did not land on
-     * [packageName] (because the shielded app opened as its own task), the previous app
-     * is launched explicitly, with the home screen as the last resort.
-     */
     private fun returnToPreviousApp(packageName: String?) {
         val target = packageName?.takeIf { it != this.packageName }
         serviceScope.launch(Dispatchers.Main) {

@@ -1,20 +1,7 @@
-/*
- * Ported from Curbox (https://github.com/iecal/curbox-android-kt-rewrite).
- * Original work: Copyright (c) Curbox contributors.
- * Adapted for Zenith: package renamed, literal matching accepts subdomains, and
- * the compiled pattern set is a small data class instead of a Pair.
- */
 package com.etrisad.zenith.data.website
 
 import java.util.Locale
 
-/**
- * Pure URL/keyword matching shared by the website blocker and its settings UI.
- *
- * A compiled pattern set is a list of raw/wildcard regexes plus lowercase literal
- * keywords. Patterns are matched against a domain+path identifier such as
- * `youtube.com/shorts`.
- */
 object WebsiteKeywordMatcher {
 
     data class Patterns(
@@ -24,14 +11,6 @@ object WebsiteKeywordMatcher {
         val isEmpty: Boolean get() = regexes.isEmpty() && literals.isEmpty()
     }
 
-    /**
-     * Compiles a collection of keyword patterns.
-     *
-     * Pattern types:
-     *   r:<expr>   - raw regex (e.g. r:(?:shorts|reels))
-     *   * / ?      - glob wildcard (* = any chars, ? = one char)
-     *   otherwise  - URL-aware literal (domain, path, or plain word)
-     */
     fun compile(keywords: Collection<String>): Patterns {
         val regexes = ArrayList<Regex>(keywords.size)
         val literals = ArrayList<String>(keywords.size)
@@ -67,7 +46,6 @@ object WebsiteKeywordMatcher {
             }
         }
         val prefix = when {
-            // A leading "*." means "this domain or any subdomain of it".
             optionalSubdomain -> "^(?:[^/]+\\.)*"
             pattern.startsWith("/") -> "^[^/]+"
             pattern.substringBefore('/').contains('.') -> "^"
@@ -85,16 +63,6 @@ object WebsiteKeywordMatcher {
         .removePrefix("www.")
         .trimEnd('/')
 
-    /**
-     * URL-aware literal match. [keyword] must already be lowercase.
-     *
-     * Handles:
-     *   - Exact domain match:   "youtube.com"  -> "youtube.com"
-     *   - Domain prefix:        "youtube.com"  -> "youtube.com/shorts"
-     *   - Subdomains:           "youtube.com"  -> "m.youtube.com/shorts"
-     *   - Path segment:         "/shorts"      -> "youtube.com/shorts"
-     *   - Domain word:          "youtube"      -> "youtube.com", "m.youtube.com"
-     */
     private fun matchesLiteral(keyword: String, urlIdentifier: String): Boolean {
         val url = normalize(urlIdentifier)
 
@@ -127,7 +95,6 @@ object WebsiteKeywordMatcher {
 
         val domain = url.substringBefore('/').substringBefore('?').substringBefore('#')
         if (keyword.contains('.')) {
-            // A bare domain keyword also covers every subdomain of it.
             return domain.endsWith(".$keyword")
         }
         if (!keyword.contains('/')) {

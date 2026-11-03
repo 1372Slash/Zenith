@@ -5,7 +5,6 @@ import java.util.concurrent.ConcurrentHashMap
 
 object WebsiteStateHolder {
     val currentWebsiteDomain = MutableStateFlow<String?>(null)
-    /** Domain plus first path segment, used by keyword and adult website blocking. */
     val currentWebsiteIdentifier = MutableStateFlow<String?>(null)
     @Volatile
     var lastBrowserPackage: String? = null
