@@ -134,11 +134,50 @@ object WebsiteRepository {
         "app.vanadium.browser",
         "org.mozilla.fennec_fdroid",
         "org.ironfoxoss.ironfox",
-        "io.github.forkmaintainers.iceraven"
+        "io.github.forkmaintainers.iceraven",
+        "com.jqssun.titanium",
+        "io.github.jqssun.titanium",
+        "com.jqssun.android.titanium",
+        "jqssun.titanium"
     )
 
+    private val browserCheckCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
     fun isKnownBrowser(packageName: String): Boolean {
-        return packageName in KNOWN_BROWSERS
+        if (packageName in KNOWN_BROWSERS) return true
+        val lower = packageName.lowercase()
+        return lower.contains("browser") ||
+            lower.contains("chrome") ||
+            lower.contains("firefox") ||
+            lower.contains("opera") ||
+            lower.contains("edge") ||
+            lower.contains("brave") ||
+            lower.contains("vivaldi") ||
+            lower.contains("duckduckgo") ||
+            lower.contains("titanium") ||
+            lower.contains("jqssun") ||
+            lower.contains("cromite") ||
+            lower.contains("vanadium") ||
+            lower.contains("kiwi") ||
+            lower.contains("via") ||
+            lower.contains("uc") ||
+            lower.contains("fenix") ||
+            lower.contains("fennec")
+    }
+
+    fun isKnownBrowser(context: Context, packageName: String): Boolean {
+        if (isKnownBrowser(packageName)) return true
+        return browserCheckCache.getOrPut(packageName) {
+            try {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com")).apply {
+                    setPackage(packageName)
+                }
+                val activities = context.packageManager.queryIntentActivities(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+                activities.isNotEmpty()
+            } catch (_: Exception) {
+                false
+            }
+        }
     }
 
     fun isUrlBlocked(url: String, blockedKeywords: List<String>): Boolean {

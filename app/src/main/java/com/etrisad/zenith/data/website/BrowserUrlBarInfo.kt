@@ -34,4 +34,7 @@ val URL_BAR_ID_LIST = mapOf(
     "mark.via.gp" to BrowserUrlBarInfo("mark.via.gp:id/url_bar"),
     "org.cromite.cromite" to BrowserUrlBarInfo("org.cromite.cromite:id/url_bar"),
     "app.vanadium.browser" to BrowserUrlBarInfo("app.vanadium.browser:id/url_bar"),
+    "com.jqssun.titanium" to BrowserUrlBarInfo("com.jqssun.titanium:id/url_bar"),
+    "io.github.jqssun.titanium" to BrowserUrlBarInfo("io.github.jqssun.titanium:id/url_bar"),
+    "com.jqssun.android.titanium" to BrowserUrlBarInfo("com.jqssun.android.titanium:id/url_bar"),
 )
