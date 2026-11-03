@@ -280,7 +280,6 @@ fun SettingsCategoryScreen(
                         onIncentiveLockCancelDisableRequest = { coroutineScope.launch { preferencesRepository.setIncentiveLockDisableRequestTimestamp(0L) } },
                         onNavigateToGracePeriod = { navController.navigate(Screen.GracePeriod.route) },
                         onWebsiteAutoTrackingEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setWebsiteAutoTrackingEnabled(enabled) } },
-                        onWebsiteBlockerEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setWebsiteBlockerEnabled(enabled) } },
                         onWebsiteBlockerBlockAdultChange = { enabled -> coroutineScope.launch { preferencesRepository.setWebsiteBlockerBlockAdult(enabled) } },
                         onWebsiteBlockerKeywordsChange = { keywords -> coroutineScope.launch { preferencesRepository.setWebsiteBlockerKeywords(keywords) } },
                         onNavigateToLockdown = { navController.navigate(Screen.Lockdown.route) },

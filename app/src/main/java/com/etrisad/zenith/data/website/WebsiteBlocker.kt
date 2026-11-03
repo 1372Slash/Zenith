@@ -12,9 +12,9 @@ class WebsiteBlocker {
         WebsiteKeywordMatcher.compile(AdultWebsitePreset.KEYWORDS)
 
     fun updatePreferences(preferences: UserPreferences) {
-        enabled = preferences.websiteBlockerEnabled
         blockAdult = preferences.websiteBlockerBlockAdult
         userPatterns = WebsiteKeywordMatcher.compile(preferences.websiteBlockerKeywords)
+        enabled = blockAdult || !userPatterns.isEmpty
     }
 
     fun blockReason(domain: String?, urlIdentifier: String?): String? {

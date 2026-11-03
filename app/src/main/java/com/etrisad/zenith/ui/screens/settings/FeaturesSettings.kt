@@ -72,7 +72,6 @@ fun FeaturesSettings(
     onIncentiveLockCancelDisableRequest: () -> Unit,
     onNavigateToGracePeriod: () -> Unit,
     onWebsiteAutoTrackingEnabledChange: (Boolean) -> Unit,
-    onWebsiteBlockerEnabledChange: (Boolean) -> Unit,
     onWebsiteBlockerBlockAdultChange: (Boolean) -> Unit,
     onWebsiteBlockerKeywordsChange: (List<String>) -> Unit,
     onNavigateToLockdown: () -> Unit,
@@ -497,7 +496,7 @@ fun FeaturesSettings(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-        PreferenceCategory(title = "Website Tracking")
+        PreferenceCategory(title = "Website")
 
         Box(modifier = Modifier.onboardingAnchor("features.website_tracking")) {
             SettingsToggle(
@@ -506,21 +505,9 @@ fun FeaturesSettings(
                 checked = preferences.websiteAutoTrackingEnabled,
                 onCheckedChange = onWebsiteAutoTrackingEnabledChange,
                 icon = Icons.Outlined.Language,
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
             )
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        PreferenceCategory(title = "Website Blocker")
-
-        SettingsToggle(
-            title = "Website Blocker",
-            description = "Block websites matching custom keywords and adult preset",
-            checked = preferences.websiteBlockerEnabled,
-            onCheckedChange = onWebsiteBlockerEnabledChange,
-            icon = Icons.Outlined.Block,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-        )
 
         Spacer(modifier = Modifier.height(4.dp))
 
