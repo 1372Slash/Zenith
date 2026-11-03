@@ -2313,9 +2313,12 @@ object ReelsShieldDefaults {
 
     val PACKAGES: Set<String> = setOf(
         "com.instagram.android",
+        "com.instagram.lite",
         "com.facebook.katana",
         "com.facebook.lite",
         "com.google.android.youtube",
+        "app.revanced.android.youtube",
+        "app.morphe.android.youtube",
         "com.snapchat.android",
         "com.zhiliaoapp.musically",
         "com.zhiliaoapp.musically.go",
@@ -2335,6 +2338,9 @@ object ReelsShieldDefaults {
     )
 
     val PARTIAL_PACKAGES: Set<String> = setOf(
+        "com.instagram.lite",
+        "app.revanced.android.youtube",
+        "app.morphe.android.youtube",
         "com.facebook.lite",
         "com.zhiliaoapp.musically",
         "com.zhiliaoapp.musically.go",
@@ -2364,7 +2370,9 @@ object ReelsShieldDefaults {
 
     fun fallbackLabel(pkg: String): String = when (pkg) {
         "com.instagram.android" -> "Instagram"
+        "com.instagram.lite" -> "Instagram Lite"
         "com.google.android.youtube" -> "YouTube"
+        "app.revanced.android.youtube", "app.morphe.android.youtube" -> "YouTube"
         "com.facebook.katana", "com.facebook.lite" -> "Facebook"
         "com.snapchat.android" -> "Snapchat"
         "com.zhiliaoapp.musically", "com.zhiliaoapp.musically.go",

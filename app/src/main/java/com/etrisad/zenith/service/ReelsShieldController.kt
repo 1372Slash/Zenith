@@ -5,17 +5,23 @@ import android.content.Context
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.etrisad.zenith.data.local.database.OverlayLogBuffer
 import com.etrisad.zenith.data.preferences.ReelsShieldDefaults
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.service.reels.ReelAppConfig
+import com.etrisad.zenith.service.reels.ReelCountTracker
+import com.etrisad.zenith.service.reels.ReelScriptRunner
 import com.etrisad.zenith.ui.components.overlay.ReelsShieldOverlayManager
 import com.etrisad.zenith.util.DateTimeUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -34,6 +40,34 @@ class ReelsShieldController(
     private val persistScope =
         CoroutineScope(Dispatchers.IO.limitedParallelism(1) + SupervisorJob())
     private val dateKeyFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+
+    // Script detectors run off the main thread. Events are copied on the accessibility
+    // callback and fed through a conflated channel, exactly like the source project, so the
+    // service never blocks on hierarchy walks.
+    private val reelEventScope =
+        CoroutineScope(Dispatchers.Default.limitedParallelism(1) + SupervisorJob())
+    private val reelEventQueue =
+        Channel<AccessibilityEvent>(Channel.CONFLATED) { event -> recycleEvent(event) }
+    private val reelScriptRunner = ReelScriptRunner(service).also { it.setup() }
+    private val reelCountTracker = ReelCountTracker { pkg -> runOnMain { onScriptReelCounted(pkg) } }
+    private var pendingReelSettleEvent: AccessibilityEvent? = null
+    private val reelSettleRecheck = Runnable {
+        val event = pendingReelSettleEvent ?: return@Runnable
+        pendingReelSettleEvent = null
+        queueReelEvent(event)
+    }
+    init {
+        reelEventScope.launch {
+            for (event in reelEventQueue) {
+                try {
+                    processReelScriptEvent(event)
+                } catch (_: Exception) {
+                } finally {
+                    recycleEvent(event)
+                }
+            }
+        }
+    }
 
     private val screenHeightPx = context.resources.displayMetrics.heightPixels
     private val screenWidthPx = context.resources.displayMetrics.widthPixels
@@ -153,6 +187,7 @@ class ReelsShieldController(
             if (!enabled) {
                 deactivateSurface("disabled", flush = true)
                 overlay.hideNow()
+                reelCountTracker.resetAll()
                 return@runOnMain
             }
 
@@ -284,7 +319,10 @@ class ReelsShieldController(
             // Turning the screen off ends the app visit; start the ten-minute
             // session countdown before tearing the surface down.
             val active = surfacePackage.ifEmpty { foregroundPackage }
-            if (active.isNotEmpty()) endSessionLater(active)
+            if (active.isNotEmpty()) {
+                endSessionLater(active)
+                reelCountTracker.onLeftApp(active)
+            }
             deactivateSurface("screen off", flush = true)
             overlay.hideNow()
         }
@@ -297,6 +335,10 @@ class ReelsShieldController(
             deactivateSurface("service destroy", flush = false)
             persist(force = true)
             overlay.destroy()
+            pendingReelSettleEvent?.let { recycleEvent(it) }
+            pendingReelSettleEvent = null
+            reelEventQueue.close()
+            reelEventScope.cancel()
         }
     }
 
@@ -416,6 +458,9 @@ class ReelsShieldController(
         // the visit (and its ten-minute session) is tracked even if the window
         // event was missed.
         trackForeground(pkg)
+        // Apps with a script detector own their counting. Letting the heuristic
+        // path run as well would count the same reel twice.
+        if (reelCountTracker.isScriptSupported(pkg)) return
 
         val now = System.currentTimeMillis()
         if (now < suppressUntil) return
@@ -454,6 +499,182 @@ class ReelsShieldController(
         // event source. Refresh it while scrolling so the confirmation window
         // used by the counting gate stays current; the scan is throttled.
         scheduleSurfaceScan(pkg, delayMs = 0L, deactivateIfMissing = false)
+    }
+
+    /**
+     * Feeds one accessibility event to the script-based reel detectors.
+     *
+     * Pager positions are recorded inline so a dropped background event cannot lose
+     * them. The detector itself runs on the conflated worker: hierarchy walks are
+     * expensive and must never block the accessibility callback.
+     */
+    fun handleScriptEvent(event: AccessibilityEvent) {
+        if (Looper.myLooper() != Looper.getMainLooper()) return
+        Log.d("ZenithReelsDebug", "handleScriptEvent ENTRY pkg=${event.packageName} type=${event.eventType} enabled=$enabled adopted=$adopted")
+        if (!enabled || !adopted) {
+            Log.d("ZenithReelsDebug", "handleScriptEvent SKIP not enabled/adopted")
+            return
+        }
+        if (SharedMonitoringState.accessibilityLimitedMode) {
+            Log.d("ZenithReelsDebug", "handleScriptEvent SKIP accessibilityLimitedMode")
+            return
+        }
+        if (!AppStateHolder.isScreenOn.value) {
+            Log.d("ZenithReelsDebug", "handleScriptEvent SKIP screen off")
+            return
+        }
+
+        val pkg = event.packageName?.toString() ?: return
+        Log.d("ZenithReelsDebug", "handleScriptEvent pkg=$pkg tracked=${pkg in trackedPackages} suppressUntil=$suppressUntil now=${System.currentTimeMillis()}")
+        if (pkg == context.packageName) return
+        if (SharedMonitoringState.isPrivatePackage(pkg)) return
+        if (pkg !in trackedPackages) {
+            Log.d("ZenithReelsDebug", "handleScriptEvent SKIP pkg not tracked: $pkg")
+            return
+        }
+        val data = ReelAppConfig.dataFor(pkg) ?: run {
+            Log.d("ZenithReelsDebug", "handleScriptEvent SKIP no ReelAppConfig data for: $pkg")
+            return
+        }
+        if ((event.eventType and data.eventType) == 0) {
+            Log.d("ZenithReelsDebug", "handleScriptEvent SKIP eventType mismatch: event=${event.eventType} data=${data.eventType}")
+            return
+        }
+        if (System.currentTimeMillis() < suppressUntil) {
+            Log.d("ZenithReelsDebug", "handleScriptEvent SKIP suppressed until $suppressUntil")
+            return
+        }
+
+        trackForeground(pkg)
+
+        if (reelCountTracker.onPagerEvent(event)) {
+            Log.d("ZenithReelsDebug", "handleScriptEvent onPagerEvent TRUE for $pkg, scheduling settle recheck")
+            scheduleReelSettleRecheck(event)
+        } else {
+            Log.d("ZenithReelsDebug", "handleScriptEvent onPagerEvent FALSE for $pkg")
+        }
+
+        val copy = try {
+            AccessibilityEvent.obtain(event)
+        } catch (_: Exception) {
+            null
+        } ?: run {
+            Log.d("ZenithReelsDebug", "handleScriptEvent SKIP failed to copy event for $pkg")
+            return
+        }
+        Log.d("ZenithReelsDebug", "handleScriptEvent queueing event for $pkg")
+        queueReelEvent(copy)
+    }
+
+    /** One more settled read after the pager stops; a still reel emits no further events. */
+    private fun scheduleReelSettleRecheck(event: AccessibilityEvent) {
+        mainHandler.removeCallbacks(reelSettleRecheck)
+        pendingReelSettleEvent?.let { recycleEvent(it) }
+        pendingReelSettleEvent = try {
+            AccessibilityEvent.obtain(event)
+        } catch (_: Exception) {
+            null
+        }
+        if (pendingReelSettleEvent != null) {
+            mainHandler.postDelayed(reelSettleRecheck, ReelCountTracker.PAGER_SETTLE_RECHECK_MS)
+        }
+    }
+
+    /**
+     * Hands the event to the conflated queue. Ownership moves to the queue; a rejected
+     * send is recycled here, while a conflated drop is recycled by the channel itself.
+     */
+    private fun queueReelEvent(event: AccessibilityEvent) {
+        if (reelEventQueue.trySend(event).isFailure) recycleEvent(event)
+    }
+
+    private fun recycleEvent(event: AccessibilityEvent) {
+        try {
+            event.recycle()
+        } catch (_: Exception) {
+        }
+    }
+
+    /** Background worker: runs the detector, then reports the result to the main thread. */
+    private fun processReelScriptEvent(event: AccessibilityEvent) {
+        val pkg = event.packageName?.toString() ?: return
+        Log.d("ZenithReelsDebug", "processReelScriptEvent ENTRY pkg=$pkg")
+        if (!reelCountTracker.isScriptSupported(pkg)) {
+            Log.d("ZenithReelsDebug", "processReelScriptEvent SKIP not script supported: $pkg")
+            return
+        }
+
+        val detection = reelScriptRunner.detect(event)
+        Log.d("ZenithReelsDebug", "processReelScriptEvent detect result pkg=$pkg detection=${detection?.let { "comparator=" + it.comparator + " isNull=" + (it.comparator.isNullOrEmpty()) } }")
+        reelCountTracker.onEvent(event, detection?.comparator)
+
+        runOnMain {
+            Log.d("ZenithReelsDebug", "processReelScriptEvent runOnMain pkg=$pkg enabled=$enabled adopted=$adopted tracked=${trackedPackages.contains(pkg)} screenOn=${AppStateHolder.isScreenOn.value} detectionNull=${detection == null}")
+            if (!enabled || !adopted) return@runOnMain
+            if (!trackedPackages.contains(pkg)) return@runOnMain
+            if (!AppStateHolder.isScreenOn.value) return@runOnMain
+            if (detection == null) {
+                onScriptViewerGone(pkg)
+            } else {
+                onScriptViewerVisible(pkg)
+            }
+        }
+    }
+
+    /** The detector found the reel viewer; the surface can be confirmed without heuristics. */
+    private fun onScriptViewerVisible(pkg: String) {
+        val now = System.currentTimeMillis()
+        if (!surfaceActive || surfacePackage != pkg) {
+            activateSurface(pkg, "script viewer", entered = true)
+        } else {
+            surfaceSeenAt = now
+            surfaceMissStreak = 0
+            showPill(pkg, atLimit = isLimitReached(pkg))
+        }
+    }
+
+    /** The detector no longer sees the viewer, so the script-backed surface is gone. */
+    private fun onScriptViewerGone(pkg: String) {
+        if (surfaceActive && surfacePackage == pkg) {
+            deactivateSurface("script viewer gone", flush = true)
+        }
+    }
+
+    /**
+     * A reel was counted by the script tracker. This replaces the old heuristic swipe
+     * counter for script-supported apps, so their events never reach [onScrollSettled].
+     */
+    private fun onScriptReelCounted(pkg: String) {
+        if (!enabled || !adopted) return
+        if (!trackedPackages.contains(pkg)) return
+        if (!AppStateHolder.isScreenOn.value) return
+        if (System.currentTimeMillis() < suppressUntil) return
+
+        rollDayIfNeeded()
+
+        val wasActive = surfaceActive && surfacePackage == pkg
+        if (!wasActive) {
+            activateSurface(pkg, "script count", entered = true)
+        } else {
+            val now = System.currentTimeMillis()
+            surfaceSeenAt = now
+            surfaceMissStreak = 0
+        }
+
+        if (isLimitReached(pkg)) {
+            showPill(pkg, atLimit = true)
+            enforceBack(pkg, "script limit")
+            return
+        }
+
+        todayCount += 1
+        todayByApp[pkg] = (todayByApp[pkg] ?: 0) + 1
+        totalCount += 1
+        history[todayDate] = todayCount
+        recordSessionSwipe(pkg)
+        persist(force = false)
+
+        showPill(pkg, atLimit = isLimitReached(pkg))
     }
 
     /**
@@ -644,6 +865,8 @@ class ReelsShieldController(
         foregroundPackage = pkg
         if (previous.isNotEmpty() && previous != pkg) {
             endSessionLater(previous)
+            // Reel tracking is per viewer session, so leaving the app clears it.
+            reelCountTracker.onLeftApp(previous)
         }
         // Also resume when the same package comes back after screen-off; the
         // app can stay "foreground" while the display is off.
@@ -1007,6 +1230,9 @@ class ReelsShieldController(
         if (SharedMonitoringState.isPrivatePackage(pkg)) return
         if (!AppStateHolder.isScreenOn.value) return
         if (System.currentTimeMillis() < suppressUntil) return
+        // Script-supported apps are driven by handleScriptEvent; the heuristic
+        // surface scan would only duplicate their work.
+        if (reelCountTracker.isScriptSupported(pkg)) return
 
         rollDayIfNeeded()
 
@@ -1862,6 +2088,13 @@ class ReelsShieldController(
                 name.contains("comment")
     }
 
+    private fun isTikTokPackage(pkg: String): Boolean {
+        return pkg == "com.zhiliaoapp.musically" ||
+            pkg == "com.zhiliaoapp.musically.go" ||
+            pkg == "com.ss.android.ugc.trill" ||
+            pkg == "com.ss.android.ugc.aweme"
+    }
+
     // ------------------------------------------------------- limit checks
 
     private fun enforceBack(pkg: String, reason: String) {
@@ -1870,20 +2103,25 @@ class ReelsShieldController(
         lastBackAt = now
         suppressUntil = now + ENTRY_SUPPRESS_MS
         val perAppLimit = perAppLimitFor(pkg)
+        val isTikTok = isTikTokPackage(pkg)
         OverlayLogBuffer.d(
             "ReelsShield",
-            "limit reached (pool $todayCount/$dailyLimit, app ${todayByApp[pkg] ?: 0}/$perAppLimit) ($reason) -> back"
+            "limit reached (pool $todayCount/$dailyLimit, app ${todayByApp[pkg] ?: 0}/$perAppLimit) ($reason) -> " + if (isTikTok) "home" else "back"
         )
         mainHandler.post {
             try {
-                service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+                if (isTikTok) {
+                    service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
+                } else {
+                    service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+                }
             } catch (_: Exception) {
             }
         }
         // Keep the pill visible long enough to explain the kick, then hide it
         // and let the next foreground/window event decide what comes next.
         mainHandler.postDelayed({
-            if (surfacePackage == pkg) deactivateSurface("after back", flush = true)
+            if (surfacePackage == pkg) deactivateSurface("after limit action", flush = true)
         }, BACK_PILL_LINGER_MS)
     }
 

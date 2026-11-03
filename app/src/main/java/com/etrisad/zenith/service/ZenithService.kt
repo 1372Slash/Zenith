@@ -494,6 +494,7 @@ class ZenithService : AccessibilityService() {
             return
         }
         if (isScrollEvent) {
+            reelsShield.handleScriptEvent(event)
             reelsShield.handleScrollEvent(event)
             return
         }
@@ -532,6 +533,7 @@ class ZenithService : AccessibilityService() {
                 handleViewTextChanged(packageName, event)
             }
         } else if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+            reelsShield.handleScriptEvent(event)
             reelsShield.onContentChanged(event, packageName)
             if (packageName == lastForegroundApp && com.etrisad.zenith.data.website.WebsiteRepository.isKnownBrowser(packageName)) {
                 var domain = websiteUrlTracker.checkAccessibilityEvent(event)
