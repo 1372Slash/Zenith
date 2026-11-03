@@ -2354,18 +2354,18 @@ object ReelsShieldDefaults {
 
     val FULLY_SUPPORTED_PACKAGES: Set<String> = setOf(
         "com.instagram.android",
-        "com.google.android.youtube"
+        "com.google.android.youtube",
+        "com.zhiliaoapp.musically",
+        "com.zhiliaoapp.musically.go",
+        "com.ss.android.ugc.trill",
+        "com.ss.android.ugc.aweme"
     )
 
     val PARTIAL_PACKAGES: Set<String> = setOf(
         "com.instagram.lite",
         "app.revanced.android.youtube",
         "app.morphe.android.youtube",
-        "com.facebook.lite",
-        "com.zhiliaoapp.musically",
-        "com.zhiliaoapp.musically.go",
-        "com.ss.android.ugc.trill",
-        "com.ss.android.ugc.aweme"
+        "com.facebook.lite"
     )
 
     val UNTESTED_PACKAGES: Set<String> = setOf(
