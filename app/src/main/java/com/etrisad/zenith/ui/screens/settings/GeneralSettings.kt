@@ -1,8 +1,17 @@
 package com.etrisad.zenith.ui.screens.settings
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -24,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.etrisad.zenith.R
+import com.etrisad.zenith.data.preferences.BlockingMode
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
@@ -40,6 +50,7 @@ fun GeneralSettings(
     onSetEmergencyRecharge: (Int) -> Unit,
     onSetDelayAppDuration: (Int) -> Unit,
     onSetDayStartTime: (Int, Int) -> Unit,
+    onSetBlockingMode: (BlockingMode) -> Unit,
     onShowWhitelistSheetChange: (Boolean) -> Unit,
     onShowAppExclusionsSheetChange: (Boolean) -> Unit,
     onOpenPermissions: () -> Unit,
@@ -50,6 +61,8 @@ fun GeneralSettings(
     var showEmergencyRechargeSheet by remember { mutableStateOf(false) }
     var showDelayAppSheet by remember { mutableStateOf(false) }
     var showDayStartSheet by remember { mutableStateOf(false) }
+    var showBlockingModeSheet by remember { mutableStateOf(false) }
+    val isBlacklist = preferences.blockingMode == BlockingMode.BLACKLIST
     val exclusionSummary = appExclusionSummary(
         preferences.privatePackages,
         preferences.excludedFromTrackingPackages
@@ -147,13 +160,35 @@ fun GeneralSettings(
 
         Spacer(modifier = Modifier.height(4.dp))
         SettingsActionItem(
-            title = "Bypass Restrictions",
-            summary = if (preferences.whitelistedPackages.isEmpty()) "No apps can skip schedules, shields, or goals"
-                      else "${preferences.whitelistedPackages.size} apps skip schedules, shields & goals (still tracked)",
-            onClick = { onShowWhitelistSheetChange(true) },
-            icon = Icons.Outlined.VerifiedUser,
+            title = "Blocking Mode",
+            summary = if (isBlacklist) "Blacklist: only the apps you pick can be blocked"
+                      else "Whitelist: apps you pick skip schedules, shields, goals & Pomodoro",
+            onClick = { showBlockingModeSheet = true },
+            icon = Icons.Outlined.SwapVert,
             shape = RoundedCornerShape(8.dp)
         )
+
+        Spacer(modifier = Modifier.height(4.dp))
+        AnimatedContent(
+            targetState = isBlacklist,
+            transitionSpec = {
+                (fadeIn(animationSpec = tween(220)) + slideInVertically { height -> height / 3 })
+                    .togetherWith(fadeOut(animationSpec = tween(180)) + slideOutVertically { height -> -height / 3 })
+            },
+            label = "blocking_mode_card_anim"
+        ) { blacklisted ->
+            SettingsActionItem(
+                title = if (blacklisted) "Blocked Apps" else "Bypass Restrictions",
+                summary = if (blacklisted) {
+                    if (preferences.blacklistedPackages.isEmpty()) "Nothing is blocked: pick the apps to block"
+                    else "${preferences.blacklistedPackages.size} apps are the only ones that can be blocked (everything else is allowed)"
+                } else if (preferences.whitelistedPackages.isEmpty()) "No apps can skip schedules, shields, or goals"
+                else "${preferences.whitelistedPackages.size} apps skip schedules, shields & goals (still tracked)",
+                onClick = { onShowWhitelistSheetChange(true) },
+                icon = if (blacklisted) Icons.Outlined.Block else Icons.Outlined.VerifiedUser,
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(4.dp))
         SettingsActionItem(
@@ -208,6 +243,166 @@ fun GeneralSettings(
                 showDayStartSheet = false
             }
         )
+    }
+
+    if (showBlockingModeSheet) {
+        BlockingModeBottomSheet(
+            initialMode = preferences.blockingMode,
+            onDismiss = { showBlockingModeSheet = false },
+            onSave = { mode: BlockingMode ->
+                onSetBlockingMode(mode)
+                showBlockingModeSheet = false
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BlockingModeBottomSheet(
+    initialMode: BlockingMode,
+    onDismiss: () -> Unit,
+    onSave: (BlockingMode) -> Unit
+) {
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
+
+    val scope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var mode by remember { mutableStateOf(initialMode) }
+
+    val scrollState = rememberScrollState()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = screenHeight * 0.9f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 100.dp)
+            ) {
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Blocking Mode",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Choose which apps Zenith is allowed to interrupt",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                ZenithGroupedButton(size = ZenithButtonSize.Medium) {
+                    val isWhitelist = mode == BlockingMode.WHITELIST
+                    ZenithButtonWeighted(
+                        onClick = { mode = BlockingMode.WHITELIST },
+                        text = "Whitelist",
+                        type = if (isWhitelist) ZenithButtonType.Filled else ZenithButtonType.Tonal,
+                        selected = isWhitelist,
+                        size = ZenithButtonSize.Medium,
+                        isFirst = true,
+                        contentScaleEnabled = false
+                    )
+                    ZenithButtonWeighted(
+                        onClick = { mode = BlockingMode.BLACKLIST },
+                        text = "Blacklist",
+                        type = if (mode == BlockingMode.BLACKLIST) ZenithButtonType.Filled else ZenithButtonType.Tonal,
+                        selected = mode == BlockingMode.BLACKLIST,
+                        size = ZenithButtonSize.Medium,
+                        isLast = true,
+                        contentScaleEnabled = false
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                AnimatedContent(
+                    targetState = mode,
+                    transitionSpec = {
+                        val direction = if (targetState == BlockingMode.BLACKLIST) 1 else -1
+                        (slideInHorizontally(animationSpec = tween(220)) { width -> direction * width / 3 } + fadeIn(tween(220)))
+                            .togetherWith(slideOutHorizontally(animationSpec = tween(180)) { width -> -direction * width / 3 } + fadeOut(tween(180)))
+                    },
+                    label = "blocking_mode_sheet_content_anim"
+                ) { currentMode ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow
+                    ) {
+                        Column(modifier = Modifier.padding(20.dp)) {
+                            Text(
+                                text = if (currentMode == BlockingMode.BLACKLIST) "Blacklist" else "Whitelist",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = if (currentMode == BlockingMode.BLACKLIST)
+                                    "Nothing is blocked by default. Only the apps you add as blocked can be interrupted by shields, goals, schedules, Pomodoro, the Mindful Gateway, and Bedtime. A blocked app without a shield gets a mindful pause before it opens. Everything else stays allowed."
+                                else
+                                    "Everything is blocked by default. The apps you allow skip schedules, shields, goals, Pomodoro, and Bedtime, so you only list the apps you need during the day.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = if (currentMode == BlockingMode.BLACKLIST)
+                                    "Apps that already have a shield, a goal, or a BLOCK schedule keep working after you switch."
+                                else
+                                    "Allowed apps are still tracked in your stats.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, MaterialTheme.colorScheme.surface),
+                            startY = 0f,
+                            endY = 40f
+                        )
+                    )
+                    .padding(16.dp)
+                    .navigationBarsPadding()
+            ) {
+                ZenithButton(
+                    onClick = {
+                        scope.launch {
+                            sheetState.hide()
+                            onSave(mode)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    text = "Save Mode"
+                )
+            }
+        }
     }
 }
 

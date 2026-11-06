@@ -311,6 +311,8 @@ class AppUsageMonitorService : Service() {
                         SharedMonitoringState.performanceConfig = initCfg
                         com.etrisad.zenith.util.ScreenUsageHelper.updateCacheDuration(initCfg.usageStatsCacheMs)
                         SharedMonitoringState.whitelistedPackages = prefs.whitelistedPackages
+                        SharedMonitoringState.blacklistedPackages = prefs.blacklistedPackages
+                        SharedMonitoringState.blockingMode = prefs.blockingMode
                         SharedMonitoringState.bedtimeWhitelistedPackages = prefs.bedtimeWhitelistedPackages
                         val gpStart = prefs.gracePeriodStartTime.split(":")
                         val gpEnd = prefs.gracePeriodEndTime.split(":")
@@ -920,6 +922,8 @@ class AppUsageMonitorService : Service() {
                 SharedMonitoringState.performanceConfig = cfg
                 com.etrisad.zenith.util.ScreenUsageHelper.updateCacheDuration(cfg.usageStatsCacheMs)
                 SharedMonitoringState.whitelistedPackages = preferences.whitelistedPackages
+                SharedMonitoringState.blacklistedPackages = preferences.blacklistedPackages
+                SharedMonitoringState.blockingMode = preferences.blockingMode
                 SharedMonitoringState.bedtimeWhitelistedPackages = preferences.bedtimeWhitelistedPackages
                 SharedMonitoringState.excludedFromTrackingPackages = preferences.excludedFromTrackingPackages
                 val privateAppsChanged = SharedMonitoringState.privatePackages != preferences.privatePackages
@@ -1510,7 +1514,12 @@ class AppUsageMonitorService : Service() {
             if (allowedUntilVal == null || currentTime > allowedUntilVal) {
                 val sh = currentShieldCache
                 val prefs = SharedMonitoringState.currentPreferences
-                if (sh != null || (prefs?.mindfulGatewayEnabled == true && !shouldBypassBlocking(currentApp))) {
+                val gatewayApplies = SharedMonitoringState.appliesMindfulGateway(
+                    currentApp,
+                    prefs?.mindfulGatewayEnabled == true,
+                    shouldBypassBlocking(currentApp)
+                )
+                if (sh != null || gatewayApplies) {
                     if (sh != null && sh.isAutoQuitEnabled && allowedUntilVal != null && allowedUntilVal > 0) {
                         if (!earlyKickManager.wasKicked(currentApp)) {
                             earlyKickManager.markKicked(currentApp)
@@ -1661,7 +1670,12 @@ class AppUsageMonitorService : Service() {
 
             if (!isAppPaused && (allowedUntil == null || currentTime > allowedUntil)) {
                 val prefs = SharedMonitoringState.currentPreferences
-                if (shield != null || isBrowserWithDomain || (prefs?.mindfulGatewayEnabled == true && !shouldBypassBlocking(currentApp))) {
+                val gatewayApplies = SharedMonitoringState.appliesMindfulGateway(
+                    currentApp,
+                    prefs?.mindfulGatewayEnabled == true,
+                    shouldBypassBlocking(currentApp)
+                )
+                if (shield != null || isBrowserWithDomain || gatewayApplies) {
                     checkIfAppIsShielded(currentApp)
                 }
             }
@@ -1954,10 +1968,14 @@ class AppUsageMonitorService : Service() {
     private var lastKickTime = 0L
 
     private suspend fun checkIfAppIsShielded(targetPackageName: String) {
-        if (targetPackageName in SharedMonitoringState.whitelistedPackages) return
-
         val websiteDomain = WebsiteStateHolder.currentWebsiteDomain.value
         val isWebsite = WebsiteRepository.isKnownBrowser(targetPackageName) && websiteDomain != null
+
+        if (SharedMonitoringState.isBlockingExempt(targetPackageName)) {
+            val websiteIsTargeted = SharedMonitoringState.isBlacklistMode && isWebsite && websiteDomain != null &&
+                !SharedMonitoringState.isBlockingExempt("zenith-web:$websiteDomain")
+            if (!websiteIsTargeted) return
+        }
         if (!isWebsite) {
             val allowedUntil = allowedApps[targetPackageName] ?: 0L
             if (System.currentTimeMillis() < allowedUntil) return
@@ -2009,7 +2027,11 @@ class AppUsageMonitorService : Service() {
         if (System.currentTimeMillis() < activeAllowedUntil) return
 
         val prefs = SharedMonitoringState.currentPreferences ?: return
-        val isMindfulGateway = shield == null && prefs.mindfulGatewayEnabled && !shouldBypassBlocking(actualTargetPackage)
+        val isMindfulGateway = shield == null && SharedMonitoringState.appliesMindfulGateway(
+            actualTargetPackage,
+            prefs.mindfulGatewayEnabled,
+            shouldBypassBlocking(actualTargetPackage)
+        )
         val appName = shield?.appName ?: overlayActionHandler.getAppName(actualTargetPackage)
         val effectiveShield = if (isMindfulGateway) overlayActionHandler.getMindfulShield(actualTargetPackage, appName) else shield
 

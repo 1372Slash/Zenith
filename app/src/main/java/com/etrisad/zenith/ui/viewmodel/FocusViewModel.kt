@@ -14,6 +14,7 @@ import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.model.IncentiveTier
+import com.etrisad.zenith.data.preferences.BlockingMode
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.data.repository.ShieldRepository
 import com.etrisad.zenith.data.local.database.DbLogBuffer
@@ -113,7 +114,7 @@ class FocusViewModel(
                 }
         }
         viewModelScope.launch {
-            var lastWhitelist: Set<String>? = null
+            var lastPickerFilter: Pair<BlockingMode, Set<String>>? = null
             preferencesRepository.userPreferencesFlow
                 .flowOn(Dispatchers.Default)
                 .collect { prefs ->
@@ -122,8 +123,9 @@ class FocusViewModel(
                         incentiveLockEnabled = prefs.incentiveLockEnabled,
                         incentiveLockGoalsMetToday = prefs.incentiveLockGoalsMetToday
                     ) }
-                    if (lastWhitelist == null || lastWhitelist != prefs.whitelistedPackages) {
-                        lastWhitelist = prefs.whitelistedPackages
+                    val pickerFilter = prefs.blockingMode to prefs.whitelistedPackages
+                    if (lastPickerFilter != pickerFilter) {
+                        lastPickerFilter = pickerFilter
                         loadInstalledApps()
                     }
                 }
@@ -265,8 +267,9 @@ class FocusViewModel(
                         emptyList()
                     }
 
-                    val whitelist = try {
-                        preferencesRepository.userPreferencesFlow.first().whitelistedPackages
+                    val exemptFromPicking = try {
+                        val prefs = preferencesRepository.userPreferencesFlow.first()
+                        if (prefs.blockingMode == BlockingMode.BLACKLIST) emptySet() else prefs.whitelistedPackages
                     } catch (e: Exception) {
                         emptySet()
                     }
@@ -289,7 +292,7 @@ class FocusViewModel(
                                     pkg.contains("overlay") ||
                                     pkg.contains("documentsui")
                             val isCoreSystemApp = isSystemFlag && (!hasLauncher || isCoreComponent)
-                            pkg !in whitelist && !isCoreSystemApp
+                            pkg !in exemptFromPicking && !isCoreSystemApp
                         }
                         .filter { it.packageName != context.packageName }
                         .map {

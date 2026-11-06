@@ -254,6 +254,10 @@ enum class ForegroundNotificationStatusMode {
     DAILY_USAGE, ACTIVE_FOCUS, DEFAULT
 }
 
+enum class BlockingMode {
+    WHITELIST, BLACKLIST
+}
+
 class UserPreferencesRepository(private val context: Context) {
 
     private object PreferencesKeys {
@@ -269,6 +273,8 @@ class UserPreferencesRepository(private val context: Context) {
         val SESSION_USAGE_OVERLAY_SIZE = intPreferencesKey("session_usage_overlay_size")
         val SESSION_USAGE_OVERLAY_OPACITY = intPreferencesKey("session_usage_overlay_opacity")
         val WHITELISTED_PACKAGES = stringPreferencesKey("whitelisted_packages")
+        val BLACKLISTED_PACKAGES = stringPreferencesKey("blacklisted_packages")
+        val BLOCKING_MODE = stringPreferencesKey("blocking_mode")
         val AUTO_BACKUP_ENABLED = booleanPreferencesKey("auto_backup_enabled")
         val BACKUP_DIRECTORY_URI = stringPreferencesKey("backup_directory_uri")
         val BACKUP_INTERVAL_HOURS = intPreferencesKey("backup_interval_hours")
@@ -528,6 +534,10 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
             sessionUsageOverlaySize = settings[PreferencesKeys.SESSION_USAGE_OVERLAY_SIZE] ?: 100,
             sessionUsageOverlayOpacity = settings[PreferencesKeys.SESSION_USAGE_OVERLAY_OPACITY] ?: 90,
             whitelistedPackages = settings[PreferencesKeys.WHITELISTED_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
+            blacklistedPackages = settings[PreferencesKeys.BLACKLISTED_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
+            blockingMode = settings[PreferencesKeys.BLOCKING_MODE]
+                ?.let { runCatching { BlockingMode.valueOf(it) }.getOrNull() }
+                ?: BlockingMode.WHITELIST,
             excludedFromTrackingPackages = settings[PreferencesKeys.EXCLUDED_FROM_TRACKING_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
             privatePackages = settings[PreferencesKeys.PRIVATE_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
             accessibilityLimitedMode = settings[PreferencesKeys.ACCESSIBILITY_LIMITED_MODE] ?: false,
@@ -1218,6 +1228,14 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 
     suspend fun setWhitelistedPackages(packages: Set<String>) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.WHITELISTED_PACKAGES] = packages.joinToString(",") }
+    }
+
+    suspend fun setBlacklistedPackages(packages: Set<String>) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.BLACKLISTED_PACKAGES] = packages.joinToString(",") }
+    }
+
+    suspend fun setBlockingMode(mode: BlockingMode) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.BLOCKING_MODE] = mode.name }
     }
 
     suspend fun setAppExclusions(privatePackages: Set<String>, usageOnlyPackages: Set<String>) {
@@ -2476,6 +2494,8 @@ data class UserPreferences(
     val sessionUsageOverlaySize: Int = 100,
     val sessionUsageOverlayOpacity: Int = 90,
     val whitelistedPackages: Set<String> = emptySet(),
+    val blacklistedPackages: Set<String> = emptySet(),
+    val blockingMode: BlockingMode = BlockingMode.WHITELIST,
     val excludedFromTrackingPackages: Set<String> = emptySet(),
     val privatePackages: Set<String> = emptySet(),
     val accessibilityLimitedMode: Boolean = false,

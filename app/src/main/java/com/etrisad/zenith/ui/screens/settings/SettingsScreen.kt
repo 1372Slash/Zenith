@@ -23,6 +23,7 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.etrisad.zenith.BuildConfig
 import com.etrisad.zenith.ZenithApplication
 import com.etrisad.zenith.data.manager.GitHubUpdateManager
+import com.etrisad.zenith.data.preferences.BlockingMode
 import com.etrisad.zenith.data.preferences.PerformanceConfig
 import com.etrisad.zenith.data.preferences.ThemeConfig
 import com.etrisad.zenith.data.preferences.UserPreferences
@@ -206,6 +207,7 @@ fun SettingsScreen(
                     onSetEmergencyRecharge = { mins -> coroutineScope.launch { preferencesRepository.setEmergencyRechargeDuration(mins) } },
                     onSetDelayAppDuration = { secs -> coroutineScope.launch { preferencesRepository.setDelayAppDuration(secs) } },
                     onSetDayStartTime = { hour, minute -> coroutineScope.launch { preferencesRepository.setDayStartTime(hour, minute) } },
+                    onSetBlockingMode = { mode -> coroutineScope.launch { preferencesRepository.setBlockingMode(mode) } },
                     onShowWhitelistSheetChange = { showWhitelistSheet = it },
                     onShowAppExclusionsSheetChange = { showAppExclusionsSheet = it },
                     onOpenPermissions = onOpenPermissions,
@@ -366,12 +368,18 @@ fun SettingsScreen(
     }
 
     if (showWhitelistSheet) {
+        val isBlacklist = preferences.blockingMode == BlockingMode.BLACKLIST
         WhitelistBottomSheet(
-            initialWhitelisted = preferences.whitelistedPackages,
+            initialWhitelisted = if (isBlacklist) preferences.blacklistedPackages else preferences.whitelistedPackages,
+            title = if (isBlacklist) "Blocked Apps" else "Bypass Restrictions",
+            subtitle = if (isBlacklist) "Only these apps can be interrupted by shields, goals, schedules, Pomodoro and the Mindful Gateway. Everything else stays allowed."
+                       else "Still tracked in stats, but skips schedules, shields, and goals.",
+            autoSelectSystemApps = !isBlacklist,
             onDismiss = { showWhitelistSheet = false },
             onSave = { packages ->
                 coroutineScope.launch {
-                    preferencesRepository.setWhitelistedPackages(packages)
+                    if (isBlacklist) preferencesRepository.setBlacklistedPackages(packages)
+                    else preferencesRepository.setWhitelistedPackages(packages)
                 }
                 showWhitelistSheet = false
             }

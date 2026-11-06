@@ -49,6 +49,7 @@ import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.etrisad.zenith.data.local.entity.FocusType
+import com.etrisad.zenith.data.preferences.BlockingMode
 import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.components.UsageHistoryCard
@@ -635,7 +636,8 @@ fun BedtimeScreen(
     if (showAppPicker) {
         AllowedBedAppsBottomSheet(
             initialWhitelisted = preferences.bedtimeWhitelistedPackages,
-            generalWhitelisted = preferences.whitelistedPackages,
+            generalWhitelisted = if (preferences.blockingMode == BlockingMode.BLACKLIST) emptySet()
+                                 else preferences.whitelistedPackages,
             onDismiss = { showAppPicker = false },
             onSave = {
                 viewModel.setBedtimeWhitelistedPackages(it)

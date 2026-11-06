@@ -97,7 +97,8 @@ fun PrivacyInfoBottomSheet(
                     "Private: fully ignored; stored data is purged.",
                     "Hidden: still monitored, but excluded from usage totals, history, and streaks.",
                     "Bypass Restrictions: still tracked, but skips schedules, shields, and goals.",
-                    "In short: Private & Hidden Apps control privacy and stats; Bypass Restrictions controls blocking."
+                    "Blocking Mode flips that list: Whitelist exempts the apps you allow, Blacklist instead blocks only the apps you pick.",
+                    "In short: Private & Hidden Apps control privacy and stats; Blocking Mode and Bypass Restrictions control blocking."
                 )
             )
         )

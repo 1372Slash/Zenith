@@ -556,6 +556,7 @@ object FeatureInfoRegistry {
             FeatureInfoSections.tips(
                 "Prefer Private for banking, authenticator, health, or messaging apps; use Hidden when you only want to hide screen time without disabling monitoring.",
                 "Bypass Restrictions only skip schedules, shields, and goals; those apps are still tracked. Use Private & Hidden Apps when you want an app ignored or hidden from stats.",
+                "Blocking Mode can flip the list: Whitelist exempts the apps you allow, while Blacklist leaves everything allowed except the apps you pick to block.",
                 "Turn off Store Notification Contents if you want interception without keeping message text.",
                 "Android Auto Backup excludes the usage/notification database, but local backups you create from Data Management include it, so store them privately."
             )

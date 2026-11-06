@@ -70,7 +70,7 @@ class ZenithNotificationListener : NotificationListenerService() {
                 val pkg = sbn.packageName
                 val isAllowed = pkg in SharedMonitoringState.pomodoroAllowedPackages ||
                     pkg in SharedMonitoringState.CRITICAL_SYSTEM_PACKAGES ||
-                    pkg in SharedMonitoringState.whitelistedPackages
+                    SharedMonitoringState.isBlockingExempt(pkg)
                 if (!isAllowed) {
                     cancelNotification(sbn.key)
                     val storeContent = SharedMonitoringState.storeInterceptedNotificationContent

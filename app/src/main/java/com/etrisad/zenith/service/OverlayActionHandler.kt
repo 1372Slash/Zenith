@@ -861,13 +861,14 @@ class OverlayActionHandler(
 
         if (SharedMonitoringState.isPomodoroActive) {
             if (packageName in SharedMonitoringState.CRITICAL_SYSTEM_PACKAGES) return true
-            if (packageName in SharedMonitoringState.whitelistedPackages) return true
+            if (SharedMonitoringState.isBlockingExempt(packageName)) return true
             if (isKeyboardApp(packageName)) return true
             if (SharedMonitoringState.launcherPackages.contains(packageName) ||
                 SharedMonitoringState.defaultLauncherPackage == packageName ||
                 packageName.contains("launcher", ignoreCase = true) ||
                 packageName.contains("home", ignoreCase = true)) return true
             if (packageName in SharedMonitoringState.restrictedPackages) return false
+            if (SharedMonitoringState.isBlacklistMode) return false
             if (SharedMonitoringState.isPomodoroPaused) {
                 if (packageName in SharedMonitoringState.pomodoroAllowedPackages) return true
                 val isSystem = SharedMonitoringState.systemAppCache.getOrPut(packageName) {
@@ -901,7 +902,7 @@ class OverlayActionHandler(
         val prefs = SharedMonitoringState.currentPreferences
         val isBedtimeOrWindDown = SharedMonitoringState.isBedtimeActive || (SharedMonitoringState.isWindDownActive && prefs?.bedtimeWindDownEnabled == true)
 
-        if (packageName in SharedMonitoringState.whitelistedPackages) return true
+        if (SharedMonitoringState.isBlockingExempt(packageName)) return true
         if (isKeyboardApp(packageName)) return true
 
         if (packageName in SharedMonitoringState.CRITICAL_SYSTEM_PACKAGES) return true
@@ -912,6 +913,8 @@ class OverlayActionHandler(
             packageName.contains("home", ignoreCase = true)) return true
 
         if (packageName in SharedMonitoringState.restrictedPackages) return false
+
+        if (SharedMonitoringState.isBlacklistMode) return false
 
         val isSystem = SharedMonitoringState.systemAppCache.getOrPut(packageName) {
             try {

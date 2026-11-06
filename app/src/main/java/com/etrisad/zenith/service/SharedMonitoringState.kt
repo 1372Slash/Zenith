@@ -2,6 +2,7 @@ package com.etrisad.zenith.service
 
 import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.local.entity.ShieldEntity
+import com.etrisad.zenith.data.preferences.BlockingMode
 import com.etrisad.zenith.data.preferences.PerformanceConfig
 import com.etrisad.zenith.data.preferences.PerformanceLevel
 import com.etrisad.zenith.data.preferences.UserPreferences
@@ -24,6 +25,8 @@ object SharedMonitoringState {
     @Volatile var parsedSchedulesCache = listOf<ParsedSchedule>()
     @Volatile var currentPreferences: UserPreferences? = null
     @Volatile var whitelistedPackages = emptySet<String>()
+    @Volatile var blacklistedPackages = emptySet<String>()
+    @Volatile var blockingMode = BlockingMode.WHITELIST
     @Volatile var bedtimeWhitelistedPackages = emptySet<String>()
     @Volatile var excludedFromTrackingPackages = emptySet<String>()
     @Volatile var privatePackages = emptySet<String>()
@@ -32,6 +35,7 @@ object SharedMonitoringState {
     @Volatile var notificationExcludedPackages = emptySet<String>()
     @Volatile var storeInterceptedNotificationContent = false
     @Volatile var restrictedPackages = emptySet<String>()
+    @Volatile var targetedPackages = emptySet<String>()
     @Volatile var hasGlobalAllowSchedule = false
     @Volatile var launcherAppsCache = emptySet<String>()
     @Volatile var launcherPackages = emptySet<String>()
@@ -131,6 +135,20 @@ object SharedMonitoringState {
         packageName in FINANCIAL_APPS
     fun isPrivatePackage(packageName: String): Boolean =
         packageName.isNotEmpty() && packageName in privatePackages
+
+    val isBlacklistMode: Boolean
+        get() = blockingMode == BlockingMode.BLACKLIST
+
+    fun isBlacklisted(packageName: String): Boolean =
+        isBlacklistMode && packageName.isNotEmpty() && packageName in blacklistedPackages
+
+    fun isBlockingExempt(packageName: String): Boolean = when (blockingMode) {
+        BlockingMode.WHITELIST -> packageName in whitelistedPackages
+        BlockingMode.BLACKLIST -> packageName !in blacklistedPackages && packageName !in targetedPackages
+    }
+
+    fun appliesMindfulGateway(packageName: String, gatewayEnabled: Boolean, bypassed: Boolean): Boolean =
+        if (isBlacklistMode) isBlacklisted(packageName) else gatewayEnabled && !bypassed
     fun isNotificationExcluded(packageName: String): Boolean =
         packageName.isNotEmpty() &&
             (packageName in privatePackages || packageName in notificationExcludedPackages)
@@ -140,6 +158,7 @@ object SharedMonitoringState {
         val schedulePkgs = activeSchedules.asSequence().filter { it.mode == ScheduleMode.BLOCK }
             .flatMap { it.packageNames }.toSet()
         hasGlobalAllowSchedule = activeSchedules.any { it.mode == ScheduleMode.ALLOW }
-        restrictedPackages = (shieldPkgs + schedulePkgs + BLOCKABLE_SYSTEM_APPS) - privatePackages
+        targetedPackages = (shieldPkgs + schedulePkgs) - privatePackages
+        restrictedPackages = (targetedPackages + BLOCKABLE_SYSTEM_APPS) - privatePackages
     }
 }

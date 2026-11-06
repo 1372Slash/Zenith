@@ -54,7 +54,8 @@ fun WhitelistBottomSheet(
     title: String = "Bypass Restrictions",
     subtitle: String = "Still tracked in stats, but skips schedules, shields, and goals.",
     allowedPackages: Set<String>? = null,
-    priorityPackages: Set<String> = emptySet()
+    priorityPackages: Set<String> = emptySet(),
+    autoSelectSystemApps: Boolean = true
 ) {
     val context = LocalContext.current
     val pm = context.packageManager
@@ -120,7 +121,7 @@ fun WhitelistBottomSheet(
             apps = mappedApps
 
             if (initialWhitelisted.isEmpty()) {
-                selectedApps = if (allowedPackages != null) {
+                selectedApps = if (allowedPackages != null || !autoSelectSystemApps) {
                     emptySet()
                 } else {
                     mappedApps.asSequence().filter { it.isSystemApp }.map { it.packageName }.toSet()

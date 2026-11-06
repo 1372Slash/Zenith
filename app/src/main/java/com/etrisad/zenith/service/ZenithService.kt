@@ -133,6 +133,8 @@ class ZenithService : AccessibilityService() {
                 SharedMonitoringState.performanceConfig = initCfg
                 com.etrisad.zenith.util.ScreenUsageHelper.updateCacheDuration(initCfg.usageStatsCacheMs)
                 SharedMonitoringState.whitelistedPackages = prefs.whitelistedPackages
+                SharedMonitoringState.blacklistedPackages = prefs.blacklistedPackages
+                SharedMonitoringState.blockingMode = prefs.blockingMode
                 SharedMonitoringState.bedtimeWhitelistedPackages = prefs.bedtimeWhitelistedPackages
 
                 shieldRepository.isShieldsLoaded.first { it }
@@ -281,6 +283,8 @@ class ZenithService : AccessibilityService() {
                 SharedMonitoringState.performanceConfig = cfg
                 com.etrisad.zenith.util.ScreenUsageHelper.updateCacheDuration(cfg.usageStatsCacheMs)
                 SharedMonitoringState.whitelistedPackages = preferences.whitelistedPackages
+                SharedMonitoringState.blacklistedPackages = preferences.blacklistedPackages
+                SharedMonitoringState.blockingMode = preferences.blockingMode
                 SharedMonitoringState.bedtimeWhitelistedPackages = preferences.bedtimeWhitelistedPackages
                 SharedMonitoringState.excludedFromTrackingPackages = preferences.excludedFromTrackingPackages
                 val privateAppsChanged = SharedMonitoringState.privatePackages != preferences.privatePackages
@@ -1152,7 +1156,12 @@ class ZenithService : AccessibilityService() {
                         isScheduled = checkSchedules("zenith-web:$websiteDomain")
                     }
                     val prefs = SharedMonitoringState.currentPreferences ?: return
-                    if (!isScheduled && (shield != null || isBrowserWithDomain || (prefs.mindfulGatewayEnabled && !shouldBypassBlocking(currentApp))) && currentTime > allowedUntil) {
+                    val gatewayApplies = SharedMonitoringState.appliesMindfulGateway(
+                        currentApp,
+                        prefs.mindfulGatewayEnabled,
+                        shouldBypassBlocking(currentApp)
+                    )
+                    if (!isScheduled && (shield != null || isBrowserWithDomain || gatewayApplies) && currentTime > allowedUntil) {
                         checkIfAppIsShielded(currentApp)
                     }
                 }
@@ -1264,7 +1273,8 @@ class ZenithService : AccessibilityService() {
         if (isOverlayCheckInProgress) return
         isOverlayCheckInProgress = true
         try {
-            if (targetPackageName in SharedMonitoringState.whitelistedPackages) return
+            val exemptFromBlocking = SharedMonitoringState.isBlockingExempt(targetPackageName)
+            if (exemptFromBlocking && !SharedMonitoringState.isBlacklistMode) return
 
             val isBrowser = WebsiteRepository.isKnownBrowser(targetPackageName)
             var websiteDomain: String? = WebsiteStateHolder.currentWebsiteDomain.value
@@ -1277,6 +1287,12 @@ class ZenithService : AccessibilityService() {
                     }
                     delay(150L * i)
                 }
+            }
+
+            if (exemptFromBlocking) {
+                val websiteIsTargeted = isBrowser && websiteDomain != null &&
+                    !SharedMonitoringState.isBlockingExempt("zenith-web:$websiteDomain")
+                if (!websiteIsTargeted) return
             }
 
             if (targetPackageName != lastForegroundApp) {
@@ -1333,7 +1349,11 @@ class ZenithService : AccessibilityService() {
             if (System.currentTimeMillis() < activeAllowedUntil) return
 
             val prefs = SharedMonitoringState.currentPreferences ?: return
-            val isMindfulGateway = shield == null && prefs.mindfulGatewayEnabled && !shouldBypassBlocking(actualTargetPackage)
+            val isMindfulGateway = shield == null && SharedMonitoringState.appliesMindfulGateway(
+                actualTargetPackage,
+                prefs.mindfulGatewayEnabled,
+                shouldBypassBlocking(actualTargetPackage)
+            )
             val appName = shield?.appName ?: overlayActionHandler.getAppName(actualTargetPackage)
             val effectiveShield = if (isMindfulGateway) overlayActionHandler.getMindfulShield(actualTargetPackage, appName) else shield
 
