@@ -1233,7 +1233,7 @@ fun buildAchievementDefs(): List<AchievementDef> = listOf(
         )
     ),
     AchievementDef(
-        id = "midnight_oil", title = "Midnight Oil",
+        id = "midnight_owl", title = "Midnight Owl",
         desc = "Active after midnight (00:00-04:00)", icon = Icons.Outlined.DarkMode,
         category = AchievementCategory.EXPLORER,
         thresholds = listOf(TierThreshold(ProfileTier.I, 1, "Spotted once"))
@@ -1407,7 +1407,7 @@ private val JOURNEY_ORDER = listOf(
     "pomo_first", "preset_saver", "schedule_keeper",
     "hot_streak", "streak_keeper", "streak_roller", "under_budget", "overachiever",
     "time_saver", "night_guardian", "night_owl_lite", "early_bird",
-    "midnight_oil", "sunrise_club",
+    "midnight_owl", "sunrise_club",
     "historian", "loyal_tracker", "app_atlas", "fortress_builder", "goal_getter",
     "weekend_warrior", "web_surf",
     "theme_stylist", "theme_explorer", "font_explorer", "contrast_seeker",
@@ -1482,7 +1482,7 @@ fun buildAchievementStates(stats: ProfileAchievementStats): List<AchievementStat
         "profile_polisher" to stats.profileFields.toLong(),
         "streak_roller" to stats.sevenDayStreak.toLong(),
         "overachiever" to stats.overdrawDays.toLong(),
-        "midnight_oil" to if (stats.nightNights > 0) 1L else 0L,
+        "midnight_owl" to if (stats.nightNights > 0) 1L else 0L,
         "sunrise_club" to if (stats.earlyMornings > 0) 1L else 0L,
         "web_surf" to if (stats.webTotalMillis > 0L) 1L else 0L,
         "palette_painter" to if (stats.hasCustomOverlay) 1L else 0L,
