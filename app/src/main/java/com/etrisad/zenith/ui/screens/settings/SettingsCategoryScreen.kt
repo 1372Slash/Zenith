@@ -26,6 +26,7 @@ import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.preferences.PerformanceLevel
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.ui.components.CategorySettingsBottomSheet
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.data.remote.model.GitHubRelease
@@ -76,6 +77,7 @@ fun SettingsCategoryScreen(
     var showRestoreSheet by remember { mutableStateOf(false) }
     var showDbLogSheet by remember { mutableStateOf(false) }
     var showOverlayLogSheet by remember { mutableStateOf(false) }
+    var showCategorySettingsSheet by remember { mutableStateOf(false) }
     var latestRelease by remember { mutableStateOf<GitHubRelease?>(null) }
     var backupMetadata by remember { mutableStateOf<BackupUtils.BackupMetadata?>(null) }
     var pendingRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
@@ -288,6 +290,8 @@ fun SettingsCategoryScreen(
                         onNavigateToPausePoint = { navController.navigate(Screen.PausePoint.route) },
                         onNavigateToReelsShield = { navController.navigate(Screen.ReelsShield.route) },
                         onNavigateToRedirectShield = { navController.navigate(Screen.RedirectShield.route) },
+                        onNavigateToAppCategories = { navController.navigate(Screen.AppCategories.route) },
+                        onEditCategories = { showCategorySettingsSheet = true },
                         goalCount = goalCount
                     )
                     "appearance" -> AppearanceSettings(
@@ -626,6 +630,16 @@ fun SettingsCategoryScreen(
         }
         if (showOverlayLogSheet) {
             OverlayLogBottomSheet(onDismiss = { showOverlayLogSheet = false })
+        }
+        if (showCategorySettingsSheet) {
+            CategorySettingsBottomSheet(
+                existingCategory = null,
+                onDismiss = { showCategorySettingsSheet = false },
+                onSave = { name, description, iconKey, colorArgb ->
+                    showCategorySettingsSheet = false
+                },
+                onDelete = null
+            )
         }
     }
 }

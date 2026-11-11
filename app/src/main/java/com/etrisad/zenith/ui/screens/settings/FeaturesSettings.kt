@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
+import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -90,6 +91,8 @@ fun FeaturesSettings(
     ) -> Unit,
     onNavigateToReelsShield: () -> Unit = {},
     onNavigateToRedirectShield: () -> Unit = {},
+    onNavigateToAppCategories: () -> Unit = {},
+    onEditCategories: () -> Unit = {},
     goalCount: Int
 ) {
     val context = LocalContext.current
@@ -528,6 +531,21 @@ fun FeaturesSettings(
             onClick = { showKeywordsSheet = true },
             icon = Icons.Outlined.Description,
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        PreferenceCategory(title = "Usage Tracking")
+
+        SettingsActionItem(
+            title = "App Categories",
+            summary = if (preferences.appCategories.isEmpty()) {
+                "Built-in suggestions for common apps — or create your own categories"
+            } else {
+                "${preferences.appCategories.size} manual ${if (preferences.appCategories.size == 1) "override" else "overrides"} · suggestions applied automatically"
+            },
+            onClick = onNavigateToAppCategories,
+            icon = Icons.AutoMirrored.Outlined.Label,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
         )
     }
 }
