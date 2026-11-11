@@ -408,6 +408,10 @@ class ShieldRepository(
         return websiteUsageDao.getUsageForDateSnapshot(date)
     }
 
+    suspend fun getWebsiteDomains(): List<String> {
+        return websiteUsageDao.getAllDomains()
+    }
+
     suspend fun getWebsiteTotalUsageSince(domain: String, sinceDate: String): Long {
         return websiteUsageDao.getTotalUsageSince(domain, sinceDate) ?: 0L
     }
