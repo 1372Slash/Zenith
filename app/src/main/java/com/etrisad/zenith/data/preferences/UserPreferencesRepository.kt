@@ -20,6 +20,7 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.LimitPeriod
 import com.etrisad.zenith.data.model.AlarmItem
+import com.etrisad.zenith.data.model.AppCategory
 import com.etrisad.zenith.ui.components.pausepoint.PausePointConfig
 import com.etrisad.zenith.ui.components.pausepoint.PausePointDefaults
 import com.etrisad.zenith.ui.components.pausepoint.PausePointTaskType
@@ -432,6 +433,8 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
         val DISABLE_TRACKING_END_HOUR = intPreferencesKey("disable_tracking_end_hour")
         val EXCLUDED_FROM_TRACKING_PACKAGES = stringPreferencesKey("excluded_from_tracking_packages")
         val PRIVATE_PACKAGES = stringPreferencesKey("private_packages")
+        val APP_CATEGORIES = stringPreferencesKey("app_categories")
+        val CUSTOM_CATEGORIES = stringPreferencesKey("custom_categories")
         val ACCESSIBILITY_LIMITED_MODE = booleanPreferencesKey("accessibility_limited_mode")
         val NOTIFICATION_INTERCEPTION_ENABLED = booleanPreferencesKey("notification_interception_enabled")
         val NOTIFICATION_EXCLUDED_PACKAGES = stringPreferencesKey("notification_excluded_packages")
@@ -540,6 +543,8 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
                 ?: BlockingMode.WHITELIST,
             excludedFromTrackingPackages = settings[PreferencesKeys.EXCLUDED_FROM_TRACKING_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
             privatePackages = settings[PreferencesKeys.PRIVATE_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
+            appCategories = parseAppCategories(settings[PreferencesKeys.APP_CATEGORIES]),
+            customCategories = parseCustomCategories(settings[PreferencesKeys.CUSTOM_CATEGORIES]),
             accessibilityLimitedMode = settings[PreferencesKeys.ACCESSIBILITY_LIMITED_MODE] ?: false,
             notificationInterceptionEnabled = settings[PreferencesKeys.NOTIFICATION_INTERCEPTION_ENABLED] ?: true,
             notificationExcludedPackages = settings[PreferencesKeys.NOTIFICATION_EXCLUDED_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
@@ -1242,6 +1247,69 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.PRIVATE_PACKAGES] = privatePackages.joinToString(",")
             preferences[PreferencesKeys.EXCLUDED_FROM_TRACKING_PACKAGES] = usageOnlyPackages.joinToString(",")
+        }
+    }
+
+    suspend fun setAppCategories(categories: Map<String, String>) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.APP_CATEGORIES] = categories
+                .filterValues { it != AppCategory.UNCATEGORIZED.id }
+                .entries
+                .sortedBy { it.key }
+                .joinToString(";") { "${it.key}=${it.value}" }
+        }
+    }
+
+    suspend fun setAppCategory(packageName: String, category: AppCategory) {
+        val current = userPreferencesFlow.first().appCategories
+        val updated = if (category == AppCategory.UNCATEGORIZED) {
+            current - packageName
+        } else {
+            current + (packageName to category.id)
+        }
+        setAppCategories(updated)
+    }
+
+    suspend fun addCustomCategory(label: String, description: String = "Your custom category", iconKey: String, colorArgb: Int): AppCategory {
+        val category = AppCategory(
+            id = "custom_${System.currentTimeMillis()}",
+            label = label.trim(),
+            description = description.trim().ifEmpty { "Your custom category" },
+            iconKey = iconKey,
+            colorArgb = colorArgb,
+            isCustom = true
+        )
+        context.dataStore.edit { preferences ->
+            val current = parseCustomCategories(preferences[PreferencesKeys.CUSTOM_CATEGORIES])
+            preferences[PreferencesKeys.CUSTOM_CATEGORIES] = encodeCustomCategories(current + category)
+        }
+        return category
+    }
+
+    suspend fun updateCustomCategory(categoryId: String, label: String, description: String, iconKey: String, colorArgb: Int) {
+        context.dataStore.edit { preferences ->
+            val current = parseCustomCategories(preferences[PreferencesKeys.CUSTOM_CATEGORIES])
+            val updated = current.map {
+                if (it.id == categoryId) {
+                    it.copy(label = label, description = description, iconKey = iconKey, colorArgb = colorArgb)
+                } else {
+                    it
+                }
+            }
+            preferences[PreferencesKeys.CUSTOM_CATEGORIES] = encodeCustomCategories(updated)
+        }
+    }
+
+    suspend fun deleteCustomCategory(categoryId: String) {
+        context.dataStore.edit { preferences ->
+            val current = parseCustomCategories(preferences[PreferencesKeys.CUSTOM_CATEGORIES])
+            val updated = current.filterNot { it.id == categoryId }
+            preferences[PreferencesKeys.CUSTOM_CATEGORIES] = encodeCustomCategories(updated)
+        }
+        val assignments = userPreferencesFlow.first().appCategories
+        val cleaned = assignments.filterValues { it != categoryId }
+        if (cleaned.size != assignments.size) {
+            setAppCategories(cleaned)
         }
     }
 
@@ -2481,6 +2549,57 @@ object MindfulGatewayDefaults {
     const val AUTO_QUIT_ENABLED = false
 }
 
+private fun parseAppCategories(raw: String?): Map<String, String> {
+    if (raw.isNullOrBlank()) return emptyMap()
+    return raw.split(";")
+        .mapNotNull { entry ->
+            val separator = entry.lastIndexOf('=')
+            if (separator <= 0 || separator == entry.lastIndex) return@mapNotNull null
+            val packageName = entry.substring(0, separator)
+            val categoryId = entry.substring(separator + 1)
+            if (categoryId.isBlank() || categoryId == AppCategory.UNCATEGORIZED.id) null
+            else packageName to categoryId
+        }
+        .toMap()
+}
+
+private fun parseCustomCategories(raw: String?): List<AppCategory> {
+    if (raw.isNullOrBlank()) return emptyList()
+    return raw.split(";").mapNotNull { entry ->
+        val parts = entry.split("|")
+        if (parts.size < 4) return@mapNotNull null
+        val id = parts[0]
+        val label = runCatching {
+            java.net.URLDecoder.decode(parts[1], "UTF-8")
+        }.getOrDefault(parts[1])
+        val iconKey = parts[2]
+        val colorArgb = parts[3].toLongOrNull()?.toInt()
+        val description = if (parts.size >= 5) {
+            runCatching {
+                java.net.URLDecoder.decode(parts[4], "UTF-8")
+            }.getOrDefault(parts[4])
+        } else {
+            "Your custom category"
+        }
+        if (id.isBlank() || label.isBlank() || colorArgb == null) null
+        else AppCategory(
+            id = id,
+            label = label,
+            description = description.ifEmpty { "Your custom category" },
+            iconKey = iconKey,
+            colorArgb = colorArgb,
+            isCustom = true
+        )
+    }
+}
+
+private fun encodeCustomCategories(categories: List<AppCategory>): String =
+    categories.joinToString(";") { category ->
+        val label = java.net.URLEncoder.encode(category.label, "UTF-8")
+        val description = java.net.URLEncoder.encode(category.description, "UTF-8")
+        "${category.id}|$label|${category.iconKey}|${category.colorArgb ?: 0}|$description"
+    }
+
 data class UserPreferences(
     val themeConfig: ThemeConfig = ThemeConfig.FOLLOW_SYSTEM,
     val fontOption: FontOption = FontOption.GOOGLE_SANS_FLEX,
@@ -2498,6 +2617,8 @@ data class UserPreferences(
     val blockingMode: BlockingMode = BlockingMode.WHITELIST,
     val excludedFromTrackingPackages: Set<String> = emptySet(),
     val privatePackages: Set<String> = emptySet(),
+    val appCategories: Map<String, String> = emptyMap(),
+    val customCategories: List<AppCategory> = emptyList(),
     val accessibilityLimitedMode: Boolean = false,
     val notificationInterceptionEnabled: Boolean = true,
     val notificationExcludedPackages: Set<String> = emptySet(),
