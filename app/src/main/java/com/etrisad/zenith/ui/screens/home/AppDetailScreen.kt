@@ -45,11 +45,16 @@ import androidx.graphics.shapes.toPath
 import coil.compose.SubcomposeAsyncImage
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
+import com.etrisad.zenith.data.model.AppCategory
+import com.etrisad.zenith.data.model.CategoryCatalog
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import com.etrisad.zenith.ui.components.AppCategoryCard
+import com.etrisad.zenith.ui.components.AppCategoryPickerSheet
+import com.etrisad.zenith.ui.components.CreateCategoryDialog
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.components.UsageHistoryCard
 import com.etrisad.zenith.ui.components.LongTermSection
@@ -69,12 +74,14 @@ fun AppDetailScreen(
     packageName: String,
     viewModel: HomeViewModel,
     userPreferencesRepository: com.etrisad.zenith.data.preferences.UserPreferencesRepository,
-    innerPadding: PaddingValues
+    innerPadding: PaddingValues,
+    onOpenCategoryDetails: (AppCategory) -> Unit = {}
 ) {
     val uiState by viewModel.appDetailUiState.collectAsState()
     val preferences by userPreferencesRepository.userPreferencesFlow.collectAsState(
         initial = com.etrisad.zenith.data.preferences.UserPreferences()
     )
+    val categoryCatalog = remember(preferences) { CategoryCatalog(preferences) }
     val isInLockdown = preferences.isInLockdown()
     val detailContext = LocalContext.current
     val detailHaptic = LocalHapticFeedback.current
@@ -111,6 +118,7 @@ fun AppDetailScreen(
     val formatDuration = remember(viewModel) { { millis: Long -> viewModel.formatDuration(millis) } }
 
     var selectedHour by remember { mutableStateOf<Int?>(null) }
+    var showCategorySheet by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val pullToRefreshState = rememberPullToRefreshState()
@@ -128,6 +136,37 @@ fun AppDetailScreen(
 
     val isPackageMatch = uiState.packageName == packageName
     val showLoadingIndicator = (uiState.isLoading || !isPackageMatch) && !isRefreshing
+
+    var showCreateCategoryDialog by remember { mutableStateOf(false) }
+    if (showCategorySheet) {
+        AppCategoryPickerSheet(
+            appName = uiState.appName.ifEmpty { packageName },
+            packageName = packageName,
+            selected = categoryCatalog.resolve(packageName, uiState.appName),
+            categories = categoryCatalog.categories,
+            onDismiss = { showCategorySheet = false },
+            onCreateNew = {
+                showCategorySheet = false
+                showCreateCategoryDialog = true
+            },
+            onSelect = { category ->
+                scope.launch { userPreferencesRepository.setAppCategory(packageName, category) }
+                showCategorySheet = false
+            }
+        )
+    }
+    if (showCreateCategoryDialog) {
+        CreateCategoryDialog(
+            onDismiss = { showCreateCategoryDialog = false },
+            onCreate = { name, iconKey, colorArgb ->
+                showCreateCategoryDialog = false
+                scope.launch {
+                    val category = userPreferencesRepository.addCustomCategory(name, "Your custom category", iconKey, colorArgb)
+                    userPreferencesRepository.setAppCategory(packageName, category)
+                }
+            }
+        )
+    }
 
     AnimatedContent(
         targetState = showLoadingIndicator,
@@ -228,6 +267,18 @@ fun AppDetailScreen(
                             yesterdayTime = formatDuration(uiState.yesterdayUsage),
                             percentageChange = uiState.percentageChange,
                             focusType = uiState.type
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+
+                    item {
+                        val category = categoryCatalog.resolve(packageName, uiState.appName)
+                        AppCategoryCard(
+                            category = category,
+                            isSuggested = categoryCatalog.isSuggested(packageName, uiState.appName),
+                            onClick = { showCategorySheet = true },
+                            onDetailsClick = { onOpenCategoryDetails(category) },
+                            shape = RoundedCornerShape(8.dp)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                     }

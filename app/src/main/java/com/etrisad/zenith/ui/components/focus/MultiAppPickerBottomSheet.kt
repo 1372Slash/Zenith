@@ -47,7 +47,8 @@ fun MultiAppPickerBottomSheet(
     onWebsiteToggled: ((String) -> Unit)? = null,
     showTabs: Boolean = true,
     title: String = "Select Apps for Schedule",
-    maxSelection: Int? = null
+    maxSelection: Int? = null,
+    allowEmptySelection: Boolean = false
 ) {
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
@@ -190,10 +191,10 @@ fun MultiAppPickerBottomSheet(
                 }
             }
 
-            val hasSelection = uiState.selectedAppsForSchedule.isNotEmpty()
+            val canConfirm = allowEmptySelection || uiState.selectedAppsForSchedule.isNotEmpty()
             FloatingActionButton(
                 onClick = {
-                    if (!hasSelection) return@FloatingActionButton
+                    if (!canConfirm) return@FloatingActionButton
                     scope.launch {
                         sheetState.hide()
                         onConfirm()
@@ -203,13 +204,13 @@ fun MultiAppPickerBottomSheet(
                     .align(Alignment.BottomEnd)
                     .windowInsetsPadding(WindowInsets.navigationBars)
                     .padding(24.dp),
-                containerColor = if (hasSelection) MaterialTheme.colorScheme.primary
+                containerColor = if (canConfirm) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.surfaceVariant
             ) {
                 Icon(
                     Icons.AutoMirrored.Outlined.ArrowForward,
                     contentDescription = "Next",
-                    tint = if (hasSelection) MaterialTheme.colorScheme.onPrimary
+                    tint = if (canConfirm) MaterialTheme.colorScheme.onPrimary
                         else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

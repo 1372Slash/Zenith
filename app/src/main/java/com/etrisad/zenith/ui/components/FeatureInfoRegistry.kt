@@ -15,6 +15,7 @@ object FeatureInfoRegistry {
         route == Screen.EyeCare.route -> eyeCare
         route == Screen.ReelsShield.route -> reelsShield
         route == Screen.RedirectShield.route -> redirectShield
+        route == Screen.AppCategories.route -> appCategories
         route?.startsWith("app_detail") == true -> appDetail
         route == Screen.Lockdown.route -> lockdown
         route == Screen.TamperProtection.route -> tamperProtection
@@ -667,6 +668,28 @@ object FeatureInfoRegistry {
             FeatureInfoSections.tips(
                 "Type anything in Custom to stress-test glyphs at large sizes.",
                 "Presets are a fast way to A/B different axis combinations."
+            )
+        )
+    )
+
+    private val appCategories = FeatureInfo(
+        title = "App Categories",
+        summary = "Organize your installed apps and websites into functional categories for clearer insights and streamlined blocking.",
+        sections = listOf(
+            FeatureInfoSections.whatItDoes(
+                "Categorizes apps and websites into built-in categories (Social, Productivity, Games, Entertainment, etc.) or custom user categories.",
+                "Tracks categorized vs uncategorized completion percentage with a wavy progress indicator and app/website counters.",
+                "Provides category filters and bulk or individual categorization options."
+            ),
+            FeatureInfoSections.whatYoullSee(
+                "A circular wavy progress header showing your total categorization percentage and mini pills for apps, websites, and custom categories.",
+                "A search bar to quickly find apps and websites.",
+                "Grouped lists of your custom categories, websites, and installed apps with their assigned category chips and suggested badges."
+            ),
+            FeatureInfoSections.tips(
+                "Tap any app or website row to open the category picker and assign it to a new category.",
+                "Create custom categories using the Floating Action Button (FAB) at the bottom right.",
+                "Suggested categories are automatically detected to help you categorize common apps instantly."
             )
         )
     )

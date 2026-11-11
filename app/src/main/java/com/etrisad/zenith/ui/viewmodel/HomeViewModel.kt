@@ -1806,6 +1806,19 @@ class HomeViewModel(
     fun openSettingsSheet() { _appDetailUiState.update { it.copy(isSettingsSheetOpen = true) } }
     fun closeSettingsSheet() { _appDetailUiState.update { it.copy(isSettingsSheetOpen = false) } }
 
+    data class CategoryDetailUiState(
+        val isEditSheetOpen: Boolean = false,
+        val isInfoDialogOpen: Boolean = false
+    )
+
+    private val _categoryDetailUiState = MutableStateFlow(CategoryDetailUiState())
+    val categoryDetailUiState: StateFlow<CategoryDetailUiState> = _categoryDetailUiState.asStateFlow()
+
+    fun openCategoryEditSheet() { _categoryDetailUiState.update { it.copy(isEditSheetOpen = true) } }
+    fun closeCategoryEditSheet() { _categoryDetailUiState.update { it.copy(isEditSheetOpen = false) } }
+    fun openCategoryInfoDialog() { _categoryDetailUiState.update { it.copy(isInfoDialogOpen = true) } }
+    fun closeCategoryInfoDialog() { _categoryDetailUiState.update { it.copy(isInfoDialogOpen = false) } }
+
     fun saveFocus(
         packageName: String, appName: String, timeLimitMinutes: Int, maxEmergencyUses: Int, isRemindersEnabled: Boolean,
         isStrictModeEnabled: Boolean, isAutoQuitEnabled: Boolean, isEndOverlayEnabled: Boolean = true, isPausePointEnabled: Boolean = true, maxUsesPerPeriod: Int, refreshPeriodMinutes: Int,

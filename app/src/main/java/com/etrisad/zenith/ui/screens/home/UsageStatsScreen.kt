@@ -6,6 +6,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -14,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Android
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -23,7 +26,12 @@ import androidx.compose.material.icons.outlined.MonitorWeight
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Stars
+import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
+import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.TrackChanges
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
@@ -40,9 +48,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.Shape
+import java.util.Locale
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.ui.onboarding.LocalOnboardingScroll
@@ -55,6 +65,12 @@ import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.ui.components.focus.appIconShape
 import coil.request.ImageRequest
 import com.etrisad.zenith.data.local.entity.FocusType
+import com.etrisad.zenith.data.model.AppCategory
+import com.etrisad.zenith.data.model.CategoryCatalog
+import com.etrisad.zenith.ui.components.WeekStepperIndicator
+import com.etrisad.zenith.ui.components.CategoryDonutChart
+import com.etrisad.zenith.ui.components.appCategoryColor
+import com.etrisad.zenith.ui.components.appCategoryIcon
 import com.etrisad.zenith.ui.components.SnapshotSection
 import com.etrisad.zenith.ui.components.UsageHistoryCard
 import com.etrisad.zenith.ui.components.LongTermSection
@@ -92,12 +108,25 @@ fun UsageStatsScreen(
     userPreferencesRepository: com.etrisad.zenith.data.preferences.UserPreferencesRepository,
     innerPadding: PaddingValues,
     showDatabaseIndicator: Boolean,
-    onAppClick: (String) -> Unit
+    onAppClick: (String) -> Unit,
+    onCategoryClick: (AppCategory) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val preferences by userPreferencesRepository.userPreferencesFlow.collectAsState(
         initial = com.etrisad.zenith.data.preferences.UserPreferences()
     )
+    val categoryCatalog = remember(preferences) { CategoryCatalog(preferences) }
+    val dashboardCategoryUsage = remember(
+        uiState.allAppsUsage,
+        uiState.websiteUsage,
+        categoryCatalog
+    ) {
+        (uiState.allAppsUsage + uiState.websiteUsage)
+            .filter { it.totalTimeVisible > 0 }
+            .groupBy { categoryCatalog.resolve(it.packageName, it.appName) }
+            .map { (category, apps) -> category to apps.sumOf { it.totalTimeVisible } }
+            .sortedByDescending { it.second }
+    }
     val pullToRefreshState = rememberPullToRefreshState()
     var isManualRefreshing by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -126,6 +155,7 @@ fun UsageStatsScreen(
     var highlightedCategory by remember { mutableStateOf<String?>(null) } 
     
     var isOtherAppsExpanded by rememberSaveable { mutableStateOf(false) }
+    var isMoreInsightsExpanded by rememberSaveable { mutableStateOf(false) }
     var isOtherHourAppsExpanded by rememberSaveable(selectedHour) { mutableStateOf(false) }
     var isWebsiteExpanded by rememberSaveable { mutableStateOf(false) }
     var isHourlyWebsiteExpanded by rememberSaveable(selectedHour) { mutableStateOf(false) }
@@ -331,7 +361,7 @@ fun UsageStatsScreen(
                     .onboardingAnchor("usage_stats.donut")
             ) {
                 val selectedDayTotal = uiState.totalScreenTime
-                ZenithDashboard(
+                UsageBreakdownDashboard(
                     totalTime = selectedDayTotal,
                     targetTime = uiState.targetMillis,
                     yesterdayTime = uiState.yesterdayScreenTime,
@@ -343,11 +373,15 @@ fun UsageStatsScreen(
                     activeShieldsCount = uiState.activeShields.size,
                     formatDuration = viewModel::formatDuration,
                     highlightedCategory = highlightedCategory,
-                    onCategoryClick = { highlightedCategory = if (highlightedCategory == it) null else it }
+                    onCategoryClick = { highlightedCategory = if (highlightedCategory == it) null else it },
+                    categoryUsage = dashboardCategoryUsage,
+                    onOpenCategory = onCategoryClick
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
+
+
 
         item(key = "hourly_stats_header") {
             Column(modifier = Modifier.animateItem()) {
@@ -436,6 +470,7 @@ fun UsageStatsScreen(
                     UsageItem(
                         app = app,
                         type = appTypes[app.packageName] ?: "OTHER",
+                        category = categoryCatalog.resolve(app.packageName, app.appName),
                         formatDuration = viewModel::formatDuration,
                         index = groupIndex,
                         total = hourlyGroupTotal,
@@ -617,6 +652,7 @@ fun UsageStatsScreen(
                             UsageItem(
                                 app = app,
                                 type = appTypes[app.packageName] ?: "OTHER",
+                        category = categoryCatalog.resolve(app.packageName, app.appName),
                                 formatDuration = viewModel::formatDuration,
                                 index = groupIndex,
                                 total = hourlyGroupTotal,
@@ -767,6 +803,8 @@ fun UsageStatsScreen(
             }
         }
 
+        val aboutYouTotal = if (isMoreInsightsExpanded) 8 else 6
+
         item(key = "insight_time_profile") {
             val profile = remember(uiState.hourlyUsage) {
                 val morningUsage = uiState.hourlyUsage.filter { it.hour in 5..11 }.sumOf { it.usageTimeMillis }
@@ -787,7 +825,7 @@ fun UsageStatsScreen(
                 TimeProfileItem(
                     profile = profile, 
                     index = 0, 
-                    total = 2,
+                    total = aboutYouTotal,
                     onClick = {
                         val peakHour = when(profile) {
                             "Early Bird" -> 8
@@ -798,6 +836,45 @@ fun UsageStatsScreen(
                         }
                         if (peakHour != null) selectedHour = peakHour
                     }
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+        }
+
+        item(key = "insight_top_category") {
+            Column(modifier = Modifier.animateItem()) {
+                CategoryInsightItem(
+                    categoryUsage = dashboardCategoryUsage,
+                    formatDuration = viewModel::formatDuration,
+                    index = 1,
+                    total = aboutYouTotal,
+                    onCategoryClick = onCategoryClick
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+        }
+
+        item(key = "insight_peak_hour") {
+            Column(modifier = Modifier.animateItem()) {
+                PeakHourInsightItem(
+                    hourlyUsage = uiState.hourlyUsage,
+                    formatDuration = viewModel::formatDuration,
+                    index = 2,
+                    total = aboutYouTotal,
+                    onHourClick = { hour -> selectedHour = hour }
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+        }
+
+        item(key = "insight_app_diversity") {
+            Column(modifier = Modifier.animateItem()) {
+                AppDiversityInsightItem(
+                    totalAppsCount = regularApps.size,
+                    totalWebsitesCount = lowWebsiteUsage.size,
+                    index = 3,
+                    total = aboutYouTotal,
+                    onClick = { isOtherAppsExpanded = !isOtherAppsExpanded }
                 )
                 Spacer(modifier = Modifier.height(4.dp))
             }
@@ -814,12 +891,122 @@ fun UsageStatsScreen(
                     totalSessions = totalSessions,
                     avgSessionMillis = avgSessionMillis,
                     formatDuration = viewModel::formatDuration,
-                    index = 1,
-                    total = 2,
+                    index = 4,
+                    total = aboutYouTotal,
                     onClick = {
                         isOtherAppsExpanded = !isOtherAppsExpanded
                     }
                 )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+        }
+
+        item(key = "insight_other_analytics_header") {
+            Column(modifier = Modifier.animateItem()) {
+                MoreInsightsHeaderCard(
+                    isExpanded = isMoreInsightsExpanded,
+                    onClick = { isMoreInsightsExpanded = !isMoreInsightsExpanded },
+                    index = 5,
+                    total = aboutYouTotal
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+        }
+
+        if (isMoreInsightsExpanded) {
+            val websiteTotal = uiState.websiteUsage.sumOf { it.totalTimeVisible }
+            val appTotal = uiState.allAppsUsage.sumOf { it.totalTimeVisible }
+            val combinedTotal = appTotal + websiteTotal
+            val webShare = if (combinedTotal > 0L) (websiteTotal.toFloat() / combinedTotal) * 100f else 0f
+            val appShare = if (combinedTotal > 0L) (appTotal.toFloat() / combinedTotal) * 100f else 0f
+
+            val weeklyAvg = uiState.weeklyAvgTime
+            val screenTime = uiState.totalScreenTime
+            val trendStr = if (weeklyAvg > 0L) {
+                val diffPct = (((screenTime - weeklyAvg).toFloat() / weeklyAvg) * 100f).roundToInt()
+                if (diffPct < 0) "${-diffPct}% vs 7d avg"
+                else if (diffPct > 0) "+${diffPct}% vs 7d avg"
+                else "Equal to 7d avg"
+            } else {
+                "No 7d avg"
+            }
+
+            val avgAppFocus = if (regularApps.isNotEmpty()) screenTime / regularApps.size else 0L
+            val focusSpanStr = "${viewModel.formatDuration(avgAppFocus)} / app"
+
+            item(key = "insight_grid_row1") {
+                Column(modifier = Modifier.animateItem()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        AnalyticsMiniCard(
+                            title = "Weekly Trend Progress",
+                            value = trendStr,
+                            icon = Icons.AutoMirrored.Outlined.TrendingUp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        AnalyticsMiniCard(
+                            title = "Average App Focus Span",
+                            value = focusSpanStr,
+                            icon = Icons.Outlined.Schedule,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+            }
+
+            item(key = "insight_grid_row2") {
+                val primeWindowStr = remember(uiState.hourlyUsage) {
+                    val totals = LongArray(24)
+                    uiState.hourlyUsage.forEach { hourInfo ->
+                        if (hourInfo.hour in 0..23) {
+                            totals[hourInfo.hour] = hourInfo.usageTimeMillis
+                        }
+                    }
+                    var maxWindowSum = 0L
+                    var bestWindowStart = -1
+                    for (h in 0..21) {
+                        val windowSum = totals[h] + totals[h + 1] + totals[h + 2]
+                        if (windowSum > maxWindowSum) {
+                            maxWindowSum = windowSum
+                            bestWindowStart = h
+                        }
+                    }
+                    if (bestWindowStart != -1 && maxWindowSum > 0L) {
+                        val locale = java.util.Locale.getDefault()
+                        val startStr = String.format(locale, "%02d:00", bestWindowStart)
+                        val endStr = String.format(locale, "%02d:00", bestWindowStart + 3)
+                        "$startStr - $endStr"
+                    } else {
+                        "—"
+                    }
+                }
+                val leftBottomCardShape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 8.dp)
+                val rightBottomCardShape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 8.dp, bottomEnd = 24.dp)
+                Column(modifier = Modifier.animateItem()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        AnalyticsMiniCard(
+                            title = "App vs Web Ratio",
+                            value = "Apps: ${appShare.roundToInt()}% · Web: ${webShare.roundToInt()}%",
+                            icon = Icons.Outlined.Language,
+                            shape = leftBottomCardShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                        AnalyticsMiniCard(
+                            title = "Prime Activity Window",
+                            value = primeWindowStr,
+                            icon = Icons.Outlined.Lightbulb,
+                            shape = rightBottomCardShape,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
             }
         }
 
@@ -843,6 +1030,7 @@ fun UsageStatsScreen(
                 UsageItem(
                     app = app,
                     type = appTypes[app.packageName] ?: "OTHER",
+                    category = categoryCatalog.resolve(app.packageName, app.appName),
                     formatDuration = viewModel::formatDuration,
                     index = index,
                     total = totalAppsCount,
@@ -1022,6 +1210,7 @@ fun UsageStatsScreen(
                         UsageItem(
                             app = app,
                             type = appTypes[app.packageName] ?: "OTHER",
+                        category = categoryCatalog.resolve(app.packageName, app.appName),
                             formatDuration = viewModel::formatDuration,
                             index = otherAppIndex + 1 + index,
                             total = totalAppsCount,
@@ -1102,6 +1291,405 @@ private fun SnapshotShieldSheets(focusViewModel: FocusViewModel) {
                 }
             )
         }
+    }
+}
+
+@Composable
+private fun UsageBreakdownDashboard(
+    totalTime: Long,
+    targetTime: Long,
+    yesterdayTime: Long,
+    shieldUsage: Long,
+    goalUsage: Long,
+    otherUsage: Long,
+    topApp: AppUsageInfo?,
+    activeGoalsCount: Int,
+    activeShieldsCount: Int,
+    formatDuration: (Long) -> String,
+    highlightedCategory: String?,
+    onCategoryClick: (String) -> Unit,
+    categoryUsage: List<Pair<AppCategory, Long>>,
+    onOpenCategory: (AppCategory) -> Unit
+) {
+    var selectedIndex by rememberSaveable { mutableStateOf(0) }
+    var showAllCategories by rememberSaveable { mutableStateOf(false) }
+
+    val visibleSlices = remember(categoryUsage) {
+        categoryUsage.filter { it.second > 0L }
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        AnimatedContent(
+            targetState = selectedIndex,
+            transitionSpec = {
+                (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                        scaleIn(initialScale = 0.95f, animationSpec = spring(stiffness = Spring.StiffnessLow)))
+                    .togetherWith(
+                        fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                scaleOut(targetScale = 0.95f, animationSpec = spring(stiffness = Spring.StiffnessLow))
+                    )
+                    .using(SizeTransform(clip = false))
+            },
+            label = "BreakdownModeAnim"
+        ) { mode ->
+            if (mode == 0) {
+                ZenithDashboard(
+                    totalTime = totalTime,
+                    targetTime = targetTime,
+                    yesterdayTime = yesterdayTime,
+                    shieldUsage = shieldUsage,
+                    goalUsage = goalUsage,
+                    otherUsage = otherUsage,
+                    topApp = topApp,
+                    activeGoalsCount = activeGoalsCount,
+                    activeShieldsCount = activeShieldsCount,
+                    formatDuration = formatDuration,
+                    highlightedCategory = highlightedCategory,
+                    onCategoryClick = onCategoryClick
+                )
+            } else {
+                CategoryZenithDashboard(
+                    categoryUsage = categoryUsage,
+                    formatDuration = formatDuration,
+                    showAll = showAllCategories,
+                    highlightedCategory = highlightedCategory,
+                    onCategoryClick = onCategoryClick,
+                    onOpenCategory = onOpenCategory
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            val options = listOf("Type", "Categories")
+            WeekStepperIndicator(
+                rangeLabel = options[selectedIndex],
+                showPrevious = true,
+                showNext = true,
+                isLoading = false,
+                onPrevious = {
+                    selectedIndex = (selectedIndex - 1 + options.size) % options.size
+                    if (highlightedCategory != null) onCategoryClick(highlightedCategory)
+                },
+                onNext = {
+                    selectedIndex = (selectedIndex + 1) % options.size
+                    if (highlightedCategory != null) onCategoryClick(highlightedCategory)
+                }
+            )
+
+            Box(
+                modifier = Modifier.align(Alignment.CenterEnd)
+            ) {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = selectedIndex == 1 && visibleSlices.size > 3,
+                    enter = fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) + slideInHorizontally { it / 2 },
+                    exit = fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) + slideOutHorizontally { it / 2 }
+                ) {
+                    TextButton(
+                        onClick = { showAllCategories = !showAllCategories },
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Text(
+                            text = if (showAllCategories) "Show less" else "Show more",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryZenithDashboard(
+    categoryUsage: List<Pair<AppCategory, Long>>,
+    formatDuration: (Long) -> String,
+    showAll: Boolean,
+    highlightedCategory: String?,
+    onCategoryClick: (String) -> Unit,
+    onOpenCategory: (AppCategory) -> Unit
+) {
+    val visibleSlices = remember(categoryUsage) {
+        categoryUsage.filter { it.second > 0L }
+    }
+    val rawTotal = remember(visibleSlices) {
+        visibleSlices.sumOf { it.second }.toFloat().coerceAtLeast(1f)
+    }
+    val minAngleThreshold = 15f
+
+    val visibleTotal = remember(visibleSlices, rawTotal, highlightedCategory) {
+        visibleSlices.sumOf { (category, millis) ->
+            val angle = (millis.toFloat() / rawTotal) * 360f
+            if (angle >= minAngleThreshold || highlightedCategory == category.id) millis else 0L
+        }.toFloat().coerceAtLeast(1f)
+    }
+
+    val progress = remember(visibleSlices) { Animatable(0f) }
+    LaunchedEffect(visibleSlices) {
+        progress.snapTo(0f)
+        progress.animateTo(1f, animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing))
+    }
+
+    val baseStroke = 26.dp
+    val highlightStroke = 38.dp
+
+    val sliceInfo = visibleSlices.map { (category, millis) ->
+        Triple(category, millis, appCategoryColor(category))
+    }
+
+    val strokeAnimations = visibleSlices.map { (category, millis) ->
+        val isHighlighted = highlightedCategory == category.id
+        val stroke by animateDpAsState(
+            targetValue = if (isHighlighted) highlightStroke else baseStroke,
+            animationSpec = spring(stiffness = Spring.StiffnessLow),
+            label = "Stroke_${category.id}"
+        )
+        val alpha by animateFloatAsState(
+            targetValue = if (highlightedCategory == null || isHighlighted) 1f else 0.3f,
+            animationSpec = spring(stiffness = Spring.StiffnessLow),
+            label = "Alpha_${category.id}"
+        )
+        category to (stroke to alpha)
+    }.toMap()
+
+    val topSlices = remember(visibleSlices) {
+        visibleSlices.take(3)
+    }
+    val total = remember(visibleSlices) { visibleSlices.sumOf { it.second } }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1.1f)
+                    .fillMaxHeight(),
+                contentAlignment = Alignment.Center
+            ) {
+                val totalVisibleCount = visibleSlices.count { (category, millis) ->
+                    (millis.toFloat() / rawTotal) * 360f >= minAngleThreshold || highlightedCategory == category.id
+                }
+                val gap = if (totalVisibleCount > 1) 22f else 0f
+
+                androidx.compose.foundation.Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(2.dp)
+                ) {
+                    val radius = (size.minDimension - highlightStroke.toPx()) / 2
+                    val center = androidx.compose.ui.geometry.Offset(size.width / 2, size.height / 2)
+                    val arcSize = androidx.compose.ui.geometry.Size(radius * 2, radius * 2)
+                    val topLeft = androidx.compose.ui.geometry.Offset(center.x - radius, center.y - radius)
+
+                    var currentAngle = -90f
+                    sliceInfo.forEach { (category, millis, color) ->
+                        val animProps = strokeAnimations[category] ?: (baseStroke to 1f)
+                        val strokeW = animProps.first.toPx()
+                        val alpha = animProps.second
+                        val angle = (millis.toFloat() / rawTotal) * 360f
+                        val isVis = angle >= minAngleThreshold || highlightedCategory == category.id
+                        val effectiveMillis = if (isVis) millis else 0L
+                        val segmentAngle = if (visibleTotal > 0f) (effectiveMillis / visibleTotal) * 360f * progress.value else 0f
+
+                        if (segmentAngle > 0.1f) {
+                            val sweep = (segmentAngle - gap).coerceAtLeast(0f)
+                            if (sweep > 2f) {
+                                drawArc(
+                                    color = color.copy(alpha = alpha),
+                                    startAngle = currentAngle + gap / 2,
+                                    sweepAngle = sweep,
+                                    useCenter = false,
+                                    topLeft = topLeft,
+                                    size = arcSize,
+                                    style = Stroke(width = strokeW, cap = StrokeCap.Round)
+                                )
+                            } else if (highlightedCategory == category.id) {
+                                drawArc(
+                                    color = color,
+                                    startAngle = currentAngle + segmentAngle / 2 - 1f,
+                                    sweepAngle = 2f,
+                                    useCenter = false,
+                                    topLeft = topLeft,
+                                    size = arcSize,
+                                    style = Stroke(width = strokeW, cap = StrokeCap.Round)
+                                )
+                            }
+                        }
+                        if (isVis) {
+                            currentAngle += segmentAngle
+                        }
+                    }
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = formatDuration(visibleSlices.sumOf { it.second }),
+                        style = MaterialTheme.typography.displaySmall.copy(fontSize = 24.sp),
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.Center
+            ) {
+                val anyHighlighted = highlightedCategory != null
+                AnimatedContent(
+                    targetState = showAll,
+                    transitionSpec = {
+                        (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                scaleIn(initialScale = 0.92f, animationSpec = spring(stiffness = Spring.StiffnessLow)))
+                            .togetherWith(
+                                fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                        scaleOut(targetScale = 0.92f, animationSpec = spring(stiffness = Spring.StiffnessLow))
+                            )
+                            .using(SizeTransform(clip = false))
+                    },
+                    label = "CategoryListTransition"
+                ) { expanded ->
+                    if (visibleSlices.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No category usage",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else if (!expanded) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            topSlices.forEach { (category, millis) ->
+                                val color = appCategoryColor(category)
+                                DashboardSmallCard(
+                                    icon = appCategoryIcon(category),
+                                    label = category.label,
+                                    value = formatDuration(millis),
+                                    containerColor = color.copy(alpha = 0.16f),
+                                    iconSectionColor = color,
+                                    iconColor = Color.White,
+                                    textColor = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .clickable {
+                                            if (highlightedCategory == category.id) {
+                                                onOpenCategory(category)
+                                            } else {
+                                                onCategoryClick(category.id)
+                                            }
+                                        },
+                                    isHighlighted = highlightedCategory == category.id,
+                                    anyHighlighted = anyHighlighted
+                                )
+                            }
+                        }
+                    } else {
+                        Card(
+                            modifier = Modifier.fillMaxSize(),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                visibleSlices.forEach { (category, millis) ->
+                                    CategoryLegendRow(
+                                        category = category,
+                                        millis = millis,
+                                        total = total,
+                                        formatDuration = formatDuration,
+                                        onOpenCategory = onOpenCategory
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryLegendRow(
+    category: AppCategory,
+    millis: Long,
+    total: Long,
+    formatDuration: (Long) -> String,
+    onOpenCategory: (AppCategory) -> Unit
+) {
+    val color = appCategoryColor(category)
+    val percent = if (total > 0L) (millis.toFloat() / total * 100f).roundToInt() else 0
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { onOpenCategory(category) }
+            .padding(vertical = 4.dp, horizontal = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(color.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = appCategoryIcon(category),
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = color
+            )
+        }
+        Spacer(modifier = Modifier.width(6.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = category.label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "$percent%",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Text(
+            text = formatDuration(millis),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = color
+        )
     }
 }
 
@@ -1410,7 +1998,9 @@ fun DashboardSmallCard(
                         text = label,
                         style = MaterialTheme.typography.labelSmall,
                         color = textColor.copy(alpha = 0.7f),
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     AnimatedContent(
                         targetState = value,
@@ -2120,6 +2710,7 @@ fun LongTermStatsSection(
 fun UsageItem(
     app: AppUsageInfo,
     type: String?,
+    category: AppCategory? = null,
     formatDuration: (Long) -> String,
     index: Int,
     total: Int,
@@ -2181,6 +2772,27 @@ fun UsageItem(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                         )
                     }
+                    category?.takeIf { it != AppCategory.UNCATEGORIZED }?.let { cat ->
+                        Spacer(modifier = Modifier.width(4.dp))
+                        val catColor = appCategoryColor(cat)
+                        Surface(
+                            color = catColor.copy(alpha = 0.12f),
+                            contentColor = catColor,
+                            shape = CircleShape,
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = appCategoryIcon(cat),
+                                    contentDescription = cat.label,
+                                    modifier = Modifier.size(12.dp),
+                                    tint = catColor
+                                )
+                            }
+                        }
+                    }
                 }
             },
             trailingContent = {
@@ -2231,5 +2843,390 @@ fun UsageItem(
                 containerColor = Color.Transparent
             )
         )
+    }
+}
+
+@Composable
+fun CategoryInsightItem(
+    categoryUsage: List<Pair<AppCategory, Long>>,
+    formatDuration: (Long) -> String,
+    index: Int,
+    total: Int,
+    onCategoryClick: (AppCategory) -> Unit
+) {
+    val topEntry = categoryUsage.firstOrNull()
+    val topCategory = topEntry?.first
+    val topTime = topEntry?.second ?: 0L
+    val totalTime = categoryUsage.sumOf { it.second }
+    val share = if (totalTime > 0L) (topTime.toFloat() / totalTime) * 100f else 0f
+
+    var isExpanded by remember { mutableStateOf(false) }
+
+    GroupedCard(
+        index = index,
+        total = total,
+        onClick = {
+            isExpanded = !isExpanded
+            topCategory?.let { onCategoryClick(it) }
+        }
+    ) {
+        Column {
+            ListItem(
+                headlineContent = {
+                    Text(
+                        text = "Top Category",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                supportingContent = {
+                    Text(
+                        text = if (topCategory != null) "${topCategory.label} · ${formatDuration(topTime)}" else "No category data",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                leadingContent = {
+                    val color = topCategory?.let { appCategoryColor(it) } ?: MaterialTheme.colorScheme.primary
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(color.copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = topCategory?.let { appCategoryIcon(it) } ?: Icons.Outlined.Apps,
+                            contentDescription = null,
+                            tint = color,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                },
+                trailingContent = {
+                    if (topCategory != null) {
+                        SuggestionChip(
+                            onClick = { },
+                            label = { Text("${share.roundToInt()}%") },
+                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = appCategoryColor(topCategory).copy(alpha = 0.15f),
+                                labelColor = appCategoryColor(topCategory)
+                            ),
+                            border = null,
+                            shape = CircleShape
+                        )
+                    }
+                },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+            )
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(animationSpec = spring(stiffness = Spring.StiffnessLow)) + fadeIn(),
+                exit = shrinkVertically(animationSpec = spring(stiffness = Spring.StiffnessLow)) + fadeOut()
+            ) {
+                val details = if (topCategory != null) {
+                    "Your most used category is ${topCategory.label}, accounting for ${share.roundToInt()}% of your tracked screen time (${formatDuration(topTime)}). ${topCategory.description}"
+                } else {
+                    "Start using apps and assigning them to categories to see insights here."
+                }
+                Text(
+                    text = details,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 16.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun PeakHourInsightItem(
+    hourlyUsage: List<HourlyUsageInfo>,
+    formatDuration: (Long) -> String,
+    index: Int,
+    total: Int,
+    onHourClick: (Int) -> Unit
+) {
+    val peakHourData = remember(hourlyUsage) {
+        val hourlyTotals = LongArray(24)
+        hourlyUsage.forEach { hourInfo ->
+            if (hourInfo.hour in 0..23) {
+                hourlyTotals[hourInfo.hour] = hourInfo.usageTimeMillis
+            }
+        }
+        val bestHour = hourlyTotals.indices.maxByOrNull { hourlyTotals[it] }?.takeIf { hourlyTotals[it] > 0L }
+        Pair(bestHour, bestHour?.let { hourlyTotals[it] } ?: 0L)
+    }
+
+    val peakHour = peakHourData.first
+    val peakTime = peakHourData.second
+    val locale = remember { java.util.Locale.getDefault() }
+
+    var isExpanded by remember { mutableStateOf(false) }
+
+    GroupedCard(
+        index = index,
+        total = total,
+        onClick = {
+            isExpanded = !isExpanded
+            peakHour?.let { onHourClick(it) }
+        }
+    ) {
+        Column {
+            ListItem(
+                headlineContent = {
+                    Text(
+                        text = "Peak Activity Hour",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                supportingContent = {
+                    Text(
+                        text = peakHour?.let { String.format(locale, "%02d:00 · %s", it, formatDuration(peakTime)) } ?: "No hourly data",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                leadingContent = {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Schedule,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                },
+                trailingContent = {
+                    if (peakHour != null) {
+                        SuggestionChip(
+                            onClick = { },
+                            label = { Text(String.format(locale, "%02d:00", peakHour)) },
+                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                labelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            ),
+                            border = null,
+                            shape = CircleShape
+                        )
+                    }
+                },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+            )
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(animationSpec = spring(stiffness = Spring.StiffnessLow)) + fadeIn(),
+                exit = shrinkVertically(animationSpec = spring(stiffness = Spring.StiffnessLow)) + fadeOut()
+            ) {
+                val details = if (peakHour != null) {
+                    "Your screen time peaks between ${String.format(locale, "%02d:00", peakHour)} and ${String.format(locale, "%02d:59", peakHour)}, with ${formatDuration(peakTime)} spent during this hour."
+                } else {
+                    "Continue using apps to discover your peak usage hour."
+                }
+                Text(
+                    text = details,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 16.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AppDiversityInsightItem(
+    totalAppsCount: Int,
+    totalWebsitesCount: Int,
+    index: Int,
+    total: Int,
+    onClick: () -> Unit
+) {
+    var isExpanded by remember { mutableStateOf(false) }
+
+    GroupedCard(
+        index = index,
+        total = total,
+        onClick = {
+            isExpanded = !isExpanded
+            onClick()
+        }
+    ) {
+        Column {
+            ListItem(
+                headlineContent = {
+                    Text(
+                        text = "App Activity Diversity",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                supportingContent = {
+                    Text(
+                        text = "$totalAppsCount apps · $totalWebsitesCount websites today",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                leadingContent = {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Apps,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                },
+                trailingContent = {
+                    SuggestionChip(
+                        onClick = { },
+                        label = { Text("${totalAppsCount + totalWebsitesCount} total") },
+                        colors = SuggestionChipDefaults.suggestionChipColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            labelColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        ),
+                        border = null,
+                        shape = CircleShape
+                    )
+                },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+            )
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(animationSpec = spring(stiffness = Spring.StiffnessLow)) + fadeIn(),
+                exit = shrinkVertically(animationSpec = spring(stiffness = Spring.StiffnessLow)) + fadeOut()
+            ) {
+                Text(
+                    text = "You interacted with $totalAppsCount distinct applications and $totalWebsitesCount web domains today. Exploring a balanced variety of apps helps maintain mindful screen time.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 16.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MoreInsightsHeaderCard(
+    isExpanded: Boolean,
+    onClick: () -> Unit,
+    index: Int,
+    total: Int
+) {
+    GroupedCard(index = index, total = total, onClick = onClick) {
+        ListItem(
+            headlineContent = {
+                Text(
+                    text = "Other Analytics",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            supportingContent = {
+                Text(
+                    text = if (isExpanded) "Tap to collapse extra insights" else "Tap to expand extra insights",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            leadingContent = {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.BarChart,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            },
+            trailingContent = {
+                Icon(
+                    imageVector = if (isExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+        )
+    }
+}
+
+@Composable
+private fun AnalyticsMiniCard(
+    title: String,
+    value: String,
+    icon: ImageVector,
+    color: Color = MaterialTheme.colorScheme.primary,
+    shape: Shape = RoundedCornerShape(8.dp),
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = shape,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        modifier = modifier
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp),
+                    tint = color
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
