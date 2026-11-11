@@ -36,6 +36,7 @@ import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.filled.Bedtime
@@ -247,6 +248,7 @@ fun MainScreen(
                 currentRoute == Screen.EyeCare.route ||
                 currentRoute == Screen.ReelsShield.route ||
                 currentRoute == Screen.RedirectShield.route ||
+                currentRoute == Screen.AppCategories.route ||
                 currentRoute == Screen.Lockdown.route ||
                 currentRoute == Screen.TamperProtection.route ||
                 currentRoute == Screen.Pomodoro.route ||
@@ -262,7 +264,8 @@ fun MainScreen(
                 currentRoute == Screen.SystemUsageDebug.route ||
                 currentRoute == Screen.OverlayAppearance.route ||
                 currentRoute?.startsWith("settings_category") == true ||
-                currentRoute?.startsWith("app_detail") == true
+                currentRoute?.startsWith("app_detail") == true ||
+                currentRoute?.startsWith("category_detail") == true
 
     val enterAlwaysScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     val pinnedScrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -598,7 +601,8 @@ fun MainScreen(
                     currentRoute != Screen.SystemUsageDebug.route &&
                     currentRoute != Screen.OverlayAppearance.route &&
                     currentRoute?.startsWith("settings_category") == false &&
-                    currentRoute?.startsWith("app_detail") == false
+                    currentRoute?.startsWith("app_detail") == false &&
+                    currentRoute?.startsWith("category_detail") == false
 
         if (useNavigationRail) {
             AnimatedVisibility(
@@ -653,6 +657,8 @@ fun MainScreen(
                     categoryName = navBackStackEntry?.arguments?.getString("category"),
                     pausePointTypeName = navBackStackEntry?.arguments?.getString("type")
                         ?.let { runCatching { PausePointTaskType.valueOf(it).displayName }.getOrNull() },
+                    categoryDetailName = navBackStackEntry?.arguments?.getString("category")
+                        ?.let { com.etrisad.zenith.data.model.CategoryCatalog(preferences).get(it).label },
                     onBack = {
                         val intercepted = when {
                             currentRoute?.startsWith("settings_category") == true ->
@@ -663,11 +669,20 @@ fun MainScreen(
                         }
                         if (!intercepted) navController.popBackStack()
                     },
-                    showInfoButton = preferences.headerInfoButtonEnabled && FeatureInfoRegistry.infoFor(
-                        currentRoute,
-                        navBackStackEntry?.arguments?.getString("category")
-                    ) != null && !focusUiState.isSelectionMode,
-                    onInfoClick = { showFeatureInfoSheet = true },
+                    showInfoButton = preferences.headerInfoButtonEnabled && (
+                        (FeatureInfoRegistry.infoFor(
+                            currentRoute,
+                            navBackStackEntry?.arguments?.getString("category")
+                        ) != null && !focusUiState.isSelectionMode) ||
+                        currentRoute?.startsWith("category_detail") == true
+                    ),
+                    onInfoClick = {
+                        if (currentRoute?.startsWith("category_detail") == true) {
+                            homeViewModel.openCategoryInfoDialog()
+                        } else {
+                            showFeatureInfoSheet = true
+                        }
+                    },
                     infoNextToAction = !isDeepScreen || currentRoute?.startsWith("app_detail") == true,
                     navigationIcon = {
                         AnimatedContent(
@@ -744,7 +759,8 @@ fun MainScreen(
                             AnimatedContent(
                                 targetState = when {
                                     isSelectionMode -> "selection"
-                                    currentRoute?.startsWith("app_detail") == true -> "app_detail"
+                                    currentRoute?.startsWith("app_detail") == true ||
+                                    currentRoute?.startsWith("category_detail") == true -> "edit"
                                     !isDeepScreen -> "user"
                                     else -> "none"
                                 },
@@ -790,18 +806,23 @@ fun MainScreen(
                                             }
                                         }
                                     }
-                                    "app_detail" -> {
-                                        val detailLocked = preferences.isInLockdown()
+                                    "edit" -> {
+                                        val isCategory = currentRoute?.startsWith("category_detail") == true
+                                        val detailLocked = !isCategory && preferences.isInLockdown()
                                         IconButton(
                                             onClick = {
-                                                if (!detailLocked) homeViewModel.openSettingsSheet()
-                                                else Toast.makeText(context, "Locked during lockdown hours", Toast.LENGTH_SHORT).show()
+                                                if (isCategory) {
+                                                    homeViewModel.openCategoryEditSheet()
+                                                } else {
+                                                    if (!detailLocked) homeViewModel.openSettingsSheet()
+                                                    else Toast.makeText(context, "Locked during lockdown hours", Toast.LENGTH_SHORT).show()
+                                                }
                                             },
                                             modifier = Modifier.padding(end = 12.dp).size(48.dp).clip(CircleShape)
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Outlined.Edit,
-                                                contentDescription = "Edit App Settings",
+                                                contentDescription = if (isCategory) "Edit Category" else "Edit App Settings",
                                                 tint = if (detailLocked) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.size(24.dp)
                                             )
@@ -1084,7 +1105,9 @@ fun MainScreen(
                                     targetRoute == Screen.SystemUsageDebug.route ||
                                     targetRoute == Screen.OverlayAppearance.route ||
                                     targetRoute?.startsWith("settings_category") == true ||
-                                    targetRoute?.startsWith("app_detail") == true
+                                    targetRoute?.startsWith("app_detail") == true ||
+                                    targetRoute?.startsWith("category_detail") == true ||
+                                    targetRoute == Screen.AppCategories.route
                         val isInitialDeep =
                             initialRoute == Screen.UsageStats.route ||
                                     initialRoute == Screen.Bedtime.route ||
@@ -1108,7 +1131,9 @@ fun MainScreen(
                                     initialRoute == Screen.SystemUsageDebug.route ||
                                     initialRoute == Screen.OverlayAppearance.route ||
                                     initialRoute?.startsWith("settings_category") == true ||
-                                    initialRoute?.startsWith("app_detail") == true
+                                    initialRoute?.startsWith("app_detail") == true ||
+                                    initialRoute?.startsWith("category_detail") == true ||
+                                    initialRoute == Screen.AppCategories.route
 
                         val animationSpec = spring<IntOffset>(
                             dampingRatio = Spring.DampingRatioLowBouncy,
@@ -1164,8 +1189,9 @@ fun MainScreen(
                                     targetRoute == Screen.SystemUsageDebug.route ||
                                     targetRoute == Screen.OverlayAppearance.route ||
                                     targetRoute?.startsWith("settings_category") == true ||
-                                    targetRoute?.startsWith("app_detail") == true
-
+                                    targetRoute?.startsWith("app_detail") == true ||
+                                    targetRoute?.startsWith("category_detail") == true ||
+                                    targetRoute == Screen.AppCategories.route
                         val isInitialDeep =
                             initialRoute == Screen.UsageStats.route ||
                                     initialRoute == Screen.Bedtime.route ||
@@ -1189,7 +1215,9 @@ fun MainScreen(
                                     initialRoute == Screen.SystemUsageDebug.route ||
                                     initialRoute == Screen.OverlayAppearance.route ||
                                     initialRoute?.startsWith("settings_category") == true ||
-                                    initialRoute?.startsWith("app_detail") == true
+                                    initialRoute?.startsWith("app_detail") == true ||
+                                    initialRoute?.startsWith("category_detail") == true ||
+                                    initialRoute == Screen.AppCategories.route
 
                         val animationSpec = spring<IntOffset>(
                             dampingRatio = Spring.DampingRatioNoBouncy,
@@ -1298,6 +1326,12 @@ fun MainScreen(
                             onOpenGuidedPath = {
                                 showGuidedPathHub = true
                             }
+                        )
+                    }
+                    composable(Screen.AppCategories.route) {
+                        com.etrisad.zenith.ui.screens.settings.AppCategoriesScreen(
+                            preferencesRepository = userPreferencesRepository,
+                            innerPadding = innerPadding
                         )
                     }
                     composable(Screen.Bedtime.route) {
@@ -1439,6 +1473,9 @@ fun MainScreen(
                             showDatabaseIndicator = preferences.showDatabaseIndicator,
                             onAppClick = { packageName ->
                                 navController.navigate(Screen.AppDetail.createRoute(packageName))
+                            },
+                            onCategoryClick = { category ->
+                                navController.navigate(Screen.CategoryDetail.createRoute(category.id))
                             }
                         )
                     }
@@ -1493,7 +1530,27 @@ fun MainScreen(
                             packageName = packageName,
                             viewModel = homeViewModel,
                             userPreferencesRepository = userPreferencesRepository,
-                            innerPadding = innerPadding
+                            innerPadding = innerPadding,
+                            onOpenCategoryDetails = { category ->
+                                navController.navigate(Screen.CategoryDetail.createRoute(category.id))
+                            }
+                        )
+                    }
+                    composable(
+                        route = Screen.CategoryDetail.route,
+                        arguments = listOf(androidx.navigation.navArgument("category") {
+                            type = androidx.navigation.NavType.StringType
+                        })
+                    ) { backStackEntry ->
+                        val categoryId = backStackEntry.arguments?.getString("category") ?: ""
+                        com.etrisad.zenith.ui.screens.home.CategoryDetailScreen(
+                            categoryId = categoryId,
+                            viewModel = homeViewModel,
+                            userPreferencesRepository = userPreferencesRepository,
+                            innerPadding = innerPadding,
+                            onAppClick = { packageName ->
+                                navController.navigate(Screen.AppDetail.createRoute(packageName))
+                            }
                         )
                     }
                     composable(
@@ -1551,6 +1608,8 @@ fun MainScreen(
                             currentRoute?.startsWith("pause_point_type") == false &&
                             currentRoute?.startsWith("settings_category") == false &&
                             currentRoute?.startsWith("app_detail") == false &&
+                            currentRoute?.startsWith("category_detail") == false &&
+                            currentRoute != Screen.AppCategories.route &&
                             !(currentRoute == Screen.Home.route && homeCustomizeState.quickEditOpen)
 
                     androidx.compose.animation.AnimatedVisibility(

@@ -57,6 +57,7 @@ fun ZenithHeader(
     isNavRailVisible: Boolean = false,
     userName: String = "User",
     categoryName: String? = null,
+    categoryDetailName: String? = null,
     pausePointTypeName: String? = null,
     onBack: () -> Unit,
     navigationIcon: @Composable (() -> Unit)? = null,
@@ -73,6 +74,7 @@ fun ZenithHeader(
         currentRoute == Screen.EyeCare.route ||
         currentRoute == Screen.ReelsShield.route ||
         currentRoute == Screen.RedirectShield.route ||
+        currentRoute == Screen.AppCategories.route ||
         currentRoute == Screen.Lockdown.route ||
         currentRoute == Screen.TamperProtection.route ||
         currentRoute == Screen.DatabaseDebug.route ||
@@ -87,6 +89,7 @@ fun ZenithHeader(
         currentRoute?.startsWith("pause_point_type") == true ||
         currentRoute?.startsWith("settings_category") == true ||
         currentRoute?.startsWith("app_detail") == true ||
+        currentRoute?.startsWith("category_detail") == true ||
         currentRoute == Screen.Profile.route ||
         currentRoute == Screen.Achievements.route ||
         currentRoute == Screen.Level.route
@@ -161,6 +164,7 @@ fun ZenithHeader(
                 currentRoute == Screen.EyeCare.route -> "Eye Care"
                 currentRoute == Screen.ReelsShield.route -> "Reels Shield"
                 currentRoute == Screen.RedirectShield.route -> "Redirect Shield"
+                currentRoute == Screen.AppCategories.route -> "App Categories"
                 currentRoute == Screen.Lockdown.route -> "Lockdown"
                 currentRoute == Screen.TamperProtection.route -> "Tamper Protection"
                 currentRoute == Screen.DatabaseDebug.route -> "Database"
@@ -189,6 +193,7 @@ fun ZenithHeader(
                     }.ifEmpty { "Settings" }
                 }
                 currentRoute?.startsWith("app_detail") == true -> "App Detail"
+                currentRoute?.startsWith("category_detail") == true -> "Category Detail"
                 else -> "Zenith"
             }
 

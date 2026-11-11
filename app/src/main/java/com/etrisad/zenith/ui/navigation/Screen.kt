@@ -46,6 +46,12 @@ sealed class Screen(
 
     object RedirectShield : Screen("redirect_shield", "Redirect Shield", Icons.Filled.Shield, Icons.Outlined.Shield)
 
+    object AppCategories : Screen("app_categories", "App Categories", Icons.Filled.Settings, Icons.Outlined.Settings)
+
+    object CategoryDetail : Screen("category_detail/{category}", "Category", Icons.Filled.Settings, Icons.Outlined.Settings) {
+        fun createRoute(category: String) = "category_detail/$category"
+    }
+
 
 
     object AppDetail : Screen("app_detail/{packageName}", "App Detail", Icons.Filled.Home, Icons.Outlined.Home) {
