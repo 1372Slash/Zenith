@@ -169,6 +169,7 @@ class InterceptOverlayManager(
             if (overlayView != null) {
                 OverlayLogBuffer.d("OverlayMgr", "updateOverlayContent: $packageName")
                 updateOverlayContent(packageName, appName, shield, totalUsageToday, totalGlobalUsageToday, delayDurationSeconds, forcedTaskType, onAllowUse, onCloseApp, onGoalDismiss)
+                ShieldLatencyTracker.onShown(packageName, shield?.type?.name)
                 isShowing = true
                 currentPackage = packageName
                 return
@@ -247,6 +248,7 @@ class InterceptOverlayManager(
         }
         setupAndAddView(composeView, lOwner)
         OverlayLogBuffer.d("OverlayMgr", "showOverlay SUCCESS: $packageName")
+        ShieldLatencyTracker.onShown(packageName, shield?.type?.name)
     }
 
     fun showScheduleOverlay(

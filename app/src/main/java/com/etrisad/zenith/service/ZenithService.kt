@@ -918,6 +918,7 @@ class ZenithService : AccessibilityService() {
         val isNoise = InterceptOverlayManager.isSystemUiPackage(currentApp) ||
             isKeyboardApp(currentApp) || currentApp == packageName
         if (!isNoise) {
+            ShieldLatencyTracker.onDetected(currentApp, "a11y")
             val redirect = redirectShield.onForegroundChanged(currentApp)
             if (redirect.redirect) {
                 OverlayLogBuffer.d(
@@ -1270,7 +1271,10 @@ class ZenithService : AccessibilityService() {
         overlayActionHandler.getMindfulShield(packageName, appName)
 
     private suspend fun checkIfAppIsShielded(targetPackageName: String) {
-        if (isOverlayCheckInProgress) return
+        if (isOverlayCheckInProgress) {
+            ShieldLatencyTracker.onCheckSkipped(targetPackageName, "check-in-progress")
+            return
+        }
         isOverlayCheckInProgress = true
         try {
             val exemptFromBlocking = SharedMonitoringState.isBlockingExempt(targetPackageName)
@@ -1411,6 +1415,7 @@ class ZenithService : AccessibilityService() {
                 }
 
                 OverlayLogBuffer.d("Zenith_HPC", "SHOWING overlay for: $actualTargetPackage (shield=${effectiveShield?.type})")
+                ShieldLatencyTracker.onShowRequested(actualTargetPackage, "shield")
                 overlayActionHandler.showShieldOverlay(
                     targetPackageName = actualTargetPackage,
                     shield = effectiveShield,

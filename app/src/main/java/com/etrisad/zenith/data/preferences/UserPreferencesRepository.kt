@@ -153,10 +153,10 @@ fun PerformanceLevel.toConfig(): PerformanceConfig = when (this) {
         monOverlayShowing = 3000L,
         monGoalNear = 300L,
         monGoalMid = 600L,
-        monGoalFar = 900L,
+        monGoalFar = 600L,
         monShieldNear = 300L,
         monShieldMid = 800L,
-        monShieldFar = 1500L,
+        monShieldFar = 800L,
         monShieldVeryFar = 2500L,
         monDefault = 600L,
     )

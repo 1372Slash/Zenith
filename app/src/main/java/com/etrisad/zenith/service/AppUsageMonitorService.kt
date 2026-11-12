@@ -1153,6 +1153,7 @@ class AppUsageMonitorService : Service() {
     }
 
     private suspend fun handleForegroundChange(currentApp: String) {
+        ShieldLatencyTracker.onDetected(currentApp, if (ZenithService.isServiceRunning) "poll-a11y" else "poll")
         val currentTime = System.currentTimeMillis()
 
         if (SharedMonitoringState.launcherPackages.isEmpty() || currentTime - lastLauncherRefreshTime > 3600000) {
@@ -1600,9 +1601,6 @@ class AppUsageMonitorService : Service() {
         if (shield != null) {
             return if (shield.type == FocusType.GOAL) cfg.monGoalFar else cfg.monShieldFar
         }
-        if (SharedMonitoringState.parsedSchedulesCache.isEmpty() && !SharedMonitoringState.isBedtimeActive) {
-            return 15000L
-        }
         return cfg.monDefault
     }
 
@@ -1967,7 +1965,21 @@ class AppUsageMonitorService : Service() {
     private var lastKickedPackage: String? = null
     private var lastKickTime = 0L
 
+    private val overlayCheckInProgress = java.util.concurrent.atomic.AtomicBoolean(false)
+
     private suspend fun checkIfAppIsShielded(targetPackageName: String) {
+        if (!overlayCheckInProgress.compareAndSet(false, true)) {
+            ShieldLatencyTracker.onCheckSkipped(targetPackageName, "check-in-progress")
+            return
+        }
+        try {
+            checkIfAppIsShieldedInternal(targetPackageName)
+        } finally {
+            overlayCheckInProgress.set(false)
+        }
+    }
+
+    private suspend fun checkIfAppIsShieldedInternal(targetPackageName: String) {
         val websiteDomain = WebsiteStateHolder.currentWebsiteDomain.value
         val isWebsite = WebsiteRepository.isKnownBrowser(targetPackageName) && websiteDomain != null
 
@@ -2082,6 +2094,8 @@ class AppUsageMonitorService : Service() {
             }
 
             currentShieldCache = if (isMindfulGateway) null else effectiveShield
+
+            ShieldLatencyTracker.onShowRequested(actualTargetPackage, "shield")
 
             overlayActionHandler.showShieldOverlay(
                 targetPackageName = actualTargetPackage,
@@ -2503,7 +2517,9 @@ class AppUsageMonitorService : Service() {
     private fun getForegroundApp(): String? {
         val time = System.currentTimeMillis()
         val shieldForCached = cachedForegroundApp?.let { SharedMonitoringState.allShieldsCache[it] }
-        val cacheMs = if (shieldForCached != null) 2000L else 5000L
+        val cfgPollMs = try { SharedMonitoringState.performanceConfig.monDefault } catch (_: Exception) { 1200L }
+        val baseCacheMs = if (shieldForCached != null) 1000L else 2000L
+        val cacheMs = baseCacheMs.coerceAtMost(cfgPollMs.coerceAtLeast(300L))
         if (time - cachedForegroundAppTime < cacheMs && cachedForegroundApp != null) {
             return cachedForegroundApp
         }
