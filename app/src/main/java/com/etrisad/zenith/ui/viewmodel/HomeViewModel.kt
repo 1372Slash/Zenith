@@ -436,6 +436,9 @@ class HomeViewModel(
                     old.homeQuickActions == new.homeQuickActions &&
                     old.showDatabaseIndicator == new.showDatabaseIndicator &&
                     old.expressiveColors == new.expressiveColors &&
+                    old.heroGradientBallsEnabled == new.heroGradientBallsEnabled &&
+                    old.heroBallsIdleAnimationEnabled == new.heroBallsIdleAnimationEnabled &&
+                    old.heroAmbientGlowScale == new.heroAmbientGlowScale &&
                     old.bedtimeEnabled == new.bedtimeEnabled &&
                     old.bedtimeStartTime == new.bedtimeStartTime &&
                     old.bedtimeEndTime == new.bedtimeEndTime &&
@@ -1631,6 +1634,10 @@ class HomeViewModel(
     fun onHourlySortTypeChange(sortType: HourlySortType) {
         _uiState.update { it.copy(hourlySortType = sortType) }
         refreshUsageStats(showLoading = false)
+    }
+
+    fun setUsageStatsShowCategories(enabled: Boolean) {
+        viewModelScope.launch { userPreferencesRepository.setUsageStatsShowCategories(enabled) }
     }
 
     private fun updateShieldedLists() {

@@ -375,7 +375,9 @@ fun UsageStatsScreen(
                     highlightedCategory = highlightedCategory,
                     onCategoryClick = { highlightedCategory = if (highlightedCategory == it) null else it },
                     categoryUsage = dashboardCategoryUsage,
-                    onOpenCategory = onCategoryClick
+                    onOpenCategory = onCategoryClick,
+                    showCategories = preferences.usageStatsShowCategories,
+                    onShowCategoriesChange = { viewModel.setUsageStatsShowCategories(it) }
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -1309,10 +1311,12 @@ private fun UsageBreakdownDashboard(
     highlightedCategory: String?,
     onCategoryClick: (String) -> Unit,
     categoryUsage: List<Pair<AppCategory, Long>>,
-    onOpenCategory: (AppCategory) -> Unit
+    onOpenCategory: (AppCategory) -> Unit,
+    showCategories: Boolean,
+    onShowCategoriesChange: (Boolean) -> Unit
 ) {
-    var selectedIndex by rememberSaveable { mutableStateOf(0) }
     var showAllCategories by rememberSaveable { mutableStateOf(false) }
+    val selectedIndex = if (showCategories) 1 else 0
 
     val visibleSlices = remember(categoryUsage) {
         categoryUsage.filter { it.second > 0L }
@@ -1372,11 +1376,11 @@ private fun UsageBreakdownDashboard(
                 showNext = true,
                 isLoading = false,
                 onPrevious = {
-                    selectedIndex = (selectedIndex - 1 + options.size) % options.size
+                    onShowCategoriesChange(!showCategories)
                     if (highlightedCategory != null) onCategoryClick(highlightedCategory)
                 },
                 onNext = {
-                    selectedIndex = (selectedIndex + 1) % options.size
+                    onShowCategoriesChange(!showCategories)
                     if (highlightedCategory != null) onCategoryClick(highlightedCategory)
                 }
             )

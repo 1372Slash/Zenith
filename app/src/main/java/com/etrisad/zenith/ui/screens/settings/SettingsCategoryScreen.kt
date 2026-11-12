@@ -78,6 +78,8 @@ fun SettingsCategoryScreen(
     var showDbLogSheet by remember { mutableStateOf(false) }
     var showOverlayLogSheet by remember { mutableStateOf(false) }
     var showCategorySettingsSheet by remember { mutableStateOf(false) }
+    var showRecordedWebsitesSheet by remember { mutableStateOf(false) }
+    var recordedWebsites by remember { mutableStateOf<List<String>>(emptyList()) }
     var latestRelease by remember { mutableStateOf<GitHubRelease?>(null) }
     var backupMetadata by remember { mutableStateOf<BackupUtils.BackupMetadata?>(null) }
     var pendingRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
@@ -302,6 +304,9 @@ fun SettingsCategoryScreen(
                         onExpressiveColorsChange = { enabled -> coroutineScope.launch { preferencesRepository.setExpressiveColors(enabled) } },
                         onFloatingTabBarEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setFloatingTabBarEnabled(enabled) } },
                         onHeaderInfoButtonEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setHeaderInfoButtonEnabled(enabled) } },
+                        onHeroGradientBallsChange = { enabled -> coroutineScope.launch { preferencesRepository.setHeroGradientBallsEnabled(enabled) } },
+                        onHeroBallsIdleAnimationChange = { enabled -> coroutineScope.launch { preferencesRepository.setHeroBallsIdleAnimationEnabled(enabled) } },
+                        onHeroAmbientGlowScaleChange = { scale -> coroutineScope.launch { preferencesRepository.setHeroAmbientGlowScale(scale) } },
                         onNavigateToGSFlexCustomizer = { navController.navigate(Screen.GSFlexCustomizer.route) },
                         onNavigateToOverlayAppearance = { navController.navigate(Screen.OverlayAppearance.route) }
                     )
@@ -371,6 +376,15 @@ fun SettingsCategoryScreen(
                                 preferencesRepository.setStoreInterceptedNotificationContent(enabled)
                                 if (!enabled) {
                                     app.shieldRepository.scrubInterceptedNotificationContent()
+                                }
+                            }
+                        },
+                        onManageRecordedWebsites = {
+                            showRecordedWebsitesSheet = true
+                            coroutineScope.launch {
+                                recordedWebsites = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    runCatching { app.shieldRepository.getWebsiteDomains() }
+                                        .getOrDefault(emptyList())
                                 }
                             }
                         },
@@ -630,6 +644,18 @@ fun SettingsCategoryScreen(
         }
         if (showOverlayLogSheet) {
             OverlayLogBottomSheet(onDismiss = { showOverlayLogSheet = false })
+        }
+        if (showRecordedWebsitesSheet) {
+            RecordedWebsitesBottomSheet(
+                domains = recordedWebsites,
+                onDismiss = { showRecordedWebsitesSheet = false },
+                onDelete = { domain ->
+                    coroutineScope.launch {
+                        runCatching { app.shieldRepository.deleteWebsiteDomain(domain) }
+                        recordedWebsites = recordedWebsites - domain
+                    }
+                }
+            )
         }
         if (showCategorySettingsSheet) {
             CategorySettingsBottomSheet(

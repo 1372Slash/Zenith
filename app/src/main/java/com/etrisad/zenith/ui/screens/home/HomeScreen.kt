@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.clickable
@@ -36,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -61,6 +63,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -68,6 +71,8 @@ import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.etrisad.zenith.data.local.entity.FocusType
+import com.etrisad.zenith.data.model.AppCategory
+import com.etrisad.zenith.data.model.CategoryCatalog
 import com.etrisad.zenith.ui.components.UninstalledAppCard
 import com.etrisad.zenith.ui.components.focus.AppTypeTab
 import com.etrisad.zenith.ui.components.focus.ShieldSectionContent
@@ -82,6 +87,7 @@ import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonWeighted
 import com.etrisad.zenith.ui.components.ZenithButtonType
 import com.etrisad.zenith.ui.components.ZenithGroupedButton
+import com.etrisad.zenith.ui.components.appCategoryColor
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.ui.components.ShieldSortHeader
 import com.etrisad.zenith.ui.components.UsageHistoryCard
@@ -104,6 +110,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.Calendar
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.roundToInt
 import kotlin.math.pow
 
@@ -113,6 +121,8 @@ import androidx.compose.ui.text.style.TextAlign
 import com.etrisad.zenith.data.preferences.HomeQuickActionsDefaults
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 
 @Composable
@@ -221,6 +231,12 @@ fun HomeScreenContent(
 
     val bedtimeStatus = rememberBedtimeStatus(preferences)
     val pomodoroStatus = rememberPomodoroStatus(preferences)
+    val categoryCatalog = remember(preferences) { CategoryCatalog(preferences) }
+    val todayCategoryUsage = remember(uiState.allAppsUsage, categoryCatalog) {
+        uiState.allAppsUsage.groupBy { categoryCatalog.resolve(it.packageName) }
+            .mapValues { (_, apps) -> apps.sumOf { it.totalTimeVisible } }
+            .filter { it.value > 0L }
+    }
     var activeTab by remember { mutableStateOf(AppTypeTab.APPS) }
     val nowMillis by produceState(initialValue = System.currentTimeMillis()) {
         while (true) {
@@ -231,6 +247,12 @@ fun HomeScreenContent(
     val isAccessibilityEnabled = rememberAccessibilityServiceEnabled()
 
     val listState = rememberLazyListState()
+    var isResumed by remember { mutableStateOf(false) }
+    LifecycleResumeEffect(Unit) {
+        isResumed = true
+        onPauseOrDispose { isResumed = false }
+    }
+    val isHeroVisible by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
     val guideScrollHub = LocalOnboardingScroll.current
     val guideTargets = LocalOnboardingTargets.current
     var guideListTopPx by remember { mutableStateOf(0) }
@@ -380,7 +402,13 @@ fun HomeScreenContent(
                     formatDuration = formatDuration,
                     shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
                     bannerUri = bannerUri,
-                    showBanner = showBanner
+                    showBanner = showBanner,
+                    heroGradientBallsEnabled = preferences.heroGradientBallsEnabled,
+                    heroBallsIdleAnimationEnabled = preferences.heroBallsIdleAnimationEnabled && isResumed && isHeroVisible,
+                    heroAmbientGlowScale = preferences.heroAmbientGlowScale,
+                    dataDayKey = uiState.selectedDateMillis,
+                    dataReady = !uiState.isLoading,
+                    todayCategoryUsage = todayCategoryUsage
                 )
                 Spacer(modifier = Modifier.height(4.dp))
             }
@@ -817,19 +845,39 @@ fun UsageDashboard(
     formatDuration: (Long) -> String,
     shape: Shape = RoundedCornerShape(32.dp),
     bannerUri: String = "",
-    showBanner: Boolean = false
+    showBanner: Boolean = false,
+    heroGradientBallsEnabled: Boolean = false,
+    heroBallsIdleAnimationEnabled: Boolean = false,
+    heroAmbientGlowScale: Float = 1.4f,
+    dataDayKey: Long = 0L,
+    dataReady: Boolean = true,
+    todayCategoryUsage: Map<AppCategory, Long> = emptyMap()
 ) {
     val bannerVisible = showBanner && bannerUri.isNotEmpty()
+    val baseContainerColor = if (heroGradientBallsEnabled) {
+        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.5f)
+    } else {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (bannerVisible) Color.Transparent
-            else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            containerColor = if (bannerVisible) Color.Transparent else baseContainerColor
         ),
         shape = shape
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
+            if (heroGradientBallsEnabled && !bannerVisible && todayCategoryUsage.isNotEmpty()) {
+                HeroGradientBalls(
+                    categories = todayCategoryUsage,
+                    dataKey = dataDayKey,
+                    dataReady = dataReady,
+                    idleAnimationEnabled = heroBallsIdleAnimationEnabled,
+                    baseScale = heroAmbientGlowScale,
+                    modifier = Modifier.matchParentSize()
+                )
+            }
             if (bannerVisible) {
                 SubcomposeAsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
@@ -1012,6 +1060,194 @@ fun UsageDashboard(
         }
         }
     }
+}
+
+@Composable
+fun HeroGradientBalls(
+    categories: Map<AppCategory, Long>,
+    dataKey: Long,
+    dataReady: Boolean,
+    idleAnimationEnabled: Boolean,
+    baseScale: Float = 1.4f,
+    modifier: Modifier = Modifier
+) {
+    val density = LocalDensity.current
+    val total = categories.values.fold(0L) { acc, millis -> acc + millis }.toFloat().coerceAtLeast(1f)
+    val brightness = categories.size.coerceIn(1, 5) / 5f
+    val baseAlpha = 0.3f + brightness * 0.35f
+
+    val categoryColors = HashMap<AppCategory, Color>(categories.size)
+    for (category in categories.keys) {
+        categoryColors[category] = appCategoryColor(category)
+    }
+
+    val specs = remember(categories, categoryColors, density) {
+        categories.entries
+            .sortedWith(
+                compareByDescending<Map.Entry<AppCategory, Long>> { it.value }
+                    .thenBy { it.key.id }
+            )
+            .mapIndexed { index, entry ->
+                val (category, millis) = entry
+                val share = millis.toFloat() / total
+                val rnd = java.util.Random(category.id.hashCode().toLong() * 31)
+                HeroBallSpec(
+                    id = category.id,
+                    color = categoryColors.getValue(category),
+                    radius = ((36f + share * 150f) * density.density) / 2f,
+                    alpha = (baseAlpha * (0.55f + share * 0.6f)).coerceIn(0f, 0.72f),
+                    anchorX = 0.12f + rnd.nextFloat() * 0.76f,
+                    anchorY = 0.12f + rnd.nextFloat() * 0.76f,
+                    driftX = 0.018f + rnd.nextFloat() * 0.032f,
+                    driftY = 0.014f + rnd.nextFloat() * 0.028f,
+                    phaseOffset = rnd.nextFloat() * TWO_PI,
+                    speedX = if (rnd.nextBoolean()) 1 else 2,
+                    speedY = if (rnd.nextBoolean()) 1 else 2,
+                    order = index
+                )
+            }
+    }
+    val specsById = remember(specs) { specs.associateBy { it.id } }
+    val orderedIds = remember(specs) { specs.map { it.id } }
+    val states = remember { mutableStateMapOf<String, HeroBallState>() }
+
+    LaunchedEffect(dataReady, dataKey, orderedIds) {
+        if (!dataReady) return@LaunchedEffect
+        val desired = orderedIds.toSet()
+
+        orderedIds.forEachIndexed { index, id ->
+            val state = states.getOrPut(id) { HeroBallState(specsById.getValue(id)) }
+            state.presenceJob?.cancel()
+            state.presenceJob = launch {
+                if (state.presence.value <= 0.01f) {
+                    val remaining = state.createdAt + index * HERO_BALL_STAGGER_MS -
+                        android.os.SystemClock.uptimeMillis()
+                    if (remaining > 0L) delay(remaining)
+                }
+                state.presence.animateTo(1f, tween(520, easing = FastOutSlowInEasing))
+            }
+        }
+
+        states.values
+            .filter { it.id !in desired }
+            .sortedByDescending { it.order }
+            .forEachIndexed { index, state ->
+                state.presenceJob?.cancel()
+                state.presenceJob = launch {
+                    delay(index * (HERO_BALL_STAGGER_MS / 2))
+                    state.presence.animateTo(0f, tween(240, easing = FastOutLinearInEasing))
+                    states.remove(state.id)
+                }
+            }
+    }
+
+    LaunchedEffect(specs, dataReady) {
+        if (!dataReady) return@LaunchedEffect
+        specs.forEach { spec ->
+            val state = states[spec.id] ?: return@forEach
+            state.spec = spec
+            launch {
+                state.radius.animateTo(
+                    spec.radius,
+                    spring(dampingRatio = 0.7f, stiffness = 45f)
+                )
+            }
+            launch {
+                state.peakAlpha.animateTo(spec.alpha, tween(600, easing = FastOutSlowInEasing))
+            }
+        }
+    }
+
+    val idlePhase = if (idleAnimationEnabled) {
+        rememberInfiniteTransition(label = "hero_balls_idle").animateFloat(
+            initialValue = 0f,
+            targetValue = TWO_PI,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 16000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "hero_balls_phase"
+        )
+    } else {
+        null
+    }
+
+    Canvas(modifier = modifier) {
+        val width = size.width
+        val height = size.height
+        if (width <= 0f || height <= 0f) return@Canvas
+
+        val phase = idlePhase?.value
+
+        states.values.forEach { state ->
+            val presence = state.presence.value
+            if (presence <= 0.001f) return@forEach
+            val ball = state.spec
+
+            val driftX: Float
+            val driftY: Float
+            if (phase != null) {
+                driftX = (sin(phase * ball.speedX + ball.phaseOffset) - sin(ball.phaseOffset)) * ball.driftX * width * 0.5f
+                driftY = (cos(phase * ball.speedY + ball.phaseOffset * 1.7f) - cos(ball.phaseOffset * 1.7f)) * ball.driftY * height * 0.5f
+            } else {
+                driftX = 0f
+                driftY = 0f
+            }
+            val cx = ball.anchorX * width + driftX
+            val cy = ball.anchorY * height + driftY
+            val pulse = if (phase != null) {
+                1f + 0.04f * (sin(phase * 2f + ball.phaseOffset) - sin(ball.phaseOffset)) * 0.5f
+            } else {
+                1f
+            }
+            val scale = 0.6f + 0.4f * presence
+            val radius = (state.radius.value * scale * pulse * baseScale).coerceAtLeast(1f)
+            val alpha = state.peakAlpha.value
+
+            drawCircle(
+                brush = Brush.radialGradient(
+                    0f to ball.color.copy(alpha = alpha),
+                    0.45f to ball.color.copy(alpha = alpha * 0.55f),
+                    0.78f to ball.color.copy(alpha = alpha * 0.18f),
+                    1f to Color.Transparent,
+                    center = Offset(cx, cy),
+                    radius = radius
+                ),
+                radius = radius,
+                center = Offset(cx, cy),
+                alpha = presence
+            )
+        }
+    }
+}
+
+private const val TWO_PI = 6.2831855f
+private const val HERO_BALL_STAGGER_MS = 70L
+
+private data class HeroBallSpec(
+    val id: String,
+    val color: Color,
+    val radius: Float,
+    val alpha: Float,
+    val anchorX: Float,
+    val anchorY: Float,
+    val driftX: Float,
+    val driftY: Float,
+    val phaseOffset: Float,
+    val speedX: Int,
+    val speedY: Int,
+    val order: Int
+)
+
+private class HeroBallState(initial: HeroBallSpec) {
+    val id: String = initial.id
+    val order: Int = initial.order
+    val createdAt: Long = android.os.SystemClock.uptimeMillis()
+    var spec by mutableStateOf(initial)
+    val presence = Animatable(0f)
+    val radius = Animatable(initial.radius)
+    val peakAlpha = Animatable(initial.alpha)
+    var presenceJob: kotlinx.coroutines.Job? = null
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
