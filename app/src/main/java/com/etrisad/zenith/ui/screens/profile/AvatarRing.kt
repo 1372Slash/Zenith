@@ -5,7 +5,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -16,11 +15,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 
 fun Modifier.avatarRing(
     border: AvatarBorder?,
@@ -29,14 +30,23 @@ fun Modifier.avatarRing(
     animate: Boolean = true,
     shape: Shape = CircleShape
 ): Modifier = composed {
-    if (border == null) {
-        return@composed then(Modifier.border(width, fallback, shape))
-    }
-    if (!animate || border.effect == BorderEffect.NONE) {
-        return@composed then(Modifier.border(width, borderBrushFor(border), shape))
-    }
-    when (border.effect) {
-        BorderEffect.NONE -> then(Modifier.border(width, borderBrushFor(border), shape))
+    val brush = if (border == null) fallback else borderBrushFor(border)
+    val effect = if (border == null || !animate) BorderEffect.NONE else border.effect
+
+    when (effect) {
+        BorderEffect.NONE -> {
+            then(
+                Modifier.drawWithContent {
+                    drawContent()
+                    val outline = shape.createOutline(size, layoutDirection, this)
+                    drawShapeOutline(
+                        outline = outline,
+                        brush = brush,
+                        style = Stroke(width.toPx())
+                    )
+                }
+            )
+        }
         BorderEffect.SPIN -> {
             val transition = rememberInfiniteTransition(label = "ringSpin")
             val angle by transition.animateFloat(
@@ -54,7 +64,7 @@ fun Modifier.avatarRing(
                     rotate(angle) {
                         drawShapeOutline(
                             outline = outline,
-                            brush = borderBrushFor(border),
+                            brush = brush,
                             style = Stroke(width.toPx())
                         )
                     }
@@ -72,26 +82,82 @@ fun Modifier.avatarRing(
                 label = "shineAngle"
             )
             then(
-                Modifier
-                    .border(width, borderBrushFor(border), shape)
-                    .drawWithContent {
-                        drawContent()
-                        val outline = shape.createOutline(size, layoutDirection, this)
-                        val stroke = width.toPx()
-                        val shineBrush = Brush.sweepGradient(
-                            0.0f to Color.Transparent,
-                            0.1f to Color.White.copy(alpha = 0.85f),
-                            0.2f to Color.Transparent,
-                            1.0f to Color.Transparent
+                Modifier.drawWithContent {
+                    drawContent()
+                    val outline = shape.createOutline(size, layoutDirection, this)
+                    val stroke = width.toPx()
+                    drawShapeOutline(
+                        outline = outline,
+                        brush = brush,
+                        style = Stroke(stroke)
+                    )
+                    val shineBrush = Brush.sweepGradient(
+                        0.0f to Color.Transparent,
+                        0.1f to Color.White.copy(alpha = 0.85f),
+                        0.2f to Color.Transparent,
+                        1.0f to Color.Transparent
+                    )
+                    rotate(angle) {
+                        drawShapeOutline(
+                            outline = outline,
+                            brush = shineBrush,
+                            style = Stroke(stroke, cap = StrokeCap.Round)
                         )
-                        rotate(angle) {
-                            drawShapeOutline(
-                                outline = outline,
-                                brush = shineBrush,
-                                style = Stroke(stroke, cap = StrokeCap.Round)
-                            )
-                        }
                     }
+                }
+            )
+        }
+        BorderEffect.PULSE -> {
+            val transition = rememberInfiniteTransition(label = "ringPulse")
+            val pulse by transition.animateFloat(
+                initialValue = 0.4f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 1400, easing = LinearEasing),
+                    repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+                ),
+                label = "pulseAlpha"
+            )
+            then(
+                Modifier.drawWithContent {
+                    drawContent()
+                    val outline = shape.createOutline(size, layoutDirection, this)
+                    drawShapeOutline(
+                        outline = outline,
+                        brush = brush,
+                        style = Stroke(width.toPx(), cap = StrokeCap.Round)
+                    )
+                    drawShapeOutline(
+                        outline = outline,
+                        brush = SolidColor(Color.White.copy(alpha = pulse * 0.5f)),
+                        style = Stroke((width + 2.dp).toPx(), cap = StrokeCap.Round)
+                    )
+                }
+            )
+        }
+        BorderEffect.WAVE -> {
+            val transition = rememberInfiniteTransition(label = "ringWave")
+            val angle by transition.animateFloat(
+                initialValue = -12f,
+                targetValue = 12f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 1000, easing = LinearEasing),
+                    repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+                ),
+                label = "waveAngle"
+            )
+            then(
+                Modifier.drawWithContent {
+                    drawContent()
+                    val outline = shape.createOutline(size, layoutDirection, this)
+                    rotate(angle) {
+                        drawShapeOutline(
+                            outline = outline,
+                            brush = brush,
+                            style = Stroke(width.toPx())
+                        )
+                    }
+                }
             )
         }
     }

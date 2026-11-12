@@ -1,6 +1,8 @@
 package com.etrisad.zenith.ui.screens.profile
 
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
@@ -57,6 +59,11 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.toShape
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -127,23 +134,33 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-private suspend fun deleteProfileImage(context: Context, fileName: String) =
+private suspend fun deleteProfileImage(context: Context, prefix: String) =
     withContext(Dispatchers.IO) {
         try {
-            File(File(context.filesDir, "profile"), fileName).delete()
+            File(context.filesDir, "profile").listFiles()?.forEach { file ->
+                if (file.name.startsWith("${prefix}_") || file.name == "$prefix.jpg") {
+                    file.delete()
+                }
+            }
         } catch (_: Exception) {
         }
     }
+
 private suspend fun persistPickedImage(
     context: Context,
     uri: Uri,
-    fileName: String
+    prefix: String
 ): String? = withContext(Dispatchers.IO) {
     try {
         context.contentResolver.openInputStream(uri)?.use { input ->
             val dir = File(context.filesDir, "profile").apply { mkdirs() }
-            val out = File(dir, fileName)
+            val out = File(dir, "${prefix}_${System.currentTimeMillis()}.jpg")
             out.outputStream().use { output -> input.copyTo(output) }
+            dir.listFiles()?.forEach { file ->
+                val stale = file.absolutePath != out.absolutePath &&
+                    (file.name.startsWith("${prefix}_") || file.name == "$prefix.jpg")
+                if (stale) file.delete()
+            }
             out.absolutePath
         }
     } catch (_: Exception) {
@@ -186,14 +203,29 @@ fun ProfileScreen(
     var isSharing by remember { mutableStateOf(false) }
     var isEditing by rememberSaveable { mutableStateOf(false) }
     var selectedAchId by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) { profileViewModel.refresh() }
+    var installedPackages by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var pendingLifetimeRemoval by remember { mutableStateOf<LifetimeApp?>(null) }
+    LaunchedEffect(Unit) {
+        profileViewModel.refresh()
+        installedPackages = withContext(Dispatchers.IO) {
+            runCatching {
+                val pm = context.packageManager
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(0L))
+                } else {
+                    @Suppress("DEPRECATION")
+                    pm.getInstalledPackages(0)
+                }
+            }.getOrDefault(emptyList()).map { it.packageName }.toSet()
+        }
+    }
 
     val avatarPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                val path = persistPickedImage(context, uri, "avatar.jpg")
+                val path = persistPickedImage(context, uri, "avatar")
                 if (path != null) {
                     preferencesRepository.setUserAvatarUri(path)
                 } else {
@@ -207,7 +239,7 @@ fun ProfileScreen(
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                val path = persistPickedImage(context, uri, "banner.jpg")
+                val path = persistPickedImage(context, uri, "banner")
                 if (path != null) {
                     preferencesRepository.setUserBannerUri(path)
                 } else {
@@ -294,13 +326,13 @@ fun ProfileScreen(
                 onBannerClick = { bannerPicker.launch("image/*") },
                 onDeleteAvatar = {
                     scope.launch {
-                        deleteProfileImage(context, "avatar.jpg")
+                        deleteProfileImage(context, "avatar")
                         preferencesRepository.setUserAvatarUri("")
                     }
                 },
                 onDeleteBanner = {
                     scope.launch {
-                        deleteProfileImage(context, "banner.jpg")
+                        deleteProfileImage(context, "banner")
                         preferencesRepository.setUserBannerUri("")
                     }
                 }
@@ -335,6 +367,9 @@ fun ProfileScreen(
                         isLoading = state.isLoading,
                         formatDuration = homeViewModel::formatLongDuration,
                         onAppClick = onAppClick,
+                        isEditing = isEditing,
+                        installedPackages = installedPackages,
+                        onRemoveApp = { pendingLifetimeRemoval = it },
                         shape = StatsGroupTopShape
                     )
                     ProfileHeatmapCard(
@@ -514,6 +549,33 @@ fun ProfileScreen(
         )
     }
 
+    }
+
+    pendingLifetimeRemoval?.let { app ->
+        AlertDialog(
+            onDismissRequest = { pendingLifetimeRemoval = null },
+            title = { Text("Remove from lifetime stats?") },
+            text = {
+                Text(
+                    "\"${app.appName}\" is no longer installed on this device. Removing it deletes its lifetime usage history and frees the slot for the next app."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        profileViewModel.removeLifetimeApp(app.packageName)
+                        pendingLifetimeRemoval = null
+                    }
+                ) {
+                    Text("Remove", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingLifetimeRemoval = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     if (showNameDialog) {
@@ -990,6 +1052,9 @@ private fun LifetimeTopAppsCard(
     isLoading: Boolean,
     formatDuration: (Long) -> String,
     onAppClick: (String) -> Unit,
+    isEditing: Boolean = false,
+    installedPackages: Set<String> = emptySet(),
+    onRemoveApp: (LifetimeApp) -> Unit = {},
     shape: Shape = RoundedCornerShape(24.dp)
 ) {
     Card(
@@ -1030,7 +1095,10 @@ private fun LifetimeTopAppsCard(
                 LifetimePodium(
                     topApps = topApps,
                     formatDuration = formatDuration,
-                    onAppClick = onAppClick
+                    onAppClick = onAppClick,
+                    isEditing = isEditing,
+                    installedPackages = installedPackages,
+                    onRemoveApp = onRemoveApp
                 )
             }
         }
@@ -1041,8 +1109,12 @@ private fun LifetimeTopAppsCard(
 private fun LifetimePodium(
     topApps: List<LifetimeApp>,
     formatDuration: (Long) -> String,
-    onAppClick: (String) -> Unit
+    onAppClick: (String) -> Unit,
+    isEditing: Boolean = false,
+    installedPackages: Set<String> = emptySet(),
+    onRemoveApp: (LifetimeApp) -> Unit = {}
 ) {
+    val context = LocalContext.current
     val slots = remember(topApps) {
         when {
             topApps.size >= 3 -> listOf(
@@ -1058,11 +1130,31 @@ private fun LifetimePodium(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         slots.forEach { (rank, app) ->
+            val isUninstalled = remember(app.packageName, installedPackages) {
+                if (installedPackages.isEmpty()) {
+                    if (app.packageName.startsWith("zenith-web:")) {
+                        false
+                    } else {
+                        runCatching {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                context.packageManager.getPackageInfo(app.packageName, PackageManager.PackageInfoFlags.of(0L))
+                            } else {
+                                @Suppress("DEPRECATION")
+                                context.packageManager.getPackageInfo(app.packageName, 0)
+                            }
+                        }.isFailure
+                    }
+                } else {
+                    app.packageName !in installedPackages
+                }
+            }
             PodiumColumn(
                 rank = rank,
                 app = app,
                 timeLabel = formatDuration(app.totalMillis),
                 onClick = { onAppClick(app.packageName) },
+                canRemove = isEditing && isUninstalled,
+                onRemove = { onRemoveApp(app) },
                 modifier = Modifier.weight(1f)
             )
         }
@@ -1075,6 +1167,8 @@ private fun PodiumColumn(
     app: LifetimeApp,
     timeLabel: String,
     onClick: () -> Unit,
+    canRemove: Boolean = false,
+    onRemove: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val barHeight = when (rank) {
@@ -1115,31 +1209,52 @@ private fun PodiumColumn(
         Spacer(modifier = Modifier.height(6.dp))
         val isWebsite = app.packageName.startsWith("zenith-web:")
         val iconShape = appIconShape(isWebsite)
-        Surface(
-            onClick = onClick,
-            shape = iconShape,
-            color = Color.Transparent,
-            modifier = Modifier.size(if (rank == 1) 56.dp else 48.dp)
-        ) {
-            SubcomposeAsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data("app-icon://${app.packageName}").crossfade(300).build(),
-                contentDescription = app.appName,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().clip(iconShape),
-                error = {
-                    Box(
-                        modifier = Modifier.fillMaxSize().clip(iconShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
+        Box(modifier = Modifier.size(if (rank == 1) 56.dp else 48.dp)) {
+            Surface(
+                onClick = onClick,
+                shape = iconShape,
+                color = Color.Transparent,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data("app-icon://${app.packageName}").crossfade(300).build(),
+                    contentDescription = app.appName,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().clip(iconShape),
+                    error = {
+                        Box(
+                            modifier = Modifier.fillMaxSize().clip(iconShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                if (isWebsite) Icons.Outlined.Language else Icons.Outlined.Android,
+                                null, modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                )
+            }
+            if (canRemove) {
+                Surface(
+                    onClick = onRemove,
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(22.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            if (isWebsite) Icons.Outlined.Language else Icons.Outlined.Android,
-                            null, modifier = Modifier.size(24.dp)
+                            imageVector = Icons.Outlined.Close,
+                            contentDescription = "Remove ${app.appName} from lifetime stats",
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
-            )
+            }
         }
         Spacer(modifier = Modifier.height(6.dp))
         Box(
@@ -1235,81 +1350,103 @@ private fun XpCard(
 ) {
     val xpToNext = xpToNextLevel(xpTotal)
     val nextReward = remember(level) { nextLevelReward(level) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "scale"
+    )
+
+    val containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    val shape = RoundedCornerShape(24.dp)
+
     Card(
         onClick = onClick,
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        modifier = Modifier.fillMaxWidth()
+        interactionSource = interactionSource,
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .clip(shape),
+        shape = shape,
+        colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "$level",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                        Text(
-                            text = "LEVEL",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
-                        )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    val currentShapeDef = remember(level) {
+                        PROFILE_SHAPES.lastOrNull { level >= it.requiredLevel } ?: PROFILE_SHAPES.first()
                     }
+                    val progressiveShape = currentShapeDef.shapeResolver()
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiary,
+                        shape = progressiveShape,
+                        modifier = Modifier.size(64.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "$level",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.onTertiary
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "level",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "$xpTotal XP",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Black
+                        text = "Level Progress",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.ExtraBold
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "$unlockedBadges/$totalBadges badges",
+                        text = "${formatXp(xpTotal)} XP",
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearWavyProgressIndicator(
+                        progress = { levelProgress.coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "${formatXp(xpToNext)} XP to Lvl ${level + 1} • ${nextReward?.let { (_, name) -> "Next: $name" } ?: "Max level"}",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
+                Spacer(modifier = Modifier.width(8.dp))
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = "XP details",
+                    contentDescription = "Open level",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            LinearWavyProgressIndicator(
-                progress = { levelProgress },
-                modifier = Modifier.fillMaxWidth().height(8.dp),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                stroke = Stroke(
-                    width = with(LocalDensity.current) { 4.dp.toPx() },
-                    cap = StrokeCap.Round
-                )
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "$xpToNext XP to Level ${level + 1} - tap to open Level",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = nextReward?.let { (req, name) ->
-                    "Next reward: $name at Level $req"
-                } ?: "All level rewards unlocked",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.tertiary
-            )
         }
     }
 }
@@ -2019,7 +2156,7 @@ private fun renderAndShareProfile(
             canvas.drawText(userTitle, 64f, y, accent)
             y += 70f
         }
-        canvas.drawText("Level $level  -  $xpTotal XP  -  Best streak $streakBest days", 64f, y, sub)
+        canvas.drawText("Level $level  -  ${formatXp(xpTotal)} XP  -  Best streak $streakBest days", 64f, y, sub)
 
         y += 120f
         canvas.drawText("TOP APPS (LIFETIME)", 64f, y, section)

@@ -164,10 +164,19 @@ fun levelProgressForXp(xp: Long): Float {
     if (next <= current) return 1f
     return ((xp - current).toFloat() / (next - current)).coerceIn(0f, 1f)
 }
+fun formatXp(xp: Long): String {
+    val res = when {
+        xp >= 1_000_000_000L -> String.format(java.util.Locale.US, "%.1fB", xp / 1_000_000_000.0)
+        xp >= 1_000_000L -> String.format(java.util.Locale.US, "%.1fM", xp / 1_000_000.0)
+        xp >= 1_000L -> String.format(java.util.Locale.US, "%.1fK", xp / 1_000.0)
+        else -> xp.toString()
+    }
+    return res.replace(".0K", "K").replace(".0M", "M").replace(".0B", "B")
+}
 fun xpToNextLevel(xpTotal: Long): Long =
     (xpForLevel(levelForXp(xpTotal) + 1) - xpTotal).coerceAtLeast(0L)
 data class LevelTitle(val id: String, val name: String, val requiredLevel: Int)
-enum class BorderEffect { NONE, SPIN, SHINE }
+enum class BorderEffect { NONE, SPIN, SHINE, PULSE, WAVE }
 
 data class AvatarBorder(
     val id: String,
@@ -260,38 +269,42 @@ val AVATAR_BORDERS = listOf(
         BorderEffect.SPIN
     ),
     AvatarBorder(
-        "prism", "Prism", 59,
+        "crimson_flame", "Crimson Flame", 59,
         listOf(
-            Color(0xFFFF8A80), Color(0xFFFFD180), Color(0xFFA7FFEB),
-            Color(0xFF82B1FF), Color(0xFFEA80FC)
-        )
+            Color(0xFFE91E63), Color(0xFFFF4081), Color(0xFFFF1744),
+            Color(0xFFFF5722), Color(0xFFFFAB00)
+        ),
+        BorderEffect.SPIN
     ),
     AvatarBorder(
-        "spectrum", "Spectrum", 62,
+        "solar_flare", "Solar Flare", 62,
         listOf(
-            Color(0xFFFF5252), Color(0xFFFFD740), Color(0xFF69F0AE),
-            Color(0xFF40C4FF), Color(0xFFE040FB)
-        )
+            Color(0xFFFF4081), Color(0xFFFF1744), Color(0xFFFF6D00),
+            Color(0xFFFFAB00), Color(0xFFFFD600)
+        ),
+        BorderEffect.SHINE
     ),
     AvatarBorder(
-        "nebula", "Nebula", 65,
+        "emerald_forest", "Emerald Forest", 65,
         listOf(
-            Color(0xFFEA80FC), Color(0xFF7B1FA2), Color(0xFF29B6F6),
-            Color(0xFFA7FFEB), Color(0xFFFFF176)
-        )
+            Color(0xFFFFD600), Color(0xFF76FF03), Color(0xFF00C853),
+            Color(0xFF69F0AE), Color(0xFF00B8D4)
+        ),
+        BorderEffect.SPIN
     ),
     AvatarBorder(
-        "carnival", "Carnival", 68,
+        "ocean_wave", "Ocean Wave", 68,
         listOf(
-            Color(0xFFFF8A80), Color(0xFFFFAB40), Color(0xFFB9F6CA),
-            Color(0xFF84FFFF), Color(0xFFB388FF)
-        )
+            Color(0xFF69F0AE), Color(0xFF00B8D4), Color(0xFF2979FF),
+            Color(0xFF3F51B5), Color(0xFF6200EA)
+        ),
+        BorderEffect.SHINE
     ),
     AvatarBorder(
-        "eternity", "Eternity", 71,
+        "royal_amethyst", "Royal Amethyst", 71,
         listOf(
-            Color(0xFFD1C4E9), Color(0xFFB39DDB), Color(0xFF90CAF9),
-            Color(0xFF80DEEA), Color(0xFFA5D6A7)
+            Color(0xFF2979FF), Color(0xFF651FFF), Color(0xFF6200EA),
+            Color(0xFFD500F9), Color(0xFFFF007F)
         ),
         BorderEffect.SPIN
     )

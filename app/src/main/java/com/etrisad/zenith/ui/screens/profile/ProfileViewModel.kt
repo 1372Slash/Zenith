@@ -209,6 +209,24 @@ class ProfileViewModel(
         refresh()
     }
 
+    fun removeLifetimeApp(packageName: String) {
+        if (packageName.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                shieldRepository.deleteAllUsageHistoryForPackage(packageName)
+                val prefs = userPreferencesRepository.userPreferencesFlow.first()
+                val totals = decodeSnapshot(prefs.lifetimeSnapshot).toMutableMap()
+                totals.remove(packageName)
+                userPreferencesRepository.setLifetimeSnapshot(
+                    encodeSnapshot(totals),
+                    dateStr(System.currentTimeMillis())
+                )
+            } catch (_: Exception) {
+            }
+            refresh(silent = true)
+        }
+    }
+
     fun refresh(silent: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {
             refreshMutex.withLock {

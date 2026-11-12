@@ -13,7 +13,9 @@ import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.local.entity.WebsiteUsageEntity
+import com.etrisad.zenith.data.model.AppCategory
 import com.etrisad.zenith.data.model.IncentiveTier
+import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.service.SharedMonitoringState
 import kotlinx.coroutines.CoroutineScope
@@ -410,6 +412,23 @@ class ShieldRepository(
 
     suspend fun getWebsiteDomains(): List<String> {
         return websiteUsageDao.getAllDomains()
+    }
+
+    suspend fun deleteWebsiteDomain(domain: String) {
+        val packageName = WebsiteRepository.createPackageName(domain)
+        deleteAllUsageHistoryForPackage(packageName)
+        userPreferencesRepository.setAppCategory(packageName, AppCategory.UNCATEGORIZED)
+        userPreferencesRepository.removePackageFromLifetimeSnapshot(packageName)
+    }
+
+    suspend fun deleteAllUsageHistoryForPackage(packageName: String) {
+        dailyUsageDao.deleteByPackages(listOf(packageName))
+        hourlyUsageDao.deleteByPackages(listOf(packageName))
+        if (WebsiteRepository.isWebsitePackageName(packageName)) {
+            websiteUsageDao.deleteByDomain(
+                WebsiteRepository.extractDomainFromPackageName(packageName)
+            )
+        }
     }
 
     suspend fun getWebsiteTotalUsageSince(domain: String, sinceDate: String): Long {

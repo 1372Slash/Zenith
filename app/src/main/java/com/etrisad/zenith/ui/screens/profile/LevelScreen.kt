@@ -24,6 +24,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircleOutline
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.WorkspacePremium
+import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.toShape
+import androidx.compose.material3.Surface
+import androidx.compose.ui.draw.clip
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -32,15 +42,33 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.heightIn
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
@@ -48,6 +76,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.etrisad.zenith.ui.components.ZenithButton
+import com.etrisad.zenith.ui.components.ZenithButtonSize
+import com.etrisad.zenith.ui.components.ZenithButtonType
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.focus.PreferenceCategory
 import kotlinx.coroutines.launch
@@ -75,6 +106,10 @@ fun LevelScreen(
     )
     val scope = rememberCoroutineScope()
     val level = state.level
+    val unlockedBadges = remember(state.achievements) {
+        state.achievements.count { it.earnedTier != null }
+    }
+    val totalBadges = state.achievements.size
 
     val equippedTitleId = remember(preferences.userTitle, level) {
         LEVEL_TITLES.find { it.id == preferences.userTitle }
@@ -90,6 +125,7 @@ fun LevelScreen(
     }
     val equippedShape = equippedShapeDef.shapeResolver()
     val nextReward = remember(level) { nextLevelReward(level) }
+    var selectedBorder by remember { mutableStateOf<AvatarBorder?>(null) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -102,70 +138,97 @@ fun LevelScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item(key = "overview") {
+            val interactionSource = remember { MutableInteractionSource() }
+            val isPressed by interactionSource.collectIsPressedAsState()
+            val scale by animateFloatAsState(
+                targetValue = if (isPressed) 0.98f else 1f,
+                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                label = "scale"
+            )
+            val containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            val shape = RoundedCornerShape(24.dp)
+
             Card(
-                shape = RoundedCornerShape(24.dp),
+                onClick = {},
+                interactionSource = interactionSource,
+                shape = shape,
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    containerColor = containerColor
                 ),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .scale(scale)
+                    .clip(shape)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .avatarRing(
-                                    AVATAR_BORDERS.find { it.id == equippedBorderId }, 3.dp,
-                                    SolidColor(
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                                    ),
-                                    shape = equippedShape
-                                )
-                                .padding(3.dp)
-                                .background(MaterialTheme.colorScheme.primary, equippedShape),
-                            contentAlignment = Alignment.Center
-                        ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            val currentShapeDef = remember(level) {
+                                PROFILE_SHAPES.lastOrNull { level >= it.requiredLevel } ?: PROFILE_SHAPES.first()
+                            }
+                            val progressiveShape = currentShapeDef.shapeResolver()
+                            Surface(
+                                color = MaterialTheme.colorScheme.tertiary,
+                                shape = progressiveShape,
+                                modifier = Modifier.size(64.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "$level",
+                                        style = MaterialTheme.typography.headlineMedium,
+                                        fontWeight = FontWeight.Black,
+                                        color = MaterialTheme.colorScheme.onTertiary
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "$level",
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Black,
-                                color = MaterialTheme.colorScheme.onPrimary
+                                text = "level",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.secondary
                             )
                         }
                         Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "${state.xpTotal} XP",
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Black
+                                text = "Level Progress",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.ExtraBold
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = nextReward?.let { (req, name) ->
-                                    "Next reward: $name at Level $req"
-                                } ?: "All level rewards unlocked",
+                                text = "${formatXp(state.xpTotal)} XP",
+                                style = MaterialTheme.typography.displaySmall,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LinearWavyProgressIndicator(
+                                progress = { state.levelProgress.coerceIn(0f, 1f) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "${formatXp(xpToNextLevel(state.xpTotal))} XP to Lvl ${level + 1} • ${nextReward?.let { (_, name) -> "Next: $name" } ?: "Max level"}",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.tertiary
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    LinearWavyProgressIndicator(
-                        progress = { state.levelProgress },
-                        modifier = Modifier.fillMaxWidth().height(8.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                        stroke = Stroke(
-                            width = with(LocalDensity.current) { 4.dp.toPx() },
-                            cap = StrokeCap.Round
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "${xpToNextLevel(state.xpTotal)} XP to Level ${level + 1}",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
                 }
             }
         }
@@ -291,13 +354,9 @@ fun LevelScreen(
                             val equipped = equippedBorderId == border.id && unlocked
                             Card(
                                 onClick = {
-                                    scope.launch {
-                                        preferencesRepository.setUserAvatarBorder(
-                                            if (equipped) "" else border.id
-                                        )
-                                    }
+                                    selectedBorder = border
                                 },
-                                enabled = unlocked,
+                                enabled = true,
                                 shape = rewardGroupShape(index, AVATAR_BORDERS.size, unlocked),
                                 colors = CardDefaults.cardColors(
                                     containerColor = if (unlocked) {
@@ -528,7 +587,7 @@ fun LevelScreen(
                                             modifier = Modifier.weight(1f)
                                         )
                                         Text(
-                                            text = "+${day.xp} XP",
+                                            text = "+${formatXp(day.xp.toLong())} XP",
                                             style = MaterialTheme.typography.labelMedium,
                                             fontWeight = FontWeight.Black,
                                             color = MaterialTheme.colorScheme.tertiary
@@ -554,6 +613,195 @@ fun LevelScreen(
                         )
                     }
                 }
+            }
+        }
+    }
+
+    selectedBorder?.let { border ->
+        val equipped = equippedBorderId == border.id && (level >= border.requiredLevel)
+        BorderDetailSheet(
+            border = border,
+            level = level,
+            xpTotal = state.xpTotal,
+            avatarUri = preferences.userAvatarUri,
+            equipped = equipped,
+            shape = equippedShape,
+            onDismiss = { selectedBorder = null },
+            onEquipToggle = {
+                scope.launch {
+                    preferencesRepository.setUserAvatarBorder(
+                        if (equipped) "" else border.id
+                    )
+                }
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun BorderDetailSheet(
+    border: AvatarBorder,
+    level: Int,
+    xpTotal: Long,
+    avatarUri: String,
+    equipped: Boolean,
+    shape: Shape,
+    onDismiss: () -> Unit,
+    onEquipToggle: () -> Unit
+) {
+    val unlocked = level >= border.requiredLevel
+    val requiredXp = xpForLevel(border.requiredLevel)
+    val remainingXp = (requiredXp - xpTotal).coerceAtLeast(0L)
+    val progressFraction = if (requiredXp <= 0L) 1f else (xpTotal.toFloat() / requiredXp.toFloat()).coerceIn(0f, 1f)
+
+    val containerColor by animateColorAsState(
+        targetValue = MaterialTheme.colorScheme.surfaceContainerLow,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "borderSheetContainerColor"
+    )
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(88.dp)
+                        .clip(shape)
+                        .background(MaterialTheme.colorScheme.tertiaryContainer)
+                        .avatarRing(
+                            border, 6.dp,
+                            SolidColor(MaterialTheme.colorScheme.surfaceContainerHighest),
+                            animate = true,
+                            shape = shape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    var imgError by remember(avatarUri) { mutableStateOf(false) }
+                    if (avatarUri.isEmpty() || imgError) {
+                        Icon(
+                            imageVector = Icons.Outlined.Person,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(40.dp)
+                        )
+                    } else {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(avatarUri).crossfade(300).build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            onError = { imgError = true },
+                            modifier = Modifier.fillMaxSize().clip(shape)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = border.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Border",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (unlocked) "Unlocked • Level ${border.requiredLevel}" else "Locked • Requires Level ${border.requiredLevel}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (unlocked) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = containerColor),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (unlocked) "Unlocked" else "Progress to Unlock",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = "${(progressFraction * 100).toInt()}%",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearWavyProgressIndicator(
+                            progress = { progressFraction },
+                            modifier = Modifier.fillMaxWidth().height(8.dp),
+                            color = MaterialTheme.colorScheme.tertiary,
+                            trackColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f),
+                            stroke = Stroke(
+                                width = with(LocalDensity.current) { 4.dp.toPx() },
+                                cap = StrokeCap.Round
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = if (unlocked) "You have unlocked this avatar border. Equip it to display on your profile avatar."
+                            else "${formatXp(remainingXp)} XP needed (Target: ${formatXp(requiredXp)} XP) to reach Level ${border.requiredLevel}.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                ZenithButton(
+                    onClick = {
+                        onEquipToggle()
+                        onDismiss()
+                    },
+                    enabled = unlocked,
+                    fillMaxWidth = true,
+                    size = ZenithButtonSize.ExtraLarge,
+                    type = if (equipped) ZenithButtonType.Outlined else ZenithButtonType.Filled,
+                    icon = if (equipped) Icons.Outlined.CheckCircleOutline else Icons.Outlined.WorkspacePremium,
+                    text = if (equipped) "Equipped (Tap to Unequip)"
+                    else if (unlocked) "Equip Border"
+                    else "Locked (Reach Level ${border.requiredLevel})"
+                )
             }
         }
     }

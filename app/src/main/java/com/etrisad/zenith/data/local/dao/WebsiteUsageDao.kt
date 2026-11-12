@@ -36,6 +36,9 @@ interface WebsiteUsageDao {
     @Query("SELECT DISTINCT domain FROM website_usage ORDER BY domain")
     suspend fun getAllDomains(): List<String>
 
+    @Query("DELETE FROM website_usage WHERE domain = :domain")
+    suspend fun deleteByDomain(domain: String)
+
     @Query("SELECT COUNT(DISTINCT domain) FROM website_usage")
     suspend fun getDistinctDomainCount(): Int
 
