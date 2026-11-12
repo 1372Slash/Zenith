@@ -339,6 +339,99 @@ private fun MultiWebsitesContent(
             ),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
+        val recentWebsites = uiState.recentWebsites
+        if (uiState.websiteSearchQuery.isBlank() && recentWebsites.isNotEmpty()) {
+            item {
+                Text(
+                    text = "Recently Opened",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+            }
+            itemsIndexed(
+                items = recentWebsites,
+                key = { _, domain -> "recent_$domain" }
+            ) { index, domain ->
+                val packageName = WebsiteRepository.createPackageName(domain)
+                val isSelected = packageName in uiState.selectedAppsForSchedule
+                val shape = when {
+                    recentWebsites.size == 1 -> RoundedCornerShape(24.dp)
+                    index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                    index == recentWebsites.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                    else -> RoundedCornerShape(8.dp)
+                }
+                Card(
+                    onClick = { onWebsiteToggled?.invoke(domain) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = shape,
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceContainerHigh
+                    )
+                ) {
+                    ListItem(
+                        headlineContent = {
+                            Text(
+                                text = WebsiteRepository.getDisplayName(domain, "https://$domain"),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        supportingContent = {
+                            Text(
+                                text = domain,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        leadingContent = {
+                            val domainOnly = WebsiteRepository.extractDomain(domain)
+                            val wsShape = MaterialShapes.Square.toShape()
+                            SubcomposeAsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data("app-icon://${WebsiteRepository.createPackageName(domainOnly)}")
+                                    .crossfade(400)
+                                    .build(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant, wsShape)
+                                    .clip(wsShape),
+                                contentScale = ContentScale.Crop,
+                                error = {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(wsShape)
+                                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Outlined.Language, contentDescription = null)
+                                    }
+                                }
+                            )
+                        },
+                        trailingContent = {
+                            Checkbox(
+                                checked = isSelected,
+                                onCheckedChange = { onWebsiteToggled?.invoke(domain) },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = MaterialTheme.colorScheme.primary,
+                                    uncheckedColor = MaterialTheme.colorScheme.outline
+                                )
+                            )
+                        },
+                        colors = ListItemDefaults.colors(
+                            containerColor = Color.Transparent
+                        )
+                    )
+                }
+            }
+            item { Spacer(modifier = Modifier.height(16.dp)) }
+        }
+
         if (uiState.websiteSuggestions.isNotEmpty()) {
             item {
                 Text(

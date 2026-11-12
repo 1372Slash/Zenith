@@ -72,7 +72,8 @@ data class FocusUiState(
     val websiteSearchQuery: String = "",
     val websiteSuggestions: List<String> = emptyList(),
     val websiteSuggestionsLoading: Boolean = false,
-    val selectedWebsiteUrl: String? = null
+    val selectedWebsiteUrl: String? = null,
+    val recentWebsites: List<String> = emptyList()
 )
 
 @OptIn(kotlinx.coroutines.FlowPreview::class)
@@ -145,7 +146,13 @@ class FocusViewModel(
                     ) }
                 }
         }
+        viewModelScope.launch { refreshRecentWebsites() }
         startRealTimeUpdates()
+    }
+
+    private suspend fun refreshRecentWebsites() {
+        val domains = runCatching { shieldRepository.getWebsiteDomains() }.getOrDefault(emptyList())
+        _uiState.update { it.copy(recentWebsites = domains) }
     }
 
     fun onShieldSortTypeChange(sortType: ShieldSortType) {
@@ -380,6 +387,7 @@ class FocusViewModel(
     fun setPickerTab(tab: PickerTab) {
         websiteValidationJob?.cancel()
         _uiState.value = _uiState.value.copy(pickerTab = tab, websiteSearchQuery = "", websiteSuggestions = emptyList(), websiteSuggestionsLoading = false)
+        if (tab == PickerTab.WEBSITES) viewModelScope.launch { refreshRecentWebsites() }
     }
 
     fun onWebsiteSearchQueryChange(query: String) {
@@ -494,6 +502,7 @@ class FocusViewModel(
             websiteSuggestions = emptyList(),
             websiteSuggestionsLoading = false
         )
+        viewModelScope.launch { refreshRecentWebsites() }
     }
 
     fun confirmWebsiteForSchedule(domain: String) {

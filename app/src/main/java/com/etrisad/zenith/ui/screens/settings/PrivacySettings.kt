@@ -21,7 +21,8 @@ fun PrivacySettings(
     onAccessibilityLimitedModeChange: (Boolean) -> Unit,
     onNotificationInterceptionEnabledChange: (Boolean) -> Unit,
     onNotificationExcludedPackagesChange: (Set<String>) -> Unit,
-    onStoreInterceptedNotificationContentChange: (Boolean) -> Unit
+    onStoreInterceptedNotificationContentChange: (Boolean) -> Unit,
+    onManageRecordedWebsites: () -> Unit = {}
 ) {
     var showAppExclusionsSheet by remember { mutableStateOf(false) }
     var showNotifExcludedSheet by remember { mutableStateOf(false) }
@@ -40,6 +41,16 @@ fun PrivacySettings(
             onClick = { showAppExclusionsSheet = true },
             icon = Icons.Outlined.Security,
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        SettingsActionItem(
+            title = "Recorded Websites",
+            summary = "Review and remove websites Zenith has tracked",
+            onClick = onManageRecordedWebsites,
+            icon = Icons.Outlined.Language,
+            shape = RoundedCornerShape(8.dp)
         )
 
         Spacer(modifier = Modifier.height(4.dp))

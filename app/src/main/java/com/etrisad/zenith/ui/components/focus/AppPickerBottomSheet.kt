@@ -328,6 +328,99 @@ private fun WebsitesContent(
                 bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 32.dp
             )
         ) {
+            val recentWebsites = uiState.recentWebsites
+            if (uiState.websiteSearchQuery.isBlank() && recentWebsites.isNotEmpty()) {
+                item {
+                    PickerSectionHeader(title = "Recently Opened")
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                itemsIndexed(
+                    items = recentWebsites,
+                    key = { _, domain -> "recent_$domain" }
+                ) { index, domain ->
+                    val displayName = com.etrisad.zenith.data.website.WebsiteRepository.getDisplayName(domain, "https://$domain")
+                    val shape = when {
+                        recentWebsites.size == 1 -> RoundedCornerShape(24.dp)
+                        index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                        index == recentWebsites.size - 1 -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                        else -> RoundedCornerShape(8.dp)
+                    }
+                    Card(
+                        onClick = {
+                            scope.launch {
+                                sheetState.hide()
+                                onWebsiteSelected?.invoke(domain)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().animateItem(),
+                        shape = shape,
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        )
+                    ) {
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    text = displayName,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            supportingContent = {
+                                Text(
+                                    text = domain,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            leadingContent = {
+                                val domainOnly = com.etrisad.zenith.data.website.WebsiteRepository.extractDomain(domain)
+                                val wsShape = MaterialShapes.Square.toShape()
+                                SubcomposeAsyncImage(
+                                    model = ImageRequest.Builder(LocalContext.current)
+                                        .data("app-icon://${com.etrisad.zenith.data.website.WebsiteRepository.createPackageName(domainOnly)}")
+                                        .crossfade(400)
+                                        .build(),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant, wsShape)
+                                        .clip(wsShape),
+                                    contentScale = ContentScale.Crop,
+                                    error = {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .clip(wsShape)
+                                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Language,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                        }
+                                    }
+                                )
+                            },
+                            trailingContent = {
+                                Icon(
+                                    imageVector = Icons.Outlined.Language,
+                                    contentDescription = "Select",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            colors = ListItemDefaults.colors(
+                                containerColor = Color.Transparent
+                            )
+                        )
+                    }
+                }
+                item { Spacer(modifier = Modifier.height(24.dp)) }
+            }
+
             if (uiState.websiteSuggestions.isNotEmpty()) {
             item {
                 PickerSectionHeader(title = "Suggestions")
