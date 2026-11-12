@@ -169,7 +169,7 @@ If you find Zenith helpful and would like to support its development, you can su
 ## Special Thanks
 
 - **[Tomato](https://github.com/nsh07/Tomato)** - Interface and promotional material inspiration.
-- **[Curbox](https://github.com/iecal/curbox-android-kt-rewrite)** - Short-video detection scripts, accessibility-node counting, and website keyword matching adapted from Curbox. Credit to the Curbox contributors.
+- **[Curbox](https://github.com/curbox-app/curbox-android)** - Short-video detection scripts, accessibility-node counting, and website keyword matching adapted from Curbox. Credit to the Curbox contributors.
 
 ## License
 
