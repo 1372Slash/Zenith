@@ -281,13 +281,29 @@ fun customCategoryIcon(iconKey: String): ImageVector =
     customCategoryIcons.firstOrNull { it.first == iconKey }?.second
         ?: Icons.AutoMirrored.Outlined.Label
 
-fun appCategoryIcon(category: AppCategory): ImageVector = when (category.id) {
-    AppCategory.PRODUCTIVE.id -> Icons.Outlined.School
-    AppCategory.SOCIAL.id -> Icons.Outlined.Groups
-    AppCategory.LEISURE.id -> Icons.Outlined.SportsEsports
-    AppCategory.UTILITIES.id -> Icons.Outlined.Apps
-    AppCategory.UNCATEGORIZED.id -> Icons.AutoMirrored.Outlined.Label
-    else -> customCategoryIcon(category.iconKey)
+fun appCategoryIcon(category: AppCategory): ImageVector {
+    customCategoryIcons.firstOrNull { it.first == category.iconKey }?.let { return it.second }
+    return when (category.id) {
+        AppCategory.PRODUCTIVE.id -> Icons.Outlined.School
+        AppCategory.SOCIAL.id -> Icons.Outlined.Groups
+        AppCategory.LEISURE.id -> Icons.Outlined.SportsEsports
+        AppCategory.UTILITIES.id -> Icons.Outlined.Apps
+        AppCategory.UNCATEGORIZED.id -> Icons.AutoMirrored.Outlined.Label
+        else -> customCategoryIcon(category.iconKey)
+    }
+}
+
+fun categoryIconPickerKey(category: AppCategory?): String {
+    if (category != null) {
+        if (customCategoryIcons.any { it.first == category.iconKey }) return category.iconKey
+        when (category.id) {
+            AppCategory.PRODUCTIVE.id -> return "school"
+            AppCategory.SOCIAL.id -> return "groups"
+            AppCategory.LEISURE.id -> return "games"
+            AppCategory.UTILITIES.id -> return "apps"
+        }
+    }
+    return customCategoryIcons.first().first
 }
 
 @Composable

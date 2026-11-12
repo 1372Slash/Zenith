@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -46,6 +47,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.etrisad.zenith.data.model.AppCategory
+import com.etrisad.zenith.data.website.TldSuggestions
+import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.ui.components.appCategoryIcon
 import com.etrisad.zenith.ui.components.focus.MultiAppIconGroup
 import com.etrisad.zenith.ui.components.focus.MultiAppPickerBottomSheet
@@ -68,7 +71,8 @@ fun CategorySettingsBottomSheet(
     onDelete: (() -> Unit)? = null,
     apps: List<AppInfo> = emptyList(),
     assignedApps: Set<String> = emptySet(),
-    onAppsChange: ((Set<String>) -> Unit)? = null
+    onAppsChange: ((Set<String>) -> Unit)? = null,
+    recentWebsites: List<String> = emptyList()
 ) {
     val configuration = LocalConfiguration.current
     val scope = rememberCoroutineScope()
@@ -82,14 +86,19 @@ fun CategorySettingsBottomSheet(
 
     val screenHeight = configuration.screenHeightDp.dp
 
+    val existingColor = if (existingCategory != null) appCategoryColor(existingCategory) else null
     var name by remember { mutableStateOf(existingCategory?.label ?: "") }
     var description by remember { mutableStateOf(existingCategory?.description ?: "Your custom category") }
-    var iconKey by remember { mutableStateOf(existingCategory?.iconKey ?: customCategoryIcons.first().first) }
-    var colorArgb by remember { mutableStateOf(existingCategory?.colorArgb ?: customCategoryColors.first()) }
+    var iconKey by remember { mutableStateOf(categoryIconPickerKey(existingCategory)) }
+    var colorArgb by remember {
+        mutableStateOf(existingCategory?.colorArgb ?: existingColor?.toArgb() ?: customCategoryColors.first())
+    }
 
     var selectedApps by remember { mutableStateOf(assignedApps) }
     var showAppPicker by remember { mutableStateOf(false) }
     var pickerQuery by remember { mutableStateOf("") }
+    var pickerTab by remember { mutableStateOf(PickerTab.APPS) }
+    var websiteQuery by remember { mutableStateOf("") }
 
     val initialHsv = remember { FloatArray(3).also { android.graphics.Color.colorToHSV(colorArgb, it) } }
     var showCustomColor by remember { mutableStateOf(false) }
@@ -649,16 +658,25 @@ fun CategorySettingsBottomSheet(
                     .navigationBarsPadding()
             ) {
                 ZenithGroupedButton {
-                    if (onDelete != null && existingCategory != null && existingCategory.isCustom) {
+                    val customCategory = existingCategory?.isCustom == true
+                    if (onDelete != null && existingCategory != null) {
                         ZenithButtonWeighted(
                             onClick = {
                                 scope.launch { sheetState.hide() }
                                 onDelete()
                             },
-                            text = "Delete",
+                            text = if (customCategory) "Delete" else "Reset",
                             type = ZenithButtonType.Tonal,
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                            containerColor = if (customCategory) {
+                                MaterialTheme.colorScheme.errorContainer
+                            } else {
+                                MaterialTheme.colorScheme.secondaryContainer
+                            },
+                            contentColor = if (customCategory) {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            },
                             weight = 1f,
                             isFirst = true,
                             isLast = false
@@ -706,11 +724,17 @@ fun CategorySettingsBottomSheet(
                 installedApps = apps,
                 selectedAppsForSchedule = selectedApps,
                 searchQuery = pickerQuery,
-                pickerTab = PickerTab.APPS
+                pickerTab = pickerTab,
+                websiteSearchQuery = websiteQuery,
+                websiteSuggestions = TldSuggestions.suggest(websiteQuery),
+                websiteSuggestionsLoading = false,
+                recentWebsites = recentWebsites
             ),
             onDismiss = {
                 showAppPicker = false
                 pickerQuery = ""
+                websiteQuery = ""
+                pickerTab = PickerTab.APPS
             },
             onAppToggled = { packageName ->
                 selectedApps = if (packageName in selectedApps) {
@@ -722,10 +746,24 @@ fun CategorySettingsBottomSheet(
             onConfirm = {
                 showAppPicker = false
                 pickerQuery = ""
+                websiteQuery = ""
+                pickerTab = PickerTab.APPS
             },
             onSearchQueryChange = { pickerQuery = it },
-            showTabs = false,
-            title = "Select Apps",
+            onTabChange = { pickerTab = it },
+            onWebsiteSearchChange = { websiteQuery = it },
+            onWebsiteToggled = { domain ->
+                val packageName = WebsiteRepository.createPackageName(
+                    WebsiteRepository.extractDomain(domain)
+                )
+                selectedApps = if (packageName in selectedApps) {
+                    selectedApps - packageName
+                } else {
+                    selectedApps + packageName
+                }
+            },
+            showTabs = true,
+            title = "Select Apps & Websites",
             allowEmptySelection = true
         )
     }

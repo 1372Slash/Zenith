@@ -12,8 +12,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.SortByAlpha
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material.icons.outlined.SortByAlpha
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Language
@@ -29,6 +34,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.toShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.MediumFloatingActionButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -37,10 +45,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -61,6 +67,15 @@ import com.etrisad.zenith.ui.components.AppCategoryPickerSheet
 import com.etrisad.zenith.ui.components.CategoryChip
 import com.etrisad.zenith.ui.components.CategoryHeader
 import com.etrisad.zenith.ui.components.CategorySettingsBottomSheet
+import com.etrisad.zenith.ui.components.CategorySetupWizardSheet
+import com.etrisad.zenith.ui.components.ZenithButton
+import com.etrisad.zenith.ui.components.ZenithButtonSize
+import com.etrisad.zenith.ui.components.ZenithButtonType
+import com.etrisad.zenith.ui.components.customCategoryColors
+import com.etrisad.zenith.ui.components.customCategoryIcons
+import com.etrisad.zenith.ui.components.ZenithToggleButtonGroup
+import com.etrisad.zenith.ui.components.ZenithToggleOption
+import com.etrisad.zenith.ui.components.appCategoryColor
 import com.etrisad.zenith.ui.components.appCategoryIcon
 import com.etrisad.zenith.ui.viewmodel.AppInfo
 import kotlinx.coroutines.Dispatchers
@@ -85,7 +100,12 @@ fun AppCategoriesScreen(
     val shieldRepository = remember(application) { application.shieldRepository }
     val preferences by preferencesRepository.userPreferencesFlow.collectAsState(initial = UserPreferences())
     val categoryCatalog = remember(preferences) { CategoryCatalog(preferences) }
+    val defaultCategories = remember(preferences.defaultCategoryOverrides) {
+        AppCategory.assignable.map { preferences.defaultCategoryOverrides[it.id] ?: it }
+    }
     val coroutineScope = rememberCoroutineScope()
+    var sortMode by remember { mutableStateOf(CategoryBrowseSort.APP_NAME) }
+    var recentWebsites by remember { mutableStateOf<List<String>>(emptyList()) }
     var apps by remember { mutableStateOf<List<CategorisedApp>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var searchQuery by remember { mutableStateOf("") }
@@ -94,6 +114,14 @@ fun AppCategoriesScreen(
     var showCategorySheet by remember { mutableStateOf(false) }
     var editingCategory by remember { mutableStateOf<AppCategory?>(null) }
     var pendingNewApps by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var wizardQueue by remember { mutableStateOf<List<CategorisedApp>>(emptyList()) }
+    var wizardIndex by remember { mutableStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        recentWebsites = withContext(Dispatchers.IO) {
+            runCatching { shieldRepository.getWebsiteDomains() }.getOrDefault(emptyList())
+        }
+    }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -148,11 +176,11 @@ fun AppCategoriesScreen(
                 it.packageName.contains(searchQuery, ignoreCase = true)
         }
     }
-    val websiteItems = remember(filtered, categoryCatalog) {
-        filtered.filter { it.isWebsite }.sortedWith(categorisedFirst(categoryCatalog))
+    val websiteItems = remember(filtered, categoryCatalog, sortMode) {
+        filtered.filter { it.isWebsite }.sortedWith(browseComparator(categoryCatalog, sortMode))
     }
-    val appItems = remember(filtered, categoryCatalog) {
-        filtered.filterNot { it.isWebsite }.sortedWith(categorisedFirst(categoryCatalog))
+    val appItems = remember(filtered, categoryCatalog, sortMode) {
+        filtered.filterNot { it.isWebsite }.sortedWith(browseComparator(categoryCatalog, sortMode))
     }
     val taggedCount = remember(allItems, categoryCatalog) {
         allItems.count {
@@ -160,6 +188,7 @@ fun AppCategoriesScreen(
         }
     }
     val totalCount = allItems.size
+    val uncategorizedCount = (totalCount - taggedCount).coerceAtLeast(0)
     val progressFraction = if (totalCount > 0) taggedCount.toFloat() / totalCount else 0f
     val installCount = remember(allItems) { allItems.count { !it.isWebsite } }
     val websiteCount = remember(allItems) { allItems.count { it.isWebsite } }
@@ -168,9 +197,51 @@ fun AppCategoriesScreen(
     }
 
     fun assignedPackages(category: AppCategory): Set<String> =
-        allItems.filter { preferences.appCategories[it.packageName] == category.id }
-            .map { it.packageName }
-            .toSet()
+        preferences.appCategories.filterValues { it == category.id }.keys
+
+    fun advanceWizard() {
+        if (wizardIndex + 1 >= wizardQueue.size) {
+            wizardQueue = emptyList()
+            wizardIndex = 0
+        } else {
+            wizardIndex += 1
+        }
+    }
+
+    fun startCategoryWizard() {
+        val pending = allItems.filter {
+            categoryCatalog.resolve(it.packageName, it.appName) == AppCategory.UNCATEGORIZED
+        }
+        if (pending.isEmpty()) return
+        wizardQueue = pending
+        wizardIndex = 0
+    }
+
+    fun assignWizardCategory(category: AppCategory) {
+        val app = wizardQueue.getOrNull(wizardIndex) ?: return
+        coroutineScope.launch {
+            preferencesRepository.setAppCategory(app.packageName, category)
+        }
+        advanceWizard()
+    }
+
+    fun createWizardCategory(name: String) {
+        val app = wizardQueue.getOrNull(wizardIndex) ?: return
+        val label = name.trim()
+        if (label.isEmpty()) return
+        val iconKey = customCategoryIcons.random().first
+        val colorArgb = customCategoryColors.random()
+        coroutineScope.launch {
+            val category = preferencesRepository.addCustomCategory(
+                label = label,
+                description = "",
+                iconKey = iconKey,
+                colorArgb = colorArgb
+            )
+            preferencesRepository.setAppCategory(app.packageName, category)
+        }
+        advanceWizard()
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -221,6 +292,91 @@ fun AppCategoriesScreen(
                 }
             }
 
+            if (!isLoading && uncategorizedCount > 0) {
+                item(key = "category_wizard_cta") {
+                    Box(modifier = Modifier.animateItem()) {
+                        Column(modifier = Modifier.padding(top = 8.dp)) {
+                            ZenithButton(
+                                onClick = { startCategoryWizard() },
+                                text = "Start Setup Wizard",
+                                icon = Icons.Outlined.AutoAwesome,
+                                type = ZenithButtonType.Tonal,
+                                size = ZenithButtonSize.Medium,
+                                fillMaxWidth = true
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "$uncategorizedCount apps still need a category",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (!isLoading) {
+                item(key = "default_categories_header") {
+                    Box(modifier = Modifier.animateItem()) {
+                        CategorySectionHeader(title = "Default Categories", count = defaultCategories.size)
+                    }
+                }
+                itemsIndexed(
+                    items = defaultCategories,
+                    key = { _, category -> category.id }
+                ) { index, category ->
+                    val appCount = allItems.count { preferences.appCategories[it.packageName] == category.id }
+                    Box(modifier = Modifier.animateItem()) {
+                        CategoryListRow(
+                            category = category,
+                            appCount = appCount,
+                            shape = categoryRowShape(index, defaultCategories.size),
+                            onEdit = {
+                                editingCategory = category
+                                showCategorySheet = true
+                            }
+                        )
+                    }
+                }
+
+                if (preferences.customCategories.isNotEmpty()) {
+                    item(key = "your_categories_header") {
+                        Box(modifier = Modifier.animateItem()) {
+                            CategorySectionHeader(title = "Your Categories", count = preferences.customCategories.size)
+                        }
+                    }
+                    itemsIndexed(
+                        items = preferences.customCategories,
+                        key = { _, category -> category.id }
+                    ) { index, category ->
+                        val appCount = allItems.count { preferences.appCategories[it.packageName] == category.id }
+                        Box(modifier = Modifier.animateItem()) {
+                            CategoryListRow(
+                                category = category,
+                                appCount = appCount,
+                                shape = categoryRowShape(index, preferences.customCategories.size),
+                                onEdit = {
+                                    editingCategory = category
+                                    showCategorySheet = true
+                                }
+                            )
+                        }
+                    }
+                }
+
+                item(key = "category_sort_header") {
+                    Box(modifier = Modifier.animateItem()) {
+                        CategorySortHeader(
+                            title = "Apps & Websites",
+                            sortMode = sortMode,
+                            onSortModeChange = { sortMode = it },
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                }
+            }
+
             when {
                 isLoading -> item(key = "category_loading") {
                     Box(
@@ -246,31 +402,6 @@ fun AppCategoriesScreen(
                 }
 
                 else -> {
-                    if (preferences.customCategories.isNotEmpty()) {
-                        item(key = "your_categories_header") {
-                            Box(modifier = Modifier.animateItem()) {
-                                CategorySectionHeader(title = "Your Categories", count = preferences.customCategories.size)
-                            }
-                        }
-                        itemsIndexed(
-                            items = preferences.customCategories,
-                            key = { _, category -> category.id }
-                        ) { index, category ->
-                            val appCount = allItems.count { preferences.appCategories[it.packageName] == category.id }
-                            Box(modifier = Modifier.animateItem()) {
-                                CategoryListRow(
-                                    category = category,
-                                    appCount = appCount,
-                                    shape = categoryRowShape(index, preferences.customCategories.size),
-                                    onEdit = {
-                                        editingCategory = category
-                                        showCategorySheet = true
-                                    }
-                                )
-                            }
-                        }
-                    }
-
                     if (websiteItems.isNotEmpty()) {
                         item(key = "category_websites_header") {
                             Box(modifier = Modifier.animateItem()) {
@@ -288,11 +419,7 @@ fun AppCategoriesScreen(
                                     category = category,
                                     isSuggested = categoryCatalog.isSuggested(app.packageName, app.appName),
                                     shape = categoryRowShape(index, websiteItems.size),
-                                    onClick = { editingApp = app },
-                                    onEditCategory = {
-                                        editingCategory = category
-                                        showCategorySheet = true
-                                    }
+                                    onClick = { editingApp = app }
                                 )
                             }
                         }
@@ -314,11 +441,7 @@ fun AppCategoriesScreen(
                                     category = category,
                                     isSuggested = categoryCatalog.isSuggested(app.packageName, app.appName),
                                     shape = categoryRowShape(index, appItems.size),
-                                    onClick = { editingApp = app },
-                                    onEditCategory = {
-                                        editingCategory = category
-                                        showCategorySheet = true
-                                    }
+                                    onClick = { editingApp = app }
                                 )
                             }
                         }
@@ -379,6 +502,7 @@ fun AppCategoriesScreen(
             existingCategory = sheetCategory,
             apps = appOptions,
             assignedApps = sheetCategory?.let { assignedPackages(it) } ?: emptySet(),
+            recentWebsites = recentWebsites,
             onAppsChange = { selected ->
                 if (sheetCategory != null) {
                     val previous = assignedPackages(sheetCategory)
@@ -404,9 +528,13 @@ fun AppCategoriesScreen(
                 showCategorySheet = false
                 val existing = editingCategory
                 editingCategory = null
-                if (existing != null && existing.isCustom) {
+                if (existing != null) {
                     coroutineScope.launch {
-                        preferencesRepository.updateCustomCategory(existing.id, name, description, iconKey, colorArgb)
+                        if (existing.isCustom) {
+                            preferencesRepository.updateCustomCategory(existing.id, name, description, iconKey, colorArgb)
+                        } else {
+                            preferencesRepository.updateDefaultCategory(existing.id, name, description, iconKey, colorArgb)
+                        }
                     }
                 } else {
                     coroutineScope.launch {
@@ -426,11 +554,33 @@ fun AppCategoriesScreen(
                 showCategorySheet = false
                 val cat = editingCategory
                 editingCategory = null
-                if (cat != null && cat.isCustom) {
+                if (cat != null) {
                     coroutineScope.launch {
-                        preferencesRepository.deleteCustomCategory(cat.id)
+                        if (cat.isCustom) {
+                            preferencesRepository.deleteCustomCategory(cat.id)
+                        } else {
+                            preferencesRepository.resetDefaultCategory(cat.id)
+                        }
                     }
                 }
+            }
+        )
+    }
+
+    val wizardApp = wizardQueue.getOrNull(wizardIndex)
+    if (wizardApp != null) {
+        CategorySetupWizardSheet(
+            appName = wizardApp.appName,
+            packageName = wizardApp.packageName,
+            isWebsite = wizardApp.isWebsite,
+            categories = categoryCatalog.categories.filter { it != AppCategory.UNCATEGORIZED },
+            remaining = wizardQueue.size - wizardIndex,
+            total = wizardQueue.size,
+            onSelectCategory = { assignWizardCategory(it) },
+            onCreateCategory = { createWizardCategory(it) },
+            onDismiss = {
+                wizardQueue = emptyList()
+                wizardIndex = 0
             }
         )
     }
@@ -556,11 +706,11 @@ private fun AppCategoryRow(
     category: AppCategory,
     isSuggested: Boolean,
     shape: RoundedCornerShape,
-    onClick: () -> Unit,
-    onEditCategory: (() -> Unit)? = null
+    onClick: () -> Unit
 ) {
     val fallbackIcon = if (app.isWebsite) Icons.Outlined.Language else appCategoryIcon(category)
     val context = LocalContext.current
+    val iconShape = if (app.isWebsite) MaterialShapes.Square.toShape() else CircleShape
     Card(
         onClick = onClick,
         shape = shape,
@@ -583,19 +733,24 @@ private fun AppCategoryRow(
                 contentDescription = null,
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(CircleShape),
+                    .background(
+                        if (app.isWebsite) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
+                        iconShape
+                    )
+                    .clip(iconShape),
                 contentScale = ContentScale.Crop,
                 error = {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
-                            .clip(CircleShape)
+                            .clip(iconShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = fallbackIcon,
                             contentDescription = null,
+                            tint = if (app.isWebsite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -640,29 +795,68 @@ private fun AppCategoryRow(
                 }
                 CategoryChip(category = category)
             }
-            if (category.isCustom && onEditCategory != null) {
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(
-                    onClick = onEditCategory,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Edit,
-                        contentDescription = "Edit category",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
         }
     }
 }
 
-private fun categorisedFirst(catalog: CategoryCatalog): Comparator<CategorisedApp> =
-    compareBy<CategorisedApp>(
-        { catalog.resolve(it.packageName, it.appName) == AppCategory.UNCATEGORIZED },
+private enum class CategoryBrowseSort { APP_NAME, CATEGORY_NAME }
+
+private fun browseComparator(
+    catalog: CategoryCatalog,
+    sort: CategoryBrowseSort
+): Comparator<CategorisedApp> = when (sort) {
+    CategoryBrowseSort.APP_NAME -> compareBy { it.appName.lowercase() }
+    CategoryBrowseSort.CATEGORY_NAME -> compareBy<CategorisedApp>(
+        { catalog.resolve(it.packageName, it.appName).label.lowercase() },
         { it.appName.lowercase() }
     )
+}
+
+@Composable
+private fun CategorySortHeader(
+    title: String,
+    sortMode: CategoryBrowseSort,
+    onSortModeChange: (CategoryBrowseSort) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        ZenithToggleButtonGroup(
+            modifier = Modifier.width(140.dp),
+            size = ZenithButtonSize.Medium,
+            options = listOf(
+                ZenithToggleOption(
+                    icon = if (sortMode == CategoryBrowseSort.APP_NAME) {
+                        Icons.Filled.SortByAlpha
+                    } else {
+                        Icons.Outlined.SortByAlpha
+                    }
+                ),
+                ZenithToggleOption(
+                    icon = if (sortMode == CategoryBrowseSort.CATEGORY_NAME) {
+                        Icons.Filled.Category
+                    } else {
+                        Icons.Outlined.Category
+                    }
+                )
+            ),
+            selectedIndices = setOf(if (sortMode == CategoryBrowseSort.APP_NAME) 0 else 1),
+            onToggle = { index ->
+                onSortModeChange(
+                    if (index == 0) CategoryBrowseSort.APP_NAME else CategoryBrowseSort.CATEGORY_NAME
+                )
+            }
+        )
+    }
+}
 
 @Composable
 private fun CategorySectionHeader(title: String, count: Int) {
@@ -709,7 +903,7 @@ private fun CategoryListRow(
     shape: RoundedCornerShape,
     onEdit: () -> Unit
 ) {
-    val color = Color(category.colorArgb ?: MaterialTheme.colorScheme.primary.toArgb())
+    val color = appCategoryColor(category)
     Card(
         onClick = onEdit,
         shape = shape,

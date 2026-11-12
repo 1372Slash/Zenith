@@ -72,19 +72,30 @@ fun CategoryDetailScreen(
                 scope.launch {
                     if (category.isCustom) {
                         userPreferencesRepository.updateCustomCategory(category.id, name, description, iconKey, colorArgb)
-                    } else {
-                        userPreferencesRepository.addCustomCategory(name, description, iconKey, colorArgb)
+                    } else if (category.id != AppCategory.UNCATEGORIZED.id) {
+                        userPreferencesRepository.updateDefaultCategory(category.id, name, description, iconKey, colorArgb)
                     }
                 }
             },
-            onDelete = if (category.isCustom) {
-                {
-                    viewModel.closeCategoryEditSheet()
-                    scope.launch {
-                        userPreferencesRepository.deleteCustomCategory(category.id)
+            onDelete = when {
+                category.isCustom -> {
+                    {
+                        viewModel.closeCategoryEditSheet()
+                        scope.launch {
+                            userPreferencesRepository.deleteCustomCategory(category.id)
+                        }
                     }
                 }
-            } else null
+                category.id != AppCategory.UNCATEGORIZED.id -> {
+                    {
+                        viewModel.closeCategoryEditSheet()
+                        scope.launch {
+                            userPreferencesRepository.resetDefaultCategory(category.id)
+                        }
+                    }
+                }
+                else -> null
+            }
         )
     }
 
