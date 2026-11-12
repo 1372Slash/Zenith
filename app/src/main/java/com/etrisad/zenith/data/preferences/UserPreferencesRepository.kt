@@ -282,6 +282,10 @@ class UserPreferencesRepository(private val context: Context) {
         val FLOATING_TAB_BAR_ENABLED = booleanPreferencesKey("floating_tab_bar_enabled")
         val HEADER_INFO_BUTTON_ENABLED = booleanPreferencesKey("header_info_button_enabled")
         val EXPRESSIVE_COLORS = booleanPreferencesKey("expressive_colors")
+        val HERO_GRADIENT_BALLS_ENABLED = booleanPreferencesKey("hero_gradient_balls_enabled")
+        val HERO_BALLS_IDLE_ANIMATION_ENABLED = booleanPreferencesKey("hero_balls_idle_animation_enabled")
+        val HERO_AMBIENT_GLOW_SCALE = floatPreferencesKey("hero_ambient_glow_scale")
+        val USAGE_STATS_SHOW_CATEGORIES = booleanPreferencesKey("usage_stats_show_categories")
         val TOTAL_USAGE_PILL_ENABLED = booleanPreferencesKey("total_usage_pill_enabled")
         val FOREGROUND_NOTIFICATION_STATUS_MODE = stringPreferencesKey("foreground_notification_status_mode")
 
@@ -435,6 +439,7 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
         val PRIVATE_PACKAGES = stringPreferencesKey("private_packages")
         val APP_CATEGORIES = stringPreferencesKey("app_categories")
         val CUSTOM_CATEGORIES = stringPreferencesKey("custom_categories")
+        val DEFAULT_CATEGORY_OVERRIDES = stringPreferencesKey("default_category_overrides")
         val ACCESSIBILITY_LIMITED_MODE = booleanPreferencesKey("accessibility_limited_mode")
         val NOTIFICATION_INTERCEPTION_ENABLED = booleanPreferencesKey("notification_interception_enabled")
         val NOTIFICATION_EXCLUDED_PACKAGES = stringPreferencesKey("notification_excluded_packages")
@@ -545,6 +550,7 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
             privatePackages = settings[PreferencesKeys.PRIVATE_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
             appCategories = parseAppCategories(settings[PreferencesKeys.APP_CATEGORIES]),
             customCategories = parseCustomCategories(settings[PreferencesKeys.CUSTOM_CATEGORIES]),
+            defaultCategoryOverrides = parseDefaultCategoryOverrides(settings[PreferencesKeys.DEFAULT_CATEGORY_OVERRIDES]),
             accessibilityLimitedMode = settings[PreferencesKeys.ACCESSIBILITY_LIMITED_MODE] ?: false,
             notificationInterceptionEnabled = settings[PreferencesKeys.NOTIFICATION_INTERCEPTION_ENABLED] ?: true,
             notificationExcludedPackages = settings[PreferencesKeys.NOTIFICATION_EXCLUDED_PACKAGES]?.split(",")?.filter { it.isNotEmpty() }?.toSet() ?: emptySet(),
@@ -562,6 +568,10 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
             floatingTabBarEnabled = settings[PreferencesKeys.FLOATING_TAB_BAR_ENABLED] ?: false,
             headerInfoButtonEnabled = settings[PreferencesKeys.HEADER_INFO_BUTTON_ENABLED] ?: true,
             expressiveColors = settings[PreferencesKeys.EXPRESSIVE_COLORS] ?: false,
+            heroGradientBallsEnabled = settings[PreferencesKeys.HERO_GRADIENT_BALLS_ENABLED] ?: false,
+            heroBallsIdleAnimationEnabled = settings[PreferencesKeys.HERO_BALLS_IDLE_ANIMATION_ENABLED] ?: true,
+            heroAmbientGlowScale = settings[PreferencesKeys.HERO_AMBIENT_GLOW_SCALE] ?: 1.4f,
+            usageStatsShowCategories = settings[PreferencesKeys.USAGE_STATS_SHOW_CATEGORIES] ?: false,
             totalUsagePillEnabled = settings[PreferencesKeys.TOTAL_USAGE_PILL_ENABLED] ?: false,
             foregroundNotificationStatusMode = settings[PreferencesKeys.FOREGROUND_NOTIFICATION_STATUS_MODE]
                 ?.let { runCatching { ForegroundNotificationStatusMode.valueOf(it) }.getOrNull() }
@@ -834,6 +844,9 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         val dynamicColor: Boolean = true,
         val fontOption: FontOption = FontOption.GOOGLE_SANS_FLEX,
         val expressiveColors: Boolean = false,
+        val heroGradientBallsEnabled: Boolean = false,
+        val heroBallsIdleAnimationEnabled: Boolean = true,
+        val heroAmbientGlowScale: Float = 1.4f,
         val gsFlexSettings: GSFlexSettings = GSFlexSettings()
     )
 
@@ -843,6 +856,9 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             dynamicColor = it.dynamicColor,
             fontOption = it.fontOption,
             expressiveColors = it.expressiveColors,
+            heroGradientBallsEnabled = it.heroGradientBallsEnabled,
+            heroBallsIdleAnimationEnabled = it.heroBallsIdleAnimationEnabled,
+            heroAmbientGlowScale = it.heroAmbientGlowScale,
             gsFlexSettings = it.gsFlexSettings
         )
     }.distinctUntilChanged()
@@ -1004,6 +1020,18 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             if (current.add(route)) {
                 preferences[PreferencesKeys.INFO_VISITED_ROUTES] = current.joinToString(",")
             }
+        }
+    }
+
+    suspend fun removePackageFromLifetimeSnapshot(packageName: String) {
+        context.dataStore.edit { preferences ->
+            val raw = preferences[PreferencesKeys.LIFETIME_SNAPSHOT] ?: return@edit
+            if (raw.isBlank()) return@edit
+            val kept = raw.lines().filterNot { line ->
+                val tab = line.lastIndexOf('\t')
+                tab > 0 && line.substring(0, tab) == packageName
+            }
+            preferences[PreferencesKeys.LIFETIME_SNAPSHOT] = kept.joinToString("\n")
         }
     }
 
@@ -1297,6 +1325,31 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
                 }
             }
             preferences[PreferencesKeys.CUSTOM_CATEGORIES] = encodeCustomCategories(updated)
+        }
+    }
+
+    suspend fun updateDefaultCategory(categoryId: String, label: String, description: String, iconKey: String, colorArgb: Int) {
+        val base = AppCategory.assignable.firstOrNull { it.id == categoryId } ?: return
+        context.dataStore.edit { preferences ->
+            val current = parseDefaultCategoryOverrides(preferences[PreferencesKeys.DEFAULT_CATEGORY_OVERRIDES])
+            val updated = base.copy(
+                label = label.trim().ifEmpty { base.label },
+                description = description.trim(),
+                iconKey = iconKey,
+                colorArgb = colorArgb
+            )
+            preferences[PreferencesKeys.DEFAULT_CATEGORY_OVERRIDES] =
+                encodeDefaultCategoryOverrides(current + (categoryId to updated))
+        }
+    }
+
+    suspend fun resetDefaultCategory(categoryId: String) {
+        context.dataStore.edit { preferences ->
+            val current = parseDefaultCategoryOverrides(preferences[PreferencesKeys.DEFAULT_CATEGORY_OVERRIDES])
+            if (current.containsKey(categoryId)) {
+                preferences[PreferencesKeys.DEFAULT_CATEGORY_OVERRIDES] =
+                    encodeDefaultCategoryOverrides(current - categoryId)
+            }
         }
     }
 
@@ -1656,6 +1709,22 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 
     suspend fun setExpressiveColors(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.EXPRESSIVE_COLORS] = enabled }
+    }
+
+    suspend fun setHeroGradientBallsEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.HERO_GRADIENT_BALLS_ENABLED] = enabled }
+    }
+
+    suspend fun setHeroBallsIdleAnimationEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.HERO_BALLS_IDLE_ANIMATION_ENABLED] = enabled }
+    }
+
+    suspend fun setHeroAmbientGlowScale(scale: Float) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.HERO_AMBIENT_GLOW_SCALE] = scale }
+    }
+
+    suspend fun setUsageStatsShowCategories(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.USAGE_STATS_SHOW_CATEGORIES] = enabled }
     }
 
     suspend fun setOverlayPaletteId(paletteId: String) {
@@ -2593,6 +2662,42 @@ private fun parseCustomCategories(raw: String?): List<AppCategory> {
     }
 }
 
+private fun parseDefaultCategoryOverrides(raw: String?): Map<String, AppCategory> {
+    if (raw.isNullOrBlank()) return emptyMap()
+    val builtIns = AppCategory.assignable.associateBy { it.id }
+    return raw.split(";").mapNotNull { entry ->
+        val parts = entry.split("|")
+        if (parts.size < 4) return@mapNotNull null
+        val base = builtIns[parts[0]] ?: return@mapNotNull null
+        val label = runCatching {
+            java.net.URLDecoder.decode(parts[1], "UTF-8")
+        }.getOrDefault(parts[1])
+        val iconKey = parts[2]
+        val colorArgb = parts[3].toLongOrNull()?.toInt() ?: return@mapNotNull null
+        val description = if (parts.size >= 5) {
+            runCatching {
+                java.net.URLDecoder.decode(parts[4], "UTF-8")
+            }.getOrDefault(parts[4])
+        } else {
+            base.description
+        }
+        if (label.isBlank()) null
+        else base.id to base.copy(
+            label = label,
+            description = description.ifBlank { base.description },
+            iconKey = iconKey,
+            colorArgb = colorArgb
+        )
+    }.toMap()
+}
+
+private fun encodeDefaultCategoryOverrides(categories: Map<String, AppCategory>): String =
+    categories.values.sortedBy { it.id }.joinToString(";") { category ->
+        val label = java.net.URLEncoder.encode(category.label, "UTF-8")
+        val description = java.net.URLEncoder.encode(category.description, "UTF-8")
+        "${category.id}|$label|${category.iconKey}|${category.colorArgb ?: 0}|$description"
+    }
+
 private fun encodeCustomCategories(categories: List<AppCategory>): String =
     categories.joinToString(";") { category ->
         val label = java.net.URLEncoder.encode(category.label, "UTF-8")
@@ -2619,6 +2724,7 @@ data class UserPreferences(
     val privatePackages: Set<String> = emptySet(),
     val appCategories: Map<String, String> = emptyMap(),
     val customCategories: List<AppCategory> = emptyList(),
+    val defaultCategoryOverrides: Map<String, AppCategory> = emptyMap(),
     val accessibilityLimitedMode: Boolean = false,
     val notificationInterceptionEnabled: Boolean = true,
     val notificationExcludedPackages: Set<String> = emptySet(),
@@ -2636,6 +2742,10 @@ data class UserPreferences(
     val floatingTabBarEnabled: Boolean = false,
     val headerInfoButtonEnabled: Boolean = true,
     val expressiveColors: Boolean = false,
+    val heroGradientBallsEnabled: Boolean = false,
+    val heroBallsIdleAnimationEnabled: Boolean = true,
+    val heroAmbientGlowScale: Float = 1.4f,
+    val usageStatsShowCategories: Boolean = false,
     val totalUsagePillEnabled: Boolean = false,
     val foregroundNotificationStatusMode: ForegroundNotificationStatusMode = ForegroundNotificationStatusMode.DEFAULT,
     val lastKnownDailyUsage: Long = 0L,

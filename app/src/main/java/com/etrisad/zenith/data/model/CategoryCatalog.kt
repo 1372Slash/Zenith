@@ -7,7 +7,8 @@ class CategoryCatalog(
     private val assignments: Map<String, String>
 ) {
     constructor(preferences: UserPreferences) : this(
-        AppCategory.assignable + preferences.customCategories + AppCategory.UNCATEGORIZED,
+        AppCategory.assignable.map { preferences.defaultCategoryOverrides[it.id] ?: it } +
+            preferences.customCategories + AppCategory.UNCATEGORIZED,
         preferences.appCategories
     )
 
@@ -17,7 +18,9 @@ class CategoryCatalog(
 
     fun resolve(packageName: String, appName: String? = null): AppCategory {
         assignments[packageName]?.let { id -> byId[id]?.let { return it } }
-        return AppCategoryDefaults.forPackage(packageName, appName) ?: AppCategory.UNCATEGORIZED
+        val suggested = AppCategoryDefaults.forPackage(packageName, appName)
+            ?: return AppCategory.UNCATEGORIZED
+        return byId[suggested.id] ?: suggested
     }
 
     fun isSuggested(packageName: String, appName: String? = null): Boolean =
