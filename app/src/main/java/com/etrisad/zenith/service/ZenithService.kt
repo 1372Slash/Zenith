@@ -1414,6 +1414,20 @@ class ZenithService : AccessibilityService() {
                     }
                 }
 
+                if (!isWebsite && effectiveShield.type == FocusType.SHIELD && effectiveShield.isAutoQuitEnabled &&
+                    effectiveShield.timeLimitMinutes > 0 &&
+                    totalUsageToday >= effectiveShield.timeLimitMinutes * 60 * 1000L &&
+                    !SharedMonitoringState.earlyKickManager.wasKicked(actualTargetPackage)
+                ) {
+                    SharedMonitoringState.earlyKickManager.markKicked(actualTargetPackage)
+                    synchronized(allowedApps) { allowedApps.remove(actualTargetPackage) }
+                    lastKickTime = System.currentTimeMillis()
+                    lastKickedPackage = actualTargetPackage
+                    sessionUsageOverlayManager.hideHUD(actualTargetPackage, invokeOnSessionEnd = false)
+                    goToHomeScreen()
+                    return
+                }
+
                 OverlayLogBuffer.d("Zenith_HPC", "SHOWING overlay for: $actualTargetPackage (shield=${effectiveShield?.type})")
                 ShieldLatencyTracker.onShowRequested(actualTargetPackage, "shield")
                 overlayActionHandler.showShieldOverlay(

@@ -2093,6 +2093,20 @@ class AppUsageMonitorService : Service() {
                 }
             }
 
+            if (!isWebsite && effectiveShield.type == FocusType.SHIELD && effectiveShield.isAutoQuitEnabled &&
+                effectiveShield.timeLimitMinutes > 0 &&
+                totalUsageToday >= effectiveShield.timeLimitMinutes * 60 * 1000L &&
+                !earlyKickManager.wasKicked(actualTargetPackage)
+            ) {
+                earlyKickManager.markKicked(actualTargetPackage)
+                lastKickTime = System.currentTimeMillis()
+                lastKickedPackage = actualTargetPackage
+                allowedApps.remove(actualTargetPackage)
+                sessionUsageOverlayManager.hideHUD(actualTargetPackage, invokeOnSessionEnd = false)
+                goToHomeScreen()
+                return
+            }
+
             currentShieldCache = if (isMindfulGateway) null else effectiveShield
 
             ShieldLatencyTracker.onShowRequested(actualTargetPackage, "shield")
