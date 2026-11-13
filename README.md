@@ -174,4 +174,9 @@ If you find Zenith helpful and would like to support its development, you can su
 ## License
 
 This project is created for learning and self-development purposes.
-[GNU GPL v3.0](LICENCE)
+[GNU GPL v3.0](LICENSE)
+
+### Bundled font licenses
+
+- **Nunito** is licensed under the SIL Open Font License 1.1. See [licenses/Nunito-OFL.txt](licenses/Nunito-OFL.txt).
+- **Google Sans Flex** is licensed under the SIL Open Font License 1.1. See [licenses/GoogleSansFlex-OFL.txt](licenses/GoogleSansFlex-OFL.txt).

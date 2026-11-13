@@ -1,26 +1,27 @@
 package com.etrisad.zenith.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.googlefonts.GoogleFont
-import androidx.compose.ui.text.googlefonts.Font as GoogleFontSource
 import com.etrisad.zenith.R
 
-val provider = GoogleFont.Provider(
-    providerAuthority = "com.google.android.gms.fonts",
-    providerPackage = "com.google.android.gms",
-    certificates = R.array.com_google_android_gms_fonts_certs
+@OptIn(ExperimentalTextApi::class)
+private fun nunitoFont(weight: FontWeight, axisWeight: Int): Font = Font(
+    resId = R.font.nunito_variable,
+    weight = weight,
+    variationSettings = FontVariation.Settings(FontVariation.weight(axisWeight))
 )
 
-val nunitoName = GoogleFont("Nunito")
 val NunitoFontFamily = FontFamily(
-    GoogleFontSource(googleFont = nunitoName, fontProvider = provider, weight = FontWeight.Normal),
-    GoogleFontSource(googleFont = nunitoName, fontProvider = provider, weight = FontWeight.Medium),
-    GoogleFontSource(googleFont = nunitoName, fontProvider = provider, weight = FontWeight.SemiBold),
-    GoogleFontSource(googleFont = nunitoName, fontProvider = provider, weight = FontWeight.Bold)
+    nunitoFont(FontWeight.Normal, 400),
+    nunitoFont(FontWeight.Medium, 500),
+    nunitoFont(FontWeight.SemiBold, 600),
+    nunitoFont(FontWeight.Bold, 700)
 )
 
 private fun createBasicTypography(fontFamily: FontFamily): Typography {
