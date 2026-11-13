@@ -80,7 +80,7 @@ object WebsiteRepository {
     }
 
     fun getFaviconUrl(domain: String): String {
-        return "https://www.google.com/s2/favicons?domain=$domain&sz=64"
+        return "https://$domain/favicon.ico"
     }
 
     fun validateUrl(input: String): String? {
@@ -169,7 +169,7 @@ object WebsiteRepository {
         if (isKnownBrowser(packageName)) return true
         return browserCheckCache.getOrPut(packageName) {
             try {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com")).apply {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com")).apply {
                     setPackage(packageName)
                 }
                 val activities = context.packageManager.queryIntentActivities(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)

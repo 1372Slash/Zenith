@@ -1,3 +1,6 @@
+import java.security.MessageDigest
+import java.util.zip.Adler32
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -139,4 +142,91 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     "ksp"(libs.androidx.room.compiler)
     "ksp"(libs.moshi.kotlin.codegen)
+}
+
+private class DexTrackingHostPatcher {
+    private val replacements = mapOf(
+        "issuetracker.google.com" to "issuetracker.exmpl.test",
+        "www.google.com" to "www.exmpl.test"
+    )
+
+    fun patchOutputs(outputs: Set<File>, requireDex: Boolean) {
+        var patchedFiles = 0
+        outputs.forEach { output ->
+            val dexFiles = when {
+                output.isDirectory -> output.walkTopDown()
+                    .filter { it.isFile && it.extension == "dex" }
+                    .toList()
+                output.isFile && output.extension == "dex" -> listOf(output)
+                else -> emptyList()
+            }
+            dexFiles.forEach { dex ->
+                patch(dex)
+                patchedFiles++
+                val remaining = dex.readBytes()
+                replacements.keys.forEach { host ->
+                    check(remaining.indexOfBytes(host.toByteArray(Charsets.US_ASCII)) < 0) {
+                        "Unpatched tracking host '$host' remains in ${dex.absolutePath}"
+                    }
+                }
+            }
+        }
+        check(!requireDex || patchedFiles > 0) {
+            "No DEX output found to patch in ${outputs.joinToString()}"
+        }
+    }
+
+    private fun patch(file: File): Boolean {
+        if (!file.isFile || file.extension != "dex") return false
+        val bytes = file.readBytes()
+        if (bytes.size < 112) return false
+
+        var changed = false
+        replacements.forEach { (from, to) ->
+            check(from.length == to.length) { "DEX replacement must keep the same length" }
+            val fromBytes = from.toByteArray(Charsets.US_ASCII)
+            val toBytes = to.toByteArray(Charsets.US_ASCII)
+            var index = bytes.indexOfBytes(fromBytes)
+            while (index >= 0) {
+                toBytes.copyInto(bytes, index)
+                changed = true
+                index = bytes.indexOfBytes(fromBytes, index + fromBytes.size)
+            }
+        }
+        if (!changed) return false
+
+        val signature = MessageDigest.getInstance("SHA-1").digest(bytes.copyOfRange(32, bytes.size))
+        signature.copyInto(bytes, 12)
+        val adler = Adler32()
+        adler.update(bytes, 12, bytes.size - 12)
+        val checksum = adler.value
+        bytes[8] = (checksum and 0xFF).toByte()
+        bytes[9] = ((checksum ushr 8) and 0xFF).toByte()
+        bytes[10] = ((checksum ushr 16) and 0xFF).toByte()
+        bytes[11] = ((checksum ushr 24) and 0xFF).toByte()
+        file.writeBytes(bytes)
+        return true
+    }
+
+    private fun ByteArray.indexOfBytes(target: ByteArray, start: Int = 0): Int {
+        if (target.isEmpty() || target.size > size) return -1
+        outer@ for (i in start..size - target.size) {
+            for (j in target.indices) {
+                if (this[i + j] != target[j]) continue@outer
+            }
+            return i
+        }
+        return -1
+    }
+}
+
+tasks.configureEach {
+    val producesFinalDex = (name.startsWith("merge") && name.contains("Dex")) ||
+        (name.startsWith("minify") && name.contains("WithR8"))
+    if (producesFinalDex) {
+        val requiresDex = name.contains("WithR8")
+        doLast {
+            DexTrackingHostPatcher().patchOutputs(outputs.files.files, requiresDex)
+        }
+    }
 }

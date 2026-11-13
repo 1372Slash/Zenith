@@ -102,6 +102,10 @@
 - **Backup & Restore**: Securely save your settings and schedules with automated periodic backups or manual exports.
 - **Expressive Design**: Fully compliant with Material Design 3 Expressive guidelines, featuring fluid motion, adaptive typography (GSFlex), and floating navigation components.
 
+## Privacy
+
+Zenith has no analytics, advertising, crash-reporting, or telemetry SDKs. Website icons are loaded directly from the site you added. no third-party favicon service is used. The Store variant has no `INTERNET` permission at all, so it cannot make network requests. The Full variant only uses the network for the optional GitHub update check and for opening links in your browser.
+
 ## Installation Guide
 
 1. Clone this repository.
@@ -151,7 +155,7 @@ These are optional, but they make Zenith much more reliable and powerful.
 12. **Battery Optimization**: This tells Android not to close Zenith in the background, ensuring your focus time is always tracked accurately.
 13. **Precise Timing (`SCHEDULE_EXACT_ALARM`)**: Makes sure your daily resets, bedtime schedules, and reminders happen exactly when they're supposed to.
 14. **Storage Access (`READ_EXTERNAL_STORAGE`)**: Only used if you want to use the Backup & Restore feature to save or load your settings.
-15. **Internet Access (`INTERNET`)**: Full variant only. Used to check for app updates via GitHub API and to let you visit our GitHub or community pages from the settings. The Store variant (`Zenith-store-*.apk` for IzzyOnDroid/OpenAPK) removes this permission and hides the in-app update UI — updates come from the store instead.
+15. **Internet Access (`INTERNET`)**: Full variant only. Used to check for app updates via GitHub API and to let you visit our GitHub or community pages from the settings. Website icons are fetched directly from the website itself; Zenith does not use a third-party favicon service. The Store variant (`Zenith-store-*.apk` for IzzyOnDroid/OpenAPK) removes this permission and hides the in-app update UI — updates come from the store instead.
 16. **Calendar Access (`READ_CALENDAR`)**: Enables the "Show Current Event" feature, which displays your current calendar event (title, description, and progress) during the app-opening delay in the intercept overlay.
 17. **Camera (`CAMERA`)**: Only needed if you use QR Scan tasks in Pause Point, so you can scan one of your saved QR codes to continue. You can grant it from Settings > Features > Pause Point > QR Scan, or from the permission sheet under Optional Service.
 18. **NFC (`NFC`)**: Only needed if you use NFC Scan tasks in Pause Point, so you can tap one of your registered NFC tags to continue. Turn on NFC in Android Settings, register tags from Settings > Features > Pause Point > NFC Scan, or check status from the permission sheet under Optional Service.

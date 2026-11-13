@@ -1,7 +1,6 @@
 package com.etrisad.zenith.util.coil
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
@@ -14,7 +13,6 @@ import coil.map.Mapper
 import coil.request.Options
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.io.InputStream
 import java.util.concurrent.TimeUnit
 
 data class FaviconData(val domain: String)
@@ -27,45 +25,52 @@ internal val sharedFaviconHttpClient: OkHttpClient by lazy {
         .build()
 }
 
+internal object FaviconLoader {
+    private val client = sharedFaviconHttpClient
+
+    fun load(context: Context, domain: String): Drawable? {
+        val normalizedDomain = domain.trim().removePrefix("http://").removePrefix("https://")
+            .substringBefore('/').substringBefore('?').substringBefore('#')
+        if (normalizedDomain.isBlank() || !normalizedDomain.contains('.')) return null
+
+        val candidates = listOf(
+            "https://$normalizedDomain/favicon.ico",
+            "https://$normalizedDomain/apple-touch-icon.png"
+        )
+
+        for (url in candidates) {
+            try {
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android) Zenith")
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use
+                    val body = response.body ?: return@use
+                    val bytes = body.bytes()
+                    if (bytes.isEmpty()) return@use
+                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@use
+                    return BitmapDrawable(context.resources, bitmap)
+                }
+            } catch (_: Exception) {
+            }
+        }
+        return null
+    }
+}
+
 class FaviconFetcher(
     private val data: FaviconData,
     private val context: Context
 ) : Fetcher {
 
-    private val client = sharedFaviconHttpClient
-
     override suspend fun fetch(): FetchResult? {
-        val drawable = fetchFavicon(data.domain) ?: return null
+        val drawable = FaviconLoader.load(context, data.domain) ?: return null
         return DrawableResult(
             drawable = drawable,
             isSampled = false,
             dataSource = DataSource.NETWORK
         )
-    }
-
-    private fun fetchFavicon(domain: String): Drawable? {
-        val urls = listOf(
-            "https://www.google.com/s2/favicons?domain=$domain&sz=64",
-            "https://$domain/favicon.ico"
-        )
-        for (url in urls) {
-            try {
-                val request = Request.Builder().url(url).build()
-                val response = client.newCall(request).execute()
-                if (response.isSuccessful) {
-                    val body = response.body ?: continue
-                    val bytes = body.bytes()
-                    if (bytes.isNotEmpty()) {
-                        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                        if (bitmap != null) {
-                            return BitmapDrawable(context.resources, bitmap)
-                        }
-                    }
-                }
-                response.close()
-            } catch (_: Exception) {}
-        }
-        return null
     }
 
     class Factory(private val context: Context) : Fetcher.Factory<FaviconData> {
