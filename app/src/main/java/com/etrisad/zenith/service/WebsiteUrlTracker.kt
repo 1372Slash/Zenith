@@ -5,6 +5,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.data.website.URL_BAR_ID_LIST
+import com.etrisad.zenith.data.local.database.OverlayLogBuffer
 import java.util.ArrayDeque
 
 class WebsiteUrlTracker(
@@ -297,13 +298,30 @@ class WebsiteUrlTracker(
         if (tld.isEmpty() || !tld.any { it.isLetter() }) return null
 
         lastSiteIdentifier = WebsiteRepository.extractSiteIdentifier(urlText).urlIdentifier
+        val browserPkg = null
+        OverlayLogBuffer.d(
+          "WebBlocker",
+          "extract domain=$domain isKnownBrowser=${WebsiteRepository.isKnownBrowser(text)} searchBarDetected=${hasSearchBar(text)} urlLength=${text.length}"
+        )
         return domain
+    }
+
+    private fun hasSearchBar(text: String): Boolean {
+        val searchKeywords = listOf("search", "q", "query", "omnibox", "url_bar", "address_bar")
+        val lower = text.lowercase()
+        return searchKeywords.any { lower.contains(it) }
     }
 
     fun checkAccessibilityEvent(event: AccessibilityEvent): String? {
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
             val pkg = event.packageName?.toString() ?: return null
-            if (WebsiteRepository.isKnownBrowser(pkg)) {
+            val isKnown = WebsiteRepository.isKnownBrowser(pkg)
+            val browserSupported = isKnown || pkg.lowercase().contains("browser") || pkg.lowercase().contains("chrome")
+            OverlayLogBuffer.d(
+              "WebBlocker",
+              "checkAccessibilityEvent pkg=$pkg isKnownBrowser=$isKnown browserSupported=$browserSupported"
+            )
+            if (isKnown) {
                 val source = event.source
                 if (source != null) {
                     val srcText = source.text?.toString()?.trim()
@@ -334,6 +352,14 @@ class WebsiteUrlTracker(
 
     fun extractFromWindowStateChange(packageName: String, event: AccessibilityEvent): String? {
         if (!WebsiteRepository.isKnownBrowser(packageName)) return null
+
+        val isKnown = WebsiteRepository.isKnownBrowser(packageName)
+        val browserSupported = isKnown || packageName.lowercase().contains("browser") || packageName.lowercase().contains("chrome")
+        OverlayLogBuffer.d(
+          "WebBlocker",
+          "extractFromWindowStateChange pkg=$packageName isKnownBrowser=$isKnown browserSupported=$browserSupported"
+        )
+
         try {
             val source = event.source
             if (source != null) {
@@ -349,6 +375,10 @@ class WebsiteUrlTracker(
 
         val eventText = event.text?.joinToString("")?.trim()
         if (eventText != null && eventText.isNotBlank()) {
+            OverlayLogBuffer.d(
+              "WebBlocker",
+              "extractFromWindowStateChange eventText=$eventText (redacted if long)"
+            )
             return extractUrlDomain(eventText)
         }
 
@@ -357,6 +387,13 @@ class WebsiteUrlTracker(
             if (root != null && root.packageName == packageName) {
                 val result = findUrlNodeQuick(root)
                 root.recycle()
+                if (result != null) OverlayLogBuffer.d(
+                  "WebBlocker",
+                  "extractFromWindowStateChange foundUrl=$result"
+                ) else OverlayLogBuffer.d(
+                  "WebBlocker",
+                  "extractFromWindowStateChange noUrlFound"
+                )
                 if (result != null) return result
             }
         } catch (_: Exception) {}
