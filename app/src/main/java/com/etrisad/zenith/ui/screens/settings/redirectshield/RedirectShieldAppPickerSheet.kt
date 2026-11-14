@@ -77,9 +77,10 @@ fun RedirectShieldAppPickerSheet(
         }
     }
 
-    val uiState = remember(visibleApps, query, selection) {
+    val uiState = remember(apps, visibleApps, query, selection) {
         FocusUiState(
             installedApps = visibleApps,
+            installedPackages = apps.mapTo(mutableSetOf()) { it.packageName },
             topApps = emptyList(),
             searchQuery = query,
             selectedAppsForSchedule = selection,

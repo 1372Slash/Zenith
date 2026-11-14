@@ -728,6 +728,7 @@ fun CategorySettingsBottomSheet(
         MultiAppPickerBottomSheet(
             uiState = FocusUiState(
                 installedApps = apps,
+                installedPackages = apps.mapTo(mutableSetOf()) { it.packageName },
                 selectedAppsForSchedule = selectedApps,
                 searchQuery = pickerQuery,
                 pickerTab = pickerTab,

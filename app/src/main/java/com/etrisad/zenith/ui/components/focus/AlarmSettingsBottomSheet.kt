@@ -2024,6 +2024,7 @@ private fun WakeUpAppPickerSheet(
     val uiState = remember(installedApps, searchQuery, tempSelection) {
         FocusUiState(
             installedApps = installedApps,
+            installedPackages = installedApps.mapTo(mutableSetOf()) { it.packageName },
             topApps = emptyList(),
             searchQuery = searchQuery,
             selectedAppsForSchedule = tempSelection,

@@ -45,6 +45,7 @@ data class FocusUiState(
     val activeShields: List<ShieldEntity> = emptyList(),
     val activeGoals: List<ShieldEntity> = emptyList(),
     val installedApps: List<AppInfo> = emptyList(),
+    val installedPackages: Set<String> = emptySet(),
     val searchQuery: String = "",
     val isLoadingApps: Boolean = false,
     val selectedAppForFocus: AppInfo? = null,
@@ -87,6 +88,7 @@ class FocusViewModel(
     val uiState: StateFlow<FocusUiState> = _uiState.asStateFlow()
 
     private val _allInstalledApps = MutableStateFlow<List<AppInfo>>(emptyList())
+    private val _installedPackages = MutableStateFlow<Set<String>>(emptySet())
     private var allShields: List<ShieldEntity> = emptyList()
     private var loadAppsJob: kotlinx.coroutines.Job? = null
     private var websiteValidationJob: kotlinx.coroutines.Job? = null
@@ -261,7 +263,7 @@ class FocusViewModel(
             }
 
             try {
-                val apps = withContext(Dispatchers.IO) {
+                val (apps, installedPackages) = withContext(Dispatchers.IO) {
                     val pm = context.packageManager
                     val installedApps = try {
                         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -273,6 +275,7 @@ class FocusViewModel(
                     } catch (e: Exception) {
                         emptyList()
                     }
+                    val allInstalledPackages = installedApps.mapTo(mutableSetOf()) { it.packageName }
 
                     val exemptFromPicking = try {
                         val prefs = preferencesRepository.userPreferencesFlow.first()
@@ -281,7 +284,7 @@ class FocusViewModel(
                         emptySet()
                     }
 
-                    installedApps
+                    val visibleApps = installedApps
                         .filter { app ->
                             val pkg = app.packageName
                             val isSystemFlag = (app.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
@@ -309,8 +312,10 @@ class FocusViewModel(
                             )
                         }
                         .sortedBy { it.appName.lowercase() }
+                    visibleApps to allInstalledPackages
                 }
                 _allInstalledApps.value = apps
+                _installedPackages.value = installedPackages
                 updateInstalledAppsFilter()
             } catch (e: Exception) {
             } finally {
@@ -343,6 +348,7 @@ class FocusViewModel(
             _uiState.update { currentState ->
                 currentState.copy(
                     installedApps = filtered,
+                    installedPackages = _installedPackages.value,
                     topApps = topApps,
                     isLoadingApps = false
                 )
@@ -502,6 +508,7 @@ class FocusViewModel(
             websiteSuggestions = emptyList(),
             websiteSuggestionsLoading = false
         )
+        loadInstalledApps()
         viewModelScope.launch { refreshRecentWebsites() }
     }
 

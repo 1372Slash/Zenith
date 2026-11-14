@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Search
@@ -55,6 +56,8 @@ fun MultiAppPickerBottomSheet(
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    val selectionCount = uiState.selectedAppsForSchedule.size
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -90,7 +93,7 @@ fun MultiAppPickerBottomSheet(
                         )
                         if (maxSelection != null) {
                             Text(
-                                text = "${uiState.selectedAppsForSchedule.size}/$maxSelection",
+                                text = "$selectionCount/$maxSelection",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -191,7 +194,7 @@ fun MultiAppPickerBottomSheet(
                 }
             }
 
-            val canConfirm = allowEmptySelection || uiState.selectedAppsForSchedule.isNotEmpty()
+            val canConfirm = allowEmptySelection || selectionCount > 0
             FloatingActionButton(
                 onClick = {
                     if (!canConfirm) return@FloatingActionButton
@@ -233,6 +236,37 @@ private fun MultiAppsContent(
     uiState: FocusUiState,
     onAppToggled: (String) -> Unit
 ) {
+    val installedPackageSet = remember(uiState.installedApps, uiState.installedPackages) {
+        uiState.installedPackages + uiState.installedApps.map { it.packageName }
+    }
+
+    val deletedSelectedApps = remember(uiState.selectedAppsForSchedule, installedPackageSet) {
+        if (installedPackageSet.isEmpty()) {
+            emptyList()
+        } else {
+            uiState.selectedAppsForSchedule
+                .filterNot { WebsiteRepository.isWebsitePackageName(it) }
+                .filterNot { it in installedPackageSet }
+                .sorted()
+                .map { pkg ->
+                    AppInfo(
+                        packageName = pkg,
+                        appName = "Deleted App"
+                    )
+                }
+        }
+    }
+
+    val baseApps = (uiState.topApps + uiState.installedApps).distinctBy { it.packageName }
+    val allAppsUnfiltered = remember(baseApps, deletedSelectedApps) {
+        (deletedSelectedApps + baseApps).distinctBy { it.packageName }
+    }
+
+    val allApps = filterPickerApps(
+        allAppsUnfiltered,
+        uiState.searchQuery
+    )
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
@@ -242,10 +276,6 @@ private fun MultiAppsContent(
         ),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        val allApps = filterPickerApps(
-            (uiState.topApps + uiState.installedApps).distinctBy { it.packageName },
-            uiState.searchQuery
-        )
         if (allApps.isEmpty() && uiState.searchQuery.isNotBlank()) {
             item {
                 Card(
