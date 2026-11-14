@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Matrix
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -57,6 +58,8 @@ import com.etrisad.zenith.ui.components.AppCategoryPickerSheet
 import com.etrisad.zenith.ui.components.CreateCategoryDialog
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.components.UsageHistoryCard
+import com.etrisad.zenith.ui.components.StreakGauge
+import com.etrisad.zenith.util.StreakBonus
 import com.etrisad.zenith.ui.components.LongTermSection
 import com.etrisad.zenith.ui.components.ZenithContainedLoadingIndicator
 import com.etrisad.zenith.ui.components.focus.GoalSettingsBottomSheet
@@ -291,6 +294,7 @@ fun AppDetailScreen(
                         ) {
                             Column {
                                 StreakCard(
+                                    appName = uiState.appName.ifEmpty { packageName },
                                     currentStreak = uiState.currentStreak,
                                     bestStreak = uiState.bestStreak,
                                     shape = RoundedCornerShape(8.dp)
@@ -746,7 +750,7 @@ fun UsageCard(
     focusType: FocusType?,
     formatDuration: (Long) -> String,
     isActive: Boolean,
-    shape: androidx.compose.ui.graphics.Shape
+    shape: Shape
 ) {
     val isTargetSet = targetMillis > 0
     val isExceeded = isTargetSet && focusType == FocusType.SHIELD && currentUsage > targetMillis
@@ -923,10 +927,17 @@ fun UsageTrendsRow(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun StreakCard(
+    appName: String,
     currentStreak: Int,
     bestStreak: Int,
-    shape: androidx.compose.ui.graphics.Shape
+    shape: Shape
 ) {
+    val streak = currentStreak.coerceAtLeast(0)
+    val atCap = StreakBonus.isAtCap(streak)
+    val bonusPercent = StreakBonus.bonusPercent(streak)
+    val daysToCap = StreakBonus.daysUntilCap(streak)
+    val multiplierLabel = StreakBonus.multiplierLabel(streak)
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = shape,
@@ -934,56 +945,137 @@ fun StreakCard(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(20.dp)
         ) {
-            Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "$appName Streak",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "$bestStreak",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Best Streak",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiary,
+                        shape = MaterialShapes.Sunny.toShape(),
+                        modifier = Modifier.size(56.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "$currentStreak",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.onTertiary
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "days today",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 Text(
-                    text = "Streak",
-                    style = MaterialTheme.typography.labelMedium,
+                    text = "Streak Progress",
+                    style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "$bestStreak",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.onSurface
+                    fontWeight = FontWeight.ExtraBold
                 )
                 Text(
-                    text = "Best Streak",
-                    style = MaterialTheme.typography.labelSmall,
+                    text = "$streak / ${StreakBonus.CAP_DAYS} days",
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.outline
                 )
             }
 
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Surface(
-                    color = MaterialTheme.colorScheme.tertiary,
-                    shape = MaterialShapes.Sunny.toShape(),
-                    modifier = Modifier.size(56.dp)
+            Spacer(modifier = Modifier.height(12.dp))
+            StreakGauge(streakDays = streak)
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.tertiaryContainer),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = "$currentStreak",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.onTertiary
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Outlined.Bolt,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "days today",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Spacer(modifier = Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "XP Multiplier",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = if (atCap) {
+                            "Maximum bonus reached"
+                        } else {
+                            "+$bonusPercent% bonus XP • $daysToCap ${if (daysToCap == 1) "day" else "days"} to max"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)
+                ) {
+                    Text(
+                        text = multiplierLabel,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
             }
         }
     }
@@ -992,7 +1084,7 @@ fun StreakCard(
 @Composable
 fun PauseShieldCard(
     onPauseClick: () -> Unit,
-    shape: androidx.compose.ui.graphics.Shape
+    shape: Shape
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1045,7 +1137,7 @@ fun ResumeCard(
     pauseEndTimestamp: Long,
     onResume: () -> Unit,
     formatDuration: (Long) -> String,
-    shape: androidx.compose.ui.graphics.Shape,
+    shape: Shape,
     nowMillis: Long = System.currentTimeMillis()
 ) {
     val remainingMillis = remember(pauseEndTimestamp, nowMillis) {
@@ -1140,7 +1232,7 @@ fun ResumeCard(
 fun SecondaryStatsRow(
     averageUsage: String,
     totalSessions: Int,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(8.dp)
+    shape: Shape = RoundedCornerShape(8.dp)
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1204,7 +1296,7 @@ fun SecondaryStatsRow(
 @Composable
 fun PeakHourCard(
     peakHour: Int,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(8.dp)
+    shape: Shape = RoundedCornerShape(8.dp)
 ) {
     if (peakHour != -1) {
         Card(
@@ -1419,7 +1511,7 @@ fun BatteryUsageCard(
     sinceLastCharge: String,
     lastResetTimestamp: Long,
     onReset: () -> Unit,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(8.dp)
+    shape: Shape = RoundedCornerShape(8.dp)
 ) {
     val lastResetText = remember(lastResetTimestamp) {
         if (lastResetTimestamp <= 0L) "Never"
@@ -1494,7 +1586,7 @@ fun BatteryUsageCard(
 @Composable
 fun DeleteShieldCard(
     onDelete: () -> Unit,
-    shape: androidx.compose.ui.graphics.Shape
+    shape: Shape
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),

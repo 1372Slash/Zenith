@@ -460,10 +460,14 @@ class ProfileViewModel(
                 val usage = usageByPkg[shield.packageName] ?: 0L
                 when (shield.type) {
                     FocusType.SHIELD -> {
-                        xp += calcShieldXp(limit, usage)
+                        xp += com.etrisad.zenith.util.StreakBonus.applyMultiplier(
+                            calcShieldXp(limit, usage), shield.currentStreak
+                        )
                         if (usage <= limit) saved += (limit - usage).coerceAtLeast(0L)
                     }
-                    FocusType.GOAL -> xp += calcGoalXp(limit, usage)
+                    FocusType.GOAL -> xp += com.etrisad.zenith.util.StreakBonus.applyMultiplier(
+                        calcGoalXp(limit, usage), shield.currentStreak
+                    )
                 }
             }
             if (prefs.userXpLastAwardDate != todayStr) {

@@ -1,9 +1,16 @@
 package com.etrisad.zenith.ui.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -124,7 +131,13 @@ fun StreakCard(
     currentStreak: Int,
     bestStreak: Int,
     expressiveColors: Boolean,
-    shape: RoundedCornerShape
+    shape: RoundedCornerShape,
+    modifier: Modifier = Modifier,
+    title: String = "Screen Time Streak",
+    bestLabel: String = "Best Personal Streak",
+    currentLabel: String = "days today",
+    showDivider: Boolean = true,
+    footer: (@Composable () -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -144,74 +157,108 @@ fun StreakCard(
     Card(
         onClick = { },
         interactionSource = interactionSource,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .scale(scale)
             .clip(shape),
         shape = shape,
         colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(20.dp)
         ) {
-            Column {
-                Text(
-                    text = "Screen Time Streak",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.ExtraBold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "$bestStreak",
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Best Personal Streak",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                val sunnyShape = remember {
-                    GenericShape { size, _ ->
-                        val path = MaterialShapes.Sunny.toPath().asComposePath()
-                        val matrix = Matrix()
-                        matrix.scale(size.width, size.height)
-                        path.transform(matrix)
-                        addPath(path)
-                    }
-                }
-                
-                Surface(
-                    color = MaterialTheme.colorScheme.tertiary,
-                    shape = sunnyShape,
-                    modifier = Modifier.size(64.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    AnimatedContent(
+                        targetState = bestStreak,
+                        transitionSpec = {
+                            (fadeIn(animationSpec = tween(220)) + slideInVertically { it / 3 })
+                                .togetherWith(fadeOut(animationSpec = tween(140)) + slideOutVertically { -it / 3 })
+                        },
+                        label = "streakBest"
+                    ) { value ->
                         Text(
-                            text = "$currentStreak",
-                            style = MaterialTheme.typography.headlineMedium,
+                            text = "$value",
+                            style = MaterialTheme.typography.displaySmall,
                             fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.onTertiary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
+                    Text(
+                        text = bestLabel,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        fontWeight = FontWeight.Medium
+                    )
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "days today",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.secondary
-                )
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    val sunnyShape = remember {
+                        GenericShape { size, _ ->
+                            val path = MaterialShapes.Sunny.toPath().asComposePath()
+                            val matrix = Matrix()
+                            matrix.scale(size.width, size.height)
+                            path.transform(matrix)
+                            addPath(path)
+                        }
+                    }
+
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiary,
+                        shape = sunnyShape,
+                        modifier = Modifier.size(64.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            AnimatedContent(
+                                targetState = currentStreak,
+                                transitionSpec = {
+                                    (fadeIn(animationSpec = tween(220)) + slideInVertically { it / 3 })
+                                        .togetherWith(fadeOut(animationSpec = tween(140)) + slideOutVertically { -it / 3 })
+                                },
+                                contentAlignment = Alignment.Center,
+                                label = "streakCurrent"
+                            ) { value ->
+                                Text(
+                                    text = "$value",
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.onTertiary
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = currentLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
+            }
+
+            if (footer != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                if (showDivider) {
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+                footer()
             }
         }
     }
