@@ -738,22 +738,22 @@ fun ShieldSettingsBottomSheet(
 
                 ZenithButton(
                     onClick = {
-                        onSave(
-                            currentLimit,
-                            currentMaxEmergency,
-                            remindersEnabled,
-                            strictModeEnabled,
-                            pausePointEnabled,
-                            endOverlayEnabled,
-                            autoQuitEnabled,
-                            currentMaxUses,
-                            refreshPeriodMinutes,
-                            isDelayAppEnabled,
-                            selectedPeriod,
-                            activeDays
-                        )
                         scope.launch {
                             sheetState.hide()
+                            onSave(
+                                currentLimit,
+                                currentMaxEmergency,
+                                remindersEnabled,
+                                strictModeEnabled,
+                                pausePointEnabled,
+                                endOverlayEnabled,
+                                autoQuitEnabled,
+                                currentMaxUses,
+                                refreshPeriodMinutes,
+                                isDelayAppEnabled,
+                                selectedPeriod,
+                                activeDays
+                            )
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),

@@ -34,6 +34,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +49,7 @@ import com.etrisad.zenith.R
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.focus.CardGroup
 import com.etrisad.zenith.ui.components.focus.PreferenceCategory
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,6 +63,7 @@ fun GuidedPathHubBottomSheet(
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
 
     val containerColor by animateColorAsState(
         targetValue = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -173,8 +176,11 @@ fun GuidedPathHubBottomSheet(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
-                                            onDismiss()
-                                            controller.replayChapter(chapter.id)
+                                            scope.launch {
+                                                sheetState.hide()
+                                                onDismiss()
+                                                controller.replayChapter(chapter.id)
+                                            }
                                         }
                                         .padding(16.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -267,8 +273,11 @@ fun GuidedPathHubBottomSheet(
             ) {
                 ZenithButton(
                     onClick = {
-                        onDismiss()
-                        controller.replayAll()
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                            controller.replayAll()
+                        }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     text = stringResource(R.string.onboarding_path_start)

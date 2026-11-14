@@ -98,8 +98,21 @@ fun UpdateBottomSheet(
 
     val hideAndDismiss = {
         scope.launch {
-            sheetState.hide()
+            try {
+                sheetState.hide()
+            } catch (_: Exception) {
+            }
             onDismiss()
+        }
+    }
+
+    val hideAndUpdate = {
+        scope.launch {
+            try {
+                sheetState.hide()
+            } catch (_: Exception) {
+            }
+            onUpdate()
         }
     }
 
@@ -122,10 +135,7 @@ fun UpdateBottomSheet(
                 containerColor = containerColor,
                 screenHeight = screenHeight,
                 onDismiss = { hideAndDismiss() },
-                onUpdate = {
-                    onUpdate()
-                    hideAndDismiss()
-                }
+                onUpdate = { hideAndUpdate() }
             )
         }
     }
@@ -148,6 +158,7 @@ fun ChangelogBottomSheet(
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
 
     var displayCount by remember { mutableStateOf(minOf(5, releases.size)) }
     val displayedReleases = remember(releases, displayCount) { releases.take(displayCount) }
@@ -531,7 +542,7 @@ fun UpdateBottomSheetContent(
                 size = ZenithButtonSize.ExtraLarge
             ) {
                 ZenithButtonWeighted(
-                    onClick = onDismiss,
+                    onClick = { onDismiss() },
                     weight = 1f,
                     text = "Later",
                     type = ZenithButtonType.Tonal,
@@ -541,7 +552,7 @@ fun UpdateBottomSheetContent(
                 )
 
                 ZenithButtonWeighted(
-                    onClick = onUpdate,
+                    onClick = { onUpdate() },
                     weight = 1.5f,
                     text = "Update",
                     icon = Icons.Outlined.Download,

@@ -593,9 +593,11 @@ fun ReelsShieldAppLimitSheet(
             ZenithButton(
                 onClick = {
                     val next = parsed ?: safeSaved
-                    onLimitChange(next)
-                    scope.launch { sheetState.hide() }
-                    onDismiss()
+                    scope.launch {
+                        sheetState.hide()
+                        onLimitChange(next)
+                        onDismiss()
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
                 text = "Save Limit",

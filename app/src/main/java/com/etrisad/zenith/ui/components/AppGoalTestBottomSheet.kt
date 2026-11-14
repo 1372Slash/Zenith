@@ -79,8 +79,11 @@ fun AppGoalTestBottomSheet(
             val options = listOf(
                 Triple("Test with Zenith", "Single app scenario using the current app", Icons.Outlined.FilterCenterFocus) to {
                     scope.launch {
+                        try {
+                            sheetState.hide()
+                        } catch (_: Exception) {
+                        }
                         AppGoalOverlayActivity.start(context, listOf(context.packageName))
-                        sheetState.hide()
                         onDismiss()
                     }
                     Unit
@@ -90,11 +93,14 @@ fun AppGoalTestBottomSheet(
                 },
                 Triple("Test more than 2 Apps", "Multiple apps scenario (Zenith, Settings, and Phone)", Icons.Outlined.Apps) to {
                     scope.launch {
+                        try {
+                            sheetState.hide()
+                        } catch (_: Exception) {
+                        }
                         AppGoalOverlayActivity.start(
                             context, 
                             listOf(context.packageName, "com.android.settings", "com.android.phone")
                         )
-                        sheetState.hide()
                         onDismiss()
                     }
                     Unit
@@ -102,8 +108,11 @@ fun AppGoalTestBottomSheet(
                 Triple("Test with random app", "Picks a random installed launcher app", Icons.Outlined.BugReport) to {
                     scope.launch {
                         val randomPackage = getRandomInstalledApp(context)
+                        try {
+                            sheetState.hide()
+                        } catch (_: Exception) {
+                        }
                         AppGoalOverlayActivity.start(context, listOf(randomPackage))
-                        sheetState.hide()
                         onDismiss()
                     }
                     Unit

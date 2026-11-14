@@ -1567,9 +1567,12 @@ fun AchievementDetailSheet(
     onDismiss: () -> Unit,
     onOpenGuidedPathHub: (() -> Unit)? = null
 ) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface
     ) {
         Column(
@@ -1612,8 +1615,11 @@ fun AchievementDetailSheet(
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = {
-                        onDismiss()
-                        onOpenGuidedPathHub()
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                            onOpenGuidedPathHub()
+                        }
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {

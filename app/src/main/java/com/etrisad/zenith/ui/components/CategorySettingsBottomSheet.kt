@@ -662,8 +662,10 @@ fun CategorySettingsBottomSheet(
                     if (onDelete != null && existingCategory != null) {
                         ZenithButtonWeighted(
                             onClick = {
-                                scope.launch { sheetState.hide() }
-                                onDelete()
+                                scope.launch {
+                                    sheetState.hide()
+                                    onDelete()
+                                }
                             },
                             text = if (customCategory) "Delete" else "Reset",
                             type = ZenithButtonType.Tonal,
@@ -686,8 +688,10 @@ fun CategorySettingsBottomSheet(
                                 if (onAppsChange != null) {
                                     onAppsChange(selectedApps)
                                 }
-                                scope.launch { sheetState.hide() }
-                                onSave(name.trim(), description.trim(), iconKey, colorArgb)
+                                scope.launch {
+                                    sheetState.hide()
+                                    onSave(name.trim(), description.trim(), iconKey, colorArgb)
+                                }
                             },
                             text = "Save",
                             type = ZenithButtonType.Filled,
@@ -702,8 +706,10 @@ fun CategorySettingsBottomSheet(
                                 if (onAppsChange != null) {
                                     onAppsChange(selectedApps)
                                 }
-                                scope.launch { sheetState.hide() }
-                                onSave(name.trim(), description.trim(), iconKey, colorArgb)
+                                scope.launch {
+                                    sheetState.hide()
+                                    onSave(name.trim(), description.trim(), iconKey, colorArgb)
+                                }
                             },
                             text = "Save",
                             type = ZenithButtonType.Filled,

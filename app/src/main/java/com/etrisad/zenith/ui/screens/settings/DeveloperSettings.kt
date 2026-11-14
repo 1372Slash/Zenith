@@ -40,6 +40,7 @@ import com.etrisad.zenith.ui.components.overlay.InterceptBottomSheet
 import com.etrisad.zenith.ui.viewmodel.AppInfo
 import com.etrisad.zenith.ui.viewmodel.FocusUiState
 import com.etrisad.zenith.util.ScreenUsageHelper
+import kotlinx.coroutines.launch
 
 @Composable
 fun DeveloperSettings(
@@ -687,6 +688,7 @@ fun EditValueBottomSheet(
 ) {
     var inputValue by remember { mutableStateOf(initialValue) }
     val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -748,7 +750,12 @@ fun EditValueBottomSheet(
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
-                onClick = { onConfirm(inputValue) },
+                onClick = {
+                    scope.launch {
+                        sheetState.hide()
+                        onConfirm(inputValue)
+                    }
+                },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 contentPadding = PaddingValues(16.dp)
@@ -768,6 +775,7 @@ private fun TestAlarmBottomSheet(
     var mathChallengeEnabled by remember { mutableStateOf(false) }
     var gradualVolumeEnabled by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
 
     val containerColor by animateColorAsState(
         targetValue = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -879,21 +887,27 @@ private fun TestAlarmBottomSheet(
 
             ZenithButton(
                 onClick = {
-                    val intent = android.content.Intent(
-                        context,
-                        com.etrisad.zenith.service.AlarmOverlayActivity::class.java
-                    ).apply {
-                        putExtra(
-                            com.etrisad.zenith.service.AlarmOverlayActivity.EXTRA_TEST_MATH_CHALLENGE,
-                            mathChallengeEnabled
-                        )
-                        putExtra(
-                            com.etrisad.zenith.service.AlarmOverlayActivity.EXTRA_TEST_GRADUAL_VOLUME,
-                            gradualVolumeEnabled
-                        )
+                    scope.launch {
+                        val intent = android.content.Intent(
+                            context,
+                            com.etrisad.zenith.service.AlarmOverlayActivity::class.java
+                        ).apply {
+                            putExtra(
+                                com.etrisad.zenith.service.AlarmOverlayActivity.EXTRA_TEST_MATH_CHALLENGE,
+                                mathChallengeEnabled
+                            )
+                            putExtra(
+                                com.etrisad.zenith.service.AlarmOverlayActivity.EXTRA_TEST_GRADUAL_VOLUME,
+                                gradualVolumeEnabled
+                            )
+                        }
+                        try {
+                            sheetState.hide()
+                        } catch (_: Exception) {
+                        }
+                        context.startActivity(intent)
+                        onDismiss()
                     }
-                    context.startActivity(intent)
-                    onDismiss()
                 },
                 modifier = Modifier.fillMaxWidth(),
                 text = "Test Alarm",
@@ -905,7 +919,12 @@ private fun TestAlarmBottomSheet(
             Spacer(modifier = Modifier.height(12.dp))
 
             ZenithButton(
-                onClick = onDismiss,
+                onClick = {
+                    scope.launch {
+                        sheetState.hide()
+                        onDismiss()
+                    }
+                },
                 modifier = Modifier.fillMaxWidth(),
                 text = "Cancel",
                 type = ZenithButtonType.Outlined,
@@ -928,6 +947,7 @@ private fun TtsTestBottomSheet(
     var availableLocales by remember { mutableStateOf<List<java.util.Locale>>(emptyList()) }
     var selectedLocale by remember { mutableStateOf(java.util.Locale.getDefault()) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         try {
@@ -1199,9 +1219,15 @@ private fun TtsTestBottomSheet(
 
             ZenithButton(
                 onClick = {
-                    tts?.stop()
-                    tts?.shutdown()
-                    onDismiss()
+                    scope.launch {
+                        try {
+                            sheetState.hide()
+                        } catch (_: Exception) {
+                        }
+                        tts?.stop()
+                        tts?.shutdown()
+                        onDismiss()
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
                 text = "Close",

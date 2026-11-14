@@ -922,6 +922,7 @@ private fun BatteryWarningBottomSheet(
     onConfirm: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
     val iconScale = remember { Animatable(0f) }
     val contentAlpha = remember { Animatable(0f) }
 
@@ -999,14 +1000,24 @@ private fun BatteryWarningBottomSheet(
 
             ZenithGroupedButton(size = ZenithButtonSize.Large) {
                 ZenithButtonWeighted(
-                    onClick = onDismiss,
+                    onClick = {
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                        }
+                    },
                     text = "Cancel",
                     type = ZenithButtonType.Outlined,
                     isLast = false,
                     size = ZenithButtonSize.ExtraLarge
                 )
                 ZenithButtonWeighted(
-                    onClick = onConfirm,
+                    onClick = {
+                        scope.launch {
+                            sheetState.hide()
+                            onConfirm()
+                        }
+                    },
                     text = "Use Anyway",
                     type = ZenithButtonType.Filled,
                     containerColor = MaterialTheme.colorScheme.primary,

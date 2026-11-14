@@ -655,6 +655,9 @@ private fun BorderDetailSheet(
     val remainingXp = (requiredXp - xpTotal).coerceAtLeast(0L)
     val progressFraction = if (requiredXp <= 0L) 1f else (xpTotal.toFloat() / requiredXp.toFloat()).coerceIn(0f, 1f)
 
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+
     val containerColor by animateColorAsState(
         targetValue = MaterialTheme.colorScheme.surfaceContainerLow,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
@@ -663,7 +666,7 @@ private fun BorderDetailSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface
     ) {
         Column(
@@ -790,8 +793,11 @@ private fun BorderDetailSheet(
 
                 ZenithButton(
                     onClick = {
-                        onEquipToggle()
-                        onDismiss()
+                        scope.launch {
+                            sheetState.hide()
+                            onEquipToggle()
+                            onDismiss()
+                        }
                     },
                     enabled = unlocked,
                     fillMaxWidth = true,

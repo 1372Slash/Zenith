@@ -1958,13 +1958,18 @@ private fun AlarmSettingsSheetContent(
                 ZenithButton(
                     onClick = {
                         scope.launch {
+                            if (isSaving) return@launch
                             isSaving = true
                             try {
-                                val tSaveStart = System.currentTimeMillis()
-                                saveDraft()
-                                val tHide = System.currentTimeMillis()
-                                sheetState.hide()
-                                onDismiss()
+                                try {
+                                    sheetState.hide()
+                                } catch (_: Exception) {
+                                }
+                                try {
+                                    saveDraft()
+                                } finally {
+                                    onDismiss()
+                                }
                             } finally {
                                 isSaving = false
                             }
