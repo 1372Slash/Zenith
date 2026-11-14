@@ -601,7 +601,7 @@ class AppUsageMonitorService : Service() {
             }
 
             if (triggeredGoals.isNotEmpty()) {
-                triggeredGoals.forEach { goal ->
+                triggeredGoals.filter { it.isRemindersEnabled }.forEach { goal ->
                     sendGoalSuggestionNotification(goal)
                 }
 
@@ -614,13 +614,9 @@ class AppUsageMonitorService : Service() {
                     if (!isNightTime && !SharedMonitoringState.isBedtimeActive) {
                         sendGoalCallerNotification(overlayGoals)
                     }
-                    triggeredGoals.forEach { goal ->
-                        shieldRepository.updateShield(goal.copy(lastGoalReminderTimestamp = currentTime))
-                    }
-                } else {
-                    triggeredGoals.forEach { goal ->
-                        shieldRepository.updateShield(goal.copy(lastGoalReminderTimestamp = currentTime))
-                    }
+                }
+                triggeredGoals.forEach { goal ->
+                    shieldRepository.updateShield(goal.copy(lastGoalReminderTimestamp = currentTime))
                 }
             }
         } catch (e: Exception) {
