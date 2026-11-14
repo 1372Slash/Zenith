@@ -465,7 +465,7 @@ fun AppDetailScreen(
                 usageToday = uiState.todayUsage,
                 existingShield = existingShield,
                 onDismiss = { viewModel.closeSettingsSheet() },
-                onSave = { limit, reminders, goalReminder, isCaller, isSound, soundUri, period, isHudEnabled ->
+                onSave = { limit, reminders, goalReminder, isCaller, isSound, soundUri, period, isHudEnabled, isGoalOverlayEnabled ->
                     viewModel.saveFocus(
                         packageName = uiState.packageName,
                         appName = uiState.appName,
@@ -482,7 +482,8 @@ fun AppDetailScreen(
                         isGoalCallerSoundEnabled = isSound,
                         goalCallerSoundUri = soundUri,
                         limitPeriod = period,
-                        isHUDEnabled = isHudEnabled
+                        isHUDEnabled = isHudEnabled,
+                        isGoalOverlayEnabled = isGoalOverlayEnabled
                     )
                 }
             )

@@ -650,6 +650,7 @@ class FocusViewModel(
         limitPeriod: LimitPeriod = LimitPeriod.DAILY,
         url: String? = null,
         isHUDEnabled: Boolean = true,
+        isGoalOverlayEnabled: Boolean = true,
         activeDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7)
     ) {
         val type = _uiState.value.selectedFocusType
@@ -698,6 +699,7 @@ class FocusViewModel(
                     isGoalCallerSoundEnabled = isGoalCallerSoundEnabled,
                     goalCallerSoundUri = goalCallerSoundUri,
                     isHUDEnabled = isHUDEnabled,
+                    isGoalOverlayEnabled = isGoalOverlayEnabled,
                     currentStreak = if (shouldResetStreak) 0 else (existing?.currentStreak ?: 0),
                     bestStreak = existing?.bestStreak ?: 0,
                     lastStreakUpdateTimestamp = existing?.lastStreakUpdateTimestamp ?: 0L,

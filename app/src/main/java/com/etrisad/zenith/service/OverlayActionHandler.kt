@@ -185,6 +185,9 @@ class OverlayActionHandler(
         if (!AppStateHolder.isScreenOn.value) {
             return
         }
+        if (shield.type == FocusType.GOAL && !shield.isGoalOverlayEnabled) {
+            return
+        }
         OverlayLogBuffer.d("OverlayAct", "showShieldOverlay: $targetPackageName (shield type=${shield.type})")
         val shieldWithTimestamp = processDelayForShield(shield, isMindfulGateway, delayDurationSeconds, targetPackageName)
 

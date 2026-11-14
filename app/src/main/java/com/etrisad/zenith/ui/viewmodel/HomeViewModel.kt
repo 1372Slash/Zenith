@@ -1833,6 +1833,7 @@ class HomeViewModel(
         isGoalCallerSoundEnabled: Boolean = true, goalCallerSoundUri: String? = null,
         limitPeriod: LimitPeriod = LimitPeriod.DAILY,
         isHUDEnabled: Boolean = true,
+        isGoalOverlayEnabled: Boolean = true,
         activeDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7)
     ) {
         val type = _appDetailUiState.value.type ?: FocusType.SHIELD
@@ -1841,7 +1842,7 @@ class HomeViewModel(
             isStrictModeEnabled, isAutoQuitEnabled, isEndOverlayEnabled, isPausePointEnabled, maxUsesPerPeriod, refreshPeriodMinutes,
             goalReminderPeriodMinutes, isDelayAppEnabled, isGoalCallerEnabled, isGoalCallerSoundEnabled,
             goalCallerSoundUri, limitPeriod, type, viewModelScope, ::closeSettingsSheet,
-            isHUDEnabled = isHUDEnabled, activeDays = activeDays
+            isHUDEnabled = isHUDEnabled, isGoalOverlayEnabled = isGoalOverlayEnabled, activeDays = activeDays
         )
     }
 

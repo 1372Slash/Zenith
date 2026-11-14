@@ -1364,6 +1364,9 @@ class ZenithService : AccessibilityService() {
             if (effectiveShield?.type == FocusType.GOAL && SharedMonitoringState.notifiedGoals.contains(actualTargetPackage)) {
                 return
             }
+            if (effectiveShield?.type == FocusType.GOAL && !effectiveShield.isGoalOverlayEnabled) {
+                return
+            }
 
             if (effectiveShield != null && (!InterceptOverlayManager.isShowing || InterceptOverlayManager.currentPackage != actualTargetPackage)) {
                 if (isWebsite && effectiveShield.isAutoQuitEnabled) {

@@ -57,7 +57,7 @@ fun GoalSettingsBottomSheet(
     usageToday: Long,
     existingShield: ShieldEntity?,
     onDismiss: () -> Unit,
-    onSave: (Int, Boolean, Int, Boolean, Boolean, String?, LimitPeriod, Boolean) -> Unit
+    onSave: (Int, Boolean, Int, Boolean, Boolean, String?, LimitPeriod, Boolean, Boolean) -> Unit
 ) {
     val configuration = LocalConfiguration.current
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -83,6 +83,7 @@ fun GoalSettingsBottomSheet(
     var isGoalCallerSoundEnabled by remember { mutableStateOf(existingShield?.isGoalCallerSoundEnabled ?: true) }
     var goalCallerSoundUri by remember { mutableStateOf(existingShield?.goalCallerSoundUri) }
     var isHUDEnabled by remember { mutableStateOf(existingShield?.isHUDEnabled ?: true) }
+    var isGoalOverlayEnabled by remember { mutableStateOf(existingShield?.isGoalOverlayEnabled ?: true) }
 
     val ringtonePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
@@ -423,6 +424,19 @@ fun GoalSettingsBottomSheet(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
+                CardGroup(shape = middleShape, containerColor = containerColor) {
+                    SettingsToggle(
+                        title = "Goal Overlay",
+                        description = "Show an in-app goal check-in when you open this app",
+                        checked = isGoalOverlayEnabled,
+                        onCheckedChange = { isGoalOverlayEnabled = it },
+                        icon = Icons.Outlined.Flag,
+                        shape = middleShape
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
                 CardGroup(
                     shape = if (isGoalCallerEnabled) middleShape else bottomShape,
                     containerColor = containerColor
@@ -630,18 +644,19 @@ fun GoalSettingsBottomSheet(
             ) {
                 ZenithButton(
                     onClick = {
-                        onSave(
-                            ((hourText.toIntOrNull() ?: 0) * 60 + (minuteText.toIntOrNull() ?: 0)).coerceAtMost(10080),
-                            remindersEnabled,
-                            goalReminderPeriodMinutes,
-                            isGoalCallerEnabled,
-                            isGoalCallerSoundEnabled,
-                            goalCallerSoundUri,
-                            selectedPeriod,
-                            isHUDEnabled
-                        )
                         scope.launch {
                             sheetState.hide()
+                            onSave(
+                                ((hourText.toIntOrNull() ?: 0) * 60 + (minuteText.toIntOrNull() ?: 0)).coerceAtMost(10080),
+                                remindersEnabled,
+                                goalReminderPeriodMinutes,
+                                isGoalCallerEnabled,
+                                isGoalCallerSoundEnabled,
+                                goalCallerSoundUri,
+                                selectedPeriod,
+                                isHUDEnabled,
+                                isGoalOverlayEnabled
+                            )
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),

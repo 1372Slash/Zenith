@@ -1245,7 +1245,7 @@ private fun SnapshotShieldSheets(focusViewModel: FocusViewModel) {
                 usageToday = focusUiState.selectedAppUsageToday,
                 existingShield = existingShield,
                 onDismiss = { focusViewModel.closeSettingsSheet() },
-                onSave = { limit, reminders, goalReminder, isCaller, isSound, soundUri, period, isHudEnabled ->
+                onSave = { limit, reminders, goalReminder, isCaller, isSound, soundUri, period, isHudEnabled, isGoalOverlayEnabled ->
                     focusViewModel.saveFocus(
                         packageName = appInfo.packageName,
                         appName = appInfo.appName,
@@ -1262,7 +1262,8 @@ private fun SnapshotShieldSheets(focusViewModel: FocusViewModel) {
                         isGoalCallerSoundEnabled = isSound,
                         goalCallerSoundUri = soundUri,
                         limitPeriod = period,
-                        isHUDEnabled = isHudEnabled
+                        isHUDEnabled = isHudEnabled,
+                        isGoalOverlayEnabled = isGoalOverlayEnabled
                     )
                 }
             )

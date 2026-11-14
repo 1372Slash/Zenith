@@ -71,5 +71,7 @@ data class ShieldEntity(
     val isWebsite: Boolean = false,
     val url: String? = null,
     @androidx.room.ColumnInfo(defaultValue = "1,2,3,4,5,6,7")
-    val activeDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7)
+    val activeDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7),
+    @androidx.room.ColumnInfo(defaultValue = "1")
+    val isGoalOverlayEnabled: Boolean = true
 )

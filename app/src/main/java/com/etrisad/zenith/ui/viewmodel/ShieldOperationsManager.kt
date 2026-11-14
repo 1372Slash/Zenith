@@ -28,6 +28,7 @@ class ShieldOperationsManager(
         scope: CoroutineScope,
         onComplete: () -> Unit,
         isHUDEnabled: Boolean = true,
+        isGoalOverlayEnabled: Boolean = true,
         activeDays: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7)
     ) {
         scope.launch {
@@ -51,6 +52,7 @@ class ShieldOperationsManager(
                     isDelayAppEnabled = isDelayAppEnabled, isGoalCallerEnabled = isGoalCallerEnabled,
                     isGoalCallerSoundEnabled = isGoalCallerSoundEnabled, goalCallerSoundUri = goalCallerSoundUri,
                     isHUDEnabled = isHUDEnabled,
+                    isGoalOverlayEnabled = isGoalOverlayEnabled,
                     activeDays = activeDays
                 ) ?: ShieldEntity(
                     packageName = packageName, appName = appName, type = type,
@@ -64,6 +66,7 @@ class ShieldOperationsManager(
                     isDelayAppEnabled = isDelayAppEnabled, isGoalCallerEnabled = isGoalCallerEnabled,
                     isGoalCallerSoundEnabled = isGoalCallerSoundEnabled, goalCallerSoundUri = goalCallerSoundUri,
                     isHUDEnabled = isHUDEnabled,
+                    isGoalOverlayEnabled = isGoalOverlayEnabled,
                     activeDays = activeDays
                 )
                 shieldRepository.insertShield(shield)
