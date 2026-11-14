@@ -151,6 +151,17 @@
         </receiver>
 
         <receiver
+            android:name=".receiver.PomodoroNotificationReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.etrisad.zenith.action.POMODORO_PAUSE" />
+                <action android:name="com.etrisad.zenith.action.POMODORO_RESUME" />
+                <action android:name="com.etrisad.zenith.action.POMODORO_STOP" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".receiver.MidnightResetReceiver"
             android:enabled="true"
             android:exported="false">

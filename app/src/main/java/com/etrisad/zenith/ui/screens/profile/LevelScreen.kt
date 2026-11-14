@@ -606,8 +606,9 @@ fun LevelScreen(
                             text = "Shields earn XP for staying under the limit " +
                                 "(less usage = more XP, over the limit = 0). Goals earn " +
                                 "XP for reaching the target, plus a bonus for going over. " +
-                                "XP is awarded once per day. Each level needs more XP " +
-                                "than the last.",
+                                "Completed Pomodoro focus sessions also earn XP based on " +
+                                "focus time (Relaxed Mode pays slightly less). Each level " +
+                                "needs more XP than the last.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

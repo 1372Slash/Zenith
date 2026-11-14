@@ -66,7 +66,10 @@ class ZenithNotificationListener : NotificationListenerService() {
         }
 
         serviceScope.launch {
-            if (SharedMonitoringState.isPomodoroActive && !SharedMonitoringState.isPomodoroPaused) {
+            if (SharedMonitoringState.isPomodoroActive &&
+                !SharedMonitoringState.isPomodoroPaused &&
+                !SharedMonitoringState.isPomodoroRelaxedMode
+            ) {
                 val pkg = sbn.packageName
                 val isAllowed = pkg in SharedMonitoringState.pomodoroAllowedPackages ||
                     pkg in SharedMonitoringState.CRITICAL_SYSTEM_PACKAGES ||

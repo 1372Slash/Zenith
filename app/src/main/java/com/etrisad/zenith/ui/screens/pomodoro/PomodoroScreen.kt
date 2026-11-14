@@ -33,7 +33,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.ui.components.StreakCard
+import com.etrisad.zenith.ui.components.StreakGauge
+import com.etrisad.zenith.ui.viewmodel.PomodoroUiState
+import com.etrisad.zenith.util.DateTimeUtils
+import com.etrisad.zenith.util.PomodoroStreak
+import com.etrisad.zenith.util.PomodoroXp
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
@@ -84,13 +91,13 @@ fun PomodoroScreen(
                     ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 )
             }
-            !isAccessibilityServiceEnabled(pomoContext) -> {
+            !uiState.relaxedMode && !isAccessibilityServiceEnabled(pomoContext) -> {
                 Toast.makeText(pomoContext, "Accessibility service is required to detect apps", Toast.LENGTH_LONG).show()
                 pomoContext.startActivity(
                     Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 )
             }
-            !isNotificationListenerEnabled(pomoContext) -> {
+            !uiState.relaxedMode && !isNotificationListenerEnabled(pomoContext) -> {
                 Toast.makeText(pomoContext, "Notification access is required to block notifications", Toast.LENGTH_LONG).show()
                 pomoContext.startActivity(
                     Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -201,10 +208,22 @@ fun PomodoroScreen(
                     )
                 }
 
-                item(key = "stats") {
+                item(key = "stats_and_streak") {
                     Column {
                         PreferenceCategory(title = "Statistics")
-                        PomodoroStatsSection(viewModel = viewModel)
+                        PomodoroStatsSection(
+                            viewModel = viewModel,
+                            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                        )
+                        PomodoroStreakCard(
+                            currentStreak = preferences.pomodoroCurrentStreak,
+                            bestStreak = preferences.pomodoroBestStreak,
+                            lastStreakDate = preferences.pomodoroLastStreakDate,
+                            dayStartHour = preferences.dayStartHour,
+                            dayStartMinute = preferences.dayStartMinute,
+                            expressiveColors = preferences.expressiveColors,
+                            shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                        )
                     }
                 }
             }
@@ -216,10 +235,12 @@ fun PomodoroScreen(
                         maxSelection = uiState.maxSelection,
                         blockAllowedApps = uiState.blockAllowedApps,
                         pauseable = uiState.pauseable,
+                        relaxedMode = uiState.relaxedMode,
                         presetsJson = uiState.presetsJson,
                         onAppPickerClick = { showAppPicker = true },
                         onBlockAllowedAppsChange = { viewModel.setBlockAllowedApps(it) },
                         onPauseableChange = { viewModel.setPauseable(it) },
+                        onRelaxedModeChange = { viewModel.setRelaxedMode(it) },
                         onMaxSelectionChange = { viewModel.setMaxSelection(it) },
                         onSavePreset = { presetNameInput = ""; showPresetSaveSheet = true },
                         onApplyPreset = { showPresetApplySheet = true },
@@ -256,13 +277,19 @@ fun PomodoroScreen(
                 label = "PomodoroButtonsMorph"
             ) { sessionActive ->
                 if (!sessionActive) {
-                    ZenithButton(
-                        onClick = { startWithPreflight() },
-                        text = "Start Focus",
-                        icon = Icons.Outlined.PlayArrow,
-                        size = ZenithButtonSize.ExtraLarge,
-                        fillMaxWidth = true
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        PomodoroXpInfoCard(
+                            uiState = uiState,
+                            preferences = preferences
+                        )
+                        ZenithButton(
+                            onClick = { startWithPreflight() },
+                            text = "Start Focus",
+                            icon = Icons.Outlined.PlayArrow,
+                            size = ZenithButtonSize.ExtraLarge,
+                            fillMaxWidth = true
+                        )
+                    }
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (uiState.pauseable) {
@@ -397,9 +424,10 @@ fun PomodoroScreen(
     }
 
     if (showPresetSaveSheet) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
             onDismissRequest = { showPresetSaveSheet = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surface
         ) {
             Column(
@@ -435,8 +463,11 @@ fun PomodoroScreen(
                 ZenithButton(
                     onClick = {
                         if (presetNameInput.isNotBlank()) {
-                            viewModel.savePreset(presetNameInput.trim())
-                            showPresetSaveSheet = false
+                            coroutineScope.launch {
+                                sheetState.hide()
+                                viewModel.savePreset(presetNameInput.trim())
+                                showPresetSaveSheet = false
+                            }
                         }
                     },
                     text = "Save Preset",
@@ -446,7 +477,12 @@ fun PomodoroScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 ZenithButton(
-                    onClick = { showPresetSaveSheet = false },
+                    onClick = {
+                        coroutineScope.launch {
+                            sheetState.hide()
+                            showPresetSaveSheet = false
+                        }
+                    },
                     text = "Cancel",
                     type = ZenithButtonType.Text,
                     fillMaxWidth = true
@@ -456,11 +492,12 @@ fun PomodoroScreen(
     }
 
     if (showPresetApplySheet) {
+        val presetApplySheetState = rememberModalBottomSheetState()
         val presetsMap = remember(uiState.presetsJson) { viewModel.getPresets() }
         val presetList = remember(presetsMap) { presetsMap.toList() }
         ModalBottomSheet(
             onDismissRequest = { showPresetApplySheet = false },
-            sheetState = rememberModalBottomSheetState(),
+            sheetState = presetApplySheetState,
             containerColor = MaterialTheme.colorScheme.surface
         ) {
             Column(
@@ -495,8 +532,11 @@ fun PomodoroScreen(
                                 .fillMaxWidth()
                                 .clip(shape)
                                 .clickable {
-                                    viewModel.applyPreset(packages)
-                                    showPresetApplySheet = false
+                                    coroutineScope.launch {
+                                        presetApplySheetState.hide()
+                                        viewModel.applyPreset(packages)
+                                        showPresetApplySheet = false
+                                    }
                                 },
                             shape = shape,
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
@@ -706,10 +746,12 @@ fun AppSelectionCard(
     maxSelection: Int,
     blockAllowedApps: Boolean,
     pauseable: Boolean,
+    relaxedMode: Boolean,
     presetsJson: String,
     onAppPickerClick: () -> Unit,
     onBlockAllowedAppsChange: (Boolean) -> Unit,
     onPauseableChange: (Boolean) -> Unit,
+    onRelaxedModeChange: (Boolean) -> Unit,
     onMaxSelectionChange: (Int) -> Unit,
     onSavePreset: () -> Unit,
     onApplyPreset: () -> Unit,
@@ -726,12 +768,24 @@ fun AppSelectionCard(
         PreferenceCategory(title = "App Protection")
         CardGroup(shape = topShape, containerColor = containerColor) {
             SettingsToggle(
+                title = "Relaxed Mode",
+                description = "Skip Pomodoro app locking so only normal shields apply",
+                checked = relaxedMode,
+                onCheckedChange = onRelaxedModeChange,
+                icon = Icons.Outlined.Spa,
+                shape = topShape
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        CardGroup(shape = middleShape, containerColor = containerColor, enabled = !relaxedMode) {
+            SettingsToggle(
                 title = "Block apps behind puzzle",
                 description = "Selected apps require a puzzle to access",
                 checked = blockAllowedApps,
                 onCheckedChange = onBlockAllowedAppsChange,
                 icon = Icons.Outlined.Lock,
-                shape = topShape
+                shape = middleShape,
+                enabled = !relaxedMode
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
@@ -964,7 +1018,7 @@ fun PomodoroStatusProgress(
 
     val animatedProgress by animateFloatAsState(
         targetValue = progressValue,
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        animationSpec = tween(durationMillis = 1000, easing = LinearEasing),
         label = "PomodoroProgress"
     )
     val waveAmplitude: Float
@@ -1099,3 +1153,169 @@ private fun SessionDots(
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun PomodoroStreakCard(
+    currentStreak: Int,
+    bestStreak: Int,
+    lastStreakDate: String,
+    dayStartHour: Int,
+    dayStartMinute: Int,
+    expressiveColors: Boolean,
+    shape: RoundedCornerShape = RoundedCornerShape(24.dp)
+) {
+    val todayDate = remember(dayStartHour, dayStartMinute) {
+        DateTimeUtils.getDayStartDateString(System.currentTimeMillis(), dayStartHour, dayStartMinute)
+    }
+    val effective = PomodoroStreak.effectiveStreak(currentStreak, lastStreakDate, todayDate)
+    val capDays = PomodoroStreak.CAP_DAYS
+
+    val projected = PomodoroStreak.projectedStreak(currentStreak, lastStreakDate, todayDate)
+    val multiplier = PomodoroStreak.multiplierLabel(projected)
+    val bonus = PomodoroStreak.bonusPercent(projected)
+
+    StreakCard(
+        currentStreak = effective,
+        bestStreak = bestStreak,
+        expressiveColors = expressiveColors,
+        shape = shape,
+        title = "Pomodoro Streak",
+        bestLabel = "Best Pomodoro Streak",
+        currentLabel = "days streak",
+        showDivider = false,
+        footer = {
+            StreakGauge(
+                streakDays = effective,
+                capDays = capDays
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.tertiaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Bolt,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column {
+                        Text(
+                            text = "Next Session Boost",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "+$bonus% XP bonus for next session",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)
+                ) {
+                    Text(
+                        text = multiplier,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun PomodoroXpInfoCard(
+    uiState: PomodoroUiState,
+    preferences: UserPreferences
+) {
+    val todayDate = remember(preferences.dayStartHour, preferences.dayStartMinute) {
+        DateTimeUtils.getDayStartDateString(System.currentTimeMillis(), preferences.dayStartHour, preferences.dayStartMinute)
+    }
+    val projected = PomodoroStreak.projectedStreak(
+        preferences.pomodoroCurrentStreak, preferences.pomodoroLastStreakDate, todayDate
+    )
+    val totalXp = PomodoroXp.totalXpForPlan(
+        uiState.sessionDurationMinutes, uiState.sessionCount, uiState.relaxedMode, projected
+    )
+    val multiplier = PomodoroStreak.multiplierLabel(projected)
+
+    var isXpDetailExpanded by remember { mutableStateOf(false) }
+
+    Card(
+        onClick = { isXpDetailExpanded = !isXpDetailExpanded },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 4.dp),
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Outlined.WorkspacePremium,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                AnimatedContent(
+                    targetState = "Earn up to $totalXp XP ($multiplier)",
+                    transitionSpec = {
+                        (fadeIn(animationSpec = tween(220)) + slideInVertically { it / 2 })
+                            .togetherWith(fadeOut(animationSpec = tween(140)) + slideOutVertically { -it / 2 })
+                    },
+                    label = "xpTextAnimation",
+                    modifier = Modifier.weight(1f)
+                ) { text ->
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Icon(
+                    imageVector = if (isXpDetailExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            AnimatedVisibility(visible = isXpDetailExpanded) {
+                Column {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Complete all ${uiState.sessionCount} focus sessions (${uiState.sessionDurationMinutes}m each) successfully with streak bonus ($multiplier) to earn this XP. Mode: ${if (uiState.relaxedMode) "Relaxed" else "Full Focus"}.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+

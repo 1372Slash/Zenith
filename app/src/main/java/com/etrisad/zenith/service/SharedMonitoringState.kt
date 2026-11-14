@@ -51,6 +51,7 @@ object SharedMonitoringState {
     @Volatile var isBedtimeBlockingActive = false
     @Volatile var isPomodoroActive = false
     @Volatile var isPomodoroBlockingActive = false
+    @Volatile var isPomodoroRelaxedMode = false
     @Volatile var isPomodoroBreakActive = false
     @Volatile var isPomodoroPaused = false
     @Volatile var pomodoroPauseTimestamp: Long = 0L

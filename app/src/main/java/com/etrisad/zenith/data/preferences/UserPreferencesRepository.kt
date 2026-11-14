@@ -32,6 +32,7 @@ import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import com.etrisad.zenith.util.DateTimeUtils
+import com.etrisad.zenith.util.PomodoroStreak
 import com.etrisad.zenith.ui.theme.FontAxes
 import com.etrisad.zenith.ui.theme.GSFlexSettings
 import kotlinx.coroutines.CoroutineScope
@@ -475,6 +476,7 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
         val POMODORO_SESSION_COUNT = intPreferencesKey("pomodoro_session_count")
         val POMODORO_SESSIONS_BEFORE_LONG_BREAK = intPreferencesKey("pomodoro_sessions_before_long_break")
         val POMODORO_PRESETS = stringPreferencesKey("pomodoro_presets")
+        val POMODORO_RELAXED_MODE = booleanPreferencesKey("pomodoro_relaxed_mode")
 
         val PAUSE_POINT_ENABLED = booleanPreferencesKey("pause_point_enabled")
         val PAUSE_POINT_TASK_TYPES = stringPreferencesKey("pause_point_task_types")
@@ -519,6 +521,9 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
         val POMODORO_BREAK_END_TIMESTAMP = longPreferencesKey("pomodoro_break_end_timestamp")
         val POMODORO_NEXT_BREAK_ALLOWED_TIMESTAMP = longPreferencesKey("pomodoro_next_break_allowed_timestamp")
         val POMODORO_CURRENT_SESSION_NUMBER = intPreferencesKey("pomodoro_current_session_number")
+        val POMODORO_CURRENT_STREAK = intPreferencesKey("pomodoro_current_streak")
+        val POMODORO_BEST_STREAK = intPreferencesKey("pomodoro_best_streak")
+        val POMODORO_LAST_STREAK_DATE = stringPreferencesKey("pomodoro_last_streak_date")
         val USER_XP_TOTAL = longPreferencesKey("user_xp_total")
         val USER_XP_DEBUG_BASE = longPreferencesKey("user_xp_debug_base")
         val USER_XP_LAST_AWARD_DATE = stringPreferencesKey("user_xp_last_award_date")
@@ -818,6 +823,10 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
             pomodoroSessionsBeforeLongBreak = settings[PreferencesKeys.POMODORO_SESSIONS_BEFORE_LONG_BREAK] ?: 4,
             pomodoroCurrentSessionNumber = runtime[RuntimeKeys.POMODORO_CURRENT_SESSION_NUMBER] ?: 1,
             pomodoroPresets = settings[PreferencesKeys.POMODORO_PRESETS] ?: "{}",
+            pomodoroRelaxedMode = settings[PreferencesKeys.POMODORO_RELAXED_MODE] ?: false,
+            pomodoroCurrentStreak = runtime[RuntimeKeys.POMODORO_CURRENT_STREAK] ?: 0,
+            pomodoroBestStreak = runtime[RuntimeKeys.POMODORO_BEST_STREAK] ?: 0,
+            pomodoroLastStreakDate = runtime[RuntimeKeys.POMODORO_LAST_STREAK_DATE] ?: "",
             pomodoroSessionEndTimestamp = runtime[RuntimeKeys.POMODORO_SESSION_END_TIMESTAMP] ?: 0L,
             pomodoroBreakEndTimestamp = runtime[RuntimeKeys.POMODORO_BREAK_END_TIMESTAMP] ?: 0L,
             pomodoroNextBreakAllowedTimestamp = runtime[RuntimeKeys.POMODORO_NEXT_BREAK_ALLOWED_TIMESTAMP] ?: 0L,
@@ -1068,8 +1077,39 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         context.dataStore.edit { preferences ->
             val raw = preferences[PreferencesKeys.USER_XP_HISTORY] ?: ""
             val lines = raw.lines().filter { it.isNotBlank() }.toMutableList()
-            lines.removeAll { it.substringBefore('\t') == todayDate }
-            lines.add(0, "$todayDate\t$xp\t$savedMillis")
+            val index = lines.indexOfFirst { it.substringBefore('\t') == todayDate }
+            if (index >= 0) {
+                val parts = lines[index].split('\t')
+                val existingXp = parts.getOrNull(1)?.toIntOrNull() ?: 0
+                val existingSaved = parts.getOrNull(2)?.toLongOrNull() ?: 0L
+                lines[index] = "$todayDate\t${existingXp + xp}\t${existingSaved + savedMillis}"
+            } else {
+                lines.add(0, "$todayDate\t$xp\t$savedMillis")
+            }
+            preferences[PreferencesKeys.USER_XP_HISTORY] = lines.take(30).joinToString("\n")
+        }
+    }
+
+    suspend fun awardPomodoroXp(todayDate: String, xp: Int) {
+        if (xp <= 0) return
+        context.runtimeDataStore.edit { preferences ->
+            if ((preferences[RuntimeKeys.USER_XP_DEBUG_BASE] ?: -1L) < 0L) {
+                preferences[RuntimeKeys.USER_XP_TOTAL] =
+                    (preferences[RuntimeKeys.USER_XP_TOTAL] ?: 0L) + xp
+            }
+        }
+        context.dataStore.edit { preferences ->
+            val lines = (preferences[PreferencesKeys.USER_XP_HISTORY] ?: "")
+                .lines().filter { it.isNotBlank() }.toMutableList()
+            val index = lines.indexOfFirst { it.substringBefore('\t') == todayDate }
+            if (index >= 0) {
+                val parts = lines[index].split('\t')
+                val currentXp = parts.getOrNull(1)?.toIntOrNull() ?: 0
+                val saved = parts.getOrNull(2) ?: "0"
+                lines[index] = "$todayDate\t${currentXp + xp}\t$saved"
+            } else {
+                lines.add(0, "$todayDate\t$xp\t0")
+            }
             preferences[PreferencesKeys.USER_XP_HISTORY] = lines.take(30).joinToString("\n")
         }
     }
@@ -2373,6 +2413,25 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.POMODORO_PRESETS] = presetsJson }
     }
 
+    suspend fun setPomodoroRelaxedMode(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.POMODORO_RELAXED_MODE] = enabled }
+    }
+
+    suspend fun recordPomodoroStreak(todayDate: String): Int {
+        var result = 0
+        context.runtimeDataStore.edit { preferences ->
+            val current = preferences[RuntimeKeys.POMODORO_CURRENT_STREAK] ?: 0
+            val best = preferences[RuntimeKeys.POMODORO_BEST_STREAK] ?: 0
+            val lastDate = preferences[RuntimeKeys.POMODORO_LAST_STREAK_DATE] ?: ""
+            val next = PomodoroStreak.nextStreak(current, lastDate, todayDate)
+            preferences[RuntimeKeys.POMODORO_CURRENT_STREAK] = next
+            preferences[RuntimeKeys.POMODORO_BEST_STREAK] = maxOf(best, next)
+            preferences[RuntimeKeys.POMODORO_LAST_STREAK_DATE] = todayDate
+            result = next
+        }
+        return result
+    }
+
     suspend fun setDisableTrackingAtUnusedHours(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.DISABLE_TRACKING_AT_UNUSED_HOURS] = enabled }
     }
@@ -2864,6 +2923,10 @@ data class UserPreferences(
     val pomodoroSessionsBeforeLongBreak: Int = 4,
     val pomodoroCurrentSessionNumber: Int = 1,
     val pomodoroPresets: String = "{}",
+    val pomodoroRelaxedMode: Boolean = false,
+    val pomodoroCurrentStreak: Int = 0,
+    val pomodoroBestStreak: Int = 0,
+    val pomodoroLastStreakDate: String = "",
     val pomodoroSessionEndTimestamp: Long = 0L,
     val pomodoroBreakEndTimestamp: Long = 0L,
     val pomodoroNextBreakAllowedTimestamp: Long = 0L,

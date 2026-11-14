@@ -325,21 +325,27 @@ object FeatureInfoRegistry {
 
     private val pomodoro = FeatureInfo(
         title = "Pomodoro",
-        summary = "A focus timer that breaks work into sessions separated by short breaks, with optional app lockdown during sessions.",
+        summary = "A focus timer that breaks work into sessions separated by short breaks, with optional app lockdown and XP rewards.",
         sections = listOf(
             FeatureInfoSections.whatItDoes(
                 "Runs repeating focus/break cycles with configurable lengths, session counts, and long-break cadence.",
-                "Optionally blocks distracting apps for the whole session, enforced behind a puzzle."
+                "Optionally blocks distracting apps for the whole session, enforced behind a puzzle.",
+                "Relaxed Mode skips Pomodoro blocking so only your regular Zenith shields apply, and pays up to 5% less XP.",
+                "Completing a focus session earns XP based on its length.",
+                "Daily Pomodoro streaks add bonus XP: +1% per streak day, capped at +30% on day 30."
             ),
             FeatureInfoSections.whatYoullSee(
                 "A big wavy circular countdown that changes color between session, break, and paused states.",
+                "A Pomodoro Streak card with your current/best streak and the XP multiplier for your next session.",
                 "Configuration cards for durations, sessions, App Protection toggles, and the Allowed Apps picker.",
                 "Named presets you can save, load, and delete (e.g. 'Work', 'Study')."
             ),
             FeatureInfoSections.tips(
                 "Emptying the allowed-apps selection means every non-system app is blocked during sessions.",
                 "Ending a session early requires the 10-lever confirmation, commit before you start.",
-                "Pause keeps app blocking on but lets notifications through; break has a 30 min cooldown."
+                "Pause keeps app blocking on but lets notifications through; break has a 30 min cooldown.",
+                "Turn on Relaxed Mode when you only want the timer and XP, not an extra app lockdown.",
+                "Keep your Pomodoro streak alive to grow the XP boost toward its 1.30x cap at 30 days."
             )
         )
     )

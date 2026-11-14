@@ -859,7 +859,7 @@ class OverlayActionHandler(
         if (packageName == contextPkg) return true
         if (SharedMonitoringState.isPrivatePackage(packageName)) return true
 
-        if (SharedMonitoringState.isPomodoroActive) {
+        if (SharedMonitoringState.isPomodoroActive && !SharedMonitoringState.isPomodoroRelaxedMode) {
             if (packageName in SharedMonitoringState.CRITICAL_SYSTEM_PACKAGES) return true
             if (SharedMonitoringState.isBlockingExempt(packageName)) return true
             if (isKeyboardApp(packageName)) return true
@@ -1018,7 +1018,7 @@ class OverlayActionHandler(
     ): Boolean {
         if (shouldBypassBlocking(packageName)) return false
 
-        if (SharedMonitoringState.isPomodoroActive) {
+        if (SharedMonitoringState.isPomodoroActive && !SharedMonitoringState.isPomodoroRelaxedMode) {
             if (packageName !in SharedMonitoringState.pomodoroAllowedPackages) {
                 showPomodoroPuzzle(packageName, isBlocked = true)
                 return true

@@ -7,8 +7,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
+import com.etrisad.zenith.service.PomodoroNotificationHelper
 import com.etrisad.zenith.service.SharedMonitoringState
 import com.etrisad.zenith.service.ZenithNotificationListener
+import com.etrisad.zenith.util.PomodoroXp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -41,6 +43,7 @@ data class PomodoroUiState(
     val currentSessionNumber: Int = 1,
     val maxSelection: Int = 7,
     val pauseable: Boolean = true,
+    val relaxedMode: Boolean = false,
     val presetsJson: String = "{}",
     val installedApps: List<AppInfo> = emptyList(),
     val searchQuery: String = "",
@@ -94,17 +97,23 @@ class PomodoroViewModel(
                         currentSessionNumber = prefs.pomodoroCurrentSessionNumber,
                         maxSelection = prefs.pomodoroMaxAllowedApps,
                         pauseable = prefs.pomodoroPauseable,
+                        relaxedMode = prefs.pomodoroRelaxedMode,
                         presetsJson = prefs.pomodoroPresets,
                         remainingBreakMillis = if (isPaused) it.remainingBreakMillis else (prefs.pomodoroBreakEndTimestamp - now).coerceAtLeast(0L),
                         remainingSessionMillis = if (isPaused) it.remainingSessionMillis else (prefs.pomodoroSessionEndTimestamp - now).coerceAtLeast(0L)
                     )
                 }
                 SharedMonitoringState.isPomodoroActive = isActive
-                SharedMonitoringState.isPomodoroBlockingActive = isActive && !isPaused
+                SharedMonitoringState.isPomodoroBlockingActive = isActive && !isPaused && !prefs.pomodoroRelaxedMode
+                SharedMonitoringState.isPomodoroRelaxedMode = isActive && prefs.pomodoroRelaxedMode
                 SharedMonitoringState.isPomodoroBreakActive = isBreak
                 SharedMonitoringState.pomodoroAllowedPackages = prefs.pomodoroAllowedPackages
                 SharedMonitoringState.pomodoroBlockAllowedApps = prefs.pomodoroBlockAllowedApps
-                loadInstalledApps()
+                if (!installedAppsLoaded) {
+                    installedAppsLoaded = true
+                    loadInstalledApps()
+                }
+                if (isActive) startTimer()
             }
         }
         startTimer()
@@ -112,6 +121,8 @@ class PomodoroViewModel(
 
     private var timerJob: Job? = null
     private var suppressFocusRecord = false
+    private var lastNotificationKey: List<Any>? = null
+    private var installedAppsLoaded = false
 
     override fun onCleared() {
         timerJob?.cancel()
@@ -156,16 +167,25 @@ class PomodoroViewModel(
                 }
                 if (wasActive && !isActive && !isBreak) {
                     onSessionCompleted()
+                    continue
                 }
-                val newBlockingActive = isActive && !isPaused
-                if (isActive != SharedMonitoringState.isPomodoroActive || newBlockingActive != SharedMonitoringState.isPomodoroBlockingActive || isBreak != SharedMonitoringState.isPomodoroBreakActive) {
+                val newBlockingActive = isActive && !isPaused && !state.relaxedMode
+                val relaxedNow = isActive && state.relaxedMode
+                if (isActive != SharedMonitoringState.isPomodoroActive ||
+                    newBlockingActive != SharedMonitoringState.isPomodoroBlockingActive ||
+                    relaxedNow != SharedMonitoringState.isPomodoroRelaxedMode ||
+                    isBreak != SharedMonitoringState.isPomodoroBreakActive
+                ) {
                     SharedMonitoringState.isPomodoroActive = isActive
                     SharedMonitoringState.isPomodoroBlockingActive = newBlockingActive
+                    SharedMonitoringState.isPomodoroRelaxedMode = relaxedNow
                     SharedMonitoringState.isPomodoroBreakActive = isBreak
                 }
                 val fresh = _uiState.value
                 val idleNow = System.currentTimeMillis()
+                syncPomodoroNotification(fresh)
                 if (!fresh.isSessionActive && !fresh.isBreakActive &&
+                    !SharedMonitoringState.isPomodoroActive &&
                     fresh.sessionEndTimestamp <= idleNow && fresh.breakEndTimestamp <= idleNow
                 ) {
                     timerJob = null
@@ -173,6 +193,37 @@ class PomodoroViewModel(
                 }
             }
         }
+    }
+
+    private fun syncPomodoroNotification(state: PomodoroUiState) {
+        val remaining = if (state.isBreakActive) state.remainingBreakMillis else state.remainingSessionMillis
+        val key = listOf<Any>(
+            state.isSessionActive,
+            state.isBreakActive,
+            state.isPaused,
+            state.currentSessionNumber,
+            state.sessionCount,
+            state.pauseable,
+            if (state.isPaused) remaining / 1000L else -1L
+        )
+        if (key == lastNotificationKey) return
+        lastNotificationKey = key
+
+        if (!state.isSessionActive) {
+            PomodoroNotificationHelper.cancelNotification(context)
+            return
+        }
+
+        PomodoroNotificationHelper.updateNotification(
+            context = context,
+            isSessionActive = true,
+            isBreakActive = state.isBreakActive,
+            isPaused = state.isPaused,
+            remainingMillis = remaining,
+            currentSession = state.currentSessionNumber,
+            totalSessions = state.sessionCount,
+            pauseable = state.pauseable
+        )
     }
 
     private fun onSessionCompleted() {
@@ -190,34 +241,55 @@ class PomodoroViewModel(
             userPreferencesRepository.setPomodoroBreakEndTimestamp(breakEnd)
             userPreferencesRepository.setPomodoroSessionEndTimestamp(breakEnd + (state.sessionDurationMinutes * 60 * 1000L))
             SharedMonitoringState.isPomodoroActive = true
-            SharedMonitoringState.isPomodoroBlockingActive = true
+            SharedMonitoringState.isPomodoroBlockingActive = !state.relaxedMode
+            SharedMonitoringState.isPomodoroRelaxedMode = state.relaxedMode
             SharedMonitoringState.isPomodoroBreakActive = true
         }
     }
 
     fun pauseSession() {
-        viewModelScope.launch {
-            val now = System.currentTimeMillis()
-            val state = _uiState.value
-            if (!state.isSessionActive || !state.pauseable) return@launch
-            SharedMonitoringState.isPomodoroPaused = true
-            SharedMonitoringState.pomodoroPauseTimestamp = now
-            SharedMonitoringState.isPomodoroBlockingActive = false
-        }
+        val state = _uiState.value
+        if (!state.isSessionActive || !state.pauseable || state.isPaused) return
+        val now = System.currentTimeMillis()
+        SharedMonitoringState.isPomodoroPaused = true
+        SharedMonitoringState.pomodoroPauseTimestamp = now
+        SharedMonitoringState.isPomodoroBlockingActive = false
+        _uiState.update { it.copy(isPaused = true) }
+        syncPomodoroNotification(_uiState.value)
     }
 
     fun resumeSession() {
+        val state = _uiState.value
+        if (!state.isSessionActive || !state.isPaused) return
+        val now = System.currentTimeMillis()
+        val pausedAt = SharedMonitoringState.pomodoroPauseTimestamp
+        val pauseDuration = if (pausedAt > 0L) (now - pausedAt).coerceAtLeast(0L) else 0L
+        val newSessionEnd = state.sessionEndTimestamp + pauseDuration
+        val newBreakEnd = if (state.breakEndTimestamp > 0L) {
+            state.breakEndTimestamp + pauseDuration
+        } else {
+            0L
+        }
+        SharedMonitoringState.isPomodoroPaused = false
+        SharedMonitoringState.pomodoroPauseTimestamp = 0L
+        SharedMonitoringState.isPomodoroBlockingActive = !state.relaxedMode
+        _uiState.update {
+            it.copy(
+                isPaused = false,
+                sessionEndTimestamp = newSessionEnd,
+                breakEndTimestamp = newBreakEnd,
+                remainingSessionMillis = (newSessionEnd - now).coerceAtLeast(0L),
+                remainingBreakMillis = if (newBreakEnd > 0L) {
+                    (newBreakEnd - now).coerceAtLeast(0L)
+                } else {
+                    0L
+                }
+            )
+        }
+        syncPomodoroNotification(_uiState.value)
         viewModelScope.launch {
-            val state = _uiState.value
-            if (!state.isSessionActive || !state.isPaused) return@launch
-            val pauseDuration = System.currentTimeMillis() - SharedMonitoringState.pomodoroPauseTimestamp
-            val newSessionEnd = state.sessionEndTimestamp + pauseDuration
-            val newBreakEnd = state.breakEndTimestamp + pauseDuration
             userPreferencesRepository.setPomodoroSessionEndTimestamp(newSessionEnd)
             userPreferencesRepository.setPomodoroBreakEndTimestamp(newBreakEnd)
-            SharedMonitoringState.isPomodoroPaused = false
-            SharedMonitoringState.pomodoroPauseTimestamp = 0L
-            SharedMonitoringState.isPomodoroBlockingActive = true
         }
     }
 
@@ -273,7 +345,8 @@ class PomodoroViewModel(
             userPreferencesRepository.setPomodoroSessionEndTimestamp(sessionEnd)
             userPreferencesRepository.setPomodoroBreakEndTimestamp(0L)
             SharedMonitoringState.isPomodoroActive = true
-            SharedMonitoringState.isPomodoroBlockingActive = true
+            SharedMonitoringState.isPomodoroBlockingActive = !prefs.pomodoroRelaxedMode
+            SharedMonitoringState.isPomodoroRelaxedMode = prefs.pomodoroRelaxedMode
             SharedMonitoringState.isPomodoroBreakActive = false
             SharedMonitoringState.isPomodoroPaused = false
             SharedMonitoringState.pomodoroPauseTimestamp = 0L
@@ -292,9 +365,11 @@ class PomodoroViewModel(
             userPreferencesRepository.setPomodoroCurrentSessionNumber(1)
             SharedMonitoringState.isPomodoroActive = false
             SharedMonitoringState.isPomodoroBlockingActive = false
+            SharedMonitoringState.isPomodoroRelaxedMode = false
             SharedMonitoringState.isPomodoroBreakActive = false
             SharedMonitoringState.isPomodoroPaused = false
             SharedMonitoringState.pomodoroPauseTimestamp = 0L
+            com.etrisad.zenith.service.PomodoroNotificationHelper.cancelNotification(context)
             ZenithNotificationListener.restorePomodoroNotifications(context)
         }
     }
@@ -314,10 +389,20 @@ class PomodoroViewModel(
                 val dateStr = com.etrisad.zenith.util.DateTimeUtils.getDayStartDateString(
                     System.currentTimeMillis(), prefs.dayStartHour, prefs.dayStartMinute
                 )
+                val focusMillis = prefs.pomodoroSessionDurationMinutes * 60000L
                 shieldRepository.recordPomodoroSession(
                     date = dateStr,
-                    focusMillis = prefs.pomodoroSessionDurationMinutes * 60000L,
+                    focusMillis = focusMillis,
                     sessionNumber = sessionNumber
+                )
+                val streakDays = userPreferencesRepository.recordPomodoroStreak(dateStr)
+                userPreferencesRepository.awardPomodoroXp(
+                    todayDate = dateStr,
+                    xp = PomodoroXp.xpForSession(
+                        focusMinutes = prefs.pomodoroSessionDurationMinutes,
+                        relaxedMode = prefs.pomodoroRelaxedMode,
+                        streakDays = streakDays
+                    )
                 )
             } catch (_: Exception) {
             }
@@ -334,6 +419,17 @@ class PomodoroViewModel(
         viewModelScope.launch {
             userPreferencesRepository.setPomodoroBlockAllowedApps(block)
             SharedMonitoringState.pomodoroBlockAllowedApps = block
+        }
+    }
+
+    fun setRelaxedMode(enabled: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setPomodoroRelaxedMode(enabled)
+            if (_uiState.value.isSessionActive) {
+                SharedMonitoringState.isPomodoroRelaxedMode = enabled
+                SharedMonitoringState.isPomodoroBlockingActive =
+                    !enabled && !_uiState.value.isPaused
+            }
         }
     }
 

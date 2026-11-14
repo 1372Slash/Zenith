@@ -27,7 +27,10 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 @Composable
-fun PomodoroStatsSection(viewModel: PomodoroViewModel) {
+fun PomodoroStatsSection(
+    viewModel: PomodoroViewModel,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(24.dp)
+) {
     val selectedRange by viewModel.pomodoroStatsRange.collectAsState()
     val offset by viewModel.pomodoroPeriodOffset.collectAsState()
     val prefs by viewModel.userPreferences.collectAsState()
@@ -77,7 +80,7 @@ fun PomodoroStatsSection(viewModel: PomodoroViewModel) {
 
     Column {
         Card(
-            shape = RoundedCornerShape(24.dp),
+            shape = shape,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
             modifier = Modifier.fillMaxWidth()
         ) {

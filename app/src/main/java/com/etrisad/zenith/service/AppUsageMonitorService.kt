@@ -2437,7 +2437,8 @@ class AppUsageMonitorService : Service() {
         val isPaused = SharedMonitoringState.isPomodoroPaused
 
         SharedMonitoringState.isPomodoroActive = isActive
-        SharedMonitoringState.isPomodoroBlockingActive = isActive && !isPaused
+        SharedMonitoringState.isPomodoroBlockingActive = isActive && !isPaused && !prefs.pomodoroRelaxedMode
+        SharedMonitoringState.isPomodoroRelaxedMode = isActive && prefs.pomodoroRelaxedMode
         SharedMonitoringState.isPomodoroBreakActive = isBreak
         SharedMonitoringState.pomodoroAllowedPackages = prefs.pomodoroAllowedPackages
         SharedMonitoringState.pomodoroBlockAllowedApps = prefs.pomodoroBlockAllowedApps
