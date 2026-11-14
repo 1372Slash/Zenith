@@ -382,7 +382,8 @@ fun ScheduleSettingsBottomSheet(
 
                         CardGroup(
                             shape = topShape,
-                            containerColor = containerColor
+                            containerColor = containerColor,
+                            enabled = mode == ScheduleMode.BLOCK
                         ) {
                             SettingsToggle(
                                 title = "Intercept Notifications",

@@ -8,6 +8,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -16,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material3.AlertDialog
@@ -233,10 +236,18 @@ fun CardGroup(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(28.dp),
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    enabled: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val cardAlpha by animateFloatAsState(
+        targetValue = if (enabled) 1f else 0.5f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "cardGroupAlpha"
+    )
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .alpha(cardAlpha),
         shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = containerColor
@@ -256,8 +267,6 @@ fun SettingsToggle(
     enabled: Boolean = true,
     showDivider: Boolean = false
 ) {
-    val alpha = if (enabled) 1f else 0.38f
-    
     Column {
         if (showDivider) {
             HorizontalDivider(
@@ -277,18 +286,13 @@ fun SettingsToggle(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .background(
-                        if (enabled) MaterialTheme.colorScheme.primaryContainer 
-                        else MaterialTheme.colorScheme.surfaceContainerHigh,
-                        CircleShape
-                    ),
+                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = if (enabled) MaterialTheme.colorScheme.onPrimaryContainer 
-                           else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -300,13 +304,22 @@ fun SettingsToggle(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha)
-                )
+                AnimatedContent(
+                    targetState = description,
+                    transitionSpec = {
+                        (fadeIn(animationSpec = tween(220)) + slideInVertically { it / 3 })
+                            .togetherWith(fadeOut(animationSpec = tween(140)) + slideOutVertically { -it / 3 })
+                    },
+                    label = "settingsToggleDescription"
+                ) { text ->
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(8.dp))
