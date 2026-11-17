@@ -16,6 +16,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -98,8 +99,14 @@ import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.website.WebsiteRepository
 import com.etrisad.zenith.util.DateTimeUtils
+import com.etrisad.zenith.ui.components.AppClickTarget
+import com.etrisad.zenith.ui.components.AppSharedTransition
 import com.etrisad.zenith.ui.components.ShieldSortHeader
 import com.etrisad.zenith.ui.components.UninstalledAppCard
+import com.etrisad.zenith.ui.components.appContainerSharedKey
+import com.etrisad.zenith.ui.components.appIconSharedKey
+import com.etrisad.zenith.ui.components.appSharedBounds
+import com.etrisad.zenith.ui.components.appTitleSharedKey
 import com.etrisad.zenith.ui.viewmodel.ShieldSortType
 import com.etrisad.zenith.ui.onboarding.onboardingAnchor
 import kotlinx.coroutines.delay
@@ -147,7 +154,8 @@ fun ActiveShieldCard(
     shield: ShieldEntity,
     shape: RoundedCornerShape,
     isHomeScreen: Boolean,
-    onClick: (String) -> Unit,
+    onClick: (AppClickTarget) -> Unit,
+    sharedOrigin: String? = null,
     onEdit: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
     onLongClick: ((String) -> Unit)? = null,
@@ -253,25 +261,60 @@ fun ActiveShieldCard(
     )
 
     val isWebsite = shield.isWebsiteType()
+    val iconSharedKey = remember(shield.packageName, sharedOrigin) {
+        appIconSharedKey(shield.packageName, sharedOrigin)
+    }
+    val titleSharedKey = remember(shield.packageName, sharedOrigin) {
+        appTitleSharedKey(shield.packageName, sharedOrigin)
+    }
+    val containerSharedKey = remember(shield.packageName, sharedOrigin) {
+        appContainerSharedKey(shield.packageName, sharedOrigin)
+    }
+
+    val clickModifier = if (isHomeScreen || onLongClick == null) {
+        Modifier.clickable {
+            if (isSelectionMode) onToggleSelection?.invoke()
+            else onClick(
+                AppClickTarget(
+                    packageName = shield.packageName,
+                    appName = shield.appName,
+                    sharedOrigin = sharedOrigin,
+                    streak = shield.currentStreak
+                )
+            )
+        }
+    } else {
+        Modifier.combinedClickable(
+            onClick = {
+                if (isSelectionMode) onToggleSelection?.invoke()
+                else onClick(
+                    AppClickTarget(
+                        packageName = shield.packageName,
+                        appName = shield.appName,
+                        sharedOrigin = sharedOrigin,
+                        streak = shield.currentStreak
+                    )
+                )
+            },
+            onLongClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                if (isSelectionMode) onToggleSelection?.invoke()
+                else onLongClick(shield.packageName)
+            }
+        )
+    }
 
     androidx.compose.material3.Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(animatedShape)
-            .combinedClickable(
-                onClick = {
-                    if (isSelectionMode) onToggleSelection?.invoke()
-                    else if (isHomeScreen) onClick(shield.packageName)
-                    else if (!isHomeScreen) onClick(shield.packageName)
-                },
-                onLongClick = if (isHomeScreen) null else {
-                    {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        if (isSelectionMode) onToggleSelection?.invoke()
-                        else onLongClick?.invoke(shield.packageName)
-                    }
-                }
-            ),
+            .appSharedBounds(
+                key = containerSharedKey,
+                zIndexInOverlay = AppSharedTransition.Z_CONTAINER,
+                animatePlaceholderSize = false,
+                enter = AppSharedTransition.containerEnter,
+                exit = AppSharedTransition.containerExit
+            )
+            .then(clickModifier),
         shape = animatedShape,
         colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = cardColor)
     ) {
@@ -281,7 +324,13 @@ fun ActiveShieldCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
-                    modifier = Modifier.size(46.dp),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .appSharedBounds(
+                            key = iconSharedKey,
+                            scaleToBounds = true,
+                            zIndexInOverlay = AppSharedTransition.Z_ICON
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     val iconShape = appIconShape(isWebsite)
@@ -321,7 +370,7 @@ fun ActiveShieldCard(
                                 scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)),
                         exit = fadeOut(spring(stiffness = Spring.StiffnessLow)) +
                                 scaleOut(spring(stiffness = Spring.StiffnessLow)),
-                        modifier = Modifier.align(Alignment.BottomCenter).offset(y = 4.dp)
+                        modifier = Modifier.align(Alignment.BottomCenter)
                     ) {
                         Surface(
                             shape = CircleShape,
@@ -412,7 +461,12 @@ fun ActiveShieldCard(
                         text = shield.appName,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = contentColor
+                        color = contentColor,
+                        modifier = Modifier.appSharedBounds(
+                            key = titleSharedKey,
+                            scaleToBounds = true,
+                            zIndexInOverlay = AppSharedTransition.Z_TITLE
+                        )
                     )
 
                     if (!isHomeScreen && shield.isWebsite && shield.url != null) {
@@ -813,7 +867,8 @@ fun LazyListScope.activeShieldSection(
     onSortTypeChange: (ShieldSortType) -> Unit,
     tabValue: AppTypeTab,
     isHomeScreen: Boolean,
-    onClick: (String) -> Unit,
+    onClick: (AppClickTarget) -> Unit,
+    sharedOrigin: String? = null,
     nowMillis: Long = System.currentTimeMillis(),
     uninstalledPackages: Set<String> = emptySet(),
     onDeleteShield: (ShieldEntity) -> Unit = {},
@@ -874,6 +929,7 @@ fun LazyListScope.activeShieldSection(
                         shape = shape,
                         isHomeScreen = true,
                         onClick = onClick,
+                        sharedOrigin = sharedOrigin,
                         isFirst = isFirst,
                         isLast = isLast,
                         isSingle = isSingle
@@ -890,6 +946,7 @@ fun LazyListScope.activeShieldSection(
                             shape = shape,
                             isHomeScreen = false,
                             onClick = onClick,
+                            sharedOrigin = sharedOrigin,
                             onEdit = { onEditShield(shield) },
                             onLongClick = onLongClick,
                             nowMillis = nowMillis,
@@ -1046,7 +1103,8 @@ fun ShieldSectionContent(
     onSortTypeChange: (ShieldSortType) -> Unit,
     tabValue: AppTypeTab,
     isHomeScreen: Boolean,
-    onClick: (String) -> Unit,
+    onClick: (AppClickTarget) -> Unit,
+    sharedOrigin: String? = null,
     uninstalledPackages: Set<String> = emptySet(),
     onDeleteShield: (ShieldEntity) -> Unit = {},
     onDismissUninstalled: (String) -> Unit = {},
@@ -1092,7 +1150,8 @@ fun ShieldSectionContent(
                                 shield = shield,
                                 shape = shape,
                                 isHomeScreen = true,
-                                onClick = onClick
+                                onClick = onClick,
+                                sharedOrigin = sharedOrigin
                             )
                         }
 

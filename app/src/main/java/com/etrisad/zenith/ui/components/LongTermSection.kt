@@ -765,10 +765,27 @@ private fun DayAppRow(
     type: String?,
     onAppClick: (String) -> Unit
 ) {
+    val containerKey = remember(app.packageName) {
+        appContainerSharedKey(app.packageName, AppSharedTransition.ORIGIN_HEATMAP)
+    }
+    val titleKey = remember(app.packageName) {
+        appTitleSharedKey(app.packageName, AppSharedTransition.ORIGIN_HEATMAP)
+    }
+    val iconKey = remember(app.packageName) {
+        appIconSharedKey(app.packageName, AppSharedTransition.ORIGIN_HEATMAP)
+    }
+
     Card(
         onClick = { onAppClick(app.packageName) },
         shape = longTermAppRowShape(index, total),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        modifier = Modifier.appSharedBounds(
+            key = containerKey,
+            zIndexInOverlay = AppSharedTransition.Z_CONTAINER,
+            animatePlaceholderSize = false,
+            enter = AppSharedTransition.containerEnter,
+            exit = AppSharedTransition.containerExit
+        )
     ) {
         ListItem(
             headlineContent = {
@@ -778,7 +795,13 @@ private fun DayAppRow(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.weight(1f, fill = false)
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .appSharedBounds(
+                                key = titleKey,
+                                scaleToBounds = true,
+                                zIndexInOverlay = AppSharedTransition.Z_TITLE
+                            )
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     val badgeColor = when (type) {
@@ -832,22 +855,33 @@ private fun DayAppRow(
             leadingContent = {
                 val isWebsite = app.packageName.startsWith("zenith-web:")
                 val shape = appIconShape(isWebsite)
-                SubcomposeAsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current).data("app-icon://${app.packageName}").crossfade(500).build(),
-                    contentDescription = null,
-                    modifier = Modifier.size(40.dp).then(
-                        if (isWebsite) Modifier.background(
-                            MaterialTheme.colorScheme.surfaceVariant,
-                            shape
-                        ) else Modifier
-                    ).clip(shape),
-                    contentScale = ContentScale.Crop,
-                    error = {
-                        Box(Modifier.size(40.dp).clip(shape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-                            Icon(if (isWebsite) Icons.Outlined.Language else Icons.Outlined.Android, null, modifier = Modifier.size(24.dp))
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .appSharedBounds(
+                            key = iconKey,
+                            scaleToBounds = true,
+                            zIndexInOverlay = AppSharedTransition.Z_ICON
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    SubcomposeAsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current).data("app-icon://${app.packageName}").crossfade(500).build(),
+                        contentDescription = null,
+                        modifier = Modifier.size(40.dp).then(
+                            if (isWebsite) Modifier.background(
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                shape
+                            ) else Modifier
+                        ).clip(shape),
+                        contentScale = ContentScale.Crop,
+                        error = {
+                            Box(Modifier.size(40.dp).clip(shape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+                                Icon(if (isWebsite) Icons.Outlined.Language else Icons.Outlined.Android, null, modifier = Modifier.size(24.dp))
+                            }
                         }
-                    }
-                )
+                    )
+                }
             },
             colors = ListItemDefaults.colors(
                 containerColor = Color.Transparent

@@ -122,6 +122,12 @@ import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.LongTermSection
 import com.etrisad.zenith.ui.components.StreakCard
+import com.etrisad.zenith.ui.components.AppClickTarget
+import com.etrisad.zenith.ui.components.AppSharedTransition
+import com.etrisad.zenith.ui.components.appContainerSharedKey
+import com.etrisad.zenith.ui.components.appIconSharedKey
+import com.etrisad.zenith.ui.components.appSharedBounds
+import com.etrisad.zenith.ui.components.appTitleSharedKey
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithButtonType
@@ -186,7 +192,7 @@ fun ProfileScreen(
     homeViewModel: HomeViewModel,
     preferencesRepository: UserPreferencesRepository,
     innerPadding: PaddingValues,
-    onAppClick: (String) -> Unit,
+    onAppClick: (AppClickTarget) -> Unit,
     onSeeAllAchievements: () -> Unit = {},
     onOpenLevel: () -> Unit = {},
     onOpenGuidedPathHub: () -> Unit = {}
@@ -1051,7 +1057,7 @@ private fun LifetimeTopAppsCard(
     lifetimeAppCount: Int,
     isLoading: Boolean,
     formatDuration: (Long) -> String,
-    onAppClick: (String) -> Unit,
+    onAppClick: (AppClickTarget) -> Unit,
     isEditing: Boolean = false,
     installedPackages: Set<String> = emptySet(),
     onRemoveApp: (LifetimeApp) -> Unit = {},
@@ -1109,7 +1115,7 @@ private fun LifetimeTopAppsCard(
 private fun LifetimePodium(
     topApps: List<LifetimeApp>,
     formatDuration: (Long) -> String,
-    onAppClick: (String) -> Unit,
+    onAppClick: (AppClickTarget) -> Unit,
     isEditing: Boolean = false,
     installedPackages: Set<String> = emptySet(),
     onRemoveApp: (LifetimeApp) -> Unit = {}
@@ -1152,7 +1158,15 @@ private fun LifetimePodium(
                 rank = rank,
                 app = app,
                 timeLabel = formatDuration(app.totalMillis),
-                onClick = { onAppClick(app.packageName) },
+                onClick = {
+                    onAppClick(
+                        AppClickTarget(
+                            packageName = app.packageName,
+                            appName = app.appName,
+                            sharedOrigin = AppSharedTransition.ORIGIN_PROFILE
+                        )
+                    )
+                },
                 canRemove = isEditing && isUninstalled,
                 onRemove = { onRemoveApp(app) },
                 modifier = Modifier.weight(1f)
@@ -1186,6 +1200,13 @@ private fun PodiumColumn(
         2 -> MaterialTheme.colorScheme.onSecondary
         else -> MaterialTheme.colorScheme.onTertiary
     }
+    val titleKey = remember(app.packageName) {
+        appTitleSharedKey(app.packageName, AppSharedTransition.ORIGIN_PROFILE)
+    }
+    val iconKey = remember(app.packageName) {
+        appIconSharedKey(app.packageName, AppSharedTransition.ORIGIN_PROFILE)
+    }
+
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -1197,7 +1218,13 @@ private fun PodiumColumn(
             textAlign = TextAlign.Center,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.height(40.dp)
+            modifier = Modifier
+                .height(40.dp)
+                .appSharedBounds(
+                    key = titleKey,
+                    scaleToBounds = true,
+                    zIndexInOverlay = AppSharedTransition.Z_TITLE
+                )
         )
         Text(
             text = timeLabel,
@@ -1209,7 +1236,15 @@ private fun PodiumColumn(
         Spacer(modifier = Modifier.height(6.dp))
         val isWebsite = app.packageName.startsWith("zenith-web:")
         val iconShape = appIconShape(isWebsite)
-        Box(modifier = Modifier.size(if (rank == 1) 56.dp else 48.dp)) {
+        Box(
+            modifier = Modifier
+                .size(if (rank == 1) 56.dp else 48.dp)
+                .appSharedBounds(
+                    key = iconKey,
+                    scaleToBounds = true,
+                    zIndexInOverlay = AppSharedTransition.Z_ICON
+                )
+        ) {
             Surface(
                 onClick = onClick,
                 shape = iconShape,
@@ -1284,7 +1319,7 @@ private fun PodiumColumn(
 @Composable
 private fun ProfileHeatmapCard(
     homeViewModel: HomeViewModel,
-    onAppClick: (String) -> Unit,
+    onAppClick: (AppClickTarget) -> Unit,
     shape: Shape = RoundedCornerShape(24.dp)
 ) {
     val selectedRange by homeViewModel.selectedStatsRange.collectAsState()
@@ -1332,7 +1367,15 @@ private fun ProfileHeatmapCard(
             formatDuration = homeViewModel::formatLongDuration,
             periodDays = periodDays,
             dayAppLoader = homeViewModel::getDayAppBreakdown,
-            onAppClick = onAppClick,
+            onAppClick = { pkg ->
+                onAppClick(
+                    AppClickTarget(
+                        packageName = pkg,
+                        appName = pkg,
+                        sharedOrigin = AppSharedTransition.ORIGIN_HEATMAP
+                    )
+                )
+            },
             dataNote = dataNote
         )
     }

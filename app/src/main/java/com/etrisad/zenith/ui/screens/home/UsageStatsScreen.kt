@@ -67,8 +67,15 @@ import coil.request.ImageRequest
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.model.AppCategory
 import com.etrisad.zenith.data.model.CategoryCatalog
+import com.etrisad.zenith.ui.components.AppClickTarget
+import com.etrisad.zenith.ui.components.AppSharedKey
+import com.etrisad.zenith.ui.components.AppSharedTransition
 import com.etrisad.zenith.ui.components.WeekStepperIndicator
 import com.etrisad.zenith.ui.components.CategoryDonutChart
+import com.etrisad.zenith.ui.components.appContainerSharedKey
+import com.etrisad.zenith.ui.components.appIconSharedKey
+import com.etrisad.zenith.ui.components.appSharedBounds
+import com.etrisad.zenith.ui.components.appTitleSharedKey
 import com.etrisad.zenith.ui.components.appCategoryColor
 import com.etrisad.zenith.ui.components.appCategoryIcon
 import com.etrisad.zenith.ui.components.SnapshotSection
@@ -108,7 +115,7 @@ fun UsageStatsScreen(
     userPreferencesRepository: com.etrisad.zenith.data.preferences.UserPreferencesRepository,
     innerPadding: PaddingValues,
     showDatabaseIndicator: Boolean,
-    onAppClick: (String) -> Unit,
+    onAppClick: (AppClickTarget) -> Unit,
     onCategoryClick: (AppCategory) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -220,6 +227,13 @@ fun UsageStatsScreen(
         uiState.activeShields.forEach { types[it.packageName] = "SHIELD" }
         uiState.activeGoals.forEach { types[it.packageName] = "GOAL" }
         types
+    }
+
+    val streaksByPackage = remember(uiState.activeShields, uiState.activeGoals) {
+        buildMap<String, Int> {
+            uiState.activeShields.forEach { put(it.packageName, it.currentStreak) }
+            uiState.activeGoals.forEach { put(it.packageName, it.currentStreak) }
+        }
     }
 
     fun getGroupShape(index: Int, total: Int): RoundedCornerShape {
@@ -476,9 +490,18 @@ fun UsageStatsScreen(
                         formatDuration = viewModel::formatDuration,
                         index = groupIndex,
                         total = hourlyGroupTotal,
-                        onClick = { onAppClick(app.packageName) },
+                        onClick = {
+                            onAppClick(
+                                AppClickTarget(
+                                    packageName = app.packageName,
+                                    appName = app.appName,
+                                    sharedOrigin = AppSharedTransition.ORIGIN_USAGE_STATS_HOURLY
+                                )
+                            )
+                        },
                         containerColor = hourlyAccentContainerColor,
-                        accentColor = hourlyAccentColor
+                        accentColor = hourlyAccentColor,
+                        sharedOrigin = AppSharedTransition.ORIGIN_USAGE_STATS_HOURLY
                     )
                 }
             }
@@ -658,9 +681,18 @@ fun UsageStatsScreen(
                                 formatDuration = viewModel::formatDuration,
                                 index = groupIndex,
                                 total = hourlyGroupTotal,
-                                onClick = { onAppClick(app.packageName) },
+                                onClick = {
+                                    onAppClick(
+                                        AppClickTarget(
+                                            packageName = app.packageName,
+                                            appName = app.appName,
+                                            sharedOrigin = AppSharedTransition.ORIGIN_USAGE_STATS_HOURLY
+                                        )
+                                    )
+                                },
                                 containerColor = hourlyAccentContainerColor,
-                                accentColor = hourlyAccentColor
+                                accentColor = hourlyAccentColor,
+                                sharedOrigin = AppSharedTransition.ORIGIN_USAGE_STATS_HOURLY
                             )
                         }
                     }
@@ -745,7 +777,15 @@ fun UsageStatsScreen(
         item(key = "long_term_stats") {
             LongTermStatsSection(
                 viewModel = viewModel,
-                onAppClick = onAppClick,
+                onAppClick = { pkg ->
+                    onAppClick(
+                        AppClickTarget(
+                            packageName = pkg,
+                            appName = pkg,
+                            sharedOrigin = AppSharedTransition.ORIGIN_HEATMAP
+                        )
+                    )
+                },
                 getAppType = { pkg ->
                     when {
                         pkg.startsWith("zenith-web:") -> "WEBSITE"
@@ -1036,7 +1076,17 @@ fun UsageStatsScreen(
                     formatDuration = viewModel::formatDuration,
                     index = index,
                     total = totalAppsCount,
-                    onClick = remember(app.packageName, onAppClick) { { onAppClick(app.packageName) } }
+                    onClick = {
+                        onAppClick(
+                            AppClickTarget(
+                                packageName = app.packageName,
+                                appName = app.appName,
+                                sharedOrigin = AppSharedTransition.ORIGIN_USAGE_STATS,
+                                streak = streaksByPackage[app.packageName] ?: 0
+                            )
+                        )
+                    },
+                    sharedOrigin = AppSharedTransition.ORIGIN_USAGE_STATS
                 )
                 Spacer(modifier = Modifier.height(4.dp))
             }
@@ -1216,7 +1266,17 @@ fun UsageStatsScreen(
                             formatDuration = viewModel::formatDuration,
                             index = otherAppIndex + 1 + index,
                             total = totalAppsCount,
-                            onClick = remember(app.packageName, onAppClick) { { onAppClick(app.packageName) } }
+                            onClick = {
+                                onAppClick(
+                                    AppClickTarget(
+                                        packageName = app.packageName,
+                                        appName = app.appName,
+                                        sharedOrigin = AppSharedTransition.ORIGIN_USAGE_STATS,
+                                        streak = streaksByPackage[app.packageName] ?: 0
+                                    )
+                                )
+                            },
+                            sharedOrigin = AppSharedTransition.ORIGIN_USAGE_STATS
                         )
                         if (index < lowUsageApps.size - 1) {
                             Spacer(modifier = Modifier.height(4.dp))
@@ -2035,6 +2095,7 @@ fun GroupedCard(
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    sharedContainerKey: AppSharedKey? = null,
     content: @Composable () -> Unit
 ) {
     val shape = when {
@@ -2046,12 +2107,20 @@ fun GroupedCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .appSharedBounds(
+                key = sharedContainerKey,
+                zIndexInOverlay = AppSharedTransition.Z_CONTAINER,
+                animatePlaceholderSize = false,
+                enter = AppSharedTransition.containerEnter,
+                exit = AppSharedTransition.containerExit
+            )
             .clip(shape)
             .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
         shape = shape,
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-        content = { content() }
-    )
+        colors = CardDefaults.cardColors(containerColor = containerColor)
+    ) {
+        content()
+    }
 }
 
 @Composable
@@ -2722,9 +2791,27 @@ fun UsageItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
-    accentColor: Color = MaterialTheme.colorScheme.secondary
+    accentColor: Color = MaterialTheme.colorScheme.secondary,
+    sharedOrigin: String? = null
 ) {
-    GroupedCard(index = index, total = total, onClick = onClick, modifier = modifier, containerColor = containerColor) {
+    val iconSharedKey = remember(app.packageName, sharedOrigin) {
+        appIconSharedKey(app.packageName, sharedOrigin)
+    }
+    val titleSharedKey = remember(app.packageName, sharedOrigin) {
+        appTitleSharedKey(app.packageName, sharedOrigin)
+    }
+    val containerSharedKey = remember(app.packageName, sharedOrigin) {
+        appContainerSharedKey(app.packageName, sharedOrigin)
+    }
+
+    GroupedCard(
+        index = index,
+        total = total,
+        onClick = onClick,
+        modifier = modifier,
+        containerColor = containerColor,
+        sharedContainerKey = containerSharedKey
+    ) {
         ListItem(
             headlineContent = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2732,7 +2819,13 @@ fun UsageItem(
                         text = app.appName,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.weight(1f, fill = false)
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .appSharedBounds(
+                                key = titleSharedKey,
+                                scaleToBounds = true,
+                                zIndexInOverlay = AppSharedTransition.Z_TITLE
+                            )
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     val badgeColor = when (type) {
@@ -2811,38 +2904,49 @@ fun UsageItem(
             leadingContent = {
                 val isWebsite = app.packageName.startsWith("zenith-web:")
                 val shape = appIconShape(isWebsite)
-                SubcomposeAsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data("app-icon://${app.packageName}")
-                        .crossfade(500)
-                        .build(),
-                    contentDescription = null,
+                Box(
                     modifier = Modifier
-                        .size(40.dp)
-                        .then(
-                            if (isWebsite) Modifier.background(
-                                MaterialTheme.colorScheme.surfaceVariant,
-                                shape
-                            ) else Modifier
-                        )
-                        .clip(shape),
-                    contentScale = ContentScale.Crop,
-                    error = {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(shape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (isWebsite) Icons.Outlined.Language else Icons.Outlined.Android,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp)
+                        .size(48.dp)
+                        .appSharedBounds(
+                            key = iconSharedKey,
+                            scaleToBounds = true,
+                            zIndexInOverlay = AppSharedTransition.Z_ICON
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    SubcomposeAsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data("app-icon://${app.packageName}")
+                            .crossfade(500)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .then(
+                                if (isWebsite) Modifier.background(
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                    shape
+                                ) else Modifier
                             )
+                            .clip(shape),
+                        contentScale = ContentScale.Crop,
+                        error = {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(shape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isWebsite) Icons.Outlined.Language else Icons.Outlined.Android,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         }
-                    }
-                )
+                    )
+                }
             },
             colors = ListItemDefaults.colors(
                 containerColor = Color.Transparent

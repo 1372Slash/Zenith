@@ -37,6 +37,12 @@ import com.etrisad.zenith.ui.components.CategoryHeader
 import com.etrisad.zenith.ui.components.CategorySettingsBottomSheet
 import com.etrisad.zenith.ui.components.appCategoryColor
 import com.etrisad.zenith.ui.components.appCategoryIcon
+import com.etrisad.zenith.ui.components.AppClickTarget
+import com.etrisad.zenith.ui.components.AppSharedTransition
+import com.etrisad.zenith.ui.components.appContainerSharedKey
+import com.etrisad.zenith.ui.components.appIconSharedKey
+import com.etrisad.zenith.ui.components.appSharedBounds
+import com.etrisad.zenith.ui.components.appTitleSharedKey
 import com.etrisad.zenith.ui.viewmodel.AppUsageInfo
 import com.etrisad.zenith.ui.viewmodel.HomeViewModel
 import kotlinx.coroutines.launch
@@ -51,7 +57,7 @@ fun CategoryDetailScreen(
     viewModel: HomeViewModel,
     userPreferencesRepository: UserPreferencesRepository,
     innerPadding: PaddingValues,
-    onAppClick: (String) -> Unit
+    onAppClick: (AppClickTarget) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val detailUiState by viewModel.categoryDetailUiState.collectAsState()
@@ -327,7 +333,15 @@ fun CategoryDetailScreen(
                     share = if (categoryTotal > 0L) app.totalTimeVisible.toFloat() / categoryTotal else 0f,
                     formatDuration = viewModel::formatDuration,
                     shape = categoryAppShape(index, categoryApps.size),
-                    onClick = { onAppClick(app.packageName) }
+                    onClick = {
+                        onAppClick(
+                            AppClickTarget(
+                                packageName = app.packageName,
+                                appName = app.appName,
+                                sharedOrigin = AppSharedTransition.ORIGIN_CATEGORY
+                            )
+                        )
+                    }
                 )
                 if (index < categoryApps.size - 1) {
                     Spacer(modifier = Modifier.height(4.dp))
@@ -546,13 +560,31 @@ private fun CategoryAppRow(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val containerKey = remember(app.packageName) {
+        appContainerSharedKey(app.packageName, AppSharedTransition.ORIGIN_CATEGORY)
+    }
+    val titleKey = remember(app.packageName) {
+        appTitleSharedKey(app.packageName, AppSharedTransition.ORIGIN_CATEGORY)
+    }
+    val iconKey = remember(app.packageName) {
+        appIconSharedKey(app.packageName, AppSharedTransition.ORIGIN_CATEGORY)
+    }
+
     Card(
         onClick = onClick,
         shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .appSharedBounds(
+                key = containerKey,
+                zIndexInOverlay = AppSharedTransition.Z_CONTAINER,
+                animatePlaceholderSize = false,
+                enter = AppSharedTransition.containerEnter,
+                exit = AppSharedTransition.containerExit
+            )
     ) {
         Row(
             modifier = Modifier
@@ -560,32 +592,43 @@ private fun CategoryAppRow(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            SubcomposeAsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data("app-icon://${app.packageName}")
-                    .crossfade(300)
-                    .build(),
-                contentDescription = null,
+            Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop,
-                error = {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Apps,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
+                    .size(48.dp)
+                    .appSharedBounds(
+                        key = iconKey,
+                        scaleToBounds = true,
+                        zIndexInOverlay = AppSharedTransition.Z_ICON
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data("app-icon://${app.packageName}")
+                        .crossfade(300)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop,
+                    error = {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Apps,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
-                }
-            )
+                )
+            }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -593,7 +636,12 @@ private fun CategoryAppRow(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.appSharedBounds(
+                        key = titleKey,
+                        scaleToBounds = true,
+                        zIndexInOverlay = AppSharedTransition.Z_TITLE
+                    )
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Box(

@@ -5,8 +5,11 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +28,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -51,14 +55,19 @@ import com.etrisad.zenith.data.model.CategoryCatalog
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import com.etrisad.zenith.ui.components.AppCategoryCard
 import com.etrisad.zenith.ui.components.AppCategoryPickerSheet
 import com.etrisad.zenith.ui.components.CreateCategoryDialog
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.components.UsageHistoryCard
 import com.etrisad.zenith.ui.components.StreakGauge
+import com.etrisad.zenith.ui.components.AppSharedTransition
+import com.etrisad.zenith.ui.components.appContainerSharedKey
+import com.etrisad.zenith.ui.components.appIconSharedKey
+import com.etrisad.zenith.ui.components.appSharedBounds
+import com.etrisad.zenith.ui.components.appTitleSharedKey
+import com.etrisad.zenith.ui.components.LocalSharedTransitionAnimationScope
+import com.etrisad.zenith.ui.components.LocalSharedTransitionScope
 import com.etrisad.zenith.util.StreakBonus
 import com.etrisad.zenith.ui.components.LongTermSection
 import com.etrisad.zenith.ui.components.ZenithContainedLoadingIndicator
@@ -75,10 +84,14 @@ import java.util.*
 @Composable
 fun AppDetailScreen(
     packageName: String,
+    initialAppName: String = "",
+    initialStreak: Int = 0,
+    sharedOrigin: String? = null,
     viewModel: HomeViewModel,
     userPreferencesRepository: com.etrisad.zenith.data.preferences.UserPreferencesRepository,
     innerPadding: PaddingValues,
-    onOpenCategoryDetails: (AppCategory) -> Unit = {}
+    onOpenCategoryDetails: (AppCategory) -> Unit = {},
+    onReOpen: (() -> Unit)? = null
 ) {
     val uiState by viewModel.appDetailUiState.collectAsState()
     val preferences by userPreferencesRepository.userPreferencesFlow.collectAsState(
@@ -103,13 +116,7 @@ fun AppDetailScreen(
         viewModel.loadAppDetail(packageName)
     }
 
-    DisposableEffect(packageName) {
-        onDispose {
-            viewModel.clearAppDetail(packageName)
-        }
-    }
-
-    val shield = uiState.shieldEntity
+    val shield = uiState.shieldEntity.takeIf { uiState.packageName == packageName }
     val isFocusActive = remember(shield) { shield != null }
     val isEffectivelyPaused = remember(shield, nowMillis) {
         shield?.let {
@@ -171,132 +178,258 @@ fun AppDetailScreen(
         )
     }
 
-    AnimatedContent(
-        targetState = showLoadingIndicator,
-        transitionSpec = {
-            if (targetState) {
-                fadeIn(animationSpec = tween(200)) togetherWith
-                        fadeOut(animationSpec = tween(200))
-            } else {
-                (fadeIn(animationSpec = tween(400, delayMillis = 50)) +
-                 scaleIn(initialScale = 0.92f, animationSpec = tween(400, delayMillis = 50)))
-                    .togetherWith(fadeOut(animationSpec = tween(300)))
-            }
-        },
-        label = "LoadingToContentTransition"
-    ) { loading ->
-        if (loading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                ZenithContainedLoadingIndicator()
-            }
-        } else {
-            PullToRefreshBox(
-                isRefreshing = isRefreshing,
-                onRefresh = { onRefresh() },
-                state = pullToRefreshState,
-                indicator = {
-                    val scale by animateFloatAsState(
-                        targetValue = if (isRefreshing) 1f else pullToRefreshState.distanceFraction.coerceIn(0f, 1f),
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessLow
-                        ),
-                        label = "LoadingIndicatorScale"
-                    )
+    val appContainerKey = remember(packageName, sharedOrigin) {
+        appContainerSharedKey(packageName, sharedOrigin)
+    }
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = innerPadding.calculateTopPadding() + 16.dp),
-                        contentAlignment = Alignment.TopCenter
-                    ) {
-                        ZenithContainedLoadingIndicator(
-                            modifier = Modifier.graphicsLayer {
-                                scaleX = scale
-                                scaleY = scale
-                                alpha = scale.coerceIn(0f, 1f)
-                            }
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
-            ) {
-                LazyColumn(
+    val animScope = LocalSharedTransitionAnimationScope.current
+    val isExiting = animScope?.transition?.targetState == EnterExitState.PostExit
+
+    val listState = rememberLazyListState()
+    var hasStaggered by remember(packageName) { mutableStateOf(false) }
+    var staggerStage by remember(packageName) { mutableIntStateOf(0) }
+
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (listState.isScrollInProgress) {
+            staggerStage = 15
+        }
+    }
+
+    LaunchedEffect(packageName, showLoadingIndicator) {
+        if (!showLoadingIndicator && !hasStaggered) {
+            hasStaggered = true
+            staggerStage = 1
+            for (i in 2..15) {
+                delay(80)
+                if (staggerStage < i) {
+                    staggerStage = i
+                }
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .zIndex(if (isExiting) -1f else 1f)
+            .appSharedBounds(
+                key = appContainerKey,
+                zIndexInOverlay = AppSharedTransition.Z_CONTAINER,
+                animatePlaceholderSize = false,
+                enter = AppSharedTransition.containerEnter,
+                exit = AppSharedTransition.containerExit
+            )
+            .background(MaterialTheme.colorScheme.background)
+            .then(
+                if (isExiting && onReOpen != null) {
+                    Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onReOpen
+                    )
+                } else {
+                    Modifier
+                }
+            )
+    ) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { onRefresh() },
+            state = pullToRefreshState,
+            indicator = {
+                val scale by animateFloatAsState(
+                    targetValue = if (isRefreshing) 1f else pullToRefreshState.distanceFraction.coerceIn(0f, 1f),
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    ),
+                    label = "LoadingIndicatorScale"
+                )
+
+                Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .animateContentSize(
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMediumLow
-                            )
-                        )
-                        .padding(horizontal = 16.dp),
-                    contentPadding = PaddingValues(
-                        top = innerPadding.calculateTopPadding() + 16.dp,
-                        bottom = innerPadding.calculateBottomPadding() + 80.dp
-                    )
+                        .fillMaxWidth()
+                        .padding(top = innerPadding.calculateTopPadding() + 16.dp),
+                    contentAlignment = Alignment.TopCenter
                 ) {
-                    item {
-                        AppHeader(
-                            appName = uiState.appName,
-                            packageName = uiState.packageName,
-                            focusType = uiState.type,
-                            isActive = isFocusActive,
-                            isPaused = isEffectivelyPaused,
-                            pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L,
-                            nowMillis = nowMillis,
-                            shield = shield
-                        )
-                        Spacer(modifier = Modifier.height(24.dp))
-                    }
+                    ZenithContainedLoadingIndicator(
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                            alpha = scale.coerceIn(0f, 1f)
+                        }
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                userScrollEnabled = !isExiting,
+                contentPadding = PaddingValues(
+                    top = innerPadding.calculateTopPadding() + 16.dp,
+                    bottom = innerPadding.calculateBottomPadding() + 80.dp
+                )
+            ) {
+                item {
+                    AppHeader(
+                        appName = if (uiState.packageName == packageName && uiState.appName.isNotEmpty()) {
+                            uiState.appName
+                        } else {
+                            initialAppName.ifEmpty { packageName }
+                        },
+                        packageName = packageName,
+                        focusType = uiState.type,
+                        isActive = isFocusActive,
+                        isPaused = isEffectivelyPaused,
+                        pauseEndTimestamp = shield?.pauseEndTimestamp ?: 0L,
+                        nowMillis = nowMillis,
+                        shield = shield,
+                        streak = if (shield != null) shield.currentStreak else initialStreak,
+                        sharedOrigin = sharedOrigin
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
 
+                if (showLoadingIndicator) {
                     item {
-                        UsageCard(
-                            title = "Today's Usage",
-                            time = formatDuration(uiState.todayUsage),
-                            targetMillis = targetMillis,
-                            currentUsage = uiState.todayUsage,
-                            focusType = uiState.type,
-                            formatDuration = formatDuration,
-                            isActive = isFocusActive,
-                            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                    }
-
-                    item {
-                        UsageTrendsRow(
-                            yesterdayUsage = uiState.yesterdayUsage,
-                            yesterdayTime = formatDuration(uiState.yesterdayUsage),
-                            percentageChange = uiState.percentageChange,
-                            focusType = uiState.type
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                    }
-
-                    item {
-                        val category = categoryCatalog.resolve(packageName, uiState.appName)
-                        AppCategoryCard(
-                            category = category,
-                            isSuggested = categoryCatalog.isSuggested(packageName, uiState.appName),
-                            onClick = { showCategorySheet = true },
-                            onDetailsClick = { onOpenCategoryDetails(category) },
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                    }
-
-                    item {
-                        AnimatedVisibility(
-                            visible = isFocusActive,
-                            enter = fadeIn() + expandVertically(),
-                            exit = fadeOut() + shrinkVertically()
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(240.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Column {
-                                StreakCard(
-                                    appName = uiState.appName.ifEmpty { packageName },
-                                    currentStreak = uiState.currentStreak,
-                                    bestStreak = uiState.bestStreak,
+                            ZenithContainedLoadingIndicator()
+                        }
+                    }
+                } else {
+
+                    item {
+                        StaggeredItem(index = 0, staggerStage = staggerStage) {
+                            UsageCard(
+                                title = "Today's Usage",
+                                time = formatDuration(uiState.todayUsage),
+                                targetMillis = targetMillis,
+                                currentUsage = uiState.todayUsage,
+                                focusType = uiState.type,
+                                formatDuration = formatDuration,
+                                isActive = isFocusActive,
+                                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                    }
+
+                    item {
+                        StaggeredItem(index = 1, staggerStage = staggerStage) {
+                            UsageTrendsRow(
+                                yesterdayUsage = uiState.yesterdayUsage,
+                                yesterdayTime = formatDuration(uiState.yesterdayUsage),
+                                percentageChange = uiState.percentageChange,
+                                focusType = uiState.type
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                    }
+
+                    item {
+                        StaggeredItem(index = 2, staggerStage = staggerStage) {
+                            val category = categoryCatalog.resolve(packageName, uiState.appName)
+                            AppCategoryCard(
+                                category = category,
+                                isSuggested = categoryCatalog.isSuggested(packageName, uiState.appName),
+                                onClick = { showCategorySheet = true },
+                                onDetailsClick = { onOpenCategoryDetails(category) },
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                    }
+
+                    item {
+                        StaggeredItem(index = 3, staggerStage = staggerStage) {
+                            AnimatedVisibility(
+                                visible = isFocusActive,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                Column {
+                                    StreakCard(
+                                        appName = uiState.appName.ifEmpty { packageName },
+                                        currentStreak = uiState.currentStreak,
+                                        bestStreak = uiState.bestStreak,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                }
+                            }
+                        }
+                    }
+
+                    item {
+                        StaggeredItem(index = 4, staggerStage = staggerStage) {
+                            UsageHistoryCard(
+                                history = uiState.usageHistory,
+                                targetMillis = targetMillis,
+                                focusType = uiState.type,
+                                showDatabaseIndicator = preferences.showDatabaseIndicator,
+                                formatDuration = formatDuration,
+                                onDaySelected = { },
+                                olderWeekLoader = { chunkOffset -> viewModel.getPerAppWeekHistory(packageName, chunkOffset) },
+                                loaderKey = packageName,
+                                title = "History",
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                    }
+
+                    item {
+                        StaggeredItem(index = 5, staggerStage = staggerStage) {
+                            PerAppLongTermSection(packageName = packageName, viewModel = viewModel)
+                        }
+                    }
+
+                    item {
+                        if (uiState.hourlyUsage.any { it > 0 }) {
+                            StaggeredItem(index = 6, staggerStage = staggerStage) {
+                                HourlyUsageChart(
+                                    hourlyUsage = uiState.hourlyUsage,
+                                    selectedHour = selectedHour,
+                                    onHourClick = { selectedHour = if (selectedHour == it) null else it },
+                                    focusType = uiState.type,
+                                    formatDuration = formatDuration,
+                                    bedtimeEnabled = preferences.bedtimeEnabled,
+                                    bedtimeStartTime = preferences.bedtimeStartTime,
+                                    bedtimeEndTime = preferences.bedtimeEndTime,
+                                    bedtimeDays = preferences.bedtimeDays
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+                        }
+                    }
+
+                    item {
+                        StaggeredItem(index = 7, staggerStage = staggerStage) {
+                            SecondaryStatsRow(
+                                averageUsage = formatDuration(uiState.averageUsage),
+                                totalSessions = uiState.totalSessions,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                    }
+
+                    if (uiState.batteryStatsResetEnabled) {
+                        item {
+                            StaggeredItem(index = 8, staggerStage = staggerStage) {
+                                BatteryUsageCard(
+                                    sinceLastCharge = formatDuration(uiState.sinceLastChargeUsage),
+                                    lastResetTimestamp = uiState.lastResetTimestamp,
+                                    onReset = { viewModel.resetAppUsage(packageName) },
                                     shape = RoundedCornerShape(8.dp)
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
@@ -305,145 +438,91 @@ fun AppDetailScreen(
                     }
 
                     item {
-                        UsageHistoryCard(
-                            history = uiState.usageHistory,
-                            targetMillis = targetMillis,
-                            focusType = uiState.type,
-                            showDatabaseIndicator = preferences.showDatabaseIndicator,
-                            formatDuration = formatDuration,
-                            onDaySelected = { },
-                            olderWeekLoader = { chunkOffset -> viewModel.getPerAppWeekHistory(packageName, chunkOffset) },
-                            loaderKey = packageName,
-                            title = "History",
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                    }
-
-                    item {
-                        PerAppLongTermSection(packageName = packageName, viewModel = viewModel)
-                    }
-
-                    item {
-                        if (uiState.hourlyUsage.any { it > 0 }) {
-                            HourlyUsageChart(
-                                hourlyUsage = uiState.hourlyUsage,
-                                selectedHour = selectedHour,
-                                onHourClick = { selectedHour = if (selectedHour == it) null else it },
-                                focusType = uiState.type,
-                                formatDuration = formatDuration,
-                                bedtimeEnabled = preferences.bedtimeEnabled,
-                                bedtimeStartTime = preferences.bedtimeStartTime,
-                                bedtimeEndTime = preferences.bedtimeEndTime,
-                                bedtimeDays = preferences.bedtimeDays
+                        StaggeredItem(index = 9, staggerStage = staggerStage) {
+                            PeakHourCard(
+                                peakHour = uiState.peakHour,
+                                shape = RoundedCornerShape(
+                                    topStart = 8.dp,
+                                    topEnd = 8.dp,
+                                    bottomStart = if (!isFocusActive) 24.dp else 8.dp,
+                                    bottomEnd = if (!isFocusActive) 24.dp else 8.dp
+                                )
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            if (isFocusActive) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
                         }
                     }
 
                     item {
-                        SecondaryStatsRow(
-                            averageUsage = formatDuration(uiState.averageUsage),
-                            totalSessions = uiState.totalSessions,
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                    }
+                        StaggeredItem(index = 10, staggerStage = staggerStage) {
+                            AnimatedVisibility(
+                                visible = isFocusActive,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                if (shield != null) {
+                                    var showPauseSheet by remember { mutableStateOf(false) }
+                                    var showDeleteSheet by remember { mutableStateOf(false) }
 
-                    if (uiState.batteryStatsResetEnabled) {
-                        item {
-                            BatteryUsageCard(
-                                sinceLastCharge = formatDuration(uiState.sinceLastChargeUsage),
-                                lastResetTimestamp = uiState.lastResetTimestamp,
-                                onReset = { viewModel.resetAppUsage(packageName) },
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                        }
-                    }
-
-                    item {
-                        PeakHourCard(
-                            peakHour = uiState.peakHour,
-                            shape = RoundedCornerShape(
-                                topStart = 8.dp,
-                                topEnd = 8.dp,
-                                bottomStart = if (!isFocusActive) 24.dp else 8.dp,
-                                bottomEnd = if (!isFocusActive) 24.dp else 8.dp
-                            )
-                        )
-                        if (isFocusActive) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                        }
-                    }
-
-                    item {
-                        AnimatedVisibility(
-                            visible = isFocusActive,
-                            enter = fadeIn() + expandVertically(),
-                            exit = fadeOut() + shrinkVertically()
-                        ) {
-                            if (shield != null) {
-                                var showPauseSheet by remember { mutableStateOf(false) }
-                                var showDeleteSheet by remember { mutableStateOf(false) }
-
-                                Column {
-                                    AnimatedContent(
-                                        targetState = isEffectivelyPaused,
-                                        transitionSpec = {
-                                            (fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f))
-                                                .togetherWith(fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.95f))
-                                        },
-                                        label = "PauseResumeTransition"
-                                    ) { isPaused ->
-                                        if (isPaused) {
-                                            ResumeCard(
-                                                pauseEndTimestamp = shield.pauseEndTimestamp,
-                                                onResume = { if (!isInLockdown) viewModel.resumeShield() else blockedByLockdown() },
-                                                formatDuration = formatDuration,
-                                                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp),
-                                                nowMillis = nowMillis
-                                            )
-                                        } else {
-                                            PauseShieldCard(
-                                                onPauseClick = { if (!isInLockdown) showPauseSheet = true else blockedByLockdown() },
-                                                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
-                                            )
+                                    Column {
+                                        AnimatedContent(
+                                            targetState = isEffectivelyPaused,
+                                            transitionSpec = {
+                                                (fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f))
+                                                    .togetherWith(fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.95f))
+                                            },
+                                            label = "PauseResumeTransition"
+                                        ) { isPaused ->
+                                            if (isPaused) {
+                                                ResumeCard(
+                                                    pauseEndTimestamp = shield.pauseEndTimestamp,
+                                                    onResume = { if (!isInLockdown) viewModel.resumeShield() else blockedByLockdown() },
+                                                    formatDuration = formatDuration,
+                                                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp),
+                                                    nowMillis = nowMillis
+                                                )
+                                            } else {
+                                                PauseShieldCard(
+                                                    onPauseClick = { if (!isInLockdown) showPauseSheet = true else blockedByLockdown() },
+                                                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+                                                )
+                                            }
                                         }
+
+                                        Spacer(modifier = Modifier.height(4.dp))
+
+                                        DeleteShieldCard(
+                                            onDelete = {
+                                                if (!isInLockdown) showDeleteSheet = true else blockedByLockdown()
+                                            },
+                                            shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                                        )
                                     }
-                                    
-                                    Spacer(modifier = Modifier.height(4.dp))
 
-                                    DeleteShieldCard(
-                                        onDelete = {
-                                            if (!isInLockdown) showDeleteSheet = true else blockedByLockdown()
-                                        },
-                                        shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                                    )
-                                }
+                                    if (showDeleteSheet) {
+                                        ConfirmBottomSheet(
+                                            onDismiss = { showDeleteSheet = false },
+                                            onConfirm = {
+                                                viewModel.deleteShieldFromDetail()
+                                                showDeleteSheet = false
+                                            },
+                                            leverCount = 3,
+                                            showTimeSelection = false
+                                        )
+                                    }
 
-                                if (showDeleteSheet) {
-                                    ConfirmBottomSheet(
-                                        onDismiss = { showDeleteSheet = false },
-                                        onConfirm = {
-                                            viewModel.deleteShieldFromDetail()
-                                            showDeleteSheet = false
-                                        },
-                                        leverCount = 3,
-                                        showTimeSelection = false
-                                    )
-                                }
-
-                                if (showPauseSheet) {
-                                    ConfirmBottomSheet(
-                                        onDismiss = { showPauseSheet = false },
-                                        onConfirm = { duration ->
-                                            viewModel.pauseShield(duration)
-                                            showPauseSheet = false
-                                        },
-                                        leverCount = 5,
-                                        showTimeSelection = true
-                                    )
+                                    if (showPauseSheet) {
+                                        ConfirmBottomSheet(
+                                            onDismiss = { showPauseSheet = false },
+                                            onConfirm = { duration ->
+                                                viewModel.pauseShield(duration)
+                                                showPauseSheet = false
+                                            },
+                                            leverCount = 5,
+                                            showTimeSelection = true
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -518,6 +597,42 @@ fun AppDetailScreen(
 }
 
 @Composable
+private fun StaggeredItem(
+    index: Int,
+    staggerStage: Int,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val isRevealed = staggerStage > index
+    val alpha by animateFloatAsState(
+        targetValue = if (isRevealed) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "StaggerAlpha_$index"
+    )
+    val translateY by animateDpAsState(
+        targetValue = if (isRevealed) 0.dp else 24.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "StaggerTranslate_$index"
+    )
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                this.alpha = alpha
+                this.translationY = translateY.toPx()
+            },
+        content = content
+    )
+}
+
+@Composable
 fun AppHeader(
     appName: String,
     packageName: String,
@@ -526,7 +641,9 @@ fun AppHeader(
     isPaused: Boolean = false,
     pauseEndTimestamp: Long = 0L,
     nowMillis: Long = System.currentTimeMillis(),
-    shield: ShieldEntity? = null
+    shield: ShieldEntity? = null,
+    streak: Int = 0,
+    sharedOrigin: String? = null
 ) {
     val nextResetTimestamp = shield?.let { it.lastPeriodResetTimestamp + (it.refreshPeriodMinutes * 60 * 1000L) } ?: 0L
     val remainingResetMillis = (nextResetTimestamp - nowMillis).coerceAtLeast(0L)
@@ -561,7 +678,22 @@ fun AppHeader(
     ) {
         val isWebsite = com.etrisad.zenith.data.website.WebsiteRepository.isWebsitePackageName(packageName)
         val detailIconShape = appIconShape(isWebsite)
-        Box(contentAlignment = Alignment.Center) {
+        val iconSharedKey = remember(packageName, sharedOrigin) {
+            appIconSharedKey(packageName, sharedOrigin)
+        }
+        val titleSharedKey = remember(packageName, sharedOrigin) {
+            appTitleSharedKey(packageName, sharedOrigin)
+        }
+        Box(
+            modifier = Modifier
+                .size(96.dp)
+                .appSharedBounds(
+                    key = iconSharedKey,
+                    scaleToBounds = true,
+                    zIndexInOverlay = AppSharedTransition.Z_ICON
+                ),
+            contentAlignment = Alignment.Center
+        ) {
             SubcomposeAsyncImage(
                 model = "app-icon://$packageName",
                 contentDescription = null,
@@ -595,41 +727,38 @@ fun AppHeader(
                 }
             )
 
-            shield?.let { s ->
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = s.currentStreak > 0,
-                    enter = fadeIn(spring(stiffness = Spring.StiffnessLow)) +
-                            scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)),
-                    exit = fadeOut(spring(stiffness = Spring.StiffnessLow)) +
-                            scaleOut(spring(stiffness = Spring.StiffnessLow)),
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .offset(y = 8.dp)
+            val displayStreak = shield?.currentStreak ?: streak
+            androidx.compose.animation.AnimatedVisibility(
+                visible = displayStreak > 0,
+                enter = fadeIn(spring(stiffness = Spring.StiffnessLow)) +
+                        scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)),
+                exit = fadeOut(spring(stiffness = Spring.StiffnessLow)) +
+                        scaleOut(spring(stiffness = Spring.StiffnessLow)),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    tonalElevation = 3.dp,
+                    shadowElevation = 3.dp
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.tertiary,
-                        tonalElevation = 3.dp,
-                        shadowElevation = 3.dp
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.LocalFireDepartment,
-                                contentDescription = "Streak",
-                                modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.onTertiary
-                            )
-                            Text(
-                                text = "${s.currentStreak}",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Black,
-                                color = MaterialTheme.colorScheme.onTertiary,
-                                modifier = Modifier.padding(start = 4.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Outlined.LocalFireDepartment,
+                            contentDescription = "Streak",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onTertiary
+                        )
+                        Text(
+                            text = "$displayStreak",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onTertiary,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
                     }
                 }
             }
@@ -664,7 +793,7 @@ fun AppHeader(
 
                 Box(
                     modifier = Modifier
-                        .size(90.dp)
+                        .size(96.dp)
                 ) {
                     Surface(
                         modifier = Modifier
@@ -703,7 +832,12 @@ fun AppHeader(
             text = appName,
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            modifier = Modifier.appSharedBounds(
+                key = titleSharedKey,
+                scaleToBounds = true,
+                zIndexInOverlay = AppSharedTransition.Z_TITLE
+            )
         )
 
         if (usesExhausted && remainingResetMillis > 0) {

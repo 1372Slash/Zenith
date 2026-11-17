@@ -2,9 +2,11 @@ package com.etrisad.zenith.ui.screens
 
 import android.widget.Toast
 import androidx.compose.animation.*
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -76,7 +78,10 @@ import com.etrisad.zenith.ui.components.onboarding.OnboardingStatsBottomSheet
 import com.etrisad.zenith.ui.components.onboarding.OnboardingUpdateBottomSheet
 import com.etrisad.zenith.ui.components.ZenithHeader
 import com.etrisad.zenith.ui.components.TopSheet
+import com.etrisad.zenith.ui.components.AppSharedTransition
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
+import com.etrisad.zenith.ui.components.LocalSharedTransitionAnimationScope
+import com.etrisad.zenith.ui.components.LocalSharedTransitionScope
 import com.etrisad.zenith.ui.navigation.Screen
 import com.etrisad.zenith.ui.navigation.navItems
 import com.etrisad.zenith.ui.screens.focus.FocusScreen
@@ -153,6 +158,7 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 @OptIn(
     ExperimentalMaterial3ExpressiveApi::class,
     ExperimentalMaterial3Api::class,
+    androidx.compose.animation.ExperimentalSharedTransitionApi::class,
     kotlinx.coroutines.FlowPreview::class
 )
 @Composable
@@ -692,13 +698,13 @@ fun MainScreen(
                                 else -> "none"
                             },
                             transitionSpec = {
-                                (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
-                                        scaleIn(initialScale = 0.92f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)) +
-                                        slideInHorizontally(initialOffsetX = { -it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessLow)))
+                                (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                        scaleIn(initialScale = 0.92f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
+                                        slideInHorizontally(initialOffsetX = { -it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
                                     .togetherWith(
-                                        fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                        fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
                                         scaleOut(targetScale = 0.92f) +
-                                        slideOutHorizontally(targetOffsetX = { -it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessLow))
+                                        slideOutHorizontally(targetOffsetX = { -it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
                                     )
                             },
                             label = "LeftActionsContent"
@@ -765,13 +771,13 @@ fun MainScreen(
                                     else -> "none"
                                 },
                                 transitionSpec = {
-                                    (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
-                                            scaleIn(initialScale = 0.92f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)) +
-                                            slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessLow)))
+                                    (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                            scaleIn(initialScale = 0.92f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)) +
+                                            slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)))
                                         .togetherWith(
-                                            fadeOut(animationSpec = spring(stiffness = Spring.StiffnessLow)) +
+                                            fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
                                             scaleOut(targetScale = 0.92f) +
-                                            slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessLow))
+                                            slideOutHorizontally(targetOffsetX = { it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
                                         )
                                 },
                                 label = "RightActionsContent"
@@ -1074,6 +1080,8 @@ fun MainScreen(
         )
     }
             Box(modifier = Modifier.fillMaxSize()) {
+                SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
+                    CompositionLocalProvider(LocalSharedTransitionScope provides this) {
                 NavHost(
                     navController = navController,
                     startDestination = Screen.Home.route,
@@ -1140,7 +1148,14 @@ fun MainScreen(
                             stiffness = Spring.StiffnessLow
                         )
 
-                        if (isTargetDeep) {
+                        if (targetRoute?.startsWith("app_detail") == true) {
+                            fadeIn(
+                                animationSpec = tween(
+                                    durationMillis = AppSharedTransition.DURATION_MILLIS,
+                                    easing = FastOutSlowInEasing
+                                )
+                            )
+                        } else if (isTargetDeep) {
                             slideInHorizontally(
                                 initialOffsetX = { it },
                                 animationSpec = animationSpec
@@ -1224,7 +1239,14 @@ fun MainScreen(
                             stiffness = Spring.StiffnessLow
                         )
 
-                        if (isTargetDeep) {
+                        if (targetRoute?.startsWith("app_detail") == true) {
+                            fadeOut(
+                                animationSpec = tween(
+                                    durationMillis = AppSharedTransition.DURATION_MILLIS,
+                                    easing = FastOutSlowInEasing
+                                )
+                            )
+                        } else if (isTargetDeep) {
                             slideOutHorizontally(
                                 targetOffsetX = { -it / 3 },
                                 animationSpec = animationSpec
@@ -1252,33 +1274,61 @@ fun MainScreen(
                         }
                     },
                     popEnterTransition = {
-                        slideInHorizontally(
-                            initialOffsetX = { -it / 3 },
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioLowBouncy,
-                                stiffness = Spring.StiffnessLow
+                        val initialRoute = initialState.destination.route
+                        if (initialRoute?.startsWith("app_detail") == true) {
+                            fadeIn(
+                                animationSpec = tween(
+                                    durationMillis = AppSharedTransition.DURATION_MILLIS,
+                                    easing = FastOutSlowInEasing
+                                )
                             )
-                        ) + fadeIn()
+                        } else {
+                            slideInHorizontally(
+                                initialOffsetX = { -it / 3 },
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                    stiffness = Spring.StiffnessLow
+                                )
+                            ) + fadeIn()
+                        }
                     },
                     popExitTransition = {
-                        slideOutHorizontally(
-                            targetOffsetX = { it },
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioLowBouncy,
-                                stiffness = Spring.StiffnessLow
+                        val initialRoute = initialState.destination.route
+                        if (initialRoute?.startsWith("app_detail") == true) {
+                            fadeOut(
+                                animationSpec = tween(
+                                    durationMillis = AppSharedTransition.DURATION_MILLIS,
+                                    easing = FastOutSlowInEasing
+                                )
                             )
-                        ) + fadeOut()
+                        } else {
+                            slideOutHorizontally(
+                                targetOffsetX = { it },
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                    stiffness = Spring.StiffnessLow
+                                )
+                            ) + fadeOut()
+                        }
                     }
                 ) {
                     composable(Screen.Home.route) {
                         val homeScope = rememberCoroutineScope()
+                        CompositionLocalProvider(LocalSharedTransitionAnimationScope provides this) {
                         HomeScreen(
                             homeViewModel,
                             userPreferencesRepository,
                             innerPadding,
                             onSeeFullList = { navController.navigate(Screen.UsageStats.route) },
-                            onAppClick = { packageName ->
-                                navController.navigate(Screen.AppDetail.createRoute(packageName))
+                            onAppClick = { target ->
+                                navController.navigate(
+                                    Screen.AppDetail.createRoute(
+                                        packageName = target.packageName,
+                                        sharedOrigin = target.sharedOrigin,
+                                        appName = target.appName,
+                                        streak = target.streak
+                                    )
+                                )
                             },
                             onBedtimeClick = { navController.navigate(Screen.Bedtime.route) },
                             onAlarmClick = { navController.navigate(Screen.Alarm.route) },
@@ -1295,15 +1345,24 @@ fun MainScreen(
                                 }
                             }
                         )
+                        }
                     }
                     composable(Screen.Focus.route) {
                         val focusScope = rememberCoroutineScope()
+                        CompositionLocalProvider(LocalSharedTransitionAnimationScope provides this) {
                         FocusScreen(
                             focusViewModel,
                             innerPadding,
                             scrollBehavior = scrollBehavior,
-                            onAppClick = { packageName ->
-                                navController.navigate(Screen.AppDetail.createRoute(packageName))
+                            onAppClick = { target ->
+                                navController.navigate(
+                                    Screen.AppDetail.createRoute(
+                                        packageName = target.packageName,
+                                        sharedOrigin = target.sharedOrigin,
+                                        appName = target.appName,
+                                        streak = target.streak
+                                    )
+                                )
                             },
                             onDeleteShield = { shield -> focusViewModel.deleteShield(shield) },
                             onDismissUninstalled = { pkg ->
@@ -1315,6 +1374,7 @@ fun MainScreen(
                                 }
                             }
                         )
+                        }
                     }
                     composable(Screen.Settings.route) {
                         SettingsScreen(
@@ -1388,24 +1448,33 @@ fun MainScreen(
                         )
                     }
                     composable(Screen.Profile.route) {
-                        ProfileScreen(
-                            profileViewModel = profileViewModel,
-                            homeViewModel = homeViewModel,
-                            preferencesRepository = userPreferencesRepository,
-                            innerPadding = innerPadding,
-                            onAppClick = { packageName ->
-                                navController.navigate(Screen.AppDetail.createRoute(packageName))
-                            },
-                            onSeeAllAchievements = {
-                                navController.navigate(Screen.Achievements.route)
-                            },
-                            onOpenLevel = {
-                                navController.navigate(Screen.Level.route)
-                            },
-                            onOpenGuidedPathHub = {
-                                showGuidedPathHub = true
-                            }
-                        )
+                        CompositionLocalProvider(LocalSharedTransitionAnimationScope provides this) {
+                            ProfileScreen(
+                                profileViewModel = profileViewModel,
+                                homeViewModel = homeViewModel,
+                                preferencesRepository = userPreferencesRepository,
+                                innerPadding = innerPadding,
+                                onAppClick = { target ->
+                                    navController.navigate(
+                                        Screen.AppDetail.createRoute(
+                                            packageName = target.packageName,
+                                            sharedOrigin = target.sharedOrigin,
+                                            appName = target.appName,
+                                            streak = target.streak
+                                        )
+                                    )
+                                },
+                                onSeeAllAchievements = {
+                                    navController.navigate(Screen.Achievements.route)
+                                },
+                                onOpenLevel = {
+                                    navController.navigate(Screen.Level.route)
+                                },
+                                onOpenGuidedPathHub = {
+                                    showGuidedPathHub = true
+                                }
+                            )
+                        }
                     }
                     composable(Screen.Level.route) {
                         LevelScreen(
@@ -1465,19 +1534,28 @@ fun MainScreen(
                         }
                     }
                     composable(Screen.UsageStats.route) {
+                        CompositionLocalProvider(LocalSharedTransitionAnimationScope provides this) {
                         UsageStatsScreen(
                             viewModel = homeViewModel,
                             focusViewModel = focusViewModel,
                             userPreferencesRepository = userPreferencesRepository,
                             innerPadding = innerPadding,
                             showDatabaseIndicator = preferences.showDatabaseIndicator,
-                            onAppClick = { packageName ->
-                                navController.navigate(Screen.AppDetail.createRoute(packageName))
+                            onAppClick = { target ->
+                                navController.navigate(
+                                    Screen.AppDetail.createRoute(
+                                        packageName = target.packageName,
+                                        sharedOrigin = target.sharedOrigin,
+                                        appName = target.appName,
+                                        streak = target.streak
+                                    )
+                                )
                             },
                             onCategoryClick = { category ->
                                 navController.navigate(Screen.CategoryDetail.createRoute(category.id))
                             }
                         )
+                        }
                     }
                     composable(Screen.DatabaseDebug.route) {
                         com.etrisad.zenith.ui.screens.settings.DatabaseDebugScreen(
@@ -1521,20 +1599,54 @@ fun MainScreen(
                     }
                     composable(
                         route = Screen.AppDetail.route,
-                        arguments = listOf(androidx.navigation.navArgument("packageName") {
-                            type = androidx.navigation.NavType.StringType
-                        })
+                        arguments = listOf(
+                            androidx.navigation.navArgument("packageName") {
+                                type = androidx.navigation.NavType.StringType
+                            },
+                            androidx.navigation.navArgument("origin") {
+                                type = androidx.navigation.NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                            androidx.navigation.navArgument("appName") {
+                                type = androidx.navigation.NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                            androidx.navigation.navArgument("streak") {
+                                type = androidx.navigation.NavType.IntType
+                                defaultValue = 0
+                            }
+                        )
                     ) { backStackEntry ->
                         val packageName = backStackEntry.arguments?.getString("packageName") ?: ""
+                        val sharedOrigin = backStackEntry.arguments?.getString("origin")
+                        val initialAppName = backStackEntry.arguments?.getString("appName") ?: ""
+                        val initialStreak = backStackEntry.arguments?.getInt("streak") ?: 0
+                        CompositionLocalProvider(LocalSharedTransitionAnimationScope provides this) {
                         com.etrisad.zenith.ui.screens.home.AppDetailScreen(
                             packageName = packageName,
+                            initialAppName = initialAppName,
+                            initialStreak = initialStreak,
+                            sharedOrigin = sharedOrigin,
                             viewModel = homeViewModel,
                             userPreferencesRepository = userPreferencesRepository,
                             innerPadding = innerPadding,
                             onOpenCategoryDetails = { category ->
                                 navController.navigate(Screen.CategoryDetail.createRoute(category.id))
+                            },
+                            onReOpen = {
+                                navController.navigate(
+                                    Screen.AppDetail.createRoute(
+                                        packageName = packageName,
+                                        sharedOrigin = sharedOrigin,
+                                        appName = initialAppName,
+                                        streak = initialStreak
+                                    )
+                                )
                             }
                         )
+                        }
                     }
                     composable(
                         route = Screen.CategoryDetail.route,
@@ -1543,15 +1655,24 @@ fun MainScreen(
                         })
                     ) { backStackEntry ->
                         val categoryId = backStackEntry.arguments?.getString("category") ?: ""
-                        com.etrisad.zenith.ui.screens.home.CategoryDetailScreen(
-                            categoryId = categoryId,
-                            viewModel = homeViewModel,
-                            userPreferencesRepository = userPreferencesRepository,
-                            innerPadding = innerPadding,
-                            onAppClick = { packageName ->
-                                navController.navigate(Screen.AppDetail.createRoute(packageName))
-                            }
-                        )
+                        CompositionLocalProvider(LocalSharedTransitionAnimationScope provides this) {
+                            com.etrisad.zenith.ui.screens.home.CategoryDetailScreen(
+                                categoryId = categoryId,
+                                viewModel = homeViewModel,
+                                userPreferencesRepository = userPreferencesRepository,
+                                innerPadding = innerPadding,
+                                onAppClick = { target ->
+                                    navController.navigate(
+                                        Screen.AppDetail.createRoute(
+                                            packageName = target.packageName,
+                                            sharedOrigin = target.sharedOrigin,
+                                            appName = target.appName,
+                                            streak = target.streak
+                                        )
+                                    )
+                                }
+                            )
+                        }
                     }
                     composable(
                         route = Screen.SettingsCategory.route,
@@ -1580,6 +1701,8 @@ fun MainScreen(
                             },
                             performanceBackInterceptor = performanceBackInterceptor
                         )
+                    }
+                }
                     }
                 }
 

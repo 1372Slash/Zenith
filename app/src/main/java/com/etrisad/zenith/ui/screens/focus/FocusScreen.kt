@@ -68,6 +68,8 @@ import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.local.entity.ScheduleEntity
 import com.etrisad.zenith.data.local.entity.ScheduleMode
 import com.etrisad.zenith.data.local.entity.ShieldEntity
+import com.etrisad.zenith.ui.components.AppClickTarget
+import com.etrisad.zenith.ui.components.AppSharedTransition
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.components.ShieldSortHeader
 import com.etrisad.zenith.ui.components.UninstalledAppCard
@@ -87,7 +89,7 @@ fun FocusScreen(
     viewModel: FocusViewModel,
     innerPadding: PaddingValues,
     scrollBehavior: TopAppBarScrollBehavior,
-    onAppClick: (String) -> Unit,
+    onAppClick: (AppClickTarget) -> Unit,
     onDeleteShield: (ShieldEntity) -> Unit,
     onDismissUninstalled: (String) -> Unit
 ) {
@@ -161,12 +163,12 @@ fun FocusScreen(
             },
             onShieldSortTypeChange = onShieldSortTypeChange,
             onGoalSortTypeChange = onGoalSortTypeChange,
-            onAppClick = { pkg ->
+            onAppClick = { target ->
                 if (!isInLockdown) {
                     if (uiState.isSelectionMode) {
-                        viewModel.toggleShieldSelection(pkg)
+                        viewModel.toggleShieldSelection(target.packageName)
                     } else {
-                        onAppClick(pkg)
+                        onAppClick(target)
                     }
                 } else lockdownShakeTrigger++
             },
@@ -484,7 +486,7 @@ fun FocusScreenContent(
     onDeleteSchedule: (ScheduleEntity) -> Unit,
     onShieldSortTypeChange: (ShieldSortType) -> Unit,
     onGoalSortTypeChange: (ShieldSortType) -> Unit,
-    onAppClick: (String) -> Unit,
+    onAppClick: (AppClickTarget) -> Unit,
     onAppLongClick: (String) -> Unit = {},
     onScheduleLongClick: (Long) -> Unit = {},
     isSelectionMode: Boolean = false,
@@ -552,6 +554,7 @@ fun FocusScreenContent(
                 tabValue = tab,
                 isHomeScreen = false,
                 onClick = onAppClick,
+                sharedOrigin = AppSharedTransition.ORIGIN_FOCUS,
                 nowMillis = nowMillis,
                 uninstalledPackages = uiState.uninstalledShields,
                 onDeleteShield = onDeleteShield,
@@ -640,6 +643,7 @@ fun FocusScreenContent(
                 tabValue = tab,
                 isHomeScreen = false,
                 onClick = onAppClick,
+                sharedOrigin = AppSharedTransition.ORIGIN_FOCUS,
                 nowMillis = nowMillis,
                 uninstalledPackages = uiState.uninstalledShields,
                 onDeleteShield = onDeleteShield,

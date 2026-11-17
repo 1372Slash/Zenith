@@ -73,6 +73,12 @@ import coil.request.ImageRequest
 import com.etrisad.zenith.data.local.entity.FocusType
 import com.etrisad.zenith.data.model.AppCategory
 import com.etrisad.zenith.data.model.CategoryCatalog
+import com.etrisad.zenith.ui.components.AppClickTarget
+import com.etrisad.zenith.ui.components.AppSharedTransition
+import com.etrisad.zenith.ui.components.appContainerSharedKey
+import com.etrisad.zenith.ui.components.appIconSharedKey
+import com.etrisad.zenith.ui.components.appSharedBounds
+import com.etrisad.zenith.ui.components.appTitleSharedKey
 import com.etrisad.zenith.ui.components.UninstalledAppCard
 import com.etrisad.zenith.ui.components.focus.AppTypeTab
 import com.etrisad.zenith.ui.components.focus.ShieldSectionContent
@@ -131,7 +137,7 @@ fun HomeScreen(
     userPreferencesRepository: UserPreferencesRepository,
     innerPadding: PaddingValues,
     onSeeFullList: () -> Unit,
-    onAppClick: (String) -> Unit,
+    onAppClick: (AppClickTarget) -> Unit,
     onBedtimeClick: () -> Unit,
     onDeleteShield: (ShieldEntity) -> Unit,
     onDismissUninstalled: (String) -> Unit,
@@ -211,7 +217,7 @@ fun HomeScreenContent(
     onShieldSortTypeChange: (ShieldSortType) -> Unit,
     onGoalSortTypeChange: (ShieldSortType) -> Unit,
     onSeeFullList: () -> Unit,
-    onAppClick: (String) -> Unit,
+    onAppClick: (AppClickTarget) -> Unit,
     onBedtimeClick: () -> Unit,
     onAlarmClick: () -> Unit = {},
     onPomodoroClick: () -> Unit = {},
@@ -543,7 +549,15 @@ fun HomeScreenContent(
                         expressiveColors = preferences.expressiveColors,
                         shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 24.dp, bottomEnd = 24.dp),
                         onSeeFullList = onSeeFullList,
-                        onAppClick = { packageName -> onAppClick(packageName) }
+                        onAppClick = { app ->
+                            onAppClick(
+                                AppClickTarget(
+                                    packageName = app.packageName,
+                                    appName = app.appName,
+                                    sharedOrigin = AppSharedTransition.ORIGIN_TOP_APPS
+                                )
+                            )
+                        }
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -610,6 +624,7 @@ fun HomeScreenContent(
                 tabValue = activeTab,
                 isHomeScreen = true,
                 onClick = onAppClick,
+                sharedOrigin = AppSharedTransition.ORIGIN_HOME,
                 nowMillis = nowMillis,
                 uninstalledPackages = uiState.uninstalledShieldPackageNames,
                 onDeleteShield = onDeleteShield,
@@ -755,6 +770,7 @@ fun HomeScreenContent(
                 tabValue = activeTab,
                 isHomeScreen = true,
                 onClick = onAppClick,
+                sharedOrigin = AppSharedTransition.ORIGIN_HOME,
                 nowMillis = nowMillis,
                 uninstalledPackages = uiState.uninstalledShieldPackageNames,
                 onDeleteShield = onDeleteShield,
@@ -1558,7 +1574,7 @@ fun TopAppsSection(
     expressiveColors: Boolean,
     shape: Shape = RoundedCornerShape(32.dp),
     onSeeFullList: () -> Unit,
-    onAppClick: (String) -> Unit
+    onAppClick: (AppUsageInfo) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -1639,12 +1655,28 @@ fun TopAppsSection(
                             index == 0 -> RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
                             else -> RoundedCornerShape(8.dp)
                         }
+                        val containerKey = remember(app.packageName) {
+                            appContainerSharedKey(app.packageName, AppSharedTransition.ORIGIN_TOP_APPS)
+                        }
+                        val titleKey = remember(app.packageName) {
+                            appTitleSharedKey(app.packageName, AppSharedTransition.ORIGIN_TOP_APPS)
+                        }
+                        val iconKey = remember(app.packageName) {
+                            appIconSharedKey(app.packageName, AppSharedTransition.ORIGIN_TOP_APPS)
+                        }
 
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .appSharedBounds(
+                                    key = containerKey,
+                                    zIndexInOverlay = AppSharedTransition.Z_CONTAINER,
+                                    animatePlaceholderSize = false,
+                                    enter = AppSharedTransition.containerEnter,
+                                    exit = AppSharedTransition.containerExit
+                                )
                                 .clip(itemShape)
-                                .clickable { onAppClick(app.packageName) },
+                                .clickable { onAppClick(app) },
                             shape = itemShape,
                             colors = CardDefaults.cardColors(
                                 containerColor = if (expressiveColors) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceContainerHigh
@@ -1655,7 +1687,12 @@ fun TopAppsSection(
                                     Text(
                                         text = app.appName,
                                         style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.appSharedBounds(
+                                            key = titleKey,
+                                            scaleToBounds = true,
+                                            zIndexInOverlay = AppSharedTransition.Z_TITLE
+                                        )
                                     )
                                 },
                                 trailingContent = {
@@ -1667,32 +1704,43 @@ fun TopAppsSection(
                                     )
                                 },
                                 leadingContent = {
-                                    SubcomposeAsyncImage(
-                                        model = ImageRequest.Builder(LocalContext.current)
-                                            .data("app-icon://${app.packageName}")
-                                            .crossfade(500)
-                                            .build(),
-                                        contentDescription = null,
+                                    Box(
                                         modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(CircleShape),
-                                        contentScale = ContentScale.Crop,
-                                        error = {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(40.dp)
-                                                    .clip(CircleShape)
-                                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.Android,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(24.dp)
-                                                )
+                                            .size(48.dp)
+                                            .appSharedBounds(
+                                                key = iconKey,
+                                                scaleToBounds = true,
+                                                zIndexInOverlay = AppSharedTransition.Z_ICON
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        SubcomposeAsyncImage(
+                                            model = ImageRequest.Builder(LocalContext.current)
+                                                .data("app-icon://${app.packageName}")
+                                                .crossfade(500)
+                                                .build(),
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(CircleShape),
+                                            contentScale = ContentScale.Crop,
+                                            error = {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(40.dp)
+                                                        .clip(CircleShape)
+                                                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Android,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(24.dp)
+                                                    )
+                                                }
                                             }
-                                        }
-                                    )
+                                        )
+                                    }
                                 },
                                 colors = ListItemDefaults.colors(
                                     containerColor = Color.Transparent

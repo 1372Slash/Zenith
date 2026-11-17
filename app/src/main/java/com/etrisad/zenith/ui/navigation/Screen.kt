@@ -54,8 +54,35 @@ sealed class Screen(
 
 
 
-    object AppDetail : Screen("app_detail/{packageName}", "App Detail", Icons.Filled.Home, Icons.Outlined.Home) {
-        fun createRoute(packageName: String) = "app_detail/$packageName"
+    object AppDetail : Screen(
+        "app_detail/{packageName}?origin={origin}&appName={appName}&streak={streak}",
+        "App Detail",
+        Icons.Filled.Home,
+        Icons.Outlined.Home
+    ) {
+        fun createRoute(
+            packageName: String,
+            sharedOrigin: String? = null,
+            appName: String? = null,
+            streak: Int = 0
+        ): String {
+            val query = buildList {
+                if (!sharedOrigin.isNullOrBlank()) {
+                    add("origin=${android.net.Uri.encode(sharedOrigin)}")
+                }
+                if (!appName.isNullOrBlank()) {
+                    add("appName=${android.net.Uri.encode(appName)}")
+                }
+                if (streak > 0) {
+                    add("streak=$streak")
+                }
+            }
+            return if (query.isEmpty()) {
+                "app_detail/$packageName"
+            } else {
+                "app_detail/$packageName?${query.joinToString("&")}"
+            }
+        }
     }
 
     object DatabaseDebug : Screen("database_debug", "Database Records", Icons.Filled.Settings, Icons.Outlined.Settings)
