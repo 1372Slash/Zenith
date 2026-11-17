@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -58,8 +59,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -79,8 +82,15 @@ import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithButtonType
+import com.etrisad.zenith.ui.components.AppSharedTransition
+import com.etrisad.zenith.ui.components.StaggeredItem
+import com.etrisad.zenith.ui.components.appSharedBounds
+import com.etrisad.zenith.ui.components.levelCardSharedKey
+import com.etrisad.zenith.ui.components.levelBadgeSharedKey
+import com.etrisad.zenith.ui.components.levelXpSharedKey
 import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.focus.PreferenceCategory
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 private fun rewardGroupShape(index: Int, total: Int, highlighted: Boolean) = when {
     highlighted || total == 1 -> RoundedCornerShape(24.dp)
@@ -127,7 +137,31 @@ fun LevelScreen(
     val nextReward = remember(level) { nextLevelReward(level) }
     var selectedBorder by remember { mutableStateOf<AvatarBorder?>(null) }
 
+    val listState = rememberLazyListState()
+    var hasStaggered by remember { mutableStateOf(false) }
+    var staggerStage by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (listState.isScrollInProgress) {
+            staggerStage = 5
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (!hasStaggered) {
+            hasStaggered = true
+            staggerStage = 1
+            for (i in 2..5) {
+                delay(AppSharedTransition.STAGGER_INTERVAL_MS)
+                if (staggerStage < i) {
+                    staggerStage = i
+                }
+            }
+        }
+    }
+
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = 16.dp,
@@ -147,6 +181,9 @@ fun LevelScreen(
             )
             val containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
             val shape = RoundedCornerShape(24.dp)
+            val cardKey = remember { levelCardSharedKey() }
+            val badgeKey = remember { levelBadgeSharedKey() }
+            val xpKey = remember { levelXpSharedKey() }
 
             Card(
                 onClick = {},
@@ -157,6 +194,13 @@ fun LevelScreen(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .appSharedBounds(
+                        key = cardKey,
+                        zIndexInOverlay = AppSharedTransition.Z_CONTAINER,
+                        animatePlaceholderSize = false,
+                        enter = AppSharedTransition.containerEnter,
+                        exit = AppSharedTransition.containerExit
+                    )
                     .scale(scale)
                     .clip(shape)
             ) {
@@ -174,7 +218,13 @@ fun LevelScreen(
                             Surface(
                                 color = MaterialTheme.colorScheme.tertiary,
                                 shape = progressiveShape,
-                                modifier = Modifier.size(64.dp)
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .appSharedBounds(
+                                        key = badgeKey,
+                                        scaleToBounds = true,
+                                        zIndexInOverlay = AppSharedTransition.Z_ICON
+                                    )
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Text(
@@ -206,7 +256,12 @@ fun LevelScreen(
                                 text = "${formatXp(state.xpTotal)} XP",
                                 style = MaterialTheme.typography.displaySmall,
                                 fontWeight = FontWeight.Black,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.appSharedBounds(
+                                    key = xpKey,
+                                    scaleToBounds = true,
+                                    zIndexInOverlay = AppSharedTransition.Z_TITLE
+                                )
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             LinearWavyProgressIndicator(
@@ -234,8 +289,9 @@ fun LevelScreen(
         }
 
         item(key = "titles") {
-            Column {
-                PreferenceCategory(title = "Titles")
+            StaggeredItem(index = 0, staggerStage = staggerStage) {
+                Column {
+                    PreferenceCategory(title = "Titles")
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -336,10 +392,12 @@ fun LevelScreen(
                 }
             }
         }
+    }
 
-        item(key = "borders") {
-            Column {
-                PreferenceCategory(title = "Avatar Borders")
+    item(key = "borders") {
+            StaggeredItem(index = 1, staggerStage = staggerStage) {
+                Column {
+                    PreferenceCategory(title = "Avatar Borders")
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -444,10 +502,12 @@ fun LevelScreen(
                 }
             }
         }
+    }
 
-        item(key = "shapes") {
-            Column {
-                PreferenceCategory(title = "Profile Shapes")
+    item(key = "shapes") {
+            StaggeredItem(index = 2, staggerStage = staggerStage) {
+                Column {
+                    PreferenceCategory(title = "Profile Shapes")
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -550,10 +610,12 @@ fun LevelScreen(
                 }
             }
         }
+    }
 
-        item(key = "history") {
-            Column {
-                PreferenceCategory(title = "Daily XP")
+    item(key = "history") {
+            StaggeredItem(index = 3, staggerStage = staggerStage) {
+                Column {
+                    PreferenceCategory(title = "Daily XP")
                 Card(
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(
@@ -616,6 +678,7 @@ fun LevelScreen(
                 }
             }
         }
+    }
     }
 
     selectedBorder?.let { border ->

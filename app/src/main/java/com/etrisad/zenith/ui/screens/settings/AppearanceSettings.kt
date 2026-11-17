@@ -38,6 +38,7 @@ fun AppearanceSettings(
     onHeroAmbientGlowScaleChange: (Float) -> Unit,
     onFloatingTabBarEnabledChange: (Boolean) -> Unit,
     onHeaderInfoButtonEnabledChange: (Boolean) -> Unit,
+    onSharedTransitionsEnabledChange: (Boolean) -> Unit,
     onNavigateToGSFlexCustomizer: () -> Unit,
     onNavigateToOverlayAppearance: () -> Unit
 ) {
@@ -128,6 +129,16 @@ fun AppearanceSettings(
             checked = preferences.headerInfoButtonEnabled,
             onCheckedChange = onHeaderInfoButtonEnabledChange,
             icon = Icons.Outlined.Info,
+            shape = RoundedCornerShape(8.dp)
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+        SettingsToggle(
+            title = "Shared Transitions",
+            description = "Smooth card expanding and flying animations when opening screens",
+            checked = preferences.sharedTransitionsEnabled,
+            onCheckedChange = onSharedTransitionsEnabledChange,
+            icon = Icons.Outlined.Animation,
             shape = RoundedCornerShape(8.dp)
         )
 

@@ -88,6 +88,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -128,6 +129,10 @@ import com.etrisad.zenith.ui.components.appContainerSharedKey
 import com.etrisad.zenith.ui.components.appIconSharedKey
 import com.etrisad.zenith.ui.components.appSharedBounds
 import com.etrisad.zenith.ui.components.appTitleSharedKey
+import com.etrisad.zenith.ui.components.levelCardSharedKey
+import com.etrisad.zenith.ui.components.levelBadgeSharedKey
+import com.etrisad.zenith.ui.components.levelXpSharedKey
+import com.etrisad.zenith.ui.components.StaggeredItem
 import com.etrisad.zenith.ui.components.ZenithButton
 import com.etrisad.zenith.ui.components.ZenithButtonSize
 import com.etrisad.zenith.ui.components.ZenithButtonType
@@ -270,6 +275,30 @@ fun ProfileScreen(
     val guideTopOffsetPx = with(LocalDensity.current) {
         (innerPadding.calculateTopPadding() + 24.dp).roundToPx()
     }
+
+    var hasStaggered by rememberSaveable { mutableStateOf(false) }
+    var staggerStage by rememberSaveable { mutableIntStateOf(0) }
+
+    LaunchedEffect(guideListState.isScrollInProgress) {
+        if (guideListState.isScrollInProgress) {
+            staggerStage = 6
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (hasStaggered) {
+            staggerStage = 6
+            return@LaunchedEffect
+        }
+        hasStaggered = true
+        staggerStage = 1
+        for (i in 2..6) {
+            delay(AppSharedTransition.STAGGER_INTERVAL_MS)
+            if (staggerStage < i) {
+                staggerStage = i
+            }
+        }
+    }
     androidx.compose.runtime.DisposableEffect(guideScrollHub) {
         guideScrollHub.register("profile.identity") { guideListState.animateScrollToItem(0) }
         guideScrollHub.register("profile.xp") { guideListState.animateScrollToItem(1) }
@@ -346,153 +375,161 @@ fun ProfileScreen(
             }
         }
         item(key = "xp") {
-            val unlockedBadges = remember(state.achievements) {
-                state.achievements.count { it.earnedTier != null }
-            }
-            Column(modifier = Modifier.onboardingAnchor("profile.xp")) {
-                PreferenceCategory(title = "Progress")
-                XpCard(
-                    level = state.level,
-                    levelProgress = state.levelProgress,
-                    xpTotal = state.xpTotal,
-                    unlockedBadges = unlockedBadges,
-                    totalBadges = state.achievements.size,
-                    onClick = onOpenLevel
-                )
+            StaggeredItem(index = 0, staggerStage = staggerStage) {
+                val unlockedBadges = remember(state.achievements) {
+                    state.achievements.count { it.earnedTier != null }
+                }
+                Column(modifier = Modifier.onboardingAnchor("profile.xp")) {
+                    PreferenceCategory(title = "Progress")
+                    XpCard(
+                        level = state.level,
+                        levelProgress = state.levelProgress,
+                        xpTotal = state.xpTotal,
+                        unlockedBadges = unlockedBadges,
+                        totalBadges = state.achievements.size,
+                        onClick = onOpenLevel
+                    )
+                }
             }
         }
 
         item(key = "stats_group") {
-            Column {
-                PreferenceCategory(title = "Statistics")
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    LifetimeTopAppsCard(
-                        topApps = state.topApps,
-                        lifetimeTotal = state.lifetimeTotal,
-                        lifetimeAppCount = state.lifetimeAppCount,
-                        isLoading = state.isLoading,
-                        formatDuration = homeViewModel::formatLongDuration,
-                        onAppClick = onAppClick,
-                        isEditing = isEditing,
-                        installedPackages = installedPackages,
-                        onRemoveApp = { pendingLifetimeRemoval = it },
-                        shape = StatsGroupTopShape
-                    )
-                    ProfileHeatmapCard(
-                        homeViewModel = homeViewModel,
-                        onAppClick = onAppClick,
-                        shape = StatsGroupMiddleShape
-                    )
-                    StreakCard(
-                        currentStreak = state.streakCurrent,
-                        bestStreak = state.streakBest,
-                        expressiveColors = preferences.expressiveColors,
-                        shape = StatsGroupBottomShape
-                    )
+            StaggeredItem(index = 1, staggerStage = staggerStage) {
+                Column {
+                    PreferenceCategory(title = "Statistics")
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        LifetimeTopAppsCard(
+                            topApps = state.topApps,
+                            lifetimeTotal = state.lifetimeTotal,
+                            lifetimeAppCount = state.lifetimeAppCount,
+                            isLoading = state.isLoading,
+                            formatDuration = homeViewModel::formatLongDuration,
+                            onAppClick = onAppClick,
+                            isEditing = isEditing,
+                            installedPackages = installedPackages,
+                            onRemoveApp = { pendingLifetimeRemoval = it },
+                            shape = StatsGroupTopShape
+                        )
+                        ProfileHeatmapCard(
+                            homeViewModel = homeViewModel,
+                            onAppClick = onAppClick,
+                            shape = StatsGroupMiddleShape
+                        )
+                        StreakCard(
+                            currentStreak = state.streakCurrent,
+                            bestStreak = state.streakBest,
+                            expressiveColors = preferences.expressiveColors,
+                            shape = StatsGroupBottomShape
+                        )
+                    }
                 }
             }
         }
         item(key = "guided_path_card") {
-            Card(
-                onClick = onOpenGuidedPathHub,
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ),
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            StaggeredItem(index = 2, staggerStage = staggerStage) {
+                Card(
+                    onClick = onOpenGuidedPathHub,
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp)
                 ) {
-                    Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Outlined.Explore,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(32.dp)
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Guided Path Hub",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Outlined.Explore,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp)
                         )
-                        Text(
-                            text = "Explore chapters, review badges & mastery",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Guided Path Hub",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Explore chapters, review badges & mastery",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Outlined.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Icon(
-                        imageVector = Icons.Outlined.ChevronRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
         }
         item(key = "achievements_section") {
-            Column(modifier = Modifier.onboardingAnchor("profile.achievements")) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
-                ) {
-                    Text(
-                        text = "Achievements",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(
-                        onClick = onSeeAllAchievements,
-                        modifier = Modifier.size(32.dp)
+            StaggeredItem(index = 3, staggerStage = staggerStage) {
+                Column(modifier = Modifier.onboardingAnchor("profile.achievements")) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.ChevronRight,
-                            contentDescription = "See all achievements",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
+                        Text(
+                            text = "Achievements",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
                         )
-                    }
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TierCountStrip(counts = symbolCounts)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(24.dp))
-                    ) {
-                        LazyRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        IconButton(
+                            onClick = onSeeAllAchievements,
+                            modifier = Modifier.size(32.dp)
                         ) {
-                            itemsIndexed(explorer, key = { _, s -> "ach-${s.def.id}" }) { index, ach ->
-                                AchievementSquareCard(
-                                    achievement = ach,
-                                    index = index,
-                                    total = explorer.size,
-                                    onClick = { selectedAchId = ach.def.id }
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Outlined.ChevronRight,
+                                contentDescription = "See all achievements",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     }
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(24.dp))
-                    ) {
-                        LazyRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TierCountStrip(counts = symbolCounts)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(24.dp))
                         ) {
-                            itemsIndexed(accumulation, key = { _, s -> "ach-${s.def.id}" }) { index, ach ->
-                                AchievementSquareCard(
-                                    achievement = ach,
-                                    index = index,
-                                    total = accumulation.size,
-                                    onClick = { selectedAchId = ach.def.id }
-                                )
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                itemsIndexed(explorer, key = { _, s -> "ach-${s.def.id}" }) { index, ach ->
+                                    AchievementSquareCard(
+                                        achievement = ach,
+                                        index = index,
+                                        total = explorer.size,
+                                        onClick = { selectedAchId = ach.def.id }
+                                    )
+                                }
+                            }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(24.dp))
+                        ) {
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                itemsIndexed(accumulation, key = { _, s -> "ach-${s.def.id}" }) { index, ach ->
+                                    AchievementSquareCard(
+                                        achievement = ach,
+                                        index = index,
+                                        total = accumulation.size,
+                                        onClick = { selectedAchId = ach.def.id }
+                                    )
+                                }
                             }
                         }
                     }
@@ -501,41 +538,43 @@ fun ProfileScreen(
         }
 
         item(key = "share") {
-            ZenithButton(
-                onClick = {
-                    scope.launch {
-                        isSharing = true
-                        val ok = withContext(Dispatchers.IO) {
-                            renderAndShareProfile(
-                                context = context,
-                                userName = preferences.userName.ifBlank { "User" },
-                                level = state.level,
-                                xpTotal = state.xpTotal,
-                                userTitle = LEVEL_TITLES.find { it.id == preferences.userTitle }
-                                    ?.takeIf { it.requiredLevel <= state.level }?.name ?: "",
-                                streakBest = state.streakBest,
-                                topApps = state.topApps,
-                                achievements = state.achievements
-                            )
+            StaggeredItem(index = 4, staggerStage = staggerStage) {
+                ZenithButton(
+                    onClick = {
+                        scope.launch {
+                            isSharing = true
+                            val ok = withContext(Dispatchers.IO) {
+                                renderAndShareProfile(
+                                    context = context,
+                                    userName = preferences.userName.ifBlank { "User" },
+                                    level = state.level,
+                                    xpTotal = state.xpTotal,
+                                    userTitle = LEVEL_TITLES.find { it.id == preferences.userTitle }
+                                        ?.takeIf { it.requiredLevel <= state.level }?.name ?: "",
+                                    streakBest = state.streakBest,
+                                    topApps = state.topApps,
+                                    achievements = state.achievements
+                                )
+                            }
+                            isSharing = false
+                            if (!ok) {
+                                Toast.makeText(context, "Could not share profile", Toast.LENGTH_SHORT).show()
+                            } else {
+                                preferencesRepository.setUserSharedProfile(true)
+                            }
                         }
-                        isSharing = false
-                        if (!ok) {
-                            Toast.makeText(context, "Could not share profile", Toast.LENGTH_SHORT).show()
-                        } else {
-                            preferencesRepository.setUserSharedProfile(true)
-                        }
+                    },
+                    text = if (isSharing) "Rendering card..." else "Share Your Profile",
+                    icon = Icons.Outlined.Share,
+                    size = ZenithButtonSize.Large,
+                    fillMaxWidth = true,
+                    enabled = !isSharing
+                )
+                if (isSharing) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
                     }
-                },
-                text = if (isSharing) "Rendering card..." else "Share Your Profile",
-                icon = Icons.Outlined.Share,
-                size = ZenithButtonSize.Large,
-                fillMaxWidth = true,
-                enabled = !isSharing
-            )
-            if (isSharing) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
                 }
             }
         }
@@ -1403,12 +1442,22 @@ private fun XpCard(
 
     val containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
     val shape = RoundedCornerShape(24.dp)
+    val cardKey = remember { levelCardSharedKey() }
+    val badgeKey = remember { levelBadgeSharedKey() }
+    val xpKey = remember { levelXpSharedKey() }
 
     Card(
         onClick = onClick,
         interactionSource = interactionSource,
         modifier = Modifier
             .fillMaxWidth()
+            .appSharedBounds(
+                key = cardKey,
+                zIndexInOverlay = AppSharedTransition.Z_CONTAINER,
+                animatePlaceholderSize = false,
+                enter = AppSharedTransition.containerEnter,
+                exit = AppSharedTransition.containerExit
+            )
             .scale(scale)
             .clip(shape),
         shape = shape,
@@ -1428,7 +1477,13 @@ private fun XpCard(
                     Surface(
                         color = MaterialTheme.colorScheme.tertiary,
                         shape = progressiveShape,
-                        modifier = Modifier.size(64.dp)
+                        modifier = Modifier
+                            .size(64.dp)
+                            .appSharedBounds(
+                                key = badgeKey,
+                                scaleToBounds = true,
+                                zIndexInOverlay = AppSharedTransition.Z_ICON
+                            )
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
@@ -1460,7 +1515,12 @@ private fun XpCard(
                         text = "${formatXp(xpTotal)} XP",
                         style = MaterialTheme.typography.displaySmall,
                         fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.appSharedBounds(
+                            key = xpKey,
+                            scaleToBounds = true,
+                            zIndexInOverlay = AppSharedTransition.Z_TITLE
+                        )
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     LinearWavyProgressIndicator(

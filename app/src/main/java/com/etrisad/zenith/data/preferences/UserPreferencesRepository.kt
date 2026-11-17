@@ -281,6 +281,7 @@ class UserPreferencesRepository(private val context: Context) {
         val BACKUP_DIRECTORY_URI = stringPreferencesKey("backup_directory_uri")
         val BACKUP_INTERVAL_HOURS = intPreferencesKey("backup_interval_hours")
         val FLOATING_TAB_BAR_ENABLED = booleanPreferencesKey("floating_tab_bar_enabled")
+        val SHARED_TRANSITIONS_ENABLED = booleanPreferencesKey("shared_transitions_enabled")
         val HEADER_INFO_BUTTON_ENABLED = booleanPreferencesKey("header_info_button_enabled")
         val EXPRESSIVE_COLORS = booleanPreferencesKey("expressive_colors")
         val HERO_GRADIENT_BALLS_ENABLED = booleanPreferencesKey("hero_gradient_balls_enabled")
@@ -571,6 +572,7 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
             backupIntervalHours = settings[PreferencesKeys.BACKUP_INTERVAL_HOURS] ?: 3,
             lastBackupTimestamp = runtime[RuntimeKeys.LAST_BACKUP_TIMESTAMP] ?: 0L,
             floatingTabBarEnabled = settings[PreferencesKeys.FLOATING_TAB_BAR_ENABLED] ?: false,
+            sharedTransitionsEnabled = settings[PreferencesKeys.SHARED_TRANSITIONS_ENABLED] ?: true,
             headerInfoButtonEnabled = settings[PreferencesKeys.HEADER_INFO_BUTTON_ENABLED] ?: true,
             expressiveColors = settings[PreferencesKeys.EXPRESSIVE_COLORS] ?: false,
             heroGradientBallsEnabled = settings[PreferencesKeys.HERO_GRADIENT_BALLS_ENABLED] ?: false,
@@ -1743,6 +1745,10 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.FLOATING_TAB_BAR_ENABLED] = enabled }
     }
 
+    suspend fun setSharedTransitionsEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.SHARED_TRANSITIONS_ENABLED] = enabled }
+    }
+
     suspend fun setHeaderInfoButtonEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.HEADER_INFO_BUTTON_ENABLED] = enabled }
     }
@@ -2799,6 +2805,7 @@ data class UserPreferences(
     val backupIntervalHours: Int = 3,
     val lastBackupTimestamp: Long = 0L,
     val floatingTabBarEnabled: Boolean = false,
+    val sharedTransitionsEnabled: Boolean = true,
     val headerInfoButtonEnabled: Boolean = true,
     val expressiveColors: Boolean = false,
     val heroGradientBallsEnabled: Boolean = false,

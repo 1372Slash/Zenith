@@ -61,6 +61,7 @@ import com.etrisad.zenith.ui.components.CreateCategoryDialog
 import com.etrisad.zenith.ui.components.ConfirmBottomSheet
 import com.etrisad.zenith.ui.components.UsageHistoryCard
 import com.etrisad.zenith.ui.components.StreakGauge
+import com.etrisad.zenith.ui.components.StaggeredItem
 import com.etrisad.zenith.ui.components.AppSharedTransition
 import com.etrisad.zenith.ui.components.appContainerSharedKey
 import com.etrisad.zenith.ui.components.appIconSharedKey
@@ -594,42 +595,6 @@ fun AppDetailScreen(
             )
         }
     }
-}
-
-@Composable
-private fun StaggeredItem(
-    index: Int,
-    staggerStage: Int,
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    val isRevealed = staggerStage > index
-    val alpha by animateFloatAsState(
-        targetValue = if (isRevealed) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "StaggerAlpha_$index"
-    )
-    val translateY by animateDpAsState(
-        targetValue = if (isRevealed) 0.dp else 24.dp,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "StaggerTranslate_$index"
-    )
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .graphicsLayer {
-                this.alpha = alpha
-                this.translationY = translateY.toPx()
-            },
-        content = content
-    )
 }
 
 @Composable

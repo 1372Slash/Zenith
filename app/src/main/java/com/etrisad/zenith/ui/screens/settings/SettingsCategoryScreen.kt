@@ -304,6 +304,7 @@ fun SettingsCategoryScreen(
                         onExpressiveColorsChange = { enabled -> coroutineScope.launch { preferencesRepository.setExpressiveColors(enabled) } },
                         onFloatingTabBarEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setFloatingTabBarEnabled(enabled) } },
                         onHeaderInfoButtonEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setHeaderInfoButtonEnabled(enabled) } },
+                        onSharedTransitionsEnabledChange = { enabled -> coroutineScope.launch { preferencesRepository.setSharedTransitionsEnabled(enabled) } },
                         onHeroGradientBallsChange = { enabled -> coroutineScope.launch { preferencesRepository.setHeroGradientBallsEnabled(enabled) } },
                         onHeroBallsIdleAnimationChange = { enabled -> coroutineScope.launch { preferencesRepository.setHeroBallsIdleAnimationEnabled(enabled) } },
                         onHeroAmbientGlowScaleChange = { scale -> coroutineScope.launch { preferencesRepository.setHeroAmbientGlowScale(scale) } },

@@ -10,14 +10,23 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.dp
 import com.etrisad.zenith.BuildConfig
 import android.util.Log
 
@@ -43,7 +52,7 @@ data class AppSharedKey(
 }
 
 object AppSharedTransition {
-    const val ENABLED = true
+    var ENABLED = true
 
     const val ANIMATE_PLACEHOLDER_SIZE = false
 
@@ -57,6 +66,7 @@ object AppSharedTransition {
     const val ORIGIN_HEATMAP = "heatmap"
 
     const val DURATION_MILLIS = 480
+    const val STAGGER_INTERVAL_MS = 80L
 
     const val Z_CONTAINER = 0.1f
     const val Z_ICON = 1f
@@ -78,6 +88,17 @@ object AppSharedTransition {
         fadeIn(animationSpec = ContentFade)
     internal val containerExit: ExitTransition =
         fadeOut(animationSpec = ContentFade)
+
+    private val sharedRouteActiveState = mutableStateOf(false)
+
+    val isSharedRouteActive: Boolean
+        get() = sharedRouteActiveState.value
+
+    fun setSharedRouteActive(active: Boolean) {
+        if (sharedRouteActiveState.value != active) {
+            sharedRouteActiveState.value = active
+        }
+    }
 }
 
 val LocalSharedTransitionScope = staticCompositionLocalOf<SharedTransitionScope?> { null }
@@ -98,6 +119,24 @@ fun appContainerSharedKey(packageName: String, origin: String?): AppSharedKey? =
         AppSharedKey(packageName = packageName, origin = it, type = AppSharedKey.Type.Container)
     }
 
+fun levelCardSharedKey(): AppSharedKey =
+    AppSharedKey(packageName = "zenith.level", origin = "profile_level", type = AppSharedKey.Type.Container)
+
+fun levelBadgeSharedKey(): AppSharedKey =
+    AppSharedKey(packageName = "zenith.level", origin = "profile_level", type = AppSharedKey.Type.Icon)
+
+fun levelXpSharedKey(): AppSharedKey =
+    AppSharedKey(packageName = "zenith.level", origin = "profile_level", type = AppSharedKey.Type.Title)
+
+fun achievementsCardSharedKey(): AppSharedKey =
+    AppSharedKey(packageName = "zenith.achievements", origin = "profile_achievements", type = AppSharedKey.Type.Container)
+
+fun achievementsBadgeSharedKey(): AppSharedKey =
+    AppSharedKey(packageName = "zenith.achievements", origin = "profile_achievements", type = AppSharedKey.Type.Icon)
+
+fun profileAvatarSharedKey(): AppSharedKey =
+    AppSharedKey(packageName = "zenith.profile", origin = "profile_avatar", type = AppSharedKey.Type.Icon)
+
 @Composable
 fun Modifier.appSharedElement(
     key: AppSharedKey?,
@@ -105,6 +144,7 @@ fun Modifier.appSharedElement(
     animatePlaceholderSize: Boolean = AppSharedTransition.ANIMATE_PLACEHOLDER_SIZE
 ): Modifier {
     if (!AppSharedTransition.ENABLED || key == null) return this
+    if (!AppSharedTransition.isSharedRouteActive) return this
     val sharedScope = LocalSharedTransitionScope.current ?: return this
     val animatedScope = LocalSharedTransitionAnimationScope.current ?: return this
     val base = this
@@ -134,6 +174,7 @@ fun Modifier.appSharedBounds(
     exit: ExitTransition = AppSharedTransition.containerExit
 ): Modifier {
     if (!AppSharedTransition.ENABLED || key == null) return this
+    if (!AppSharedTransition.isSharedRouteActive) return this
     val sharedScope = LocalSharedTransitionScope.current ?: return this
     val animatedScope = LocalSharedTransitionAnimationScope.current ?: return this
     val base = this
@@ -166,3 +207,39 @@ private fun placeholderSize(animated: Boolean): SharedTransitionScope.Placeholde
     } else {
         SharedTransitionScope.PlaceholderSize.ContentSize
     }
+
+@Composable
+fun StaggeredItem(
+    index: Int,
+    staggerStage: Int,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val isRevealed = staggerStage > index
+    val alpha by animateFloatAsState(
+        targetValue = if (isRevealed) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "StaggerAlpha_$index"
+    )
+    val translateY by animateDpAsState(
+        targetValue = if (isRevealed) 0.dp else 24.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "StaggerTranslate_$index"
+    )
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                this.alpha = alpha
+                this.translationY = translateY.toPx()
+            },
+        content = content
+    )
+}

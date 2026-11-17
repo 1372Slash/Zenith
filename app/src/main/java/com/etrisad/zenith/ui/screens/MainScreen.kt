@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlin.math.roundToInt
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -154,6 +155,11 @@ import com.etrisad.zenith.R
 import com.etrisad.zenith.data.preferences.UserPreferences
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+
+private fun NavBackStackEntry.hasSharedSource(): Boolean {
+    if (destination.route == Screen.Level.route) return true
+    return !arguments?.getString("origin").isNullOrBlank()
+}
 
 @OptIn(
     ExperimentalMaterial3ExpressiveApi::class,
@@ -292,6 +298,15 @@ fun MainScreen(
     if (preferencesResult == null) return
 
     val preferences = preferencesResult!!
+    AppSharedTransition.ENABLED = preferences.sharedTransitionsEnabled
+
+    val visibleNavEntries by navController.visibleEntries.collectAsState()
+    AppSharedTransition.setSharedRouteActive(
+        visibleNavEntries.any { entry ->
+            val route = entry.destination.route
+            route?.startsWith("app_detail") == true || route == Screen.Level.route
+        }
+    )
 
     val focusUiState by focusViewModel.uiState.collectAsState()
     val headerProfile by profileViewModel.uiState.collectAsState()
@@ -1148,7 +1163,12 @@ fun MainScreen(
                             stiffness = Spring.StiffnessLow
                         )
 
-                        if (targetRoute?.startsWith("app_detail") == true) {
+                        val useSharedTransitions = preferences.sharedTransitionsEnabled
+                        val isSharedRoute = targetRoute?.startsWith("app_detail") == true ||
+                            targetRoute == Screen.Level.route
+                        val hasSource = targetState.hasSharedSource()
+
+                        if (useSharedTransitions && isSharedRoute && hasSource) {
                             fadeIn(
                                 animationSpec = tween(
                                     durationMillis = AppSharedTransition.DURATION_MILLIS,
@@ -1239,7 +1259,12 @@ fun MainScreen(
                             stiffness = Spring.StiffnessLow
                         )
 
-                        if (targetRoute?.startsWith("app_detail") == true) {
+                        val useSharedTransitions = preferences.sharedTransitionsEnabled
+                        val isSharedRoute = targetRoute?.startsWith("app_detail") == true ||
+                            targetRoute == Screen.Level.route
+                        val hasSource = targetState.hasSharedSource()
+
+                        if (useSharedTransitions && isSharedRoute && hasSource) {
                             fadeOut(
                                 animationSpec = tween(
                                     durationMillis = AppSharedTransition.DURATION_MILLIS,
@@ -1274,8 +1299,12 @@ fun MainScreen(
                         }
                     },
                     popEnterTransition = {
+                        val useSharedTransitions = preferences.sharedTransitionsEnabled
                         val initialRoute = initialState.destination.route
-                        if (initialRoute?.startsWith("app_detail") == true) {
+                        val isSharedRoute = initialRoute?.startsWith("app_detail") == true ||
+                            initialRoute == Screen.Level.route
+                        val hasSource = initialState.hasSharedSource()
+                        if (useSharedTransitions && isSharedRoute && hasSource) {
                             fadeIn(
                                 animationSpec = tween(
                                     durationMillis = AppSharedTransition.DURATION_MILLIS,
@@ -1293,8 +1322,12 @@ fun MainScreen(
                         }
                     },
                     popExitTransition = {
+                        val useSharedTransitions = preferences.sharedTransitionsEnabled
                         val initialRoute = initialState.destination.route
-                        if (initialRoute?.startsWith("app_detail") == true) {
+                        val isSharedRoute = initialRoute?.startsWith("app_detail") == true ||
+                            initialRoute == Screen.Level.route
+                        val hasSource = initialState.hasSharedSource()
+                        if (useSharedTransitions && isSharedRoute && hasSource) {
                             fadeOut(
                                 animationSpec = tween(
                                     durationMillis = AppSharedTransition.DURATION_MILLIS,
@@ -1477,11 +1510,13 @@ fun MainScreen(
                         }
                     }
                     composable(Screen.Level.route) {
-                        LevelScreen(
-                            profileViewModel = profileViewModel,
-                            preferencesRepository = userPreferencesRepository,
-                            innerPadding = innerPadding
-                        )
+                        CompositionLocalProvider(LocalSharedTransitionAnimationScope provides this) {
+                            LevelScreen(
+                                profileViewModel = profileViewModel,
+                                preferencesRepository = userPreferencesRepository,
+                                innerPadding = innerPadding
+                            )
+                        }
                     }
                     composable(
                         route = Screen.Achievements.route,
