@@ -279,6 +279,14 @@ fun InterceptOverlayContent(
         }
     }
 
+    val isShieldBudgetSpent = hasSpentShieldBudget(
+        shield = shield,
+        totalUsageToday = totalUsageToday,
+        isIncentiveActive = isIncentiveActive,
+        incentiveTier = incentiveTier.takeIf { isIncentiveActive },
+        bonusUsesLeft = bonusUsesLeft
+    )
+
     InterceptBottomSheet(
         visible = showSheet,
         backgroundAlpha = backgroundAlpha,
@@ -294,6 +302,7 @@ fun InterceptOverlayContent(
         dragHandleBonusUsesLeft = bonusUsesLeft,
         contentKey = when {
             !prefsLoaded -> null
+            forcedTaskType == null && isShieldBudgetSpent -> CONTENT_B
             showPausePoint -> CONTENT_A
             forcedTaskType != null -> CONTENT_C
             else -> CONTENT_B

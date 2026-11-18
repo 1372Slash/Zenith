@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.toArgb
 import com.etrisad.zenith.data.CurrentCalendarEvent
+import com.etrisad.zenith.data.local.entity.FocusType
+import com.etrisad.zenith.data.local.entity.ShieldEntity
 import com.etrisad.zenith.data.model.IncentiveTier
 import com.etrisad.zenith.data.preferences.UserPreferences
 import com.etrisad.zenith.ui.components.ZenithButton
@@ -77,6 +79,34 @@ fun effectivePeriodUses(
     if (refreshPeriodMinutes <= 0) return currentPeriodUses
     val expired = nowMillis - lastPeriodResetTimestamp > refreshPeriodMinutes * 60 * 1000L
     return if (expired) 0 else currentPeriodUses
+}
+
+internal fun hasSpentShieldBudget(
+    shield: ShieldEntity?,
+    totalUsageToday: Long,
+    isIncentiveActive: Boolean,
+    incentiveTier: IncentiveTier?,
+    bonusUsesLeft: Int,
+    nowMillis: Long = System.currentTimeMillis()
+): Boolean {
+    if (shield == null || shield.type != FocusType.SHIELD) return false
+
+    val periodUses = effectivePeriodUses(
+        currentPeriodUses = shield.currentPeriodUses,
+        lastPeriodResetTimestamp = shield.lastPeriodResetTimestamp,
+        refreshPeriodMinutes = shield.refreshPeriodMinutes,
+        nowMillis = nowMillis
+    )
+    val usesSpent = periodUses >= shield.maxUsesPerPeriod
+
+    val limitMillis = shield.timeLimitMinutes * 60 * 1000L
+    val timeSpent = limitMillis > 0 && totalUsageToday >= limitMillis
+
+    val incentiveSpent = isIncentiveActive && incentiveTier != null &&
+        (incentiveTier == IncentiveTier.LOCKED ||
+            (incentiveTier.bonusUses < Int.MAX_VALUE && bonusUsesLeft <= 0))
+
+    return usesSpent || timeSpent || incentiveSpent
 }
 
 fun generateDynamicColorScheme(seed: Color, isDark: Boolean, currentScheme: ColorScheme, isForPreview: Boolean = false): ColorScheme {
