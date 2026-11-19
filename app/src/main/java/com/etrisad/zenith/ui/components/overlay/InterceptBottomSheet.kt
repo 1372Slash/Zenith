@@ -53,33 +53,17 @@ fun InterceptBottomSheet(
     }
     
     val context = LocalContext.current
-    val currentScheme = if (userPreferences?.dynamicColor == true && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-        if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    } else {
-        if (isDark) darkColorScheme() else lightColorScheme()
-    }
-
-    val paletteScheme = remember(userPreferences, isDark, currentScheme) {
-        if (userPreferences == null) return@remember currentScheme
-
-        val paletteId = userPreferences.overlayPaletteId
-        val customHue = userPreferences.overlayCustomHue
-
-        val selectedPalette = PREDEFINED_PALETTES.find { it.id == paletteId }
-
-        when {
-            paletteId == "dynamic" -> {
-                generateDynamicColorScheme(currentScheme.primary, isDark, currentScheme, isForPreview = false)
-            }
-            paletteId == "custom" -> {
-                val customSeed = Color(android.graphics.Color.HSVToColor(floatArrayOf(customHue, 0.6f, 0.55f)))
-                generateDynamicColorScheme(customSeed, isDark, currentScheme, isForPreview = false)
-            }
-            selectedPalette != null -> {
-                generateDynamicColorScheme(selectedPalette.seed, isDark, currentScheme, isForPreview = false)
-            }
-            else -> currentScheme
-        }
+    val paletteScheme = remember(
+        userPreferences?.overlayPaletteId,
+        userPreferences?.overlayCustomHue,
+        userPreferences?.expressiveColors,
+        isDark,
+        context
+    ) {
+        val paletteId = userPreferences?.overlayPaletteId ?: "dynamic"
+        val customHue = userPreferences?.overlayCustomHue ?: 270f
+        val expressiveColors = userPreferences?.expressiveColors ?: false
+        getOverlayColorScheme(context, paletteId, isDark, customHue, expressiveColors)
     }
 
     val density = LocalDensity.current
@@ -168,11 +152,7 @@ fun InterceptBottomSheet(
                             .imePadding(),
                         shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (userPreferences?.overlayPaletteId == "monochrome") {
-                                if (isDark) Color(0xFF1B1B1B) else Color(0xFFF5F5F5)
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainer
-                            }
+                            containerColor = MaterialTheme.colorScheme.background
                         ),
                         elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
                     ) {

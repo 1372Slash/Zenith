@@ -45,8 +45,8 @@ import com.etrisad.zenith.data.preferences.UserPreferencesRepository
 import com.etrisad.zenith.ui.components.overlay.OverlayColorPalette
 import com.etrisad.zenith.ui.components.overlay.PREDEFINED_PALETTES
 import com.etrisad.zenith.ui.components.overlay.ShieldOverlay
-import com.etrisad.zenith.ui.components.overlay.generateDynamicColorScheme
-import com.etrisad.zenith.ui.components.overlay.lightenColorHSV
+import com.etrisad.zenith.ui.components.overlay.getOverlayColorScheme
+import com.google.android.material.color.utilities.Hct
 
 @Composable
 fun OverlayAppearanceScreen(
@@ -61,12 +61,6 @@ fun OverlayAppearanceScreen(
         else -> isSystemInDarkTheme()
     }
     val context = LocalContext.current
-    val baseScheme = if (preferences.dynamicColor && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-        if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    } else {
-        if (isDark) darkColorScheme() else lightColorScheme()
-    }
-
     val scope = rememberCoroutineScope()
     
     val predefinedPalettes = PREDEFINED_PALETTES
@@ -75,31 +69,13 @@ fun OverlayAppearanceScreen(
     val sheetOpacity = preferences.overlaySheetOpacity
     val fullScreen = preferences.overlayFullScreen
     val customHue = preferences.overlayCustomHue
-    
-    val customSeed = remember(customHue) {
-        Color(android.graphics.Color.HSVToColor(floatArrayOf(customHue, 0.6f, 0.55f)))
-    }
 
-    val selectedPalette = remember(selectedPaletteId) {
-        predefinedPalettes.find { it.id == selectedPaletteId } ?: predefinedPalettes.first()
-    }
-
-    val paletteScheme = remember(selectedPalette, isDark, baseScheme, customSeed) {
-        when {
-            selectedPalette.isDynamic -> {
-                generateDynamicColorScheme(baseScheme.primary, isDark, baseScheme, isForPreview = false)
-            }
-            selectedPalette.id == "custom" -> generateDynamicColorScheme(customSeed, isDark, baseScheme, isForPreview = false)
-            else -> generateDynamicColorScheme(selectedPalette.seed, isDark, baseScheme, isForPreview = false)
-        }
+    val paletteScheme = remember(selectedPaletteId, isDark, context, customHue, preferences.expressiveColors) {
+        getOverlayColorScheme(context, selectedPaletteId, isDark, customHue, preferences.expressiveColors)
     }
 
     val animatedSheetColor by animateColorAsState(
-        targetValue = if (selectedPalette.id == "monochrome") {
-            if (isDark) Color(0xFF1B1B1B) else Color(0xFFF5F5F5)
-        } else {
-            paletteScheme.surfaceContainer
-        },
+        targetValue = paletteScheme.background,
         label = "sheetColor"
     )
 
@@ -160,8 +136,8 @@ fun OverlayAppearanceScreen(
             onPaletteSelect = { scope.launch { repository.setOverlayPaletteId(it) } },
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp),
             isDark = isDark,
-            currentScheme = baseScheme,
-            customHue = customHue
+            customHue = customHue,
+            expressiveColors = preferences.expressiveColors
         )
 
         AnimatedVisibility(
@@ -209,9 +185,11 @@ fun ColorPaletteSelector(
     onPaletteSelect: (String) -> Unit,
     shape: Shape,
     isDark: Boolean,
-    currentScheme: ColorScheme,
-    customHue: Float = 270f
+    customHue: Float = 270f,
+    expressiveColors: Boolean = false
 ) {
+    val context = LocalContext.current
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = shape,
@@ -264,18 +242,8 @@ fun ColorPaletteSelector(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 items(palettes) { palette ->
-                    val circleScheme = remember(palette, isDark, currentScheme, customHue) {
-                        if (palette.isDynamic) {
-                            currentScheme.copy(
-                                secondary = lightenColorHSV(currentScheme.secondary, if (isDark) 0.90f else 0.80f),
-                                tertiary = lightenColorHSV(currentScheme.tertiary, if (isDark) 0.90f else 0.82f)
-                            )
-                        } else if (palette.id == "custom") {
-                            val seed = Color(android.graphics.Color.HSVToColor(floatArrayOf(customHue, 0.6f, 0.55f)))
-                            generateDynamicColorScheme(seed, isDark, currentScheme, isForPreview = true)
-                        } else {
-                            generateDynamicColorScheme(palette.seed, isDark, currentScheme, isForPreview = true)
-                        }
+                    val circleScheme = remember(palette, isDark, context, customHue, expressiveColors) {
+                        getOverlayColorScheme(context, palette.id, isDark, customHue, expressiveColors)
                     }
                     
                     ColorPaletteCircle(
@@ -518,7 +486,7 @@ fun HueSelector(
     shape: Shape
 ) {
     val currentColor = remember(hue) {
-        Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 1f, 1f)))
+        Color(Hct.from(hue.toDouble(), 48.0, 50.0).toInt())
     }
 
     Card(
@@ -579,7 +547,7 @@ fun HueSelector(
                         .clip(RoundedCornerShape(8.dp))
                 ) {
                     val hueStops = listOf(0f, 60f, 120f, 180f, 240f, 300f, 360f).map { h ->
-                        Color(android.graphics.Color.HSVToColor(floatArrayOf(h, 1f, 1f)))
+                        Color(Hct.from(h.toDouble(), 48.0, 50.0).toInt())
                     }
                     val brush = Brush.horizontalGradient(hueStops, 0f, size.width)
                     val thumbPad = 2.dp.toPx()

@@ -1,5 +1,7 @@
 package com.etrisad.zenith.ui.components.overlay
 
+import android.content.Context
+import android.os.Build
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -15,7 +17,14 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.*
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.*
+import com.google.android.material.color.utilities.DynamicScheme
+import com.google.android.material.color.utilities.Hct
+import com.google.android.material.color.utilities.MaterialDynamicColors
+import com.google.android.material.color.utilities.SchemeMonochrome
+import com.google.android.material.color.utilities.SchemeTonalSpot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -109,96 +118,202 @@ internal fun hasSpentShieldBudget(
     return usesSpent || timeSpent || incentiveSpent
 }
 
-fun generateDynamicColorScheme(seed: Color, isDark: Boolean, currentScheme: ColorScheme, isForPreview: Boolean = false): ColorScheme {
-    val hsv = FloatArray(3)
-    android.graphics.Color.colorToHSV(seed.toArgb(), hsv)
-    
-    val hue = hsv[0]
-    val sat = hsv[1]
-    val isMonochrome = sat < 0.05f
-    val primaryV = if (isMonochrome) {
-        if (isDark) 0.95f else 0.1f
+private val materialDynamicColors = MaterialDynamicColors()
+
+fun createM3ColorSchemeFromSeed(
+    seed: Color,
+    isDark: Boolean,
+    forceMonochrome: Boolean = false
+): ColorScheme {
+    val effectiveSeed = if (seed == Color.Transparent || seed.alpha == 0f) {
+        Color(0xFF4D568D)
     } else {
-        if (isDark) 0.82f else 0.50f
+        seed
     }
-    val primarySat = if (isMonochrome) 0f else sat.coerceIn(0.1f, 0.8f)
-    val primary = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, primarySat, primaryV)))
-    val secondaryV = if (isMonochrome) {
-        if (isDark) 0.7f else 0.8f
+    val seedArgb = effectiveSeed.toArgb()
+    val hct = Hct.fromInt(seedArgb)
+    val isMonochrome = forceMonochrome || hct.chroma < 5.0
+    val scheme: DynamicScheme = if (isMonochrome) {
+        SchemeMonochrome(hct, isDark, 0.0)
     } else {
-        if (isDark) 0.90f else 0.78f
+        SchemeTonalSpot(hct, isDark, 0.0)
     }
-    val secondarySat = if (isMonochrome) 0f else (sat * 0.2f).coerceAtMost(0.15f)
-    val secondary = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, secondarySat, secondaryV)))
-    val tertiaryV = if (isMonochrome) {
-        if (isDark) 0.4f else 0.5f
+
+    val mdc = materialDynamicColors
+
+    return if (isDark) {
+        darkColorScheme(
+            primary = Color(mdc.primary().getArgb(scheme)),
+            onPrimary = Color(mdc.onPrimary().getArgb(scheme)),
+            primaryContainer = Color(mdc.primaryContainer().getArgb(scheme)),
+            onPrimaryContainer = Color(mdc.onPrimaryContainer().getArgb(scheme)),
+            inversePrimary = Color(mdc.inversePrimary().getArgb(scheme)),
+            secondary = Color(mdc.secondary().getArgb(scheme)),
+            onSecondary = Color(mdc.onSecondary().getArgb(scheme)),
+            secondaryContainer = Color(mdc.secondaryContainer().getArgb(scheme)),
+            onSecondaryContainer = Color(mdc.onSecondaryContainer().getArgb(scheme)),
+            tertiary = Color(mdc.tertiary().getArgb(scheme)),
+            onTertiary = Color(mdc.onTertiary().getArgb(scheme)),
+            tertiaryContainer = Color(mdc.tertiaryContainer().getArgb(scheme)),
+            onTertiaryContainer = Color(mdc.onTertiaryContainer().getArgb(scheme)),
+            background = Color(mdc.background().getArgb(scheme)),
+            onBackground = Color(mdc.onBackground().getArgb(scheme)),
+            surface = Color(mdc.surface().getArgb(scheme)),
+            onSurface = Color(mdc.onSurface().getArgb(scheme)),
+            surfaceVariant = Color(mdc.surfaceVariant().getArgb(scheme)),
+            onSurfaceVariant = Color(mdc.onSurfaceVariant().getArgb(scheme)),
+            surfaceTint = Color(mdc.surfaceTint().getArgb(scheme)),
+            inverseSurface = Color(mdc.inverseSurface().getArgb(scheme)),
+            inverseOnSurface = Color(mdc.inverseOnSurface().getArgb(scheme)),
+            error = Color(mdc.error().getArgb(scheme)),
+            onError = Color(mdc.onError().getArgb(scheme)),
+            errorContainer = Color(mdc.errorContainer().getArgb(scheme)),
+            onErrorContainer = Color(mdc.onErrorContainer().getArgb(scheme)),
+            outline = Color(mdc.outline().getArgb(scheme)),
+            outlineVariant = Color(mdc.outlineVariant().getArgb(scheme)),
+            scrim = Color(mdc.scrim().getArgb(scheme)),
+            surfaceBright = Color(mdc.surfaceBright().getArgb(scheme)),
+            surfaceDim = Color(mdc.surfaceDim().getArgb(scheme)),
+            surfaceContainer = Color(mdc.surfaceContainer().getArgb(scheme)),
+            surfaceContainerHigh = Color(mdc.surfaceContainerHigh().getArgb(scheme)),
+            surfaceContainerHighest = Color(mdc.surfaceContainerHighest().getArgb(scheme)),
+            surfaceContainerLow = Color(mdc.surfaceContainerLow().getArgb(scheme)),
+            surfaceContainerLowest = Color(mdc.surfaceContainerLowest().getArgb(scheme))
+        )
     } else {
-        if (isDark) {
-            if (isForPreview) 0.88f else 0.65f
-        } else {
-            if (isForPreview) 0.75f else 0.40f
+        lightColorScheme(
+            primary = Color(mdc.primary().getArgb(scheme)),
+            onPrimary = Color(mdc.onPrimary().getArgb(scheme)),
+            primaryContainer = Color(mdc.primaryContainer().getArgb(scheme)),
+            onPrimaryContainer = Color(mdc.onPrimaryContainer().getArgb(scheme)),
+            inversePrimary = Color(mdc.inversePrimary().getArgb(scheme)),
+            secondary = Color(mdc.secondary().getArgb(scheme)),
+            onSecondary = Color(mdc.onSecondary().getArgb(scheme)),
+            secondaryContainer = Color(mdc.secondaryContainer().getArgb(scheme)),
+            onSecondaryContainer = Color(mdc.onSecondaryContainer().getArgb(scheme)),
+            tertiary = Color(mdc.tertiary().getArgb(scheme)),
+            onTertiary = Color(mdc.onTertiary().getArgb(scheme)),
+            tertiaryContainer = Color(mdc.tertiaryContainer().getArgb(scheme)),
+            onTertiaryContainer = Color(mdc.onTertiaryContainer().getArgb(scheme)),
+            background = Color(mdc.background().getArgb(scheme)),
+            onBackground = Color(mdc.onBackground().getArgb(scheme)),
+            surface = Color(mdc.surface().getArgb(scheme)),
+            onSurface = Color(mdc.onSurface().getArgb(scheme)),
+            surfaceVariant = Color(mdc.surfaceVariant().getArgb(scheme)),
+            onSurfaceVariant = Color(mdc.onSurfaceVariant().getArgb(scheme)),
+            surfaceTint = Color(mdc.surfaceTint().getArgb(scheme)),
+            inverseSurface = Color(mdc.inverseSurface().getArgb(scheme)),
+            inverseOnSurface = Color(mdc.inverseOnSurface().getArgb(scheme)),
+            error = Color(mdc.error().getArgb(scheme)),
+            onError = Color(mdc.onError().getArgb(scheme)),
+            errorContainer = Color(mdc.errorContainer().getArgb(scheme)),
+            onErrorContainer = Color(mdc.onErrorContainer().getArgb(scheme)),
+            outline = Color(mdc.outline().getArgb(scheme)),
+            outlineVariant = Color(mdc.outlineVariant().getArgb(scheme)),
+            scrim = Color(mdc.scrim().getArgb(scheme)),
+            surfaceBright = Color(mdc.surfaceBright().getArgb(scheme)),
+            surfaceDim = Color(mdc.surfaceDim().getArgb(scheme)),
+            surfaceContainer = Color(mdc.surfaceContainer().getArgb(scheme)),
+            surfaceContainerHigh = Color(mdc.surfaceContainerHigh().getArgb(scheme)),
+            surfaceContainerHighest = Color(mdc.surfaceContainerHighest().getArgb(scheme)),
+            surfaceContainerLow = Color(mdc.surfaceContainerLow().getArgb(scheme)),
+            surfaceContainerLowest = Color(mdc.surfaceContainerLowest().getArgb(scheme))
+        )
+    }
+}
+
+fun getOverlayColorScheme(
+    context: Context,
+    paletteId: String,
+    isDark: Boolean,
+    customHue: Float = 270f,
+    expressiveColors: Boolean = false
+): ColorScheme {
+    val baseScheme = when (paletteId) {
+        "dynamic" -> {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            } else {
+                createM3ColorSchemeFromSeed(Color(0xFF4D568D), isDark)
+            }
+        }
+        "custom" -> {
+            val customHct = Hct.from(customHue.toDouble(), 48.0, 50.0)
+            createM3ColorSchemeFromSeed(Color(customHct.toInt()), isDark)
+        }
+        "monochrome" -> {
+            createM3ColorSchemeFromSeed(Color(0xFF616161), isDark, forceMonochrome = true)
+        }
+        else -> {
+            val palette = PREDEFINED_PALETTES.find { it.id == paletteId }
+            val seed = palette?.seed?.takeIf { it != Color.Transparent } ?: Color(0xFF4D568D)
+            createM3ColorSchemeFromSeed(seed, isDark)
         }
     }
-    val tertiaryHue = if (isMonochrome) hue else (hue + 60f) % 360f
-    val tertiarySat = if (isMonochrome) 0f else (sat * 0.4f).coerceIn(0.1f, 0.4f)
-    val tertiary = Color(android.graphics.Color.HSVToColor(floatArrayOf(tertiaryHue, tertiarySat, tertiaryV)))
-    val surfaceV = if (isDark) 0.12f else if (isForPreview) 0.98f else 1.0f
-    val surfaceSat = if (isMonochrome) 0f else if (isDark) (sat * 0.45f).coerceIn(0.12f, 0.32f) else if (isForPreview) (sat * 0.05f).coerceAtMost(0.04f) else (sat * 0.05f).coerceAtMost(0.04f)
-    val surface = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, surfaceSat, surfaceV)))
 
-    val surfaceContainerLowest = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isMonochrome) 0f else sat * 0.08f, if (isDark) 0.07f else 1.0f)))
-    val surfaceContainerLow = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isMonochrome) 0f else sat * 0.18f, if (isDark) 0.15f else 0.96f)))
-    val surfaceContainer = if (isForPreview) {
-        Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isMonochrome) 0f else sat * 0.25f, if (isDark) 0.18f else 0.94f)))
+    return if (expressiveColors) {
+        if (isDark) {
+            baseScheme.copy(
+                background = baseScheme.surfaceContainerLow,
+                surface = baseScheme.surfaceContainerLow,
+                surfaceContainer = baseScheme.surfaceContainerHigh,
+                surfaceContainerLow = baseScheme.surfaceContainerHigh,
+                surfaceContainerHigh = baseScheme.surfaceContainerHigh,
+                surfaceContainerHighest = baseScheme.surfaceContainerHigh,
+                surfaceContainerLowest = baseScheme.surfaceContainerHigh
+            )
+        } else {
+            baseScheme.copy(
+                background = baseScheme.surfaceContainerLow,
+                surface = baseScheme.surfaceContainerLow,
+                surfaceContainer = Color.White,
+                surfaceContainerLow = Color.White,
+                surfaceContainerHigh = Color.White,
+                surfaceContainerHighest = Color.White,
+                surfaceContainerLowest = Color.White
+            )
+        }
     } else {
-        Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isMonochrome) 0f else (sat * 0.20f).coerceIn(0.05f, 0.16f), if (isDark) 0.17f else 0.95f)))
+        baseScheme
     }
-    val surfaceContainerHigh = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, if (isMonochrome) 0f else (sat * 0.40f).coerceIn(0.12f, 0.30f), if (isDark) 0.24f else 0.88f)))
-    val surfaceContainerHighest = surfaceContainerHigh.copy(alpha = 0.9f)
+}
 
-    val secondaryContainerV = if (isDark) 0.33f else 0.87f
-    val secondaryContainerSat = if (isMonochrome) 0f else (sat * 0.45f).coerceIn(0.18f, 0.35f)
-    val secondaryContainer = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, secondaryContainerSat, secondaryContainerV)))
-
-    val tertiaryContainerV = if (isDark) 0.33f else 0.87f
-    val tertiaryContainerSat = if (isMonochrome) 0f else (tertiarySat * 0.8f).coerceIn(0.16f, 0.32f)
-    val tertiaryContainer = Color(android.graphics.Color.HSVToColor(floatArrayOf(tertiaryHue, tertiaryContainerSat, tertiaryContainerV)))
-
-    val outlineVariantHue = (hue + 30f) % 360f
-    val outlineVariantSat = if (isMonochrome) 0f else (sat * 0.15f).coerceIn(0.03f, 0.08f)
-    val outlineVariantV = if (isDark) 0.35f else 0.85f
-    val outlineVariantColor = Color(android.graphics.Color.HSVToColor(floatArrayOf(outlineVariantHue, outlineVariantSat, outlineVariantV)))
-
-    val surfaceVariantSat = if (isMonochrome) 0f else (sat * 0.35f).coerceIn(0.10f, 0.22f)
-    val surfaceVariantV = if (isDark) 0.22f else 0.90f
-    val surfaceVariantColor = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, surfaceVariantSat, surfaceVariantV)))
-
-    return currentScheme.copy(
-        primary = primary,
-        onPrimary = if (isDark) Color.Black else Color.White,
-        primaryContainer = primary.copy(alpha = if (isDark) 0.3f else 0.15f),
-        onPrimaryContainer = primary,
-        
-        secondary = secondary,
-        onSecondary = if (isDark) Color.Black else Color.White,
-        secondaryContainer = if (isForPreview) secondary.copy(alpha = if (isDark) 0.25f else 0.2f) else secondaryContainer,
-        onSecondaryContainer = if (isForPreview) secondary else (if (isDark) secondary else Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, (secondaryContainerSat * 2f).coerceIn(0.40f, 0.85f), 0.22f)))),
-        tertiary = tertiary,
-        onTertiary = if (isDark) Color.Black else Color.White,
-        tertiaryContainer = if (isForPreview) tertiary.copy(alpha = if (isDark) 0.25f else 0.14f) else tertiaryContainer,
-        onTertiaryContainer = if (isForPreview) tertiary else (if (isDark) tertiary else Color(android.graphics.Color.HSVToColor(floatArrayOf(tertiaryHue, (tertiaryContainerSat * 2f).coerceIn(0.40f, 0.85f), 0.22f)))),
-
-        surface = surface,
-        onSurface = if (isDark) Color.White else Color.Black,
-        surfaceVariant = surfaceVariantColor,
-        onSurfaceVariant = if (isDark) Color.LightGray else Color.DarkGray,
-        surfaceContainerLowest = surfaceContainerLowest,
-        surfaceContainerLow = surfaceContainerLow,
-        surfaceContainer = surfaceContainer,
-        surfaceContainerHigh = surfaceContainerHigh,
-        surfaceContainerHighest = surfaceContainerHighest,
-        outlineVariant = outlineVariantColor
-    )
+fun generateDynamicColorScheme(
+    seed: Color,
+    isDark: Boolean,
+    currentScheme: ColorScheme,
+    isForPreview: Boolean = false,
+    expressiveColors: Boolean = false
+): ColorScheme {
+    if (seed == Color.Transparent || seed.alpha == 0f) {
+        return currentScheme
+    }
+    val scheme = createM3ColorSchemeFromSeed(seed, isDark)
+    return if (expressiveColors) {
+        if (isDark) {
+            scheme.copy(
+                background = scheme.surfaceContainerLow,
+                surface = scheme.surfaceContainerLow,
+                surfaceContainer = scheme.surfaceContainerHigh,
+                surfaceContainerLow = scheme.surfaceContainerHigh,
+                surfaceContainerHigh = scheme.surfaceContainerHigh,
+                surfaceContainerHighest = scheme.surfaceContainerHigh,
+                surfaceContainerLowest = scheme.surfaceContainerHigh
+            )
+        } else {
+            scheme.copy(
+                background = scheme.surfaceContainerLow,
+                surface = scheme.surfaceContainerLow,
+                surfaceContainer = Color.White,
+                surfaceContainerLow = Color.White,
+                surfaceContainerHigh = Color.White,
+                surfaceContainerHighest = Color.White,
+                surfaceContainerLowest = Color.White
+            )
+        }
+    } else {
+        scheme
+    }
 }
 
 fun lightenColorHSV(color: Color, targetV: Float): Color {

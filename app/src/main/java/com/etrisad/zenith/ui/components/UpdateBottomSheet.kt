@@ -39,6 +39,7 @@ import androidx.palette.graphics.Palette
 import coil.request.ImageRequest
 import com.etrisad.zenith.data.remote.model.GitHubRelease
 import com.etrisad.zenith.ui.theme.ZenithTheme
+import com.etrisad.zenith.ui.components.overlay.createM3ColorSchemeFromSeed
 import androidx.compose.ui.tooling.preview.Preview
 import kotlinx.coroutines.launch
 
@@ -405,57 +406,7 @@ private fun formatReleaseDate(dateString: String?): String {
 }
 
 private fun generateDynamicColorScheme(seed: Color, isDark: Boolean, currentScheme: ColorScheme): ColorScheme {
-    val hsl = FloatArray(3)
-    val argb = seed.toArgb()
-    android.graphics.Color.RGBToHSV(
-        android.graphics.Color.red(argb),
-        android.graphics.Color.green(argb),
-        android.graphics.Color.blue(argb),
-        hsl
-    )
-    
-    val primaryV = if (isDark) 0.9f else 0.4f
-    val primary = Color(android.graphics.Color.HSVToColor(floatArrayOf(hsl[0], hsl[1] * 0.8f, primaryV)))
-    
-    val secondaryV = if (isDark) 0.9f else 0.35f
-    val secondary = Color(android.graphics.Color.HSVToColor(floatArrayOf(hsl[0], hsl[1] * 0.4f, secondaryV)))
-    
-    val tertiaryV = if (isDark) 0.9f else 0.45f
-    val tertiary = Color(android.graphics.Color.HSVToColor(floatArrayOf((hsl[0] + 60f) % 360f, hsl[1] * 0.6f, tertiaryV)))
-
-    val surfaceV = if (isDark) 0.1f else 0.98f
-    val surface = Color(android.graphics.Color.HSVToColor(floatArrayOf(hsl[0], hsl[1] * 0.1f, surfaceV)))
-    val surfaceContainerLowest = Color(android.graphics.Color.HSVToColor(floatArrayOf(hsl[0], hsl[1] * 0.05f, if (isDark) 0.04f else 1.0f)))
-    val surfaceContainerLow = Color(android.graphics.Color.HSVToColor(floatArrayOf(hsl[0], hsl[1] * 0.1f, if (isDark) 0.12f else 0.96f)))
-    val surfaceContainer = Color(android.graphics.Color.HSVToColor(floatArrayOf(hsl[0], hsl[1] * 0.15f, if (isDark) 0.15f else 0.94f)))
-    val surfaceContainerHigh = Color(android.graphics.Color.HSVToColor(floatArrayOf(hsl[0], hsl[1] * 0.2f, if (isDark) 0.2f else 0.9f)))
-
-    return currentScheme.copy(
-        primary = primary,
-        onPrimary = if (isDark) Color.Black else Color.White,
-        primaryContainer = primary.copy(alpha = if (isDark) 0.3f else 0.15f),
-        onPrimaryContainer = primary,
-        
-        secondary = secondary,
-        onSecondary = if (isDark) Color.Black else Color.White,
-        secondaryContainer = secondary.copy(alpha = if (isDark) 0.25f else 0.2f),
-        onSecondaryContainer = secondary,
-        
-        tertiary = tertiary,
-        onTertiary = if (isDark) Color.Black else Color.White,
-        tertiaryContainer = tertiary.copy(alpha = if (isDark) 0.25f else 0.14f),
-        onTertiaryContainer = tertiary,
-
-        surface = surface,
-        onSurface = if (isDark) Color.White else Color.Black,
-        surfaceVariant = surfaceContainer,
-        onSurfaceVariant = if (isDark) Color.LightGray else Color.DarkGray,
-        surfaceContainerLowest = surfaceContainerLowest,
-        surfaceContainerLow = surfaceContainerLow,
-        surfaceContainer = surfaceContainer,
-        surfaceContainerHigh = surfaceContainerHigh,
-        surfaceContainerHighest = surfaceContainerHigh.copy(alpha = 0.9f)
-    )
+    return createM3ColorSchemeFromSeed(seed, isDark)
 }
 
 @Composable
