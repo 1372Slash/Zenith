@@ -14,18 +14,25 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -36,8 +43,11 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -64,6 +74,7 @@ import androidx.compose.material3.toShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -71,7 +82,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -98,12 +108,19 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Matrix
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -113,6 +130,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.lifecycle.compose.LifecycleStartEffect
 import com.etrisad.zenith.ui.onboarding.LocalOnboardingScroll
 import com.etrisad.zenith.ui.onboarding.onboardingAnchor
 import androidx.core.content.FileProvider
@@ -144,7 +162,9 @@ import com.etrisad.zenith.ui.viewmodel.HomeViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.graphics.shapes.toPath
 import java.io.File
+import kotlin.math.sqrt
 private suspend fun deleteProfileImage(context: Context, prefix: String) =
     withContext(Dispatchers.IO) {
         try {
@@ -182,6 +202,17 @@ private suspend fun persistPickedImage(
 private const val MAX_PROFILE_NAME_LENGTH = 20
 private const val MAX_PROFILE_BIO_LENGTH = 120
 
+private const val PROFILE_SUN_ROTATION_ENABLED = true
+private const val PROFILE_SUN_ROTATION_MILLIS = 48_000
+private const val PROFILE_SUN_SCALE = 1.45f
+private const val PROFILE_SUN_VALLEY_RATIO = 0.4f
+private const val PROFILE_HERO_CONTENT_RISE = 0.64f
+private val ProfileHeroHeaderHeight = 64.dp
+private val ProfileHeroSunTopOffset = 136.dp
+private val ProfileHeroContentPadding = 24.dp
+private val ProfileHeroContentGap = 12.dp
+private val ProfileHeroBottomRoom = 16.dp
+
 private val StatsGroupTopShape = RoundedCornerShape(
     topStart = 24.dp, topEnd = 24.dp, bottomStart = 8.dp, bottomEnd = 8.dp
 )
@@ -208,6 +239,12 @@ fun ProfileScreen(
     )
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    var isStarted by remember { mutableStateOf(false) }
+    LifecycleStartEffect(Unit) {
+        isStarted = true
+        onStopOrDispose { isStarted = false }
+    }
 
     var showNameDialog by remember { mutableStateOf(false) }
     var showBioDialog by remember { mutableStateOf(false) }
@@ -317,9 +354,7 @@ fun ProfileScreen(
         state = guideListState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = innerPadding.calculateTopPadding() + 16.dp,
+            top = 0.dp,
             bottom = innerPadding.calculateBottomPadding() + 96.dp
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -341,41 +376,84 @@ fun ProfileScreen(
             androidx.compose.foundation.layout.Box(
                 modifier = Modifier.onboardingAnchor("profile.identity")
             ) {
-            ProfileIdentityCard(
-                userName = preferences.userName,
-                userBio = preferences.userBio,
-                avatarUri = preferences.userAvatarUri,
-                bannerUri = preferences.userBannerUri,
-                level = state.level,
-                equippedTitle = equippedTitle?.name ?: "",
-                equippedBorder = equippedBorder,
-                equippedShape = equippedShape,
-                isEditing = isEditing,
-                showBannerOnHome = preferences.profileBannerOnHome,
-                onShowBannerOnHomeChange = {
-                    scope.launch { preferencesRepository.setProfileBannerOnHome(it) }
-                },
-                onEditName = { showNameDialog = true },
-                onEditBio = { showBioDialog = true },
-                onAvatarClick = { avatarPicker.launch("image/*") },
-                onBannerClick = { bannerPicker.launch("image/*") },
-                onDeleteAvatar = {
-                    scope.launch {
-                        deleteProfileImage(context, "avatar")
-                        preferencesRepository.setUserAvatarUri("")
-                    }
-                },
-                onDeleteBanner = {
-                    scope.launch {
-                        deleteProfileImage(context, "banner")
-                        preferencesRepository.setUserBannerUri("")
+                Column {
+                    ProfileHero(
+                        userName = preferences.userName,
+                        userBio = preferences.userBio,
+                        avatarUri = preferences.userAvatarUri,
+                        bannerUri = preferences.userBannerUri,
+                        level = state.level,
+                        equippedTitle = equippedTitle?.name ?: "",
+                        equippedBorder = equippedBorder,
+                        equippedShape = equippedShape,
+                        isEditing = isEditing,
+                        rotationEnabled = PROFILE_SUN_ROTATION_ENABLED && isStarted,
+                        onEditName = { showNameDialog = true },
+                        onEditBio = { showBioDialog = true },
+                        onAvatarClick = { avatarPicker.launch("image/*") },
+                        onBannerClick = { bannerPicker.launch("image/*") },
+                        onDeleteAvatar = {
+                            scope.launch {
+                                deleteProfileImage(context, "avatar")
+                                preferencesRepository.setUserAvatarUri("")
+                            }
+                        },
+                        onDeleteBanner = {
+                            scope.launch {
+                                deleteProfileImage(context, "banner")
+                                preferencesRepository.setUserBannerUri("")
+                            }
+                        }
+                    )
+                    AnimatedVisibility(
+                        visible = isEditing,
+                        enter = expandVertically(
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                        ) + fadeIn(
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                        ),
+                        exit = shrinkVertically(
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                        ) + fadeOut(
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                        )
+                    ) {
+                        Box(
+                            modifier = Modifier.padding(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = 4.dp,
+                                bottom = 4.dp
+                            )
+                        ) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                shape = RoundedCornerShape(20.dp)
+                            ) {
+                                SettingsToggle(
+                                    title = "Show banner on Home",
+                                    description = "Use your profile banner in the Daily Screen Time card",
+                                    checked = preferences.profileBannerOnHome,
+                                    onCheckedChange = {
+                                        scope.launch {
+                                            preferencesRepository.setProfileBannerOnHome(it)
+                                        }
+                                    },
+                                    icon = Icons.Outlined.Image,
+                                    shape = RoundedCornerShape(20.dp)
+                                )
+                            }
+                        }
                     }
                 }
-            )
             }
         }
         item(key = "xp") {
-            StaggeredItem(index = 0, staggerStage = staggerStage) {
+            StaggeredItem(
+                index = 0,
+                staggerStage = staggerStage,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            ) {
                 val unlockedBadges = remember(state.achievements) {
                     state.achievements.count { it.earnedTier != null }
                 }
@@ -394,7 +472,11 @@ fun ProfileScreen(
         }
 
         item(key = "stats_group") {
-            StaggeredItem(index = 1, staggerStage = staggerStage) {
+            StaggeredItem(
+                index = 1,
+                staggerStage = staggerStage,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            ) {
                 Column {
                     PreferenceCategory(title = "Statistics")
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -426,7 +508,11 @@ fun ProfileScreen(
             }
         }
         item(key = "guided_path_card") {
-            StaggeredItem(index = 2, staggerStage = staggerStage) {
+            StaggeredItem(
+                index = 2,
+                staggerStage = staggerStage,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            ) {
                 Card(
                     onClick = onOpenGuidedPathHub,
                     shape = RoundedCornerShape(24.dp),
@@ -468,7 +554,11 @@ fun ProfileScreen(
             }
         }
         item(key = "achievements_section") {
-            StaggeredItem(index = 3, staggerStage = staggerStage) {
+            StaggeredItem(
+                index = 3,
+                staggerStage = staggerStage,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            ) {
                 Column(modifier = Modifier.onboardingAnchor("profile.achievements")) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -538,7 +628,11 @@ fun ProfileScreen(
         }
 
         item(key = "share") {
-            StaggeredItem(index = 4, staggerStage = staggerStage) {
+            StaggeredItem(
+                index = 4,
+                staggerStage = staggerStage,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            ) {
                 ZenithButton(
                     onClick = {
                         scope.launch {
@@ -827,8 +921,16 @@ private fun EditRevealButton(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+private fun buildProfileSunPath(sizePx: Float): Path {
+    val path = MaterialShapes.Sunny.toPath().asComposePath()
+    path.transform(Matrix().apply { scale(sizePx, sizePx) })
+    return path
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun ProfileIdentityCard(
+private fun ProfileHero(
     userName: String,
     userBio: String,
     avatarUri: String,
@@ -838,8 +940,7 @@ private fun ProfileIdentityCard(
     equippedBorder: AvatarBorder?,
     equippedShape: Shape = CircleShape,
     isEditing: Boolean,
-    showBannerOnHome: Boolean,
-    onShowBannerOnHomeChange: (Boolean) -> Unit,
+    rotationEnabled: Boolean,
     onEditName: () -> Unit,
     onEditBio: () -> Unit,
     onAvatarClick: () -> Unit,
@@ -847,243 +948,299 @@ private fun ProfileIdentityCard(
     onDeleteAvatar: () -> Unit,
     onDeleteBanner: () -> Unit
 ) {
-    Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp)
-                        .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
+    val backgroundColor = MaterialTheme.colorScheme.background
+    val density = LocalDensity.current
+    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val sunTop = statusBarTop + ProfileHeroSunTopOffset
+    val sunTopPx = with(density) { sunTop.toPx() }
+
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val sunSize = maxWidth * PROFILE_SUN_SCALE
+        val sunSizePx = with(density) { sunSize.toPx() }
+        val sunPath = remember(sunSizePx) { buildProfileSunPath(sunSizePx) }
+        val contentHalfWidth = (maxWidth / 2f) - ProfileHeroContentPadding
+        val valleyRadius = sunSize * PROFILE_SUN_VALLEY_RATIO
+        val arcDrop = sqrt(
+            (valleyRadius.value * valleyRadius.value -
+                contentHalfWidth.value * contentHalfWidth.value).coerceAtLeast(0f)
+        )
+        val contentTop =
+            sunTop + (sunSize / 2f - arcDrop.dp + ProfileHeroContentGap) * PROFILE_HERO_CONTENT_RISE
+        val bannerHeight = sunTop + sunSize / 2f
+
+        val sunAngle = rememberInfiniteTransition(label = "profileSunRotation").animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    durationMillis = PROFILE_SUN_ROTATION_MILLIS,
+                    easing = LinearEasing
+                )
+            ),
+            label = "profileSunAngle"
+        )
+        val rotation = if (rotationEnabled) sunAngle.value else 0f
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(bannerHeight)
+                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
+        ) {
+            if (bannerUri.isNotEmpty()) {
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(bannerUri).crossfade(300).build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    loading = { },
+                    error = { }
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(
+                        start = 8.dp,
+                        end = 12.dp,
+                        top = statusBarTop + ProfileHeroHeaderHeight + 4.dp
+                    ),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                EditRevealButton(
+                    visible = isEditing && bannerUri.isNotEmpty(),
+                    onClick = onDeleteBanner,
+                    buttonModifier = Modifier.size(44.dp),
+                    containerColor = MaterialTheme.colorScheme.errorContainer
                 ) {
-                    if (bannerUri.isNotEmpty()) {
-                        SubcomposeAsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(bannerUri).crossfade(300).build(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                            loading = { },
-                            error = { }
-                        )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        EditRevealButton(
-                            visible = isEditing && bannerUri.isNotEmpty(),
-                            onClick = onDeleteBanner,
-                            buttonModifier = Modifier.size(44.dp),
-                            containerColor = MaterialTheme.colorScheme.errorContainer
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Delete,
-                                contentDescription = "Remove banner",
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        EditRevealButton(
-                            visible = isEditing,
-                            onClick = onBannerClick,
-                            buttonModifier = Modifier.size(44.dp),
-                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Image,
-                                contentDescription = "Change banner",
-                                tint = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
+                    Icon(
+                        imageVector = Icons.Outlined.Delete,
+                        contentDescription = "Remove banner",
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
-                Spacer(modifier = Modifier.height(52.dp))
-                Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = userName.ifBlank { "User" },
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Black,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        EditRevealButton(
-                            visible = isEditing,
-                            onClick = onEditName,
-                            buttonModifier = Modifier.size(36.dp),
-                            containerColor = Color.Transparent
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Edit,
-                                contentDescription = "Edit name",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                            contentColor = MaterialTheme.colorScheme.primary,
-                            shape = CircleShape
-                        ) {
-                            Text(
-                                text = "Level $level",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                            )
-                        }
-                        if (equippedTitle.isNotBlank()) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f),
-                                contentColor = MaterialTheme.colorScheme.tertiary,
-                                shape = CircleShape
+                EditRevealButton(
+                    visible = isEditing,
+                    onClick = onBannerClick,
+                    buttonModifier = Modifier.size(44.dp),
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Image,
+                        contentDescription = "Change banner",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .drawBehind {
+                    clipRect(0f, 0f, size.width, size.height) {
+                        val centerX = size.width / 2f
+                        val centerY = sunTopPx + sunSizePx / 2f
+                        rotate(rotation, pivot = Offset(centerX, centerY)) {
+                            translate(
+                                left = centerX - sunSizePx / 2f,
+                                top = centerY - sunSizePx / 2f
                             ) {
-                                Text(
-                                    text = equippedTitle,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                                )
+                                drawPath(path = sunPath, color = backgroundColor)
                             }
                         }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = userBio.ifBlank { "Add a bio..." },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (userBio.isBlank()) {
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                }
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = ProfileHeroContentPadding,
+                    end = ProfileHeroContentPadding,
+                    top = contentTop,
+                    bottom = ProfileHeroBottomRoom
+                ),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(modifier = Modifier.size(96.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .size(92.dp)
+                        .then(
+                            if (equippedBorder != null) {
+                                Modifier
+                                    .avatarRing(
+                                        equippedBorder, 4.dp,
+                                        SolidColor(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                        ),
+                                        shape = equippedShape
+                                    )
+                                    .padding(4.dp)
                             } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            modifier = Modifier.weight(1f, fill = false)
+                                Modifier
+                                    .border(
+                                        2.dp,
+                                        SolidColor(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                        ),
+                                        equippedShape
+                                    )
+                                    .padding(2.dp)
+                            }
                         )
-                        EditRevealButton(
-                            visible = isEditing,
-                            onClick = onEditBio,
-                            buttonModifier = Modifier.size(36.dp),
-                            containerColor = Color.Transparent
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Edit,
-                                contentDescription = "Edit bio",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                        .clip(equippedShape)
+                        .background(MaterialTheme.colorScheme.tertiaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    var imgError by remember(avatarUri) { mutableStateOf(false) }
+                    if (avatarUri.isEmpty() || imgError) {
+                        DefaultAvatarIcon()
+                    } else {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(avatarUri).crossfade(300).build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            onError = { imgError = true },
+                            modifier = Modifier.fillMaxSize().clip(equippedShape)
+                        )
                     }
-                    AnimatedVisibility(
-                        visible = isEditing,
-                        enter = expandVertically(
-                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-                        ) + fadeIn(
-                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-                        ),
-                        exit = shrinkVertically(
-                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-                        ) + fadeOut(
-                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-                        )
+                }
+                EditRevealButton(
+                    visible = isEditing,
+                    onClick = onAvatarClick,
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                    buttonModifier = Modifier.size(32.dp),
+                    containerColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Edit,
+                        contentDescription = "Change photo",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                EditRevealButton(
+                    visible = isEditing && avatarUri.isNotEmpty(),
+                    onClick = onDeleteAvatar,
+                    modifier = Modifier.align(Alignment.TopEnd),
+                    buttonModifier = Modifier.size(28.dp),
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Delete,
+                        contentDescription = "Remove photo",
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = userName.ifBlank { "User" },
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center
+                )
+                AnimatedVisibility(
+                    visible = isEditing,
+                    enter = fadeIn(
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                    ) + expandHorizontally(
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                    ),
+                    exit = fadeOut(
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                    ) + shrinkHorizontally(
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                    )
+                ) {
+                    EditRevealButton(
+                        visible = true,
+                        onClick = onEditName,
+                        buttonModifier = Modifier.size(36.dp),
+                        containerColor = Color.Transparent
                     ) {
-                        Column {
-                            HorizontalDivider(
-                                thickness = 0.5.dp,
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                            )
-                            SettingsToggle(
-                                title = "Show banner on Home",
-                                description = "Use your profile banner in the Daily Screen Time card",
-                                checked = showBannerOnHome,
-                                onCheckedChange = onShowBannerOnHomeChange,
-                                icon = Icons.Outlined.Image,
-                                shape = RoundedCornerShape(16.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Outlined.Edit,
+                            contentDescription = "Edit name",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
-            Box(
-                modifier = Modifier
-                    .padding(start = 20.dp, top = 106.dp)
-                    .size(88.dp)
-                    .then(
-                        if (equippedBorder != null) {
-                            Modifier
-                                .avatarRing(
-                                    equippedBorder, 4.dp,
-                                    SolidColor(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                                    shape = equippedShape
-                                )
-                                .padding(4.dp)
-                        } else {
-                            Modifier
-                                .border(
-                                    2.dp,
-                                    SolidColor(MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                                    equippedShape
-                                )
-                                .padding(2.dp)
-                        }
-                    )
-                    .clip(equippedShape)
-                    .background(MaterialTheme.colorScheme.tertiaryContainer),
-                contentAlignment = Alignment.Center
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                var imgError by remember(avatarUri) { mutableStateOf(false) }
-                if (avatarUri.isEmpty() || imgError) {
-                    DefaultAvatarIcon()
-                } else {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(avatarUri).crossfade(300).build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        onError = { imgError = true },
-                        modifier = Modifier.fillMaxSize().clip(equippedShape)
+                Surface(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    shape = CircleShape
+                ) {
+                    Text(
+                        text = "Level $level",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                     )
                 }
+                if (equippedTitle.isNotBlank()) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f),
+                        contentColor = MaterialTheme.colorScheme.tertiary,
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            text = equippedTitle,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                        )
+                    }
+                }
             }
-            EditRevealButton(
-                visible = isEditing,
-                onClick = onAvatarClick,
-                modifier = Modifier.padding(start = 88.dp, top = 158.dp),
-                buttonModifier = Modifier.size(32.dp),
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Edit,
-                    contentDescription = "Change photo",
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(16.dp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = userBio.ifBlank { "Add a bio..." },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (userBio.isBlank()) {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = if (isEditing) 24.dp else 0.dp)
                 )
-            }
-            EditRevealButton(
-                visible = isEditing && avatarUri.isNotEmpty(),
-                onClick = onDeleteAvatar,
-                modifier = Modifier.padding(start = 76.dp, top = 98.dp),
-                buttonModifier = Modifier.size(28.dp),
-                containerColor = MaterialTheme.colorScheme.errorContainer
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Delete,
-                    contentDescription = "Remove photo",
-                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.size(14.dp)
-                )
+                EditRevealButton(
+                    visible = isEditing,
+                    onClick = onEditBio,
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                    buttonModifier = Modifier.size(36.dp),
+                    containerColor = Color.Transparent
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Edit,
+                        contentDescription = "Edit bio",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
     }
