@@ -674,6 +674,7 @@ fun MainScreen(
                     currentRoute = currentRoute,
                     scrollBehavior = scrollBehavior,
                     isNavRailVisible = useNavigationRail && !isDeepScreen,
+                    overMedia = currentRoute == Screen.Profile.route,
                     userName = preferences.userName,
                     categoryName = navBackStackEntry?.arguments?.getString("category"),
                     pausePointTypeName = navBackStackEntry?.arguments?.getString("type")

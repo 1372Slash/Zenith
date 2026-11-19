@@ -64,6 +64,7 @@ fun ZenithHeader(
     showInfoButton: Boolean = false,
     onInfoClick: () -> Unit = {},
     infoNextToAction: Boolean = false,
+    overMedia: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {}
 ) {
     val isHome = currentRoute == Screen.Home.route
@@ -105,13 +106,23 @@ fun ZenithHeader(
             .fillMaxWidth()
             .graphicsLayer { alpha = smoothedAlpha.value }
             .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
-                        Color.Transparent
+                if (overMedia) {
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.3f),
+                            Color.Transparent
+                        )
                     )
-                )
+                } else {
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.surface,
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                            Color.Transparent
+                        )
+                    )
+                }
             )
     ) {
         CenterAlignedTopAppBar(
