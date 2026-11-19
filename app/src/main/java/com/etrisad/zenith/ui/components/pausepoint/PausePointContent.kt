@@ -138,7 +138,7 @@ private fun WaitingTask(
             color = MaterialTheme.colorScheme.primary,
             amplitude = { 1f },
             wavelength = 32.dp,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            trackColor = MaterialTheme.colorScheme.outlineVariant,
         )
         Text(
             text = "${secondsLeft.value}s",
@@ -780,7 +780,7 @@ private fun SwitchTask(
             targetSequence.forEach { isOn ->
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = if (isOn) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                    color = if (isOn) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
                     modifier = Modifier.size(width = 48.dp, height = 24.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {

@@ -428,7 +428,7 @@ fun BedtimeAlertPill(
                 progress = { bedtimeInfo.first },
                 modifier = Modifier.size(36.dp),
                 color = MaterialTheme.colorScheme.tertiary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                trackColor = MaterialTheme.colorScheme.outlineVariant,
                 stroke = Stroke(width = 6.dp.value),
                 trackStroke = Stroke(width = 6.dp.value),
                 wavelength = 12.dp
@@ -888,7 +888,7 @@ fun CurrentEventPill(
         }
     }
 
-    val pillColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+    val pillColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.8f)
     val pillLarge = 24.dp
     val pillSmall = 4.dp
 

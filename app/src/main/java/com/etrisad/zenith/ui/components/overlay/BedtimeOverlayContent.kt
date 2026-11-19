@@ -358,7 +358,7 @@ private fun BedtimeProgress(bedtimeUiState: Triple<Float, String, String>, isSma
             color = MaterialTheme.colorScheme.tertiary,
             amplitude = { 1f },
             wavelength = waveLen,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            trackColor = MaterialTheme.colorScheme.outlineVariant,
         )
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(

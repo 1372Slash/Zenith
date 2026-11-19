@@ -561,7 +561,7 @@ fun WindDownDelaySection(
                 color = MaterialTheme.colorScheme.tertiary,
                 amplitude = { 1f },
                 wavelength = waveLength,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                trackColor = MaterialTheme.colorScheme.outlineVariant,
             )
             val secondsLeft by remember(durationSeconds) {
                 derivedStateOf { ceil((1f - progressAnimatable.value) * durationSeconds).toInt() }

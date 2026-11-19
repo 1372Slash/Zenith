@@ -468,7 +468,7 @@ fun PortraitScheduleLayout(
                                 .fillMaxWidth(0.7f)
                                 .height(8.dp),
                             color = MaterialTheme.colorScheme.tertiary,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            trackColor = MaterialTheme.colorScheme.outlineVariant
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
@@ -524,7 +524,7 @@ fun PortraitScheduleLayout(
                         color = MaterialTheme.colorScheme.primary,
                         amplitude = { 1f },
                         wavelength = 36.dp,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        trackColor = MaterialTheme.colorScheme.outlineVariant,
                     )
                 }
             }
@@ -729,7 +729,7 @@ fun LandscapeScheduleLayout(
                                 .size(80.dp),
                             color = MaterialTheme.colorScheme.primary,
                             wavelength = 24.dp,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            trackColor = MaterialTheme.colorScheme.outlineVariant,
                         )
                     }
                 }
@@ -763,7 +763,7 @@ fun LandscapeScheduleLayout(
                             .fillMaxWidth(0.6f)
                             .height(6.dp),
                         color = MaterialTheme.colorScheme.tertiary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        trackColor = MaterialTheme.colorScheme.outlineVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -830,7 +830,7 @@ private fun ScheduleFullScreenProgress(
                 color = MaterialTheme.colorScheme.primary,
                 amplitude = { 1f },
                 wavelength = 58.dp,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                trackColor = MaterialTheme.colorScheme.outlineVariant,
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
@@ -882,7 +882,7 @@ private fun ScheduleFullScreenProgressMini(
                 color = MaterialTheme.colorScheme.primary,
                 amplitude = { 1f },
                 wavelength = 36.dp,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                trackColor = MaterialTheme.colorScheme.outlineVariant,
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(

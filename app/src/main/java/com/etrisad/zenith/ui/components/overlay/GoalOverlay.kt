@@ -510,7 +510,7 @@ private fun GoalAnimatedWavyBar(progress: Float) {
             .padding(top = 8.dp)
             .height(10.dp),
         color = MaterialTheme.colorScheme.primary,
-        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+        trackColor = MaterialTheme.colorScheme.outlineVariant,
         wavelength = 40.dp
     )
 }
@@ -625,7 +625,7 @@ private fun GoalFullScreenProgress(
                 color = MaterialTheme.colorScheme.primary,
                 amplitude = { 1f },
                 wavelength = 58.dp,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                trackColor = MaterialTheme.colorScheme.outlineVariant,
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
@@ -692,7 +692,7 @@ fun GoalProgressMini(shield: ShieldEntity, totalUsageToday: Long, totalGlobalUsa
                     .padding(top = 8.dp)
                     .height(10.dp),
                 color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                trackColor = MaterialTheme.colorScheme.outlineVariant,
                 wavelength = 40.dp
             )
         }
@@ -723,7 +723,7 @@ private fun GoalFullScreenProgressMini(
                 color = MaterialTheme.colorScheme.primary,
                 amplitude = { 1f },
                 wavelength = 36.dp,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                trackColor = MaterialTheme.colorScheme.outlineVariant,
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(

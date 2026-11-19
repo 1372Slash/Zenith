@@ -1003,7 +1003,7 @@ fun ShieldProgressSection(
                         .padding(top = 8.dp)
                         .height(10.dp),
                     color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    trackColor = MaterialTheme.colorScheme.outlineVariant,
                     wavelength = 40.dp
                 )
             }
@@ -1037,7 +1037,7 @@ private fun ShieldFullScreenProgress(
                 color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                 amplitude = { 1f },
                 wavelength = 58.dp,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                trackColor = MaterialTheme.colorScheme.outlineVariant,
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
@@ -1112,7 +1112,7 @@ fun ShieldProgressMini(shield: ShieldEntity?, totalUsageToday: Long, totalGlobal
                         .padding(top = 8.dp)
                         .height(10.dp),
                     color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    trackColor = MaterialTheme.colorScheme.outlineVariant,
                     wavelength = 40.dp
                 )
             }
@@ -1146,7 +1146,7 @@ private fun ShieldFullScreenProgressMini(
                 color = if (progress < 0.2f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                 amplitude = { 1f },
                 wavelength = 36.dp,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                trackColor = MaterialTheme.colorScheme.outlineVariant,
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
@@ -1380,7 +1380,7 @@ fun LimitReachedContent(
                             .fillMaxWidth(0.6f)
                             .height(10.dp),
                         color = MaterialTheme.colorScheme.tertiary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        trackColor = MaterialTheme.colorScheme.outlineVariant
                     )
                 }
             }
@@ -1443,7 +1443,7 @@ fun IncentiveBonusUseSection(
                 .fillMaxWidth(0.7f)
                 .height(10.dp),
             color = MaterialTheme.colorScheme.tertiary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
+            trackColor = MaterialTheme.colorScheme.outlineVariant
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(

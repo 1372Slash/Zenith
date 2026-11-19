@@ -714,7 +714,7 @@ private fun PgPhaseTwoHold(durationMillis: Long, onComplete: () -> Unit) {
                 progress = { holdProgress },
                 modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                trackColor = MaterialTheme.colorScheme.outlineVariant,
                 wavelength = 32.dp
             )
             Surface(
