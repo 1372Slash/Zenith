@@ -724,7 +724,7 @@ fun PortraitInterceptLayout(
                         if (delaying) {
                             DelayInProgressSection(randomMessage, delayProgressAnimatable, delayDurationSeconds, currentEvent)
                         } else {
-                            DurationSelectionSection(minutesToDisplay, isEmergencyUnlocked, onAllowUse)
+                            DurationSelectionSection(minutesToDisplay, isEmergencyUnlocked, onAllowUse, useExpressiveColors = userPrefs.expressiveColors)
                         }
                     }
                 }
@@ -938,7 +938,8 @@ fun LandscapeInterceptLayout(
                     onEmergencyHoldingChange = onEmergencyHoldingChange,
                     onAllowUse = onAllowUse,
                     onCloseApp = onCloseApp,
-                    packageName = packageName
+                    packageName = packageName,
+                    useExpressiveColors = userPrefs.expressiveColors
                 )
             }
         }
@@ -1201,7 +1202,8 @@ fun ShieldLandscapeContent(
     onEmergencyHoldingChange: (Boolean) -> Unit = {},
     onAllowUse: (Int) -> Unit,
     onCloseApp: () -> Unit,
-    packageName: String = ""
+    packageName: String = "",
+    useExpressiveColors: Boolean = false
 ) {
     val isWebsite = WebsiteRepository.isWebsitePackageName(packageName)
     val displayRemainingMinutes = if (shield != null && shield.timeLimitMinutes > 0) {
@@ -1269,7 +1271,7 @@ fun ShieldLandscapeContent(
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                DurationButtonsGrid(if (isEmergencyUnlocked) null else displayRemainingMinutes, onAllowUse)
+                DurationButtonsGrid(if (isEmergencyUnlocked) null else displayRemainingMinutes, onAllowUse, useExpressiveColors = useExpressiveColors)
                 Spacer(modifier = Modifier.weight(1f))
                 CloseAppTextButton(onCloseApp, autoKickProgress, size = ZenithButtonSize.Large, isWebsite = isWebsite)
             }
@@ -1515,7 +1517,12 @@ fun DelayInProgressSection(
 }
 
 @Composable
-fun DurationSelectionSection(remainingMinutes: Int?, isEmergencyUnlocked: Boolean, onAllowUse: (Int) -> Unit) {
+fun DurationSelectionSection(
+    remainingMinutes: Int?,
+    isEmergencyUnlocked: Boolean,
+    onAllowUse: (Int) -> Unit,
+    useExpressiveColors: Boolean = false
+) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -1528,7 +1535,7 @@ fun DurationSelectionSection(remainingMinutes: Int?, isEmergencyUnlocked: Boolea
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        DurationButtonsGrid(if (isEmergencyUnlocked) null else remainingMinutes, onAllowUse)
+        DurationButtonsGrid(if (isEmergencyUnlocked) null else remainingMinutes, onAllowUse, useExpressiveColors = useExpressiveColors)
     }
 }
 

@@ -691,7 +691,11 @@ fun CloseAppTextButton(
 }
 
 @Composable
-fun DurationButtonsGrid(remainingMinutes: Int?, onAllowUse: (Int) -> Unit) {
+fun DurationButtonsGrid(
+    remainingMinutes: Int?,
+    onAllowUse: (Int) -> Unit,
+    useExpressiveColors: Boolean = false
+) {
     val b20 = if (remainingMinutes != null && remainingMinutes < 20) remainingMinutes else 20
     val b10 = if (remainingMinutes != null && remainingMinutes < 10) (remainingMinutes * 0.5).toInt().coerceAtLeast(1) else 10
     val b5 = if (remainingMinutes != null && remainingMinutes < 5) {
@@ -709,14 +713,16 @@ fun DurationButtonsGrid(remainingMinutes: Int?, onAllowUse: (Int) -> Unit) {
                 delaySeconds = 0,
                 onAllowUse = onAllowUse,
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(topStart = outerRadius, topEnd = innerRadius, bottomStart = innerRadius, bottomEnd = innerRadius)
+                shape = RoundedCornerShape(topStart = outerRadius, topEnd = innerRadius, bottomStart = innerRadius, bottomEnd = innerRadius),
+                useExpressiveColors = useExpressiveColors
             )
             DurationButton(
                 minutes = b5,
                 delaySeconds = 3,
                 onAllowUse = onAllowUse,
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(topStart = innerRadius, topEnd = outerRadius, bottomStart = innerRadius, bottomEnd = innerRadius)
+                shape = RoundedCornerShape(topStart = innerRadius, topEnd = outerRadius, bottomStart = innerRadius, bottomEnd = innerRadius),
+                useExpressiveColors = useExpressiveColors
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -725,14 +731,16 @@ fun DurationButtonsGrid(remainingMinutes: Int?, onAllowUse: (Int) -> Unit) {
                 delaySeconds = 6,
                 onAllowUse = onAllowUse,
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(topStart = innerRadius, topEnd = innerRadius, bottomStart = outerRadius, bottomEnd = innerRadius)
+                shape = RoundedCornerShape(topStart = innerRadius, topEnd = innerRadius, bottomStart = outerRadius, bottomEnd = innerRadius),
+                useExpressiveColors = useExpressiveColors
             )
             DurationButton(
                 minutes = b20,
                 delaySeconds = 10,
                 onAllowUse = onAllowUse,
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(topStart = innerRadius, topEnd = innerRadius, bottomStart = innerRadius, bottomEnd = outerRadius)
+                shape = RoundedCornerShape(topStart = innerRadius, topEnd = innerRadius, bottomStart = innerRadius, bottomEnd = outerRadius),
+                useExpressiveColors = useExpressiveColors
             )
         }
     }
@@ -745,7 +753,8 @@ fun DurationButton(
     delaySeconds: Int,
     onAllowUse: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    shape: Shape = MaterialTheme.shapes.large
+    shape: Shape = MaterialTheme.shapes.large,
+    useExpressiveColors: Boolean = false
 ) {
     var startAnimation by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { startAnimation = true }
@@ -787,6 +796,8 @@ fun DurationButton(
         }
     }
 
+    val loadingContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+
     FilledTonalButton(
         onClick = { if (isEnabled) onAllowUse(minutes) },
         enabled = isEnabled,
@@ -795,11 +806,14 @@ fun DurationButton(
             .graphicsLayer {
                 scaleX = buttonScale.value
                 scaleY = buttonScale.value
-                alpha = if (isEnabled) 1f else 0.8f
+                alpha = 1f
             },
         shape = shape,
         colors = ButtonDefaults.filledTonalButtonColors(
-            containerColor = if (isEnabled) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            disabledContainerColor = loadingContainerColor,
+            disabledContentColor = MaterialTheme.colorScheme.onSurface
         )
     ) {
         AnimatedContent(
