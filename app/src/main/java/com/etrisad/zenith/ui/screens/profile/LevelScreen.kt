@@ -319,10 +319,10 @@ fun LevelScreen(
                                 enabled = unlocked,
                                 shape = rewardGroupShape(index, LEVEL_TITLES.size, unlocked),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = if (unlocked) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceContainerHigh
+                                    containerColor = when {
+                                        !unlocked -> MaterialTheme.colorScheme.surfaceContainerHigh
+                                        equipped -> MaterialTheme.colorScheme.primary
+                                        else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                     },
                                     disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                                 ),
@@ -337,15 +337,15 @@ fun LevelScreen(
                                             .size(36.dp)
                                             .clip(CircleShape)
                                             .background(
-                                                if (unlocked) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)
-                                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                                if (equipped) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)
+                                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = Icons.Outlined.WorkspacePremium,
                                             contentDescription = null,
-                                            tint = if (unlocked) MaterialTheme.colorScheme.onPrimary
+                                            tint = if (equipped) MaterialTheme.colorScheme.onPrimary
                                             else MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(20.dp)
                                         )
@@ -356,8 +356,11 @@ fun LevelScreen(
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
                                         textAlign = TextAlign.Center,
-                                        color = if (unlocked) MaterialTheme.colorScheme.onPrimary
-                                        else MaterialTheme.colorScheme.onSurface,
+                                        color = when {
+                                            equipped -> MaterialTheme.colorScheme.onPrimary
+                                            unlocked -> MaterialTheme.colorScheme.primary
+                                            else -> MaterialTheme.colorScheme.onSurface
+                                        },
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         modifier = Modifier.weight(1f)
@@ -365,8 +368,11 @@ fun LevelScreen(
                                     Text(
                                         text = "Lv ${title.requiredLevel}",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = if (unlocked) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.75f)
-                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = when {
+                                            equipped -> MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.75f)
+                                            unlocked -> MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)
+                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
                                         maxLines = 1
                                     )
                                     Box(
@@ -421,10 +427,10 @@ fun LevelScreen(
                                 enabled = true,
                                 shape = rewardGroupShape(index, AVATAR_BORDERS.size, unlocked),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = if (unlocked) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceContainerHigh
+                                    containerColor = when {
+                                        !unlocked -> MaterialTheme.colorScheme.surfaceContainerHigh
+                                        equipped -> MaterialTheme.colorScheme.primary
+                                        else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                     },
                                     disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                                 ),
@@ -471,8 +477,11 @@ fun LevelScreen(
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
                                         textAlign = TextAlign.Center,
-                                        color = if (unlocked) MaterialTheme.colorScheme.onPrimary
-                                        else MaterialTheme.colorScheme.onSurface,
+                                        color = when {
+                                            equipped -> MaterialTheme.colorScheme.onPrimary
+                                            unlocked -> MaterialTheme.colorScheme.primary
+                                            else -> MaterialTheme.colorScheme.onSurface
+                                        },
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         modifier = Modifier.weight(1f)
@@ -481,8 +490,11 @@ fun LevelScreen(
                                         text = "Lv ${border.requiredLevel} - ${border.colors.size} color" +
                                             if (border.colors.size > 1) "s" else "",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = if (unlocked) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.75f)
-                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = when {
+                                            equipped -> MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.75f)
+                                            unlocked -> MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)
+                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -536,10 +548,10 @@ fun LevelScreen(
                                 enabled = unlocked,
                                 shape = rewardGroupShape(index, PROFILE_SHAPES.size, unlocked),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = if (unlocked) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceContainerHigh
+                                    containerColor = when {
+                                        !unlocked -> MaterialTheme.colorScheme.surfaceContainerHigh
+                                        equipped -> MaterialTheme.colorScheme.primary
+                                        else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                     },
                                     disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                                 ),
@@ -554,8 +566,8 @@ fun LevelScreen(
                                             .size(40.dp)
                                             .clip(pShape)
                                             .background(
-                                                if (unlocked) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.25f)
-                                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                                if (equipped) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.25f)
+                                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -571,7 +583,10 @@ fun LevelScreen(
                                                 modifier = Modifier
                                                     .size(20.dp)
                                                     .clip(pShape)
-                                                    .background(MaterialTheme.colorScheme.onPrimary)
+                                                    .background(
+                                                        if (equipped) MaterialTheme.colorScheme.onPrimary
+                                                        else MaterialTheme.colorScheme.primary
+                                                    )
                                             )
                                         }
                                     }
@@ -581,8 +596,11 @@ fun LevelScreen(
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
                                         textAlign = TextAlign.Center,
-                                        color = if (unlocked) MaterialTheme.colorScheme.onPrimary
-                                        else MaterialTheme.colorScheme.onSurface,
+                                        color = when {
+                                            equipped -> MaterialTheme.colorScheme.onPrimary
+                                            unlocked -> MaterialTheme.colorScheme.primary
+                                            else -> MaterialTheme.colorScheme.onSurface
+                                        },
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         modifier = Modifier.weight(1f)
@@ -590,8 +608,11 @@ fun LevelScreen(
                                     Text(
                                         text = "Lv ${pShapeDef.requiredLevel}",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = if (unlocked) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.75f)
-                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = when {
+                                            equipped -> MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.75f)
+                                            unlocked -> MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)
+                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
                                         maxLines = 1
                                     )
                                     Box(
