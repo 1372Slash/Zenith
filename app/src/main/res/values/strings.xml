@@ -153,4 +153,6 @@
     <string name="onboarding_step_appearance_body">Theme, Dynamic Color, Expressive Colors, fonts, the floating tab bar, and Overlay Appearance all live here.</string>
     <string name="onboarding_step_data_title">Keep it safe</string>
     <string name="onboarding_step_data_body">Auto and manual backup, restore, Smart Repair, privacy, and performance profiles. Set a backup and forget it.</string>
+    <string name="liquid_glass_title">Liquid Glass</string>
+    <string name="liquid_glass_subtitle">Translucent refractive surfaces on cards and overlays (Android 13+ enhanced)</string>
 </resources>

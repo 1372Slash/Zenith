@@ -1,4 +1,10 @@
 package com.etrisad.zenith.ui.screens.settings
+import com.etrisad.zenith.R
+import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -30,6 +36,8 @@ import com.etrisad.zenith.ui.onboarding.onboardingAnchor
 fun AppearanceSettings(
     preferences: UserPreferences,
     onThemeChange: (ThemeConfig) -> Unit,
+    liquidGlassEnabled: Boolean = false,
+    onLiquidGlassToggle: (Boolean) -> Unit = {},
     onFontChange: (FontOption) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onExpressiveColorsChange: (Boolean) -> Unit,
@@ -255,5 +263,29 @@ private fun GlowScaleSliderItem(
                 )
             }
         }
-    }
+    
+        Spacer(modifier = Modifier.height(16.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.liquid_glass_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = stringResource(R.string.liquid_glass_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = liquidGlassEnabled,
+                onCheckedChange = onLiquidGlassToggle
+            )
+        }
+}
 }

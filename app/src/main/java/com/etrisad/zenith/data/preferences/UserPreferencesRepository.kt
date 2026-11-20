@@ -266,6 +266,7 @@ class UserPreferencesRepository(private val context: Context) {
         val THEME_CONFIG = stringPreferencesKey("theme_config")
         val FONT_OPTION = stringPreferencesKey("font_option")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+        private val LIQUID_GLASS_ENABLED = booleanPreferencesKey("liquid_glass_enabled")
         val ACCESSIBILITY_DISABLED = booleanPreferencesKey("accessibility_disabled")
         val ACCESSIBILITY_REQUIRED = booleanPreferencesKey("accessibility_required")
         val SCREEN_TIME_TARGET = intPreferencesKey("screen_time_target")
@@ -3084,4 +3085,11 @@ fun PerformanceConfig.detectPreset(): PerformanceLevel {
         }
     }
     return PerformanceLevel.CUSTOM
+
+    val liquidGlassEnabled: kotlinx.coroutines.flow.Flow<Boolean> = dataStore.data
+        .map { preferences -> preferences[LIQUID_GLASS_ENABLED] ?: false }
+
+    suspend fun setLiquidGlassEnabled(enabled: Boolean) {
+        dataStore.edit { preferences -> preferences[LIQUID_GLASS_ENABLED] = enabled }
+    }
 }

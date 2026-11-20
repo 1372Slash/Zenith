@@ -1,4 +1,5 @@
 package com.etrisad.zenith.ui.screens.settings
+import com.etrisad.zenith.ui.theme.liquidGlass
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
