@@ -57,10 +57,15 @@ sealed interface ProfileBannerEvent {
     }
 }
 
+data class XpSource(
+    val label: String,
+    val xp: Int
+)
 data class XpDay(
     val date: String,
     val xp: Int,
-    val savedMillis: Long
+    val savedMillis: Long,
+    val sources: List<XpSource> = emptyList()
 )
 data class DailyCount(
     val count: Int,
@@ -455,23 +460,36 @@ class ProfileViewModel(
             val usageByPkg = todayRows.associate { it.packageName to it.usageTimeMillis }
             var xp = 0
             var saved = 0L
+            val breakdown = linkedMapOf<String, Int>()
+            fun recordSource(name: String, kind: String, amount: Int) {
+                if (amount == 0) return
+                val key = "$name • $kind"
+                breakdown[key] = (breakdown[key] ?: 0) + amount
+            }
             shields.forEach { shield ->
                 val limit = shield.timeLimitMinutes * 60_000L
                 val usage = usageByPkg[shield.packageName] ?: 0L
+                val appName = shield.appName.ifBlank { resolveAppName(shield.packageName) }
                 when (shield.type) {
                     FocusType.SHIELD -> {
-                        xp += com.etrisad.zenith.util.StreakBonus.applyMultiplier(
+                        val gained = com.etrisad.zenith.util.StreakBonus.applyMultiplier(
                             calcShieldXp(limit, usage), shield.currentStreak
                         )
+                        xp += gained
+                        recordSource(appName, "Shield", gained)
                         if (usage <= limit) saved += (limit - usage).coerceAtLeast(0L)
                     }
-                    FocusType.GOAL -> xp += com.etrisad.zenith.util.StreakBonus.applyMultiplier(
-                        calcGoalXp(limit, usage), shield.currentStreak
-                    )
+                    FocusType.GOAL -> {
+                        val gained = com.etrisad.zenith.util.StreakBonus.applyMultiplier(
+                            calcGoalXp(limit, usage), shield.currentStreak
+                        )
+                        xp += gained
+                        recordSource(appName, "Goal", gained)
+                    }
                 }
             }
             if (prefs.userXpLastAwardDate != todayStr) {
-                userPreferencesRepository.awardDailyXp(todayStr, xp, saved)
+                userPreferencesRepository.awardDailyXp(todayStr, xp, saved, breakdown)
             }
             xp
         } catch (_: Exception) { 0 }
@@ -785,11 +803,21 @@ class ProfileViewModel(
             if (raw.isBlank()) return emptyList()
             return raw.lines().mapNotNull { line ->
                 val parts = line.split('\t')
-                if (parts.size != 3) return@mapNotNull null
+                if (parts.size < 3) return@mapNotNull null
                 val xp = parts[1].toIntOrNull() ?: return@mapNotNull null
                 val saved = parts[2].toLongOrNull() ?: return@mapNotNull null
                 if (parts[0].isEmpty()) return@mapNotNull null
-                XpDay(parts[0], xp, saved)
+                XpDay(parts[0], xp, saved, decodeXpSources(parts.getOrNull(3)))
+            }
+        }
+
+        fun decodeXpSources(raw: String?): List<XpSource> {
+            if (raw.isNullOrBlank()) return emptyList()
+            return raw.split(';').mapNotNull { entry ->
+                val label = entry.substringBeforeLast('=').trim()
+                val value = entry.substringAfterLast('=', "").toIntOrNull()
+                if (label.isEmpty() || value == null || value == 0) null
+                else XpSource(label, value)
             }
         }
 

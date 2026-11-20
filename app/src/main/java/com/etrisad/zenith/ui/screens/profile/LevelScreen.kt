@@ -734,69 +734,13 @@ fun LevelScreen(
     }
 
     item(key = "history") {
-            StaggeredItem(index = 3, staggerStage = staggerStage) {
-                Column {
-                    PreferenceCategory(title = "Daily XP")
-                Card(
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        Text(
-                            text = "Saved ${formatCompactDuration(state.totalSavedMillis)} in total",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        if (state.xpHistory.isEmpty()) {
-                            Text(
-                                text = "No XP recorded yet - check back tomorrow",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                state.xpHistory.forEach { day ->
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(
-                                            text = prettyProfileDate(day.date),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        Text(
-                                            text = "+${formatXp(day.xp.toLong())} XP",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Black,
-                                            color = MaterialTheme.colorScheme.tertiary
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        HorizontalDivider(
-                            thickness = 0.5.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Shields earn XP for staying under the limit " +
-                                "(less usage = more XP, over the limit = 0). Goals earn " +
-                                "XP for reaching the target, plus a bonus for going over. " +
-                                "Completed Pomodoro focus sessions also earn XP based on " +
-                                "focus time (Relaxed Mode pays slightly less). Each level " +
-                                "needs more XP than the last.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+        StaggeredItem(index = 4, staggerStage = staggerStage) {
+            Column {
+                PreferenceCategory(title = "Daily XP")
+                XpHistorySection(
+                    days = state.xpHistory,
+                    totalSavedMillis = state.totalSavedMillis
+                )
             }
         }
     }

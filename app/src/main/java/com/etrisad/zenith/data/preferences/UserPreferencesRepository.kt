@@ -1075,28 +1075,80 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] = seen }
     }
 
-    suspend fun awardDailyXp(todayDate: String, xp: Int, savedMillis: Long) {
+    suspend fun awardDailyXp(
+        todayDate: String,
+        xp: Int,
+        savedMillis: Long,
+        breakdown: Map<String, Int> = emptyMap()
+    ) {
         context.runtimeDataStore.edit { preferences ->
             preferences[RuntimeKeys.USER_XP_TOTAL] = (preferences[RuntimeKeys.USER_XP_TOTAL] ?: 0L) + xp
             preferences[RuntimeKeys.USER_XP_LAST_AWARD_DATE] = todayDate
             preferences[RuntimeKeys.USER_TOTAL_SAVED_MILLIS] =
                 (preferences[RuntimeKeys.USER_TOTAL_SAVED_MILLIS] ?: 0L) + savedMillis
         }
+        writeXpHistory(todayDate, xp, savedMillis, breakdown)
+    }
+
+    private suspend fun writeXpHistory(
+        todayDate: String,
+        deltaXp: Int,
+        deltaSavedMillis: Long,
+        deltaBreakdown: Map<String, Int>
+    ) {
         context.dataStore.edit { preferences ->
             val raw = preferences[PreferencesKeys.USER_XP_HISTORY] ?: ""
             val lines = raw.lines().filter { it.isNotBlank() }.toMutableList()
             val index = lines.indexOfFirst { it.substringBefore('\t') == todayDate }
-            if (index >= 0) {
-                val parts = lines[index].split('\t')
-                val existingXp = parts.getOrNull(1)?.toIntOrNull() ?: 0
-                val existingSaved = parts.getOrNull(2)?.toLongOrNull() ?: 0L
-                lines[index] = "$todayDate\t${existingXp + xp}\t${existingSaved + savedMillis}"
-            } else {
-                lines.add(0, "$todayDate\t$xp\t$savedMillis")
+            val existing = if (index >= 0) parseXpHistoryLine(lines[index]) else null
+
+            val breakdown = linkedMapOf<String, Int>()
+            existing?.third?.forEach { (label, value) -> breakdown[label] = value }
+            deltaBreakdown.forEach { (label, value) ->
+                if (value != 0) {
+                    val key = sanitizeXpSourceLabel(label)
+                    breakdown[key] = (breakdown[key] ?: 0) + value
+                }
             }
+
+            val totalXp = (existing?.first ?: 0) + deltaXp
+            val totalSaved = (existing?.second ?: 0L) + deltaSavedMillis
+            val line = buildString {
+                append(todayDate).append('\t').append(totalXp).append('\t').append(totalSaved)
+                if (breakdown.isNotEmpty()) {
+                    append('\t')
+                    append(breakdown.entries.joinToString(";") { "${it.key}=${it.value}" })
+                }
+            }
+            if (index >= 0) lines[index] = line else lines.add(0, line)
             preferences[PreferencesKeys.USER_XP_HISTORY] = lines.take(30).joinToString("\n")
         }
     }
+
+    private fun parseXpHistoryLine(line: String): Triple<Int, Long, Map<String, Int>>? {
+        val parts = line.split('\t')
+        if (parts.size < 3) return null
+        val xp = parts[1].toIntOrNull() ?: return null
+        val saved = parts[2].toLongOrNull() ?: return null
+        val breakdown = parts.getOrNull(3)?.let { decodeXpBreakdown(it) } ?: emptyMap()
+        return Triple(xp, saved, breakdown)
+    }
+
+    private fun decodeXpBreakdown(raw: String): Map<String, Int> {
+        if (raw.isBlank()) return emptyMap()
+        return buildMap {
+            raw.split(';').forEach { entry ->
+                val label = entry.substringBeforeLast('=').trim()
+                val value = entry.substringAfterLast('=', "").toIntOrNull() ?: return@forEach
+                if (label.isNotEmpty() && value != 0) put(label, value)
+            }
+        }
+    }
+
+    private fun sanitizeXpSourceLabel(label: String): String =
+        label.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
+            .replace(';', ' ').replace('=', ' ')
+            .trim().take(48).ifBlank { "XP" }
 
     suspend fun awardPomodoroXp(todayDate: String, xp: Int) {
         if (xp <= 0) return
@@ -1106,20 +1158,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
                     (preferences[RuntimeKeys.USER_XP_TOTAL] ?: 0L) + xp
             }
         }
-        context.dataStore.edit { preferences ->
-            val lines = (preferences[PreferencesKeys.USER_XP_HISTORY] ?: "")
-                .lines().filter { it.isNotBlank() }.toMutableList()
-            val index = lines.indexOfFirst { it.substringBefore('\t') == todayDate }
-            if (index >= 0) {
-                val parts = lines[index].split('\t')
-                val currentXp = parts.getOrNull(1)?.toIntOrNull() ?: 0
-                val saved = parts.getOrNull(2) ?: "0"
-                lines[index] = "$todayDate\t${currentXp + xp}\t$saved"
-            } else {
-                lines.add(0, "$todayDate\t$xp\t0")
-            }
-            preferences[PreferencesKeys.USER_XP_HISTORY] = lines.take(30).joinToString("\n")
-        }
+        writeXpHistory(todayDate, xp, 0L, mapOf("Pomodoro focus" to xp))
     }
     suspend fun markOnboardingGuideShown(version: Int) {
         context.dataStore.edit { preferences ->
@@ -1217,20 +1256,7 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
                     (preferences[RuntimeKeys.USER_XP_TOTAL] ?: 0L) + xp
             }
         }
-        context.dataStore.edit { preferences ->
-            val lines = (preferences[PreferencesKeys.USER_XP_HISTORY] ?: "")
-                .lines().filter { it.isNotBlank() }.toMutableList()
-            val index = lines.indexOfFirst { it.substringBefore('\t') == todayDate }
-            if (index >= 0) {
-                val parts = lines[index].split('\t')
-                val currentXp = parts.getOrNull(1)?.toIntOrNull() ?: 0
-                val saved = parts.getOrNull(2) ?: "0"
-                lines[index] = "$todayDate\t${currentXp + xp}\t$saved"
-            } else {
-                lines.add(0, "$todayDate\t$xp\t0")
-            }
-            preferences[PreferencesKeys.USER_XP_HISTORY] = lines.take(30).joinToString("\n")
-        }
+        writeXpHistory(todayDate, xp, 0L, mapOf("Onboarding guide" to xp))
     }
 
     suspend fun setUserXpTotal(xp: Long) {
