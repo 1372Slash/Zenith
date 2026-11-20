@@ -130,7 +130,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.activity.compose.LocalActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import kotlinx.coroutines.flow.MutableStateFlow
 import com.etrisad.zenith.ui.onboarding.LocalOnboardingScroll
 import com.etrisad.zenith.ui.onboarding.onboardingAnchor
 import androidx.core.content.FileProvider
@@ -240,11 +243,12 @@ fun ProfileScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var isStarted by remember { mutableStateOf(false) }
-    LifecycleStartEffect(Unit) {
-        isStarted = true
-        onStopOrDispose { isStarted = false }
+    val hostLifecycleOwner = LocalActivity.current as? LifecycleOwner
+    val hostLifecycleFlow = remember(hostLifecycleOwner) {
+        hostLifecycleOwner?.lifecycle?.currentStateFlow ?: MutableStateFlow(Lifecycle.State.STARTED)
     }
+    val hostState by hostLifecycleFlow.collectAsState()
+    val isForeground = hostState.isAtLeast(Lifecycle.State.STARTED)
 
     var showNameDialog by remember { mutableStateOf(false) }
     var showBioDialog by remember { mutableStateOf(false) }
@@ -387,7 +391,7 @@ fun ProfileScreen(
                         equippedBorder = equippedBorder,
                         equippedShape = equippedShape,
                         isEditing = isEditing,
-                        rotationEnabled = PROFILE_SUN_ROTATION_ENABLED && isStarted,
+                        rotationEnabled = PROFILE_SUN_ROTATION_ENABLED && isForeground,
                         onEditName = { showNameDialog = true },
                         onEditBio = { showBioDialog = true },
                         onAvatarClick = { avatarPicker.launch("image/*") },
