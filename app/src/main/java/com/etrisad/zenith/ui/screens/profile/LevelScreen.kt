@@ -134,6 +134,10 @@ fun LevelScreen(
             ?.takeIf { it.requiredLevel <= level } ?: PROFILE_SHAPES.first()
     }
     val equippedShape = equippedShapeDef.shapeResolver()
+    val equippedHeroShapeDef = remember(preferences.userHeroShape, level) {
+        HERO_SHAPES.find { it.id == preferences.userHeroShape }
+            ?.takeIf { it.requiredLevel <= level } ?: HERO_SHAPES.first()
+    }
     val nextReward = remember(level) { nextLevelReward(level) }
     var selectedBorder by remember { mutableStateOf<AvatarBorder?>(null) }
 
@@ -599,6 +603,123 @@ fun LevelScreen(
                                                 imageVector = Icons.Outlined.CheckCircleOutline,
                                                 contentDescription = "Equipped",
                                                 tint = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    item(key = "hero-shapes") {
+        StaggeredItem(index = 3, staggerStage = staggerStage) {
+            Column {
+                PreferenceCategory(title = "Background Shapes")
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                ) {
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        itemsIndexed(HERO_SHAPES, key = { _, s -> "hero-shape-${s.id}" }) { index, heroDef ->
+                            val unlocked = level >= heroDef.requiredLevel
+                            val equipped = equippedHeroShapeDef.id == heroDef.id && unlocked
+                            val heroPreview = heroDef.shapeResolver()
+                            Card(
+                                onClick = {
+                                    scope.launch {
+                                        preferencesRepository.setUserHeroShape(
+                                            if (equipped) "" else heroDef.id
+                                        )
+                                    }
+                                },
+                                enabled = unlocked,
+                                shape = rewardGroupShape(index, HERO_SHAPES.size, unlocked),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = when {
+                                        !unlocked -> MaterialTheme.colorScheme.surfaceContainerHigh
+                                        equipped -> MaterialTheme.colorScheme.secondary
+                                        else -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
+                                    },
+                                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                ),
+                                modifier = Modifier.width(124.dp).aspectRatio(0.78f)
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxSize().padding(10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(heroPreview)
+                                            .background(
+                                                if (equipped) MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.25f)
+                                                else MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (!unlocked) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Lock,
+                                                contentDescription = "Locked",
+                                                tint = MaterialTheme.colorScheme.outline,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(20.dp)
+                                                    .clip(heroPreview)
+                                                    .background(
+                                                        if (equipped) MaterialTheme.colorScheme.onSecondary
+                                                        else MaterialTheme.colorScheme.secondary
+                                                    )
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = heroDef.name,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center,
+                                        color = when {
+                                            equipped -> MaterialTheme.colorScheme.onSecondary
+                                            unlocked -> MaterialTheme.colorScheme.secondary
+                                            else -> MaterialTheme.colorScheme.onSurface
+                                        },
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        text = "Lv ${heroDef.requiredLevel}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = when {
+                                            equipped -> MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.75f)
+                                            unlocked -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.75f)
+                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        maxLines = 1
+                                    )
+                                    Box(
+                                        modifier = Modifier.height(20.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (equipped) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.CheckCircleOutline,
+                                                contentDescription = "Equipped",
+                                                tint = MaterialTheme.colorScheme.onSecondary,
                                                 modifier = Modifier.size(16.dp)
                                             )
                                         }

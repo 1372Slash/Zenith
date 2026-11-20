@@ -344,10 +344,28 @@ val PROFILE_SHAPES = listOf(
 fun ProfileShapeDef.resolveShape(): Shape = shapeResolver()
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+val HERO_SHAPES = listOf(
+    ProfileShapeDef("sunny", "Sunny", 1) { MaterialShapes.Sunny.toShape() },
+    ProfileShapeDef("cookie4", "Cookie 4", 2) { MaterialShapes.Cookie4Sided.toShape() },
+    ProfileShapeDef("softburst", "Soft Burst", 3) { MaterialShapes.SoftBurst.toShape() },
+    ProfileShapeDef("burst", "Burst", 4) { MaterialShapes.Burst.toShape() },
+    ProfileShapeDef("flower", "Flower", 5) { MaterialShapes.Flower.toShape() },
+    ProfileShapeDef("clover8", "Clover 8", 6) { MaterialShapes.Clover8Leaf.toShape() },
+    ProfileShapeDef("softboom", "Soft Boom", 7) { MaterialShapes.SoftBoom.toShape() },
+    ProfileShapeDef("boom", "Boom", 8) { MaterialShapes.Boom.toShape() },
+    ProfileShapeDef("cookie6", "Cookie 6", 9) { MaterialShapes.Cookie6Sided.toShape() },
+    ProfileShapeDef("cookie7", "Cookie 7", 10) { MaterialShapes.Cookie7Sided.toShape() },
+    ProfileShapeDef("cookie9", "Cookie 9", 12) { MaterialShapes.Cookie9Sided.toShape() },
+    ProfileShapeDef("cookie12", "Cookie 12", 14) { MaterialShapes.Cookie12Sided.toShape() },
+    ProfileShapeDef("verysunny", "Very Sunny", 16) { MaterialShapes.VerySunny.toShape() }
+)
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 fun nextLevelReward(level: Int): Pair<Int, String>? {
     val upcoming = (LEVEL_TITLES.map { it.requiredLevel to it.name } +
         AVATAR_BORDERS.map { it.requiredLevel to "${it.name} Border" } +
-        PROFILE_SHAPES.map { it.requiredLevel to "${it.name} Shape" })
+        PROFILE_SHAPES.map { it.requiredLevel to "${it.name} Shape" } +
+        HERO_SHAPES.map { it.requiredLevel to "${it.name} Background" })
         .filter { it.first > level }
     return upcoming.minByOrNull { it.first }
 }

@@ -46,7 +46,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -69,12 +71,9 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material3.MaterialShapes
-import androidx.compose.material3.toShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -108,19 +107,13 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Matrix
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -320,6 +313,12 @@ fun ProfileScreen(
     var hasStaggered by rememberSaveable { mutableStateOf(false) }
     var staggerStage by rememberSaveable { mutableIntStateOf(0) }
 
+    val equippedHeroShapeDef = remember(preferences.userHeroShape, state.level) {
+        HERO_SHAPES.find { it.id == preferences.userHeroShape }
+            ?.takeIf { it.requiredLevel <= state.level } ?: HERO_SHAPES.first()
+    }
+    val heroShape = equippedHeroShapeDef.resolveShape()
+
     LaunchedEffect(guideListState.isScrollInProgress) {
         if (guideListState.isScrollInProgress) {
             staggerStage = 6
@@ -390,6 +389,7 @@ fun ProfileScreen(
                         equippedTitle = equippedTitle?.name ?: "",
                         equippedBorder = equippedBorder,
                         equippedShape = equippedShape,
+                        heroShape = heroShape,
                         isEditing = isEditing,
                         rotationEnabled = PROFILE_SUN_ROTATION_ENABLED && isForeground,
                         onEditName = { showNameDialog = true },
@@ -926,13 +926,6 @@ private fun EditRevealButton(
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-private fun buildProfileSunPath(sizePx: Float): Path {
-    val path = MaterialShapes.Sunny.toPath().asComposePath()
-    path.transform(Matrix().apply { scale(sizePx, sizePx) })
-    return path
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ProfileHero(
     userName: String,
@@ -943,6 +936,7 @@ private fun ProfileHero(
     equippedTitle: String,
     equippedBorder: AvatarBorder?,
     equippedShape: Shape = CircleShape,
+    heroShape: Shape,
     isEditing: Boolean,
     rotationEnabled: Boolean,
     onEditName: () -> Unit,
@@ -953,15 +947,11 @@ private fun ProfileHero(
     onDeleteBanner: () -> Unit
 ) {
     val backgroundColor = MaterialTheme.colorScheme.background
-    val density = LocalDensity.current
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val sunTop = statusBarTop + ProfileHeroSunTopOffset
-    val sunTopPx = with(density) { sunTop.toPx() }
 
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val sunSize = maxWidth * PROFILE_SUN_SCALE
-        val sunSizePx = with(density) { sunSize.toPx() }
-        val sunPath = remember(sunSizePx) { buildProfileSunPath(sunSizePx) }
         val contentHalfWidth = (maxWidth / 2f) - ProfileHeroContentPadding
         val valleyRadius = sunSize * PROFILE_SUN_VALLEY_RATIO
         val arcDrop = sqrt(
@@ -1044,21 +1034,17 @@ private fun ProfileHero(
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .drawBehind {
-                    clipRect(0f, 0f, size.width, size.height) {
-                        val centerX = size.width / 2f
-                        val centerY = sunTopPx + sunSizePx / 2f
-                        rotate(rotation, pivot = Offset(centerX, centerY)) {
-                            translate(
-                                left = centerX - sunSizePx / 2f,
-                                top = centerY - sunSizePx / 2f
-                            ) {
-                                drawPath(path = sunPath, color = backgroundColor)
-                            }
-                        }
-                    }
-                }
-        )
+                .clipToBounds()
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .offset(y = sunTop)
+                    .requiredSize(sunSize)
+                    .graphicsLayer { rotationZ = rotation }
+                    .background(backgroundColor, heroShape)
+            )
+        }
 
         Column(
             modifier = Modifier

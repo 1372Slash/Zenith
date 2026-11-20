@@ -312,6 +312,7 @@ class UserPreferencesRepository(private val context: Context) {
 val USER_TITLE = stringPreferencesKey("user_title")
 val USER_AVATAR_BORDER = stringPreferencesKey("user_avatar_border")
 val USER_PROFILE_SHAPE = stringPreferencesKey("user_profile_shape")
+val USER_HERO_SHAPE = stringPreferencesKey("user_hero_shape")
         val PROFILE_BANNER_ON_HOME = booleanPreferencesKey("profile_banner_on_home")
         val USER_SHARED_PROFILE = booleanPreferencesKey("user_shared_profile")
         val INFO_VISITED_ROUTES = stringPreferencesKey("info_visited_routes")
@@ -609,6 +610,7 @@ val ACHIEVEMENT_BANNERS_SEEN = stringPreferencesKey("achievement_banners_seen")
 userTitle = settings[PreferencesKeys.USER_TITLE] ?: "",
 userAvatarBorder = settings[PreferencesKeys.USER_AVATAR_BORDER] ?: "",
 userProfileShape = settings[PreferencesKeys.USER_PROFILE_SHAPE] ?: "",
+userHeroShape = settings[PreferencesKeys.USER_HERO_SHAPE] ?: "",
             profileBannerOnHome = settings[PreferencesKeys.PROFILE_BANNER_ON_HOME] ?: false,
             userSharedProfile = settings[PreferencesKeys.USER_SHARED_PROFILE] ?: false,
             infoVisitedRoutes = settings[PreferencesKeys.INFO_VISITED_ROUTES]
@@ -1013,6 +1015,10 @@ achievementBannersSeen = settings[PreferencesKeys.ACHIEVEMENT_BANNERS_SEEN] ?: "
 
     suspend fun setUserProfileShape(shapeId: String) {
         context.dataStore.edit { preferences -> preferences[PreferencesKeys.USER_PROFILE_SHAPE] = shapeId }
+    }
+
+    suspend fun setUserHeroShape(shapeId: String) {
+        context.dataStore.edit { preferences -> preferences[PreferencesKeys.USER_HERO_SHAPE] = shapeId }
     }
 
     suspend fun setProfileBannerOnHome(enabled: Boolean) {
@@ -2840,6 +2846,7 @@ data class UserPreferences(
     val userTitle: String = "",
     val userAvatarBorder: String = "",
     val userProfileShape: String = "",
+    val userHeroShape: String = "",
     val profileBannerOnHome: Boolean = false,
     val userSharedProfile: Boolean = false,
     val infoVisitedRoutes: Set<String> = emptySet(),
