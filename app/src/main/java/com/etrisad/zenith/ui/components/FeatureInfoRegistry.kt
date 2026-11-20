@@ -415,16 +415,22 @@ object FeatureInfoRegistry {
         sections = listOf(
             FeatureInfoSections.whatItDoes(
                 "Tracks total XP and shows progress to the next level, each level needs more XP than the last.",
-                "Level milestones unlock titles and avatar borders you can equip from the card rows."
+                "Level milestones unlock titles, avatar borders, profile shapes, and background shapes you can equip from the card rows.",
+                "Shields earn XP for staying under the limit: less usage means more XP, and going over the limit gives 0.",
+                "Goals earn XP for reaching the target, plus a bonus for going over it.",
+                "Completed Pomodoro focus sessions earn XP based on focus time, Relaxed Mode pays slightly less.",
+                "Finishing onboarding guide steps also grants a one-time XP bonus."
             ),
             FeatureInfoSections.whatYoullSee(
-                "Titles from Initiate up to Infinite, and avatar rings growing from 1 solid color to a 5-color gradient.",
+                "Titles from Initiate up to Infinite, avatar rings growing from 1 solid color to a 5-color gradient, and both profile and background shape tracks.",
                 "The 5th ring of each color group is animated: Rose shines, Lagoon, Candy, Spring, and Eternity spin.",
                 "Unlocked rewards turn primary-colored; locked ones stay neutral until their level is reached.",
-                "Daily XP history with saved screen time per day."
+                "Daily XP cards paged by day with date pills, saved screen time per day, the change versus the previous day, and an expandable XP Breakdown showing which shields, goals, and focus sessions earned the XP."
             ),
             FeatureInfoSections.tips(
                 "Tap an unlocked reward to equip it, tap again to unequip.",
+                "Swipe the Daily XP cards or tap a date pill to move between days, then expand XP Breakdown to see where that day's XP came from.",
+                "Daily XP keeps the last 30 recorded days, older entries are trimmed automatically.",
                 "Your equipped title also appears on the shared profile card."
             )
         )
