@@ -1,4 +1,8 @@
 package com.etrisad.zenith.ui.components
+import com.etrisad.zenith.ui.theme.liquidGlass
+import com.etrisad.zenith.ui.theme.LocalLiquidGlassEnabled
+import com.etrisad.zenith.R
+import androidx.compose.ui.res.stringResource
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -594,7 +598,7 @@ fun LongTermSection(
                                                 ListItem(
                                                     headlineContent = {
                                                         Text(
-                                                            text = "Other Apps",
+                                                            text = stringResource(R.string.long_term_other_apps),
                                                             style = MaterialTheme.typography.titleMedium,
                                                             fontWeight = FontWeight.Bold,
                                                             color = MaterialTheme.colorScheme.onSecondaryContainer

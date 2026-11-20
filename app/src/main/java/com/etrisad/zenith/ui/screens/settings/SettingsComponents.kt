@@ -1,4 +1,6 @@
 package com.etrisad.zenith.ui.screens.settings
+import com.etrisad.zenith.R
+import androidx.compose.ui.res.stringResource
 import com.etrisad.zenith.ui.theme.LocalLiquidGlassEnabled
 import com.etrisad.zenith.ui.theme.liquidGlass
 
@@ -278,7 +280,7 @@ fun ThemeSelector(
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(
-                    text = "Theme Mode",
+                    text = stringResource(R.string.settings_theme_mode),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                     modifier = Modifier.weight(1f)
@@ -288,9 +290,9 @@ fun ThemeSelector(
             Spacer(modifier = Modifier.height(16.dp))
             
             val themeOptions = listOf(
-                ThemeConfig.FOLLOW_SYSTEM to "System",
-                ThemeConfig.LIGHT to "Light",
-                ThemeConfig.DARK to "Dark"
+                ThemeConfig.FOLLOW_SYSTEM to stringResource(R.string.settings_theme_system),
+                ThemeConfig.LIGHT to stringResource(R.string.settings_theme_light),
+                ThemeConfig.DARK to stringResource(R.string.settings_theme_dark)
             )
 
             ZenithToggleButtonGroup(
@@ -341,7 +343,7 @@ fun FontSelector(
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(
-                    text = "Font Style",
+                    text = stringResource(R.string.settings_font_style),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                     modifier = Modifier.weight(1f)
@@ -351,7 +353,7 @@ fun FontSelector(
             Spacer(modifier = Modifier.height(16.dp))
             
             val fontOptions = listOf(
-                FontOption.SYSTEM to "System",
+                FontOption.SYSTEM to stringResource(R.string.settings_theme_system),
                 FontOption.GOOGLE_SANS_FLEX to "GS Flex",
                 FontOption.NUNITO to "Nunito"
             )
@@ -369,7 +371,7 @@ fun FontSelector(
                 ZenithButton(
                     onClick = onCustomizeGSFlex,
                     modifier = Modifier.fillMaxWidth(),
-                    text = "Customize GS Flex Variations",
+                    text = stringResource(R.string.settings_customize_gs_flex),
                     icon = Icons.Outlined.SettingsSuggest,
                     type = ZenithButtonType.Outlined,
                     size = ZenithButtonSize.Large

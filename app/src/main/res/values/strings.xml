@@ -155,4 +155,13 @@
     <string name="onboarding_step_data_body">Auto and manual backup, restore, Smart Repair, privacy, and performance profiles. Set a backup and forget it.</string>
     <string name="liquid_glass_title">Liquid Glass</string>
     <string name="liquid_glass_subtitle">Translucent refractive surfaces on cards and overlays (Android 13+ enhanced)</string>
+    <string name="liquid_glass_refraction_title">Refraction Intensity</string>
+    <string name="liquid_glass_refraction_desc">Adjust edge lens curvature and dispersion</string>
+    <string name="settings_theme_mode">Theme Mode</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_font_style">Font Style</string>
+    <string name="settings_customize_gs_flex">Customize GS Flex Variations</string>
+    <string name="long_term_other_apps">Other Apps</string>
 </resources>

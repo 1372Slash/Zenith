@@ -1,4 +1,6 @@
 package com.etrisad.zenith.ui.components
+import com.etrisad.zenith.ui.theme.liquidGlass
+import com.etrisad.zenith.ui.theme.LocalLiquidGlassEnabled
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -347,10 +349,10 @@ fun AppCategoryCard(
     val color = appCategoryColor(category)
     Card(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().liquidGlass(shape = shape),
         shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = if (LocalLiquidGlassEnabled.current) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
         Row(
@@ -686,10 +688,10 @@ fun CategoryBreakdownCard(
     }
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().liquidGlass(shape = shape),
         shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = if (LocalLiquidGlassEnabled.current) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

@@ -1,4 +1,7 @@
 package com.etrisad.zenith.ui.screens.settings
+import kotlin.math.roundToInt
+import com.etrisad.zenith.ui.theme.liquidGlass
+import com.etrisad.zenith.ui.theme.LocalLiquidGlassEnabled
 import com.etrisad.zenith.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
@@ -38,6 +41,8 @@ fun AppearanceSettings(
     onThemeChange: (ThemeConfig) -> Unit,
     liquidGlassEnabled: Boolean = false,
     onLiquidGlassToggle: (Boolean) -> Unit = {},
+    liquidGlassStrength: Float = 8.5f,
+    onLiquidGlassStrengthChange: (Float) -> Unit = {},
     onFontChange: (FontOption) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onExpressiveColorsChange: (Boolean) -> Unit,
@@ -181,7 +186,7 @@ private fun GlowScaleSliderItem(
     Card(
         shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = if (LocalLiquidGlassEnabled.current) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -282,10 +287,46 @@ private fun GlowScaleSliderItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Switch(
-                checked = liquidGlassEnabled,
-                onCheckedChange = onLiquidGlassToggle
-            )
-        }
+                            Switch(
+                    checked = liquidGlassEnabled,
+                    onCheckedChange = onLiquidGlassToggle
+                )
+            }
+            androidx.compose.animation.AnimatedVisibility(visible = liquidGlassEnabled) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.liquid_glass_refraction_title),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                            )
+                            Text(
+                                text = stringResource(R.string.liquid_glass_refraction_desc),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            text = "${(liquidGlassStrength * 10).roundToInt() / 10f}x",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Slider(
+                        value = liquidGlassStrength,
+                        onValueChange = onLiquidGlassStrengthChange,
+                        valueRange = 2f..18f
+                    )
+                }
+            }
 }
 }

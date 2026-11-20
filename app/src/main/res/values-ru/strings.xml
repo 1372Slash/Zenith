@@ -158,4 +158,13 @@ You now know where the day lives, how to draw a boundary, how to interrupt autop
     <string name="phone_free_time_widget_description">"Shows phone-free time today - how long you haven\'t used your phone, resets daily."</string>
     <string name="remaining_target_widget_description">Показывает оставшееся время до достижения дневной цели по экранному времени.</string>
     <string name="total_screen_time_widget_description">Показывает общее время экрана за сегодня.</string>
+    <string name="liquid_glass_refraction_title">Сила преломления стекла</string>
+    <string name="liquid_glass_refraction_desc">Настройка изгиба стеклянной фаски и дисперсии по краям</string>
+    <string name="settings_theme_mode">Тема оформления</string>
+    <string name="settings_theme_system">Системная</string>
+    <string name="settings_theme_light">Светлая</string>
+    <string name="settings_theme_dark">Тёмная</string>
+    <string name="settings_font_style">Стиль шрифта</string>
+    <string name="settings_customize_gs_flex">Настроить вариации GS Flex</string>
+    <string name="long_term_other_apps">Другие приложения</string>
 </resources>

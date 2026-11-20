@@ -27,10 +27,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/**
- * Global toggle for optional iOS-inspired Liquid Glass surface styling across Zenith.
- */
 val LocalLiquidGlassEnabled = staticCompositionLocalOf { false }
+val LocalLiquidGlassStrength = staticCompositionLocalOf { 8.5f }
 
 private const val LIQUID_GLASS_IOS26_AGSL = """
     uniform shader content;
@@ -58,7 +56,6 @@ private const val LIQUID_GLASS_IOS26_AGSL = """
         float2 p = fragCoord - halfSize;
         float dist = roundedBoxSDF(p, halfSize, r);
 
-        // Bevel lens zone only near container rim (center stays 100% sharp for text)
         float bevelWidth = clamp(min(size.x, size.y) * 0.28, 14.0, 30.0);
         float bevel = smoothstep(-bevelWidth, 0.0, dist) * (1.0 - smoothstep(0.0, 1.5, dist));
         float lensCurve = pow(bevel, 2.15);
@@ -66,7 +63,6 @@ private const val LIQUID_GLASS_IOS26_AGSL = """
         float2 n = sdfNormal(p, halfSize, r);
         float2 shift = n * (lensCurve * strength);
 
-        // Subtle iOS 26 chromatic dispersion along glass bevel
         float2 uvR = clamp(fragCoord - shift * 1.18, float2(0.5), size - 0.5);
         float2 uvG = clamp(fragCoord - shift * 1.00, float2(0.5), size - 0.5);
         float2 uvB = clamp(fragCoord - shift * 0.82, float2(0.5), size - 0.5);
@@ -76,7 +72,6 @@ private const val LIQUID_GLASS_IOS26_AGSL = """
         half4 cB = content.eval(uvB);
         half4 color = half4(cR.r, cG.g, cB.b, cG.a);
 
-        // Dual directional specular highlights (top-left primary + bottom-right bounce)
         float2 lightPrimary = normalize(float2(-0.68, -0.73));
         float2 lightBounce = normalize(float2(0.65, 0.76));
         float rimMask = exp(-abs(dist) * 0.24);
@@ -94,16 +89,12 @@ private const val LIQUID_GLASS_IOS26_AGSL = """
     }
 """
 
-/**
- * Applies an iOS 26-style Liquid Glass surface effect (SDF lens bevel, chromatic dispersion,
- * dual Fresnel specular rim on Android 13+, with translucent Material 3 fallback below).
- */
 fun Modifier.liquidGlass(
     enabled: Boolean = LocalLiquidGlassEnabled.current,
     shape: Shape = RoundedCornerShape(24.dp),
     tintAlpha: Float = 0.20f,
     borderWidth: Dp = 1.dp,
-    refractionStrength: Float = 8.5f
+    refractionStrength: Float = LocalLiquidGlassStrength.current
 ): Modifier = composed {
     if (!enabled) return@composed this
 
@@ -171,9 +162,13 @@ fun Modifier.liquidGlass(
 @Composable
 fun ProvideLiquidGlass(
     enabled: Boolean,
+    strength: Float = 8.5f,
     content: @Composable () -> Unit
 ) {
-    CompositionLocalProvider(LocalLiquidGlassEnabled provides enabled) {
+    CompositionLocalProvider(
+        LocalLiquidGlassEnabled provides enabled,
+        LocalLiquidGlassStrength provides strength
+    ) {
         content()
     }
 }

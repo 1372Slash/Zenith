@@ -103,7 +103,8 @@ class MainActivity : ComponentActivity() {
             }
 
             val liquidGlassEnabled by preferences.liquidGlassEnabled.collectAsState(initial = false)
-            ProvideLiquidGlass(enabled = liquidGlassEnabled) { ZenithTheme(
+            val liquidGlassStrength by preferences.liquidGlassStrength.collectAsState(initial = 8.5f)
+            ProvideLiquidGlass(enabled = liquidGlassEnabled, strength = liquidGlassStrength) { ZenithTheme(
                 darkTheme = darkTheme,
                 dynamicColor = appearance.dynamicColor,
                 fontOption = appearance.fontOption,
