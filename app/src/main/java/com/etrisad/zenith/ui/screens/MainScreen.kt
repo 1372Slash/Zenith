@@ -1799,7 +1799,7 @@ fun MainScreen(
                                 ) {
                                     HorizontalFloatingToolbar(
                                         expanded = true,
-                                        modifier = Modifier.liquidGlass(shape = CircleShape)
+                                        modifier = Modifier.liquidGlass(shape = RoundedCornerShape(100), tintAlpha = 0.28f)
                                             .animateContentSize()
                                             .height(68.dp),
                                         shape = RoundedCornerShape(100),

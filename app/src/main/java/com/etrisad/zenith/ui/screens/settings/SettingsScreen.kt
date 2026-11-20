@@ -45,8 +45,6 @@ fun SettingsScreen(
     onOpenGuidedPath: () -> Unit = {}
 ) {
     val preferences by preferencesRepository.userPreferencesFlow.collectAsState(initial = UserPreferences()
-    val liquidGlassEnabled by preferencesRepository.liquidGlassEnabled.collectAsState(initial = false))
-    val liquidGlassStrength by preferencesRepository.liquidGlassStrength.collectAsState(initial = 8.5f)
     val coroutineScope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
     val app = context.applicationContext as ZenithApplication

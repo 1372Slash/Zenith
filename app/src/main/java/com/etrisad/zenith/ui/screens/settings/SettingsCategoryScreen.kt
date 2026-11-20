@@ -64,7 +64,9 @@ fun SettingsCategoryScreen(
     onTestAchievementBanner: () -> Unit = {},
     performanceBackInterceptor: MutableState<() -> Boolean> = remember { mutableStateOf({ false }) }
 ) {
-    val preferences by preferencesRepository.userPreferencesFlow.collectAsState(initial = UserPreferences())
+    val preferences by preferencesRepository.userPreferencesFlow.collectAsState(initial = UserPreferences()
+    val liquidGlassEnabled by preferencesRepository.liquidGlassEnabled.collectAsState(initial = false)
+    val liquidGlassStrength by preferencesRepository.liquidGlassStrength.collectAsState(initial = 8.5f))
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val app = context.applicationContext as ZenithApplication
@@ -297,7 +299,11 @@ fun SettingsCategoryScreen(
                         goalCount = goalCount
                     )
                     "appearance" -> AppearanceSettings(
-                        preferences = preferences,
+                    preferences = preferences,
+                    liquidGlassEnabled = liquidGlassEnabled,
+                    onLiquidGlassToggle = { enabled -> coroutineScope.launch { preferencesRepository.setLiquidGlassEnabled(enabled) } },
+                    liquidGlassStrength = liquidGlassStrength,
+                    onLiquidGlassStrengthChange = { strength -> coroutineScope.launch { preferencesRepository.setLiquidGlassStrength(strength) } },
                         onThemeChange = { theme -> coroutineScope.launch { preferencesRepository.setThemeConfig(theme) } },
                         onFontChange = { font -> coroutineScope.launch { preferencesRepository.setFontOption(font) } },
                         onDynamicColorChange = { enabled -> coroutineScope.launch { preferencesRepository.setDynamicColor(enabled) } },
