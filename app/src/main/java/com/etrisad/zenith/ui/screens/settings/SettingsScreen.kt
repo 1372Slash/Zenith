@@ -44,7 +44,7 @@ fun SettingsScreen(
     permissionsMissing: Boolean = false,
     onOpenGuidedPath: () -> Unit = {}
 ) {
-    val preferences by preferencesRepository.userPreferencesFlow.collectAsState(initial = UserPreferences()
+    val preferences by preferencesRepository.userPreferencesFlow.collectAsState(initial = UserPreferences())
     val coroutineScope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
     val app = context.applicationContext as ZenithApplication
