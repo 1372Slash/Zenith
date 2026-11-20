@@ -1,4 +1,5 @@
 package com.etrisad.zenith.ui.screens.settings
+import com.etrisad.zenith.ui.theme.LocalLiquidGlassEnabled
 import com.etrisad.zenith.ui.theme.liquidGlass
 
 import androidx.compose.animation.*
@@ -67,6 +68,7 @@ fun SettingsToggle(
         modifier = Modifier
             .fillMaxWidth()
             .alpha(cardAlpha)
+            .liquidGlass(shape = shape)
             .then(
                 if (!enabled) Modifier.clickable(
                     interactionSource = remember { MutableInteractionSource() },
@@ -76,7 +78,7 @@ fun SettingsToggle(
             ),
         shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = if (LocalLiquidGlassEnabled.current) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
         Row(
@@ -181,9 +183,10 @@ fun SettingsActionItem(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .semantics(mergeDescendants = true) {},
+            .semantics(mergeDescendants = true) {}
+            .liquidGlass(shape = shape),
         shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
+        color = if (LocalLiquidGlassEnabled.current) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Row(
             modifier = Modifier
@@ -246,10 +249,10 @@ fun ThemeSelector(
     shape: Shape = RoundedCornerShape(24.dp)
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().liquidGlass(shape = shape),
         shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = if (LocalLiquidGlassEnabled.current) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -309,10 +312,10 @@ fun FontSelector(
     shape: Shape = RoundedCornerShape(24.dp)
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().animateContentSize(),
+        modifier = Modifier.fillMaxWidth().animateContentSize().liquidGlass(shape = shape),
         shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = if (LocalLiquidGlassEnabled.current) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -402,6 +405,7 @@ fun AboutActionCard(
                 scaleX = scale
                 scaleY = scale
             }
+            .liquidGlass(shape = shape)
             .clip(shape)
             .clickable(
                 interactionSource = interactionSource,
@@ -413,7 +417,7 @@ fun AboutActionCard(
             ),
         shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = if (LocalLiquidGlassEnabled.current) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
         Row(
