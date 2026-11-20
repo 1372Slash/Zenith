@@ -1,0 +1,170 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="accessibility_service_description">Определяет, какое приложение находится на переднем плане, поэтому Zenith может отображать полезные сообщения и экраны. Стандартный режим также считывает адресные строки браузера на предмет блокировки веб-сайтов и учитывает пролистывания в каналах коротких видео, которые вы решили ограничить. Ограниченный режим получает только события переключения приложений и не получает содержимое экрана или уведомлений. Зенит никогда не записывает нажатия клавиш.</string>
+    <string name="app_name">Zenith</string>
+    <string name="app_streak_widget_description">Полоса для одного приложения: щит остается ниже предела, цель достигает цели.</string>
+    <string name="global_streak_widget_description">Дней подряд меньше целевого времени использования экрана.</string>
+    <string name="onboarding_a11y_activate_target">Активировать выделенный элемент управления</string>
+    <string name="onboarding_a11y_step">Глава %1$d из %2$d, шаг %3$d из %4$d. %5$s. %6$s</string>
+    <string name="onboarding_also_title">Также в этой главе</string>
+    <string name="onboarding_back">Назад</string>
+    <string name="onboarding_badge_earned">Значок получен · %1$s</string>
+    <string name="onboarding_chapter_clock">Часы</string>
+    <string name="onboarding_chapter_clock_also">"Bedtime history and wind-down live on the Bedtime screen.
+Pomodoro keeps presets and session stats.
+Grace Period can wrap past midnight with a weekly edit lock.
+Tamper Protection adds an uninstall step and a PIN."</string>
+    <string name="onboarding_chapter_clock_badge">Хронометрист</string>
+    <string name="onboarding_chapter_clock_close">Пусть день сохранится.</string>
+    <string name="onboarding_chapter_clock_sub">Рутина должна выполняться без силы воли</string>
+    <string name="onboarding_chapter_complete_title">Глава завершена</string>
+    <string name="onboarding_chapter_first_light">Первый свет</string>
+    <string name="onboarding_chapter_first_light_also">"Usage history: tap a day to inspect it.
+Top apps: the three biggest consumers today.
+Your avatar is the door to level and achievements.
+History becomes trustworthy after about three days."</string>
+    <string name="onboarding_chapter_first_light_badge">Первый свет</string>
+    <string name="onboarding_chapter_first_light_close">Приборная панель ваша. Далее: нарисуйте первую границу.</string>
+    <string name="onboarding_chapter_first_light_sub">Посмотрите за день, прежде чем менять его.</string>
+    <string name="onboarding_chapter_mirror">Зеркало</string>
+    <string name="onboarding_chapter_mirror_also">"Notification Insights recap your day and week.
+Intercepted notifications feed an achievement.
+Weekly and monthly summaries keep unlimited history.
+App Detail can edit, pause, or delete its Shield or Goal."</string>
+    <string name="onboarding_chapter_mirror_badge">Оракул</string>
+    <string name="onboarding_chapter_mirror_close">Цифры вы можете прочитать.</string>
+    <string name="onboarding_chapter_mirror_sub">Данные превращают намерение в обратную связь</string>
+    <string name="onboarding_chapter_pause">Пауза</string>
+    <string name="onboarding_chapter_pause_also">"QR and NFC tasks need a code or tag registered first.
+Session HUD floats your remaining time.
+Usage Glimpse shows a brief total every five minutes.
+Audio Focus Intercept pauses media during an overlay."</string>
+    <string name="onboarding_chapter_pause_badge">Неподвижность</string>
+    <string name="onboarding_chapter_pause_close">Маленькие трения, выбранные вами.</string>
+    <string name="onboarding_chapter_pause_sub">Трение прерывает автопилот</string>
+    <string name="onboarding_chapter_shield">Щит</string>
+    <string name="onboarding_chapter_shield_also">"Delay App: a pause before a protected app opens.
+Strict mode removes the easy exit.
+Emergency uses are the planned escape hatch.
+Auto-quit closes an app at the limit.
+Bypass Restrictions skip schedules but are still tracked."</string>
+    <string name="onboarding_chapter_shield_badge">Щитоносец</string>
+    <string name="onboarding_chapter_shield_close">Нарисуйте первую линию, а остальное станет проще.</string>
+    <string name="onboarding_chapter_shield_sub">Защита — это граница, а не наказание</string>
+    <string name="onboarding_chapter_summit">Саммит</string>
+    <string name="onboarding_chapter_summit_also">"Widgets put streak and focus progress on your home screen.
+Privacy hides apps and notification content.
+Smart Repair and diagnostic export live in Data Management.
+Tamper Protection and Lockdown guard your future self."</string>
+    <string name="onboarding_chapter_summit_badge">Куратор</string>
+    <string name="onboarding_chapter_summit_close">Сделайте это своим, а затем сохраните.</string>
+    <string name="onboarding_chapter_summit_sub">Личность и устойчивость делают это надолго</string>
+    <string name="onboarding_close">Закрыть</string>
+    <string name="onboarding_continue">Продолжить</string>
+    <string name="onboarding_exit_body">Ваш прогресс сохраняется. Вы можете возобновить работу из дома в любое время.</string>
+    <string name="onboarding_exit_leave">Уйти</string>
+    <string name="onboarding_exit_stay">Продолжайте идти</string>
+    <string name="onboarding_exit_title">Оставить Путь?</string>
+    <string name="onboarding_finish">Готово</string>
+    <string name="onboarding_hub_chapter_summary">%1$s · %2$s</string>
+    <string name="onboarding_hub_chapter_title">Глава %1$d: %2$s</string>
+    <string name="onboarding_hub_chapters">Главы</string>
+    <string name="onboarding_hub_progress">%1$d глав %2$d завершены</string>
+    <string name="onboarding_hub_status_completed">Завершено</string>
+    <string name="onboarding_hub_status_start">Старт</string>
+    <string name="onboarding_ladder_title">Ваша лестница</string>
+    <string name="onboarding_mastered_body">Путь завершен. Ваши значки останутся с вами.</string>
+    <string name="onboarding_mastered_title">Освоен</string>
+    <string name="onboarding_mastery_body">"Six chapters. One deliberate system.
+
+You now know where the day lives, how to draw a boundary, how to interrupt autopilot, how to let the clock decide, how to read the mirror, and how to keep it all."</string>
+    <string name="onboarding_mastery_claim">Получите свой значок</string>
+    <string name="onboarding_mastery_summary">Цель %1$s · Щиты %2$d · Голы %3$d · Расписания %4$d</string>
+    <string name="onboarding_mastery_title">Зенит Мастер</string>
+    <string name="onboarding_next">Далее</string>
+    <string name="onboarding_next_chapter">Следующая глава</string>
+    <string name="onboarding_open_path">Обучение</string>
+    <string name="onboarding_open_path_summary">Возобновите, воспроизведите или перезапустите тур из шести глав.</string>
+    <string name="onboarding_path_card_body">Шесть коротких глав посвящены вашей информационной панели, щитам, процедурам и вознаграждениям. Примерно по минуте на каждого, и ваш прогресс сохраняется.</string>
+    <string name="onboarding_path_card_title">Впервые в Зените? Начните здесь</string>
+    <string name="onboarding_path_explore">Исследуйте самостоятельно</string>
+    <string name="onboarding_path_start">Начать путь</string>
+    <string name="onboarding_quest_done">Уже сделано — здорово.</string>
+    <string name="onboarding_quest_pending">Создайте Щит или Цель, когда будете готовы. Значок уже ваш.</string>
+    <string name="onboarding_quest_title">Дополнительный квест · Нарисуйте свою первую линию</string>
+    <string name="onboarding_replay_complete">Повтор завершен</string>
+    <string name="onboarding_resume_body">Вы уже на полпути, и следующая глава будет готова, когда вы будете готовы.</string>
+    <string name="onboarding_resume_title">Продолжайте свой путь</string>
+    <string name="onboarding_share_path">Поделитесь своим путем</string>
+    <string name="onboarding_show_me">Покажи мне</string>
+    <string name="onboarding_skip_chapter">Пропустить главу</string>
+    <string name="onboarding_step_achievements_body">Значки исследователя вознаграждают за использование функций. Накопленные значки со временем растут. Ваш значок Пути тоже живет здесь.</string>
+    <string name="onboarding_step_achievements_title">Значки, которые помнят</string>
+    <string name="onboarding_step_add_goal_body">"Goals don\'t block. They reward you for staying under a target, and they feed your XP."</string>
+    <string name="onboarding_step_add_goal_title">Голы – хороший полицейский</string>
+    <string name="onboarding_step_add_schedule_body">Расписание автоматизирует БЛОКИРОВКУ или РАЗРЕШЕНИЕ окон по дням и времени. Расписания БЛОК могут перехватывать уведомления.</string>
+    <string name="onboarding_step_add_schedule_title">Пусть часы решают</string>
+    <string name="onboarding_step_add_shield_body">Между вами и приложением стоит щит. Установите дневной лимит, добавьте отсрочку или сделайте его строгим. Вы всегда можете провести экстренное использование.</string>
+    <string name="onboarding_step_add_shield_title">Знакомство со Щитом</string>
+    <string name="onboarding_step_alarm_body">Сигналы будильника поддерживают преобразование текста в речь, отклонение миссий, постепенную громкость и запуск приложения для пробуждения.</string>
+    <string name="onboarding_step_alarm_title">Просыпайся, нежно</string>
+    <string name="onboarding_step_appearance_body">Тема, динамический цвет, выразительные цвета, шрифты, плавающая панель вкладок и внешний вид наложения — все это находится здесь.</string>
+    <string name="onboarding_step_appearance_title">Сделайте так, чтобы оно было похоже на ваше</string>
+    <string name="onboarding_step_bedtime_body">Перед сном блокируются отвлекающие приложения, могут утомить вас и отключить уведомления. Добавьте доверенные приложения в белый список.</string>
+    <string name="onboarding_step_bedtime_title">Закройте день намеренно</string>
+    <string name="onboarding_step_dashboard_body">"This ring is today\'s screen time against your target. The flame is your current streak. You can tap the target anytime to change it."</string>
+    <string name="onboarding_step_dashboard_title">Ваш день, краткий обзор</string>
+    <string name="onboarding_step_data_body">Автоматическое и ручное резервное копирование, восстановление, интеллектуальное восстановление, профили конфиденциальности и производительности. Поставь резервную копию и забудь.</string>
+    <string name="onboarding_step_data_title">Держите это в безопасности</string>
+    <string name="onboarding_step_donut_body">Этот пончик разделит ваш день на «Щит», «Цель» и «Другое». Часы пик и временной профиль находятся прямо ниже.</string>
+    <string name="onboarding_step_donut_title">Куда ушли часы</string>
+    <string name="onboarding_step_early_kick_body">Early Kick выбрасывает вас за пять минут до лимита, поэтому остановка является предупреждением, а не сюрпризом.</string>
+    <string name="onboarding_step_early_kick_title">Уйти перед стеной</string>
+    <string name="onboarding_step_eye_care_body">"Eye Care runs the 20-20-20 rule with rest overlays you can\'t skip. Work and rest lengths are yours to set."</string>
+    <string name="onboarding_step_eye_care_title">Отвести взгляд, намеренно</string>
+    <string name="onboarding_step_fab_body">Эта кнопка добавляет любой из трех инструментов. Нажмите и удерживайте карту, чтобы выбрать несколько одновременно.</string>
+    <string name="onboarding_step_fab_title">Одна кнопка</string>
+    <string name="onboarding_step_focus_list_body">Щит блокирует. Награды за цель. Оба появляются в этом списке; коснитесь одного, чтобы открыть сведения о приложении.</string>
+    <string name="onboarding_step_focus_list_title">Защита живет здесь</string>
+    <string name="onboarding_step_focus_tabs_body">Фокус содержит щиты, цели и графики. Приложения и веб-сайты — это отдельные поверхности, и в каждом списке отображается только то, что вы создали.</string>
+    <string name="onboarding_step_focus_tabs_title">Три инструмента, один экран</string>
+    <string name="onboarding_step_grace_body">Льготный период снимает все ограничения для выбранного вами окна, вплоть до двух часов в день. Еженедельная блокировка редактирования не позволяет ему стать постоянным.</string>
+    <string name="onboarding_step_grace_title">Запланированный перерыв</string>
+    <string name="onboarding_step_heatmap_body">Тепловая карта — это краткий обзор вашей истории. Пролистайте недели, месяцы и годы назад и сравните с прошлой неделей.</string>
+    <string name="onboarding_step_heatmap_title">Длинная дуга</string>
+    <string name="onboarding_step_identity_body">Аватар, баннер, имя и биография являются локальными для вашего устройства. Карта акций рендерится из них.</string>
+    <string name="onboarding_step_identity_title">Создайте свою личность</string>
+    <string name="onboarding_step_label">Глава %1$d · Шаг %2$d из %3$d</string>
+    <string name="onboarding_step_lockdown_body">Блокировка блокирует редактирование Щитов, Целей и Расписаний в выбранные часы. Для его отключения требуется намеренное подтверждение.</string>
+    <string name="onboarding_step_lockdown_title">Защити будущее себя</string>
+    <string name="onboarding_step_mindful_body">"Mindful Gateway interrupts every app that isn\'t whitelisted, even if it has no Shield. Defaults control uses, emergency, and pause behavior."</string>
+    <string name="onboarding_step_mindful_title">Пауза, а не тюрьма</string>
+    <string name="onboarding_step_pause_point_body">Точка паузы запрашивает небольшую задачу, прежде чем продолжить. Ожидание, дыхание, ходьба, сканирование, скольжение, математика, счет, набор текста и многое другое.</string>
+    <string name="onboarding_step_pause_point_title">Сломай автопилот</string>
+    <string name="onboarding_step_pomodoro_body">Pomodoro чередует концентрацию и отдых и может защитить вас от приложений во время сеанса. Сохраните пресет для того, как вы на самом деле работаете.</string>
+    <string name="onboarding_step_pomodoro_title">Работайте волнами</string>
+    <string name="onboarding_step_quick_actions_body">Режимы «Время сна», «Будильник», «Статистика» и «Помидор» находятся в одном касании. Используйте меню «Настройка», чтобы выбрать ярлыки, которые вы хотите видеть.</string>
+    <string name="onboarding_step_quick_actions_title">Ваши ярлыки</string>
+    <string name="onboarding_step_reels_body">Reels Shield разделяет один дневной лимит для выбранных вами приложений и отменяет его, когда он заканчивается. Ему нужна доступность.</string>
+    <string name="onboarding_step_reels_title">Короткие видео, засчитано</string>
+    <string name="onboarding_step_top_apps_body">Коснитесь любого приложения, чтобы просмотреть сведения о приложении: 21-дневные и часовые графики, заряд батареи, час пик, а также прикрепленный к нему щит или цель.</string>
+    <string name="onboarding_step_top_apps_title">Отслеживание одного приложения</string>
+    <string name="onboarding_step_trends_body">Зенит становится острее по мере изучения ваших шаблонов. Подождите примерно три дня, прежде чем доверять линии тренда.</string>
+    <string name="onboarding_step_trends_title">Три дня до истины</string>
+    <string name="onboarding_step_websites_body">Автоматическое отслеживание веб-сайтов записывает время в доменах во всех поддерживаемых браузерах, а защита веб-сайта работает так же, как защита приложения.</string>
+    <string name="onboarding_step_websites_title">Сайты тоже учитываются</string>
+    <string name="onboarding_step_xp_body">Опыт приходит от запаса щита и целей. Уровни открывают титулы и границы аватара.</string>
+    <string name="onboarding_step_xp_title">Заработано, а не куплено</string>
+    <string name="phone_free_time_widget_description">"Shows phone-free time today - how long you haven\'t used your phone, resets daily."</string>
+    <string name="remaining_target_widget_description">Показывает оставшееся время до достижения дневной цели по экранному времени.</string>
+    <string name="total_screen_time_widget_description">Показывает общее время экрана за сегодня.</string>
+    <string name="liquid_glass_refraction_title">Сила преломления стекла</string>
+    <string name="liquid_glass_refraction_desc">Настройка изгиба стеклянной фаски и дисперсии по краям</string>
+    <string name="settings_theme_mode">Тема оформления</string>
+    <string name="settings_theme_system">Системная</string>
+    <string name="settings_theme_light">Светлая</string>
+    <string name="settings_theme_dark">Тёмная</string>
+    <string name="settings_font_style">Стиль шрифта</string>
+    <string name="settings_customize_gs_flex">Настроить вариации GS Flex</string>
+    <string name="long_term_other_apps">Другие приложения</string>
+</resources>

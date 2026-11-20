@@ -1,4 +1,8 @@
 package com.etrisad.zenith.ui.screens.settings
+import com.etrisad.zenith.R
+import androidx.compose.ui.res.stringResource
+import com.etrisad.zenith.ui.theme.LocalLiquidGlassEnabled
+import com.etrisad.zenith.ui.theme.liquidGlass
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -66,6 +70,7 @@ fun SettingsToggle(
         modifier = Modifier
             .fillMaxWidth()
             .alpha(cardAlpha)
+            .liquidGlass(shape = shape)
             .then(
                 if (!enabled) Modifier.clickable(
                     interactionSource = remember { MutableInteractionSource() },
@@ -75,7 +80,7 @@ fun SettingsToggle(
             ),
         shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = if (LocalLiquidGlassEnabled.current) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
         Row(
@@ -180,9 +185,10 @@ fun SettingsActionItem(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .semantics(mergeDescendants = true) {},
+            .semantics(mergeDescendants = true) {}
+            .liquidGlass(shape = shape),
         shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
+        color = if (LocalLiquidGlassEnabled.current) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Row(
             modifier = Modifier
@@ -245,10 +251,10 @@ fun ThemeSelector(
     shape: Shape = RoundedCornerShape(24.dp)
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().liquidGlass(shape = shape),
         shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = if (LocalLiquidGlassEnabled.current) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -274,7 +280,7 @@ fun ThemeSelector(
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(
-                    text = "Theme Mode",
+                    text = stringResource(R.string.settings_theme_mode),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                     modifier = Modifier.weight(1f)
@@ -284,9 +290,9 @@ fun ThemeSelector(
             Spacer(modifier = Modifier.height(16.dp))
             
             val themeOptions = listOf(
-                ThemeConfig.FOLLOW_SYSTEM to "System",
-                ThemeConfig.LIGHT to "Light",
-                ThemeConfig.DARK to "Dark"
+                ThemeConfig.FOLLOW_SYSTEM to stringResource(R.string.settings_theme_system),
+                ThemeConfig.LIGHT to stringResource(R.string.settings_theme_light),
+                ThemeConfig.DARK to stringResource(R.string.settings_theme_dark)
             )
 
             ZenithToggleButtonGroup(
@@ -308,10 +314,10 @@ fun FontSelector(
     shape: Shape = RoundedCornerShape(24.dp)
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().animateContentSize(),
+        modifier = Modifier.fillMaxWidth().animateContentSize().liquidGlass(shape = shape),
         shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = if (LocalLiquidGlassEnabled.current) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -337,7 +343,7 @@ fun FontSelector(
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(
-                    text = "Font Style",
+                    text = stringResource(R.string.settings_font_style),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                     modifier = Modifier.weight(1f)
@@ -347,7 +353,7 @@ fun FontSelector(
             Spacer(modifier = Modifier.height(16.dp))
             
             val fontOptions = listOf(
-                FontOption.SYSTEM to "System",
+                FontOption.SYSTEM to stringResource(R.string.settings_theme_system),
                 FontOption.GOOGLE_SANS_FLEX to "GS Flex",
                 FontOption.NUNITO to "Nunito"
             )
@@ -365,7 +371,7 @@ fun FontSelector(
                 ZenithButton(
                     onClick = onCustomizeGSFlex,
                     modifier = Modifier.fillMaxWidth(),
-                    text = "Customize GS Flex Variations",
+                    text = stringResource(R.string.settings_customize_gs_flex),
                     icon = Icons.Outlined.SettingsSuggest,
                     type = ZenithButtonType.Outlined,
                     size = ZenithButtonSize.Large
@@ -401,6 +407,7 @@ fun AboutActionCard(
                 scaleX = scale
                 scaleY = scale
             }
+            .liquidGlass(shape = shape)
             .clip(shape)
             .clickable(
                 interactionSource = interactionSource,
@@ -412,7 +419,7 @@ fun AboutActionCard(
             ),
         shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = if (LocalLiquidGlassEnabled.current) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
         Row(

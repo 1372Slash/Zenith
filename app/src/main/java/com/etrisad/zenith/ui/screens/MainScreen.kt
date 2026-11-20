@@ -1,4 +1,6 @@
 package com.etrisad.zenith.ui.screens
+import com.etrisad.zenith.ui.theme.liquidGlass
+import com.etrisad.zenith.ui.theme.LocalLiquidGlassEnabled
 
 import android.widget.Toast
 import androidx.compose.animation.*
@@ -1797,12 +1799,12 @@ fun MainScreen(
                                 ) {
                                     HorizontalFloatingToolbar(
                                         expanded = true,
-                                        modifier = Modifier
+                                        modifier = Modifier.liquidGlass(shape = RoundedCornerShape(100), tintAlpha = 0.28f)
                                             .animateContentSize()
                                             .height(68.dp),
                                         shape = RoundedCornerShape(100),
                                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-                                        colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
+                                        colors = if (LocalLiquidGlassEnabled.current) FloatingToolbarDefaults.standardFloatingToolbarColors(toolbarContainerColor = Color.Transparent) else FloatingToolbarDefaults.standardFloatingToolbarColors(
                                             toolbarContainerColor = MaterialTheme.colorScheme.primaryContainer
                                         )
                                     ) {

@@ -1,5 +1,7 @@
 package com.etrisad.zenith
 
+import com.etrisad.zenith.ui.theme.ProvideLiquidGlass
+
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
@@ -100,7 +102,9 @@ class MainActivity : ComponentActivity() {
                 else -> androidx.compose.foundation.isSystemInDarkTheme()
             }
 
-            ZenithTheme(
+            val liquidGlassEnabled by preferences.liquidGlassEnabled.collectAsState(initial = false)
+            val liquidGlassStrength by preferences.liquidGlassStrength.collectAsState(initial = 8.5f)
+            ProvideLiquidGlass(enabled = liquidGlassEnabled, strength = liquidGlassStrength) { ZenithTheme(
                 darkTheme = darkTheme,
                 dynamicColor = appearance.dynamicColor,
                 fontOption = appearance.fontOption,
@@ -117,7 +121,7 @@ class MainActivity : ComponentActivity() {
                     initialPackageName = initialPackageName,
                     onInitialPackageHandled = { initialPackageName = null }
                 )
-            }
+            } }
         }
     }
 
